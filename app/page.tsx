@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { NavLink } from "@/components/NavLink";
 import { useRouter } from "next/navigation";
 import { SharedHeader } from "@/components/SharedHeader";
 import { Footer } from "@/components/Footer";
@@ -63,12 +63,12 @@ export default function LandingPage() {
                 </p>
               </div>
             </div>
-            <Link
+            <NavLink
               href="/admin"
               className="shrink-0 px-4 py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-xs flex items-center gap-2 transition-all shadow-md"
             >
               <ShieldCheck size={16} /> Admin Control Center <ArrowRight size={14} />
-            </Link>
+            </NavLink>
           </div>
         )}
 
@@ -86,20 +86,20 @@ export default function LandingPage() {
 
         <div className="hero-ctas">
           {isAdmin ? (
-            <Link href="/admin" className="btn-primary">
+            <NavLink href="/admin" className="btn-primary">
               <ShieldCheck size={18} /> Admin Control Center <ArrowRight size={16} />
-            </Link>
+            </NavLink>
           ) : (
-            <Link href="/arena" onClick={handleArenaClick} className="btn-primary">
+            <NavLink href="/arena" onClick={handleArenaClick} className="btn-primary">
               <Swords size={18} /> Enter Game Arena <ArrowRight size={16} />
-            </Link>
+            </NavLink>
           )}
-          <Link href="/leagues" className="btn-secondary">
+          <NavLink href="/leagues" className="btn-secondary">
             <Trophy size={18} /> Tournament Hub
-          </Link>
-          <Link href="/wallet" className="btn-outline">
+          </NavLink>
+          <NavLink href="/wallet" className="btn-outline">
             <Wallet size={18} /> Wallet & Rewards
-          </Link>
+          </NavLink>
         </div>
 
         <div className="hero-stats">

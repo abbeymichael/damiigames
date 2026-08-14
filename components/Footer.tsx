@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { NavLink } from "@/components/NavLink";
 import { UserCog, Shield, Trophy, Swords, Wallet, Bot, Coins, Sparkles, CheckCircle, HelpCircle } from "lucide-react";
 
 export function Footer() {
@@ -47,24 +47,24 @@ export function Footer() {
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
-                <Link href="/arena" className="hover:text-[#f5efdf] transition-colors flex items-center gap-1.5">
+                <NavLink href="/arena" className="hover:text-[#f5efdf] transition-colors flex items-center gap-1.5">
                   <Swords size={12} className="text-[#a3b8b0]/70" /> Online Matchmaking
-                </Link>
+                </NavLink>
               </li>
               <li>
-                <Link href="/arena?mode=local" className="hover:text-[#f5efdf] transition-colors flex items-center gap-1.5">
+                <NavLink href="/arena?mode=local" className="hover:text-[#f5efdf] transition-colors flex items-center gap-1.5">
                   <Bot size={12} className="text-[#a3b8b0]/70" /> Local Pass &amp; Play
-                </Link>
+                </NavLink>
               </li>
               <li>
-                <Link href="/arena?mode=bot" className="hover:text-[#f5efdf] transition-colors flex items-center gap-1.5">
+                <NavLink href="/arena?mode=bot" className="hover:text-[#f5efdf] transition-colors flex items-center gap-1.5">
                   <Bot size={12} className="text-[#a3b8b0]/70" /> Practice vs AI Engine
-                </Link>
+                </NavLink>
               </li>
               <li>
-                <Link href="/arena?mode=wager" className="hover:text-[#f5efdf] transition-colors flex items-center gap-1.5">
+                <NavLink href="/arena?mode=wager" className="hover:text-[#f5efdf] transition-colors flex items-center gap-1.5">
                   <Coins size={12} className="text-[#d6a735]" /> Competitive Wager Room
-                </Link>
+                </NavLink>
               </li>
             </ul>
           </div>
@@ -76,22 +76,22 @@ export function Footer() {
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
-                <Link href="/leagues" className="hover:text-[#f5efdf] transition-colors flex items-center gap-1.5">
+                <NavLink href="/leagues" className="hover:text-[#f5efdf] transition-colors flex items-center gap-1.5">
                   <Trophy size={12} className="text-[#a3b8b0]/70" /> Active Leagues &amp; Brackets
-                </Link>
+                </NavLink>
               </li>
               <li>
-                <Link
+                <NavLink
                   href="/organizer"
                   className="text-[#d6a735] font-bold hover:text-white transition-colors flex items-center gap-1.5"
                 >
                   <UserCog size={13} className="text-[#d6a735]" /> Organizer Licensing Portal
-                </Link>
+                </NavLink>
               </li>
               <li>
-                <Link href="/wallet" className="hover:text-[#f5efdf] transition-colors flex items-center gap-1.5">
+                <NavLink href="/wallet" className="hover:text-[#f5efdf] transition-colors flex items-center gap-1.5">
                   <Wallet size={12} className="text-[#a3b8b0]/70" /> Wallet &amp; Escrow Ledger
-                </Link>
+                </NavLink>
               </li>
             </ul>
           </div>
@@ -103,9 +103,9 @@ export function Footer() {
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
-                <Link href="/admin" className="hover:text-[#f5efdf] transition-colors flex items-center gap-1.5">
+                <NavLink href="/admin" className="hover:text-[#f5efdf] transition-colors flex items-center gap-1.5">
                   <Shield size={12} className="text-[#a3b8b0]/70" /> Admin Oversight Studio
-                </Link>
+                </NavLink>
               </li>
               <li>
                 <span className="text-[#a3b8b0]/70 flex items-center gap-1.5 cursor-default">
