@@ -1,0 +1,364 @@
+import { dbRepository } from "./db-client";
+import { securityService } from "./security";
+import { WalletTransaction, WagerEscrow } from "./types";
+
+export const walletService = {
+  // 1 GHS = 100 Points
+  POINTS_PER_GHS: 100,
+
+  async getBalance(token: string) {
+    const profile = await dbRepository.getProfile(token);
+    if (!profile) {
+      return { points: 0, rating: 1000, username: "", role: "user", phoneNumber: "", wins: 0, losses: 0, draws: 0 };
+    }
+    return {
+      points: profile.points,
+      rating: profile.rating,
+      username: profile.username,
+      role: profile.role,
+      phoneNumber: profile.phoneNumber || "",
+      wins: profile.wins || 0,
+      losses: profile.losses || 0,
+      draws: profile.draws || 0,
+    };
+  },
+
+  async initPaystackTopup(userToken: string, amountGhs: number, email?: string) {
+    if (!amountGhs || isNaN(amountGhs) || amountGhs <= 0 || !Number.isFinite(amountGhs)) {
+      throw new Error("Amount must be a positive number in GHS");
+    }
+    const profile = await dbRepository.getProfile(userToken);
+    if (!profile) throw new Error("User profile not found. Please log in first.");
+    if (profile.status === "banned") throw new Error("Account is banned. Please contact support.");
+
+    const settings = await dbRepository.getAdminSettings();
+    const minDep = settings.minDepositGhs ?? 5;
+    const maxDep = settings.maxDepositGhs ?? 5000;
+
+    if (amountGhs < minDep) {
+      throw new Error(`Deposit amount (GH₵ ${amountGhs}) is below the minimum deposit limit of GH₵ ${minDep}`);
+    }
+    if (amountGhs > maxDep) {
+      throw new Error(`Deposit amount (GH₵ ${amountGhs}) exceeds the maximum deposit limit of GH₵ ${maxDep.toLocaleString()}`);
+    }
+
+    const pointsToAdd = Math.floor(amountGhs);
+
+    const ref = `PAYSTACK-${Date.now()}-${securityService.generateCsprngToken(8).toUpperCase()}`;
+
+    // Create pending deposit transaction
+    const tx: WalletTransaction = {
+      id: `tx-${securityService.generateUUID()}`,
+      userToken,
+      type: "deposit",
+      currency: "points",
+      amount: pointsToAdd,
+      reference: ref,
+      status: "pending",
+      metaJson: JSON.stringify({ amountGhs: pointsToAdd, rate: 1, email: email || `${profile.username.toLowerCase().replace(/\s+/g, "")}@damii.gh` }),
+      createdAt: new Date().toISOString(),
+    };
+
+    await dbRepository.createTransaction(tx);
+
+    const secretKey = process.env.PAYSTACK_SECRET_KEY;
+    let authorizationUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://damii.gh"}/wallet?ref=${ref}`;
+
+    if (secretKey) {
+      try {
+        const response = await fetch("https://api.paystack.co/transaction/initialize", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${secretKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: email || `${profile.username.toLowerCase().replace(/\s+/g, "")}@damii.gh`,
+            amount: pointsToAdd * 100, // in pesewas
+            reference: ref,
+            currency: "GHS",
+            callback_url: `${process.env.NEXT_PUBLIC_APP_URL || "https://damii.gh"}/wallet?ref=${ref}`,
+          }),
+        });
+        const data = await response.json();
+        if (data.status && data.data?.authorization_url) {
+          authorizationUrl = data.data.authorization_url;
+        }
+      } catch (err) {
+        if (process.env.NODE_ENV === "production") {
+          throw new Error("Failed to communicate with Paystack payment gateway");
+        }
+      }
+    } else if (process.env.NODE_ENV === "production") {
+      throw new Error("PAYSTACK_SECRET_KEY is not configured on the server");
+    }
+
+    return { reference: ref, authorizationUrl, pointsToAdd, amountGhs: pointsToAdd };
+  },
+
+  async verifyAndCreditPaystack(reference: string) {
+    if (!reference || typeof reference !== "string" || reference.trim().length < 5) {
+      throw new Error("Invalid payment reference");
+    }
+
+    const cleanRef = reference.trim();
+
+    return dbRepository.lockKey(`paystack:${cleanRef}`, async () => {
+      // Check idempotency store
+      const alreadyProcessed = await dbRepository.isPaystackRefProcessed(cleanRef);
+
+      const all = await dbRepository.getAllTransactions(500);
+      const tx = all.find((t) => t.reference === cleanRef);
+
+      if (!tx) {
+        throw new Error("Transaction reference not found in system database");
+      }
+
+      if (tx.status === "completed" || alreadyProcessed) {
+        return { success: true, message: "Transaction already credited", tx };
+      }
+
+      let verified = false;
+      const secretKey = process.env.PAYSTACK_SECRET_KEY;
+
+      if (secretKey) {
+        try {
+          const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(cleanRef)}`, {
+            headers: { Authorization: `Bearer ${secretKey}` },
+          });
+          const json = await res.json();
+          if (json.status && json.data?.status === "success") {
+            const paidPesewas = json.data.amount;
+            const expectedPesewas = tx.amount * 100;
+            if (typeof paidPesewas === "number" && paidPesewas >= expectedPesewas) {
+              verified = true;
+            }
+          }
+        } catch {
+          verified = false;
+        }
+      } else {
+        if (process.env.NODE_ENV === "production") {
+          throw new Error("PAYSTACK_SECRET_KEY environment variable is missing in production");
+        }
+        verified = true;
+      }
+
+      if (verified) {
+        await dbRepository.markPaystackRefProcessed(cleanRef);
+        tx.status = "completed";
+        await dbRepository.createTransaction(tx);
+        await dbRepository.updateProfileBalance(tx.userToken, tx.amount);
+        return { success: true, message: `Successfully added GH₵ ${tx.amount} to your wallet!`, tx };
+      } else {
+        tx.status = "failed";
+        await dbRepository.createTransaction(tx);
+        throw new Error("Paystack payment verification failed: Payment not confirmed by gateway");
+      }
+    });
+  },
+
+  async requestWithdrawal(userToken: string, amountGhs: number, momoNumber: string, momoProvider: string) {
+    if (amountGhs <= 0) throw new Error("Withdrawal amount must be greater than zero GHS");
+    const profile = await dbRepository.getProfile(userToken);
+    if (!profile) throw new Error("User profile not found. Please log in first.");
+    if (profile.status === "banned") throw new Error("Account is banned. Please contact support.");
+
+    const settings = await dbRepository.getAdminSettings();
+    const minWd = settings.minWithdrawalGhs ?? 10;
+    const maxWd = settings.maxWithdrawalGhs ?? 2000;
+    const maxDailyWd = settings.maxDailyWithdrawalGhs ?? 5000;
+
+    if (amountGhs < minWd) {
+      throw new Error(`Withdrawal amount (GH₵ ${amountGhs}) is below the minimum withdrawal limit of GH₵ ${minWd}`);
+    }
+    if (amountGhs > maxWd) {
+      throw new Error(`Withdrawal amount (GH₵ ${amountGhs}) exceeds the maximum single withdrawal limit of GH₵ ${maxWd.toLocaleString()}`);
+    }
+
+    // Daily withdrawal aggregate limit check
+    const userTxs = await dbRepository.getUserTransactions(userToken, 200);
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const recent24hWithdrawals = userTxs
+      .filter((t) => t.type === "withdrawal" && t.status !== "failed" && t.createdAt >= oneDayAgo)
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+
+    if (recent24hWithdrawals + amountGhs > maxDailyWd) {
+      const remainingLimit = Math.max(0, maxDailyWd - recent24hWithdrawals);
+      throw new Error(
+        `24-hour withdrawal limit of GH₵ ${maxDailyWd.toLocaleString()} reached. You have requested GH₵ ${recent24hWithdrawals.toLocaleString()} in the last 24h (Remaining limit: GH₵ ${remainingLimit.toLocaleString()})`
+      );
+    }
+
+    if (profile.points < amountGhs) throw new Error(`Insufficient wallet balance. You have GH₵ ${profile.points}`);
+
+    const ghsValue = Number(amountGhs.toFixed(2));
+
+    // Deduct wallet balance
+    await dbRepository.updateProfileBalance(userToken, -ghsValue);
+
+    const ref = `WITHDRAW-${Date.now()}-${securityService.generateCsprngToken(4).toUpperCase()}`;
+    const tx: WalletTransaction = {
+      id: `tx-wdraw-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+      userToken,
+      type: "withdrawal",
+      currency: "points",
+      amount: -ghsValue,
+      reference: ref,
+      status: "pending",
+      metaJson: JSON.stringify({ momoNumber, momoProvider, ghsValue }),
+      createdAt: new Date().toISOString(),
+    };
+    await dbRepository.createTransaction(tx);
+
+    return { reference: ref, pointsDeducted: ghsValue, ghsValue };
+  },
+
+  // --- Wager Escrow Locking & Payouts ---
+  async lockWagerEscrow(roomCode: string, wagerAmount: number, player1Token: string, player2Token: string): Promise<WagerEscrow> {
+    const p1 = await dbRepository.getProfile(player1Token);
+    const p2 = await dbRepository.getProfile(player2Token);
+
+    if (!p1 || p1.points < wagerAmount) throw new Error(`Host has insufficient Points for ${wagerAmount} Points Wager`);
+    if (!p2 || p2.points < wagerAmount) throw new Error(`Guest has insufficient Points for ${wagerAmount} Points Wager`);
+
+    // Deduct wager Points from both players
+    await dbRepository.updateProfileBalance(player1Token, -wagerAmount);
+    await dbRepository.updateProfileBalance(player2Token, -wagerAmount);
+
+    const escrow: WagerEscrow = {
+      id: `escrow-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+      roomCode,
+      amountMarbles: 0,
+      amountPoints: wagerAmount * 2, // Total pot in Points
+      player1Token,
+      player2Token,
+      lockedAt: new Date().toISOString(),
+      status: "locked",
+      winnerToken: null,
+      disbursedAt: null,
+    };
+
+    await dbRepository.createEscrow(escrow);
+
+    const now = new Date().toISOString();
+    await dbRepository.createTransaction({
+      id: `tx-wager-p1-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+      userToken: player1Token,
+      type: "wager_lock",
+      currency: "points",
+      amount: -wagerAmount,
+      reference: escrow.id,
+      status: "completed",
+      metaJson: JSON.stringify({ roomCode }),
+      createdAt: now,
+    });
+
+    await dbRepository.createTransaction({
+      id: `tx-wager-p2-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+      userToken: player2Token,
+      type: "wager_lock",
+      currency: "points",
+      amount: -wagerAmount,
+      reference: escrow.id,
+      status: "completed",
+      metaJson: JSON.stringify({ roomCode }),
+      createdAt: now,
+    });
+
+    return escrow;
+  },
+
+  async disburseWagerEscrow(escrowId: string, winnerToken: string | null): Promise<WagerEscrow> {
+    const escrow = await dbRepository.getEscrow(escrowId);
+    if (!escrow || escrow.status !== "locked") {
+      throw new Error("Escrow not found or already settled");
+    }
+
+    const now = new Date().toISOString();
+    const settings = await dbRepository.getAdminSettings();
+    const wagerFeePercent = settings.wagerFeePercent ?? 5;
+
+    if (winnerToken) {
+      // Calculate platform fee percentage on total pot
+      const totalPot = escrow.amountPoints;
+      const platformFee = Math.round((totalPot * wagerFeePercent) / 100);
+      const winnerPayout = totalPot - platformFee;
+
+      escrow.status = "disbursed";
+      escrow.winnerToken = winnerToken;
+      escrow.disbursedAt = now;
+      await dbRepository.saveEscrow(escrow);
+
+      // Credit net payout to winner
+      await dbRepository.updateProfileBalance(winnerToken, winnerPayout);
+
+      // Record transaction for winner
+      await dbRepository.createTransaction({
+        id: `tx-wager-win-${Date.now()}`,
+        userToken: winnerToken,
+        type: "wager_win",
+        currency: "points",
+        amount: winnerPayout,
+        reference: escrow.id,
+        status: "completed",
+        metaJson: JSON.stringify({ roomCode: escrow.roomCode, totalPot, platformFee, wagerFeePercent }),
+        createdAt: now,
+      });
+
+      // Record platform fee entry for system ledger
+      if (platformFee > 0) {
+        await dbRepository.createTransaction({
+          id: `tx-fee-${Date.now()}`,
+          userToken: "system-house",
+          type: "platform_fee",
+          currency: "points",
+          amount: platformFee,
+          reference: escrow.id,
+          status: "completed",
+          metaJson: JSON.stringify({ roomCode: escrow.roomCode, totalPot, wagerFeePercent }),
+          createdAt: now,
+        });
+      }
+    } else {
+      // Refund both players full wager amount on draw
+      escrow.status = "refunded";
+      escrow.disbursedAt = now;
+      await dbRepository.saveEscrow(escrow);
+
+      const refundPerPlayer = Math.floor(escrow.amountPoints / 2);
+      await dbRepository.updateProfileBalance(escrow.player1Token, refundPerPlayer);
+      if (escrow.player2Token) {
+        await dbRepository.updateProfileBalance(escrow.player2Token, refundPerPlayer);
+      }
+
+      await dbRepository.createTransaction({
+        id: `tx-wager-ref-p1-${Date.now()}`,
+        userToken: escrow.player1Token,
+        type: "wager_refund",
+        currency: "points",
+        amount: refundPerPlayer,
+        reference: escrow.id,
+        status: "completed",
+        metaJson: JSON.stringify({ roomCode: escrow.roomCode }),
+        createdAt: now,
+      });
+
+      if (escrow.player2Token) {
+        await dbRepository.createTransaction({
+          id: `tx-wager-ref-p2-${Date.now()}`,
+          userToken: escrow.player2Token,
+          type: "wager_refund",
+          currency: "points",
+          amount: refundPerPlayer,
+          reference: escrow.id,
+          status: "completed",
+          metaJson: JSON.stringify({ roomCode: escrow.roomCode }),
+          createdAt: now,
+        });
+      }
+    }
+
+    return escrow;
+  },
+};

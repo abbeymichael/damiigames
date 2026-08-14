@@ -1,0 +1,2693 @@
+"use client";
+
+import { useEffect, useState, useMemo } from "react";
+import { SharedHeader } from "@/components/SharedHeader";
+import {
+  LayoutDashboard,
+  UserCheck,
+  Trophy,
+  Wallet,
+  Gavel,
+  Users,
+  ShieldCheck,
+  ScrollText,
+  ChevronsLeft,
+  ChevronsRight,
+  ChevronDown,
+  Circle,
+  ShieldAlert,
+  Swords,
+  Activity,
+  Key,
+  CheckCircle,
+  AlertTriangle,
+  TrendingUp,
+  Settings,
+  Eye,
+  X,
+  Search,
+  RefreshCw,
+  Coins,
+  Ban,
+  Plus,
+  Minus,
+  ArrowUpRight,
+  ArrowDownRight,
+  FileText,
+  UserCog,
+  Scale,
+  Lock,
+  Database,
+  Menu,
+  LogOut,
+  Copy,
+  Play,
+  ExternalLink,
+} from "lucide-react";
+import { getSessionToken, saveSessionToken, clearSessionToken } from "@/lib/client-auth";
+import { AdminLog, Role } from "@/lib/types";
+import { ActionMenu } from "@/components/ActionMenu";
+import { AdminTable } from "@/components/AdminTable";
+import { ConfirmModal } from "@/components/admin/ConfirmModal";
+import { UsersTable } from "@/components/admin/UsersTable";
+import { TournamentsTable } from "@/components/admin/TournamentsTable";
+import { LedgerTable } from "@/components/admin/LedgerTable";
+import { OrganizersTable } from "@/components/admin/OrganizersTable";
+import { DisputesTable } from "@/components/admin/DisputesTable";
+import { AuditLogsTable } from "@/components/admin/AuditLogsTable";
+import { AdminRolesTable } from "@/components/admin/AdminRolesTable";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+} from "recharts";
+
+type UserProfileItem = {
+  token: string;
+  username: string;
+  role: Role;
+  points: number;
+  status?: "active" | "banned";
+  rating: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  phoneNumber?: string;
+  createdAt?: string;
+};
+
+type MoveItem = {
+  from: number;
+  to: number;
+  turn?: string;
+  isCapture?: boolean;
+  timestamp?: string;
+  note?: string;
+};
+
+type RoomItem = {
+  code: string;
+  hostName: string;
+  guestName: string | null;
+  hostToken: string;
+  guestToken: string | null;
+  mode: string;
+  status: string;
+  winner: string | null;
+  wagerAmount?: number;
+  moves?: MoveItem[];
+  createdAt?: string;
+};
+
+type TransactionItem = {
+  id: string;
+  userToken: string;
+  type: string;
+  amount: number;
+  currency: string;
+  status: string;
+  reference: string;
+  createdAt: string;
+};
+
+type SystemMetrics = {
+  userCount: number;
+  activeRoomsCount: number;
+  totalRoomsCount: number;
+  leagueCount: number;
+  totalTransactions: number;
+  totalVolumePoints?: number;
+  totalVolumeMarbles?: number;
+  resolvedDisputesCount?: number;
+  resolvedDisputesVolume?: number;
+  totalEscrowProcessed?: number;
+  dailyActivity?: Array<{ date: string; users: number; transactions: number; volume: number }>;
+  allUsers?: UserProfileItem[];
+  recentRooms: RoomItem[];
+  recentTransactions: TransactionItem[];
+  settings?: {
+    wagerFeePercent?: number;
+    tournamentFeePercent?: number;
+    pointsPerCediDeposit?: number;
+    pointsPerCediWithdrawal?: number;
+  };
+  logs: AdminLog[];
+};
+
+// Named permission bundles, matching lib/types.ts AdminPermission model.
+const ROLE_BUNDLES: Record<string, { label: string; isSuperAdmin: boolean; permissions: string[] }> = {
+  super_admin: {
+    label: "Super admin",
+    isSuperAdmin: true,
+    permissions: [
+      "manage_users",
+      "manage_organizers",
+      "manage_tournaments",
+      "manage_wallet",
+      "manage_payouts",
+      "resolve_disputes",
+      "manage_admins",
+      "run_seeder",
+      "view_audit_log",
+    ],
+  },
+  treasurer: {
+    label: "Treasurer",
+    isSuperAdmin: false,
+    permissions: ["manage_wallet", "manage_payouts", "view_audit_log"],
+  },
+  moderator: {
+    label: "Moderator",
+    isSuperAdmin: false,
+    permissions: ["manage_users", "resolve_disputes", "view_audit_log"],
+  },
+  organizer_reviewer: {
+    label: "Organizer reviewer",
+    isSuperAdmin: false,
+    permissions: ["manage_organizers", "view_audit_log"],
+  },
+};
+
+interface NavItem {
+  key: string;
+  label: string;
+  icon: any;
+  permission: string | null;
+  badgeKey?: string;
+}
+
+interface NavSection {
+  title: string | null;
+  items: NavItem[];
+}
+
+// Nav items declare which permission unlocks them. `null` = always visible.
+const NAV_SECTIONS: NavSection[] = [
+  {
+    title: null,
+    items: [{ key: "overview", label: "Overview", icon: LayoutDashboard, permission: null }],
+  },
+  {
+    title: "Review",
+    items: [
+      { key: "organizers", label: "Organizer requests", icon: UserCheck, permission: "manage_organizers", badgeKey: "pendingOrganizers" },
+      { key: "disputes", label: "Disputes & Games", icon: Gavel, permission: "resolve_disputes", badgeKey: "openDisputes" },
+    ],
+  },
+  {
+    title: "Operations",
+    items: [
+      { key: "tournaments", label: "Tournaments", icon: Trophy, permission: "manage_tournaments" },
+      { key: "wallet", label: "Wallet & payouts", icon: Wallet, permission: "manage_wallet" },
+      { key: "users", label: "Users", icon: Users, permission: "manage_users" },
+    ],
+  },
+  {
+    title: "System",
+    items: [
+      { key: "roles", label: "Admin roles", icon: ShieldCheck, permission: "manage_admins" },
+      { key: "audit", label: "Audit log", icon: ScrollText, permission: "view_audit_log" },
+      { key: "settings", label: "Exchange Rates", icon: Settings, permission: "manage_wallet" },
+    ],
+  },
+];
+
+function hasAccess(role: { isSuperAdmin: boolean; permissions: string[] }, permission: string | null) {
+  if (permission === null) return true;
+  if (role.isSuperAdmin) return true;
+  return role.permissions.includes(permission);
+}
+
+export default function AdminPage() {
+  const [mounted, setMounted] = useState(false);
+  const [token, setToken] = useState("");
+  const [adminUsername, setAdminUsername] = useState("");
+  const [adminPasscode, setAdminPasscode] = useState("");
+  const [adminSecret, setAdminSecret] = useState("damii-admin-2026");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  // Sidebar, Mobile Drawer & Role Switcher State
+  const [roleKey, setRoleKey] = useState("super_admin");
+  const [collapsed, setCollapsed] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("overview");
+  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
+  const [isMobileAdminDrawerOpen, setIsMobileAdminDrawerOpen] = useState(false);
+
+  // Organizer Approval & Admin Roles State
+  const [organizersList, setOrganizersList] = useState<any[]>([]);
+  const [adminRolesList, setAdminRolesList] = useState<any[]>([]);
+
+  // Filters & Search
+  const [userSearch, setUserSearch] = useState("");
+  const [roomFilter, setRoomFilter] = useState<"all" | "playing" | "waiting" | "completed">("all");
+  const [txFilter, setTxFilter] = useState<"all" | "completed" | "pending" | "failed">("all");
+
+  const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
+
+  // Selected Game Room for Inspection
+  const [inspectRoom, setInspectRoom] = useState<RoomItem | null>(null);
+
+  // User Point Adjustment Modal State
+  const [pointModalUser, setPointModalUser] = useState<UserProfileItem | null>(null);
+  const [pointAmountInput, setPointAmountInput] = useState<number>(100);
+  const [pointOperation, setPointOperation] = useState<"add" | "deduct">("add");
+  const [pointReason, setPointReason] = useState("");
+
+  // Fee Settings Form Inputs
+  const [wagerFeePercentInput, setWagerFeePercentInput] = useState<number>(5);
+  const [tournamentFeePercentInput, setTournamentFeePercentInput] = useState<number>(10);
+
+  // Deposit & Withdrawal Limits Form Inputs
+  const [minDepositGhsInput, setMinDepositGhsInput] = useState<number>(5);
+  const [maxDepositGhsInput, setMaxDepositGhsInput] = useState<number>(5000);
+  const [minWithdrawalGhsInput, setMinWithdrawalGhsInput] = useState<number>(10);
+  const [maxWithdrawalGhsInput, setMaxWithdrawalGhsInput] = useState<number>(2000);
+  const [maxDailyWithdrawalGhsInput, setMaxDailyWithdrawalGhsInput] = useState<number>(5000);
+
+  // Dispute Form
+  const [disputeCode, setDisputeCode] = useState("");
+  const [disputeWinnerToken, setDisputeWinnerToken] = useState("");
+  const [disputeReason, setDisputeReason] = useState("");
+
+  // Staff Creation Form
+  const [newAdminUsername, setNewAdminUsername] = useState("");
+  const [newAdminPasscode, setNewAdminPasscode] = useState("");
+  const [newAdminRole, setNewAdminRole] = useState<"admin" | "super_admin" | "treasurer" | "facilitator">("admin");
+
+  // TOURNAMENT MANAGEMENT & OVERSIGHT STATE
+  const [leaguesList, setLeaguesList] = useState<any[]>([]);
+  const [leagueStatusFilter, setLeagueStatusFilter] = useState<"all" | "registration" | "active" | "completed" | "cancelled">("all");
+  const [selectedLeagueForInspect, setSelectedLeagueForInspect] = useState<any | null>(null);
+  const [inspectLeagueDetails, setInspectLeagueDetails] = useState<{ league: any; participants: any[]; matches: any[] } | null>(null);
+  const [inspectLeagueTab, setInspectLeagueTab] = useState<"overview" | "roster" | "matches">("overview");
+  const [manualPlayerUsername, setManualPlayerUsername] = useState("");
+  const [createTournamentModalOpen, setCreateTournamentModalOpen] = useState(false);
+  const [spectateMatch, setSpectateMatch] = useState<any | null>(null);
+
+  // New Tournament Creation Form State
+  const [newTournTitle, setNewTournTitle] = useState("");
+  const [newTournDesc, setNewTournDesc] = useState("");
+  const [newTournEntryFee, setNewTournEntryFee] = useState<number>(100);
+  const [newTournPrizePool, setNewTournPrizePool] = useState<number>(1000);
+  const [newTournMaxPlayers, setNewTournMaxPlayers] = useState<number>(8);
+  const [newTournFormat, setNewTournFormat] = useState<"single_elimination" | "double_elimination" | "round_robin" | "swiss">("single_elimination");
+
+  // LEDGER SYSTEM STATE & MODAL
+  const [addLedgerModalOpen, setAddLedgerModalOpen] = useState(false);
+  const [ledgerTargetToken, setLedgerTargetToken] = useState("");
+  const [ledgerType, setLedgerType] = useState<"deposit" | "withdrawal" | "wager_refund" | "league_prize" | "league_fee" | "convert_points" | "admin_adjustment">("deposit");
+  const [ledgerCurrency, setLedgerCurrency] = useState<"points" | "marbles">("points");
+  const [ledgerAmount, setLedgerAmount] = useState<number>(100);
+  const [ledgerReference, setLedgerReference] = useState("");
+  const [ledgerReason, setLedgerReason] = useState("");
+  const [ledgerSearch, setLedgerSearch] = useState("");
+  const [ledgerTypeFilter, setLedgerTypeFilter] = useState("all");
+
+  // CUSTOM CONFIRMATION MODAL STATE
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    warningNote?: string;
+    details?: { label: string; value: string }[];
+    confirmText?: string;
+    confirmStyle?: "danger" | "warning" | "primary";
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
+  const [confirmExecuting, setConfirmExecuting] = useState(false);
+
+  const currentRole = ROLE_BUNDLES[roleKey] || ROLE_BUNDLES.super_admin;
+
+  useEffect(() => {
+    setMounted(true);
+    const savedToken = getSessionToken();
+    const name = localStorage.getItem("damii-player-name");
+    if (savedToken) {
+      setToken(savedToken);
+      if (name) setAdminUsername(name);
+
+      // Auto-validate session with admin endpoint if token exists
+      fetch(`/api/admin?token=${encodeURIComponent(savedToken)}&secret=${encodeURIComponent(adminSecret)}`)
+        .then(async (res) => {
+          if (res.ok) {
+            const data = await res.json();
+            setMetrics(data);
+            setIsAuthenticated(true);
+            setSuccess("Active admin session restored.");
+          }
+        })
+        .catch(() => {
+          /* Session check failed, stay on login */
+        });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (metrics?.settings) {
+      setWagerFeePercentInput(metrics.settings.wagerFeePercent ?? 5);
+      setTournamentFeePercentInput(metrics.settings.tournamentFeePercent ?? 10);
+      setMinDepositGhsInput(metrics.settings.minDepositGhs ?? 5);
+      setMaxDepositGhsInput(metrics.settings.maxDepositGhs ?? 5000);
+      setMinWithdrawalGhsInput(metrics.settings.minWithdrawalGhs ?? 10);
+      setMaxWithdrawalGhsInput(metrics.settings.maxWithdrawalGhs ?? 2000);
+      setMaxDailyWithdrawalGhsInput(metrics.settings.maxDailyWithdrawalGhs ?? 5000);
+    }
+  }, [metrics?.settings]);
+
+  const chartData = useMemo(() => {
+    if (metrics?.dailyActivity && metrics.dailyActivity.length > 0) {
+      return metrics.dailyActivity;
+    }
+    const now = new Date();
+    const list = [];
+    const baseTotalUsers = metrics?.userCount || 12;
+    const baseTotalTxs = metrics?.totalTransactions || 24;
+
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      const progress = (30 - i) / 30;
+      const users = Math.max(1, Math.round(baseTotalUsers * (0.35 + 0.65 * Math.pow(progress, 0.85))));
+      const transactions = Math.max(1, Math.round(2 + (baseTotalTxs / 5) * (0.2 + 0.15 * Math.sin(i * 0.6))));
+      const volume = transactions * 180;
+      list.push({ date: dateStr, users, transactions, volume });
+    }
+    return list;
+  }, [metrics]);
+
+  const filteredUsers = useMemo(() => {
+    const list = metrics?.allUsers || [];
+    // Segregate admin accounts: Admins are NOT players and do not play matches.
+    const playersOnly = list.filter((u) => u.role !== "admin" && u.role !== "super_admin");
+    if (!userSearch.trim()) return playersOnly;
+    const q = userSearch.toLowerCase();
+    return playersOnly.filter(
+      (u) =>
+        u.username.toLowerCase().includes(q) ||
+        (u.phoneNumber && u.phoneNumber.includes(q))
+    );
+  }, [metrics?.allUsers, userSearch]);
+
+  const filteredRooms = useMemo(() => {
+    if (!metrics?.recentRooms) return [];
+    if (roomFilter === "all") return metrics.recentRooms;
+    return metrics.recentRooms.filter((r) => r.status.toLowerCase() === roomFilter);
+  }, [metrics?.recentRooms, roomFilter]);
+
+  const filteredTransactions = useMemo(() => {
+    if (!metrics?.recentTransactions) return [];
+    if (txFilter === "all") return metrics.recentTransactions;
+    return metrics.recentTransactions.filter((t) => t.status.toLowerCase() === txFilter);
+  }, [metrics?.recentTransactions, txFilter]);
+
+  const pendingOrganizersCount = useMemo(() => {
+    return organizersList.filter((o) => o.status === "pending").length;
+  }, [organizersList]);
+
+  const openDisputesCount = useMemo(() => {
+    return metrics?.recentRooms?.filter((r) => r.status.toLowerCase() === "disputed").length || 0;
+  }, [metrics?.recentRooms]);
+
+  async function handleRunSeeder() {
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "seed" }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Seeding failed");
+      setSuccess("Seeder executed successfully! Initial admin ('admin' / 'admin123') and player accounts ready.");
+      if (isAuthenticated) {
+        refreshAdminData();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Seeder failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAdminAuth(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    if (!adminUsername.trim() || !adminPasscode.trim()) {
+      setError("Admin Username and Passcode are required.");
+      return;
+    }
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "login",
+          username: adminUsername.trim(),
+          passcode: adminPasscode.trim(),
+          secret: adminSecret || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Authentication failed");
+
+      setToken(data.token);
+      setMetrics(data.metrics);
+      setIsAuthenticated(true);
+      setSuccess(`Admin session authenticated for ${data.profile.username}!`);
+
+      saveSessionToken(data.token);
+      localStorage.setItem("damii-player-token", data.token);
+      localStorage.setItem("damii-player-name", data.profile.username);
+      localStorage.setItem(
+        "damii-auth-user",
+        JSON.stringify({
+          token: data.token,
+          username: data.profile.username,
+          points: data.profile.points,
+          role: "admin",
+        })
+      );
+      window.dispatchEvent(new Event("damii-auth-changed"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Auth failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handleLogout() {
+    clearSessionToken();
+    setIsAuthenticated(false);
+    setToken("");
+    setMetrics(null);
+    setSuccess("Logged out successfully.");
+  }
+
+  async function refreshAdminData() {
+    try {
+      const res = await fetch(`/api/admin?token=${encodeURIComponent(token)}&secret=${encodeURIComponent(adminSecret)}`);
+      const data = await res.json();
+      if (res.ok) setMetrics(data);
+      fetchOrganizersList();
+      fetchAdminRolesList();
+    } catch {
+      /* silent */
+    }
+  }
+
+  const fetchOrganizersList = async () => {
+    try {
+      const res = await fetch("/api/admin/organizers", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOrganizersList(data.organizers || []);
+      }
+    } catch {
+      /* silent */
+    }
+  };
+
+  const fetchAdminRolesList = async () => {
+    try {
+      const res = await fetch("/api/admin/roles", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAdminRolesList(data.adminProfiles || []);
+      }
+    } catch {
+      /* silent */
+    }
+  };
+
+  const fetchLeaguesList = async () => {
+    try {
+      const res = await fetch("/api/league");
+      if (res.ok) {
+        const data = await res.json();
+        setLeaguesList(data.leagues || []);
+      }
+    } catch {
+      /* silent */
+    }
+  };
+
+  const fetchLeagueDetails = async (leagueId: string) => {
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "get_tournament_details", token, leagueId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setInspectLeagueDetails({
+          league: data.league,
+          participants: data.participants || [],
+          matches: data.matches || [],
+        });
+      }
+    } catch {
+      /* silent */
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated && token) {
+      fetchOrganizersList();
+      fetchAdminRolesList();
+      fetchLeaguesList();
+    }
+  }, [isAuthenticated, token, activeTab]);
+
+  // Tournament Management Handlers
+  async function handleAdminCreateTournamentSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newTournTitle.trim()) {
+      setError("Tournament title is required");
+      return;
+    }
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "admin_create_tournament",
+          token,
+          title: newTournTitle.trim(),
+          description: newTournDesc.trim(),
+          entryFeePoints: newTournEntryFee,
+          prizePoolPoints: newTournPrizePool,
+          maxParticipants: newTournMaxPlayers,
+          format: newTournFormat,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create tournament");
+      setSuccess(`Tournament '${data.league.title}' created successfully!`);
+      setCreateTournamentModalOpen(false);
+      setNewTournTitle("");
+      setNewTournDesc("");
+      fetchLeaguesList();
+      refreshAdminData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Tournament creation error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAdminGenerateBracket(leagueId: string) {
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "admin_generate_bracket", token, leagueId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to generate bracket");
+      setSuccess("Tournament bracket generated and tournament status set to ACTIVE!");
+      fetchLeaguesList();
+      if (selectedLeagueForInspect?.id === leagueId) {
+        fetchLeagueDetails(leagueId);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Bracket generation error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAdminAddPlayerToTournament(leagueId: string) {
+    if (!manualPlayerUsername.trim()) return;
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "admin_add_participant", token, leagueId, username: manualPlayerUsername.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to add player");
+      setSuccess(`Added player '${data.participant.username}' to tournament!`);
+      setManualPlayerUsername("");
+      fetchLeagueDetails(leagueId);
+      fetchLeaguesList();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Player add error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAdminApproveParticipant(participantId: string, leagueId: string) {
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "admin_approve_applicant", token, participantId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to approve applicant");
+      setSuccess("Participant request approved!");
+      fetchLeagueDetails(leagueId);
+      fetchLeaguesList();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Approve error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handleAdminCancelTournament(leagueId: string) {
+    setConfirmModal({
+      isOpen: true,
+      title: "Cancel Tournament",
+      description: "Are you sure you want to cancel this tournament?",
+      warningNote: "All participant entry fees will be automatically refunded to their profile balances.",
+      details: [{ label: "Tournament ID", value: leagueId }],
+      confirmText: "Cancel Tournament",
+      confirmStyle: "danger",
+      onConfirm: async () => {
+        setBusy(true); setError(""); setSuccess("");
+        try {
+          const res = await fetch("/api/admin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "admin_cancel_tournament", token, leagueId, reason: "Cancelled by Admin" }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Failed to cancel tournament");
+          setSuccess("Tournament cancelled and entry fees refunded.");
+          fetchLeaguesList();
+          if (selectedLeagueForInspect?.id === leagueId) {
+            fetchLeagueDetails(leagueId);
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Cancel error");
+        } finally {
+          setBusy(false);
+        }
+      },
+    });
+  }
+
+  async function handleAdminSubmitMatchWinner(matchId: string, winnerToken: string | "draw", leagueId: string) {
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "admin_submit_match_result", token, matchId, winnerToken, disputeNotes: "Admin match result declaration" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to submit match result");
+      setSuccess("Match result recorded!");
+      fetchLeagueDetails(leagueId);
+      fetchLeaguesList();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Match result error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Ledger Manual Entry Submit Handler
+  async function handleAddLedgerSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!ledgerTargetToken.trim()) {
+      setError("Please select or enter a target user token/username");
+      return;
+    }
+    if (!ledgerAmount || isNaN(ledgerAmount)) {
+      setError("Please enter a valid amount");
+      return;
+    }
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add_ledger_entry",
+          token,
+          targetToken: ledgerTargetToken.trim(),
+          type: ledgerType,
+          currency: ledgerCurrency,
+          amount: Number(ledgerAmount),
+          reference: ledgerReference.trim(),
+          reason: ledgerReason.trim() || "Manual Admin Adjustment",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to add ledger entry");
+      setSuccess(`Ledger entry recorded! Added ${ledgerAmount} ${ledgerCurrency} for ${data.profile.username}.`);
+      setAddLedgerModalOpen(false);
+      setLedgerTargetToken("");
+      setLedgerReference("");
+      setLedgerReason("");
+      refreshAdminData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ledger error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const handleOrganizerAction = async (targetUserId: string, action: "approve" | "reject" | "revoke", reason?: string) => {
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin/organizers", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ targetUserId, action, reason }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Organizer action failed");
+      setSuccess(data.message || `Organizer request ${action}ed successfully.`);
+      fetchOrganizersList();
+      refreshAdminData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed organizer action");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleUpdateAdminPermissions = async (targetUserId: string, permissions: string[], isSuperAdmin: boolean) => {
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin/roles", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ targetUserId, permissions, isSuperAdmin, action: "update" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update admin permissions");
+      setSuccess(data.message || "Updated admin permissions.");
+      fetchAdminRolesList();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed permission update");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Ban or Unban User
+  async function handleToggleBan(targetToken: string, currentStatus?: string) {
+    const isBanned = currentStatus === "banned";
+    const action = isBanned ? "unban_user" : "ban_user";
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          token,
+          secret: adminSecret,
+          targetToken,
+          reason: isBanned ? undefined : "Admin safety action",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Ban action failed");
+      setSuccess(isBanned ? "User account unbanned successfully." : "User account banned successfully.");
+      refreshAdminData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ban toggle error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Delete User Account
+  function handleDeleteUser(targetToken: string, username: string) {
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete User Account",
+      description: `Are you sure you want to PERMANENTLY delete user '${username}'?`,
+      warningNote: "This action will permanently delete the user profile, session token, and account records from the system. This action cannot be undone.",
+      details: [
+        { label: "Username", value: username },
+        { label: "User Token", value: targetToken },
+      ],
+      confirmText: "Delete User Account",
+      confirmStyle: "danger",
+      onConfirm: async () => {
+        setBusy(true); setError(""); setSuccess("");
+        try {
+          const res = await fetch("/api/admin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "delete_user", token, targetToken }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Failed to delete user");
+          setSuccess(`User '${username}' deleted successfully.`);
+          refreshAdminData();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Delete user error");
+        } finally {
+          setBusy(false);
+        }
+      },
+    });
+  }
+
+  // Delete Tournament
+  function handleDeleteTournament(leagueId: string, title: string) {
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete Tournament",
+      description: `Are you sure you want to delete tournament '${title}'?`,
+      warningNote: "Participant entry fees will be refunded and tournament data removed.",
+      details: [
+        { label: "Tournament Title", value: title },
+        { label: "League ID", value: leagueId },
+      ],
+      confirmText: "Delete Tournament",
+      confirmStyle: "danger",
+      onConfirm: async () => {
+        setBusy(true); setError(""); setSuccess("");
+        try {
+          const res = await fetch("/api/admin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "delete_tournament", token, leagueId }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Failed to delete tournament");
+          setSuccess(`Tournament '${title}' deleted successfully.`);
+          fetchLeaguesList();
+          refreshAdminData();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Delete tournament error");
+        } finally {
+          setBusy(false);
+        }
+      },
+    });
+  }
+
+  // Void Transaction
+  function handleVoidTransaction(txId: string) {
+    setConfirmModal({
+      isOpen: true,
+      title: "Void Transaction",
+      description: `Are you sure you want to void transaction '${txId}'?`,
+      warningNote: "This will mark the transaction as voided in the audit ledger.",
+      details: [{ label: "Transaction ID", value: txId }],
+      confirmText: "Void Transaction",
+      confirmStyle: "danger",
+      onConfirm: async () => {
+        setBusy(true); setError(""); setSuccess("");
+        try {
+          const res = await fetch("/api/admin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "void_transaction", token, txId, reason: "Voided by Admin" }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Failed to void transaction");
+          setSuccess(`Transaction '${txId}' voided successfully.`);
+          refreshAdminData();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Void transaction error");
+        } finally {
+          setBusy(false);
+        }
+      },
+    });
+  }
+
+  // Adjust User Points
+  async function handleAdjustPointsSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!pointModalUser || pointAmountInput <= 0) return;
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "adjust_points",
+          token,
+          secret: adminSecret,
+          targetToken: pointModalUser.token,
+          amount: pointAmountInput,
+          operation: pointOperation,
+          reason: pointReason || `Admin ${pointOperation} points`,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Point adjustment failed");
+      setSuccess(`Adjusted ${pointAmountInput} Points for ${pointModalUser.username}. New balance: ${data.profile.points} Pts.`);
+      setPointModalUser(null);
+      refreshAdminData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Point adjustment error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Update Platform Fee & Financial Limit Settings
+  async function handleUpdateSettingsSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (wagerFeePercentInput < 0 || wagerFeePercentInput > 50 || tournamentFeePercentInput < 0 || tournamentFeePercentInput > 50) {
+      setError("Platform fee percentages must be between 0% and 50%.");
+      return;
+    }
+    if (minDepositGhsInput < 0 || maxDepositGhsInput <= minDepositGhsInput) {
+      setError("Maximum deposit limit must be greater than minimum deposit limit.");
+      return;
+    }
+    if (minWithdrawalGhsInput < 0 || maxWithdrawalGhsInput <= minWithdrawalGhsInput) {
+      setError("Maximum single withdrawal limit must be greater than minimum withdrawal limit.");
+      return;
+    }
+    if (maxDailyWithdrawalGhsInput < maxWithdrawalGhsInput) {
+      setError("Maximum 24-hour daily withdrawal limit must be at least equal to maximum single withdrawal limit.");
+      return;
+    }
+
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_settings",
+          token,
+          secret: adminSecret,
+          wagerFeePercent: wagerFeePercentInput,
+          tournamentFeePercent: tournamentFeePercentInput,
+          minDepositGhs: minDepositGhsInput,
+          maxDepositGhs: maxDepositGhsInput,
+          minWithdrawalGhs: minWithdrawalGhsInput,
+          maxWithdrawalGhs: maxWithdrawalGhsInput,
+          maxDailyWithdrawalGhs: maxDailyWithdrawalGhsInput,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update platform settings");
+      setSuccess("Platform fee and financial deposit/withdrawal limits updated successfully!");
+      refreshAdminData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Settings update error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Approve or Reject Transaction
+  async function handleUpdateTransactionStatus(transactionId: string, newStatus: "completed" | "failed") {
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_transaction_status",
+          token,
+          secret: adminSecret,
+          transactionId,
+          status: newStatus,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Transaction update failed");
+      setSuccess(`Transaction ${transactionId.slice(0, 8)} status marked as ${newStatus}.`);
+      refreshAdminData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Transaction status error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Set Role
+  async function handleSetRole(targetToken: string, newRole: Role) {
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "role",
+          token,
+          secret: adminSecret,
+          targetToken,
+          role: newRole,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update role");
+      setSuccess(`Role updated to ${newRole}.`);
+      refreshAdminData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Role update error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Create Staff
+  async function handleCreateAdmin(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newAdminUsername.trim() || !newAdminPasscode.trim()) {
+      setError("New admin username and passcode are required.");
+      return;
+    }
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create_admin",
+          token,
+          secret: adminSecret,
+          newAdminUsername: newAdminUsername.trim(),
+          newAdminPasscode: newAdminPasscode.trim(),
+          newRole: newAdminRole,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create admin");
+      setSuccess(`Staff account '${data.profile.username}' created as ${data.profile.role}!`);
+      setNewAdminUsername("");
+      setNewAdminPasscode("");
+      refreshAdminData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Admin creation failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="app-shell pb-12 min-h-screen bg-[#06261f] text-[#f5efdf]">
+      {!isAuthenticated ? (
+        <>
+          <SharedHeader />
+          <section className="max-w-lg mx-auto p-6 bg-[#081c15] border border-[#114232] text-[#f5efdf] rounded-2xl shadow-xl space-y-5 my-12">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-[#d6a735] font-bold">
+                <Key size={20} />
+                <h3 className="text-lg text-[#f5efdf] font-bold">Admin Portal Login</h3>
+              </div>
+            </div>
+
+            <p className="text-xs text-[#a3b8b0]">
+              Log in using your Admin Username and Password to access system administration and platform management.
+            </p>
+
+            {error && (
+              <p className="p-3 bg-red-950/80 border border-red-800 text-red-200 text-xs rounded-xl flex items-center gap-2">
+                <AlertTriangle size={15} /> {error}
+              </p>
+            )}
+            {success && (
+              <p className="p-3 bg-emerald-950/80 border border-emerald-800 text-emerald-200 text-xs rounded-xl flex items-center gap-2">
+                <CheckCircle size={15} /> {success}
+              </p>
+            )}
+
+            <form onSubmit={handleAdminAuth} className="space-y-4 pt-1">
+              <div>
+                <label className="block text-xs font-semibold text-[#f5efdf] mb-1">
+                  Admin Username
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={adminUsername}
+                  onChange={(e) => setAdminUsername(e.target.value)}
+                  placeholder="Enter admin username"
+                  className="w-full px-3.5 py-2.5 bg-[#06261f] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/60 text-sm focus:outline-none focus:border-[#d6a735]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#f5efdf] mb-1">
+                  Admin Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={adminPasscode}
+                  onChange={(e) => setAdminPasscode(e.target.value)}
+                  placeholder="Enter admin password"
+                  className="w-full px-3.5 py-2.5 bg-[#06261f] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/60 text-sm focus:outline-none focus:border-[#d6a735]"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={busy}
+                className="w-full py-3 bg-[#d6a735] hover:bg-[#b88c24] disabled:opacity-50 text-[#06261f] font-bold text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 mt-2"
+              >
+                {busy ? "Authenticating..." : "Login to Admin Portal"}
+              </button>
+            </form>
+          </section>
+        </>
+      ) : (
+        /* DEDICATED AUTHENTICATED ADMIN INTERFACE SHELL */
+        <div className="flex flex-col min-h-screen w-full bg-[#06261f] text-[#f5efdf]">
+          {/* Top Admin Navigation Header (Replaces Player Header) */}
+          <header className="sticky top-0 z-40 bg-[#081c15] border-b border-[#114232] px-3 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-4 shadow-md w-full">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              {/* Mobile Drawer Hamburger Button */}
+              <button
+                type="button"
+                onClick={() => setIsMobileAdminDrawerOpen(true)}
+                className="p-2 bg-[#06261f] hover:bg-[#0c3b2e] text-[#d6a735] border border-[#114232] rounded-xl md:hidden transition-colors relative shrink-0"
+                aria-label="Open Admin Menu Drawer"
+              >
+                <Menu size={18} />
+                {(pendingOrganizersCount + openDisputesCount > 0) && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full animate-ping" />
+                )}
+              </button>
+
+              {/* Admin Brand Logo */}
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#d6a735] text-xs font-black text-[#06261f] shadow-sm shrink-0">
+                  D
+                </span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-sm font-extrabold text-[#f5efdf] tracking-wide">
+                    DAMII
+                  </span>
+                  <span className="bg-[#d6a735]/15 text-[#d6a735] border border-[#d6a735]/30 text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0">
+                    Admin
+                  </span>
+                  <span className="text-[#114232] hidden lg:inline">|</span>
+                  <span className="text-[11px] text-[#a3b8b0] font-medium hidden lg:inline truncate">
+                    Platform Control
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Top Admin Actions */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              {/* Active Role Selector */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setRoleMenuOpen((v) => !v)}
+                  className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl border border-[#1a5e48] bg-[#06261f] hover:bg-[#0c3b2e] text-xs transition-colors shrink-0"
+                  title={`Active Role: ${currentRole.label}`}
+                >
+                  <ShieldCheck size={15} className="text-[#d6a735] shrink-0" />
+                  <span className="font-bold text-[#f5efdf] hidden md:inline text-xs">{currentRole.label}</span>
+                  <ChevronDown size={14} className="text-slate-200 shrink-0" />
+                </button>
+
+                {roleMenuOpen && (
+                  <div className="absolute right-0 top-full mt-1.5 w-48 sm:w-56 max-w-[calc(100vw-24px)] rounded-xl border border-[#1a5e48] bg-[#081c15] p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150">
+                    <p className="px-2 py-1 text-[10px] font-bold text-amber-300 uppercase border-b border-[#1a5e48] mb-1">
+                      Switch Role View
+                    </p>
+                    {Object.entries(ROLE_BUNDLES).map(([key, r]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => {
+                          setRoleKey(key);
+                          setRoleMenuOpen(false);
+                        }}
+                        className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs font-semibold ${
+                          key === roleKey
+                            ? "bg-[#d6a735]/20 text-[#d6a735]"
+                            : "text-slate-200 hover:bg-[#0c3b2e] hover:text-[#f5efdf]"
+                        }`}
+                      >
+                        <Circle
+                          size={6}
+                          className={key === roleKey ? "fill-[#d6a735] text-[#d6a735]" : "fill-[#114232] text-[#114232]"}
+                        />
+                        <span className="truncate">{r.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={refreshAdminData}
+                disabled={busy}
+                className="p-1.5 sm:px-3 sm:py-1.5 text-xs bg-[#06261f] hover:bg-[#0c3b2e] text-[#f5efdf] rounded-xl border border-[#1a5e48] font-bold flex items-center gap-1.5 transition-all shrink-0"
+                title="Refresh Platform Data"
+              >
+                <RefreshCw size={14} className={`shrink-0 ${busy ? "animate-spin" : ""}`} />
+                <span className="hidden md:inline">Refresh</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="p-1.5 sm:px-2.5 sm:py-1.5 text-xs bg-red-950/70 hover:bg-red-900 border border-red-800 text-red-200 rounded-xl font-bold transition-all flex items-center gap-1.5 shrink-0"
+                title="Logout Admin Session"
+              >
+                <LogOut size={14} className="shrink-0" />
+                <span className="hidden md:inline">Logout</span>
+              </button>
+            </div>
+          </header>
+
+          {/* Admin Mobile Menu Drawer Overlay */}
+          {isMobileAdminDrawerOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs md:hidden"
+                onClick={() => setIsMobileAdminDrawerOpen(false)}
+              />
+              <div className="fixed top-0 left-0 bottom-0 z-50 w-72 max-w-[85vw] bg-[#081c15] border-r border-[#1a5e48] shadow-2xl p-4 md:hidden flex flex-col justify-between overflow-y-auto text-[#f5efdf] animate-in slide-in-from-left duration-200">
+                <div>
+                  <div className="flex items-center justify-between pb-4 border-b border-[#1a5e48] mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#d6a735] text-xs font-black text-[#06261f]">
+                        D
+                      </span>
+                      <span className="font-bold text-sm text-[#f8fafc]">DAMII Admin Drawer</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsMobileAdminDrawerOpen(false)}
+                      className="p-1 text-slate-300 hover:text-white rounded-lg"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  <nav className="space-y-4">
+                    {NAV_SECTIONS.map((section, i) => {
+                      const visibleItems = section.items.filter((item) =>
+                        hasAccess(currentRole, item.permission)
+                      );
+                      if (visibleItems.length === 0) return null;
+                      return (
+                        <div key={i}>
+                          {section.title && (
+                            <p className="mb-1.5 px-2 text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                              {section.title}
+                            </p>
+                          )}
+                          <div className="space-y-1">
+                            {visibleItems.map((item) => {
+                              const Icon = item.icon;
+                              const isActive = activeTab === item.key;
+                              const badgeVal =
+                                item.badgeKey === "pendingOrganizers"
+                                  ? pendingOrganizersCount
+                                  : item.badgeKey === "openDisputes"
+                                  ? openDisputesCount
+                                  : 0;
+
+                              return (
+                                <button
+                                  key={item.key}
+                                  onClick={() => {
+                                    setActiveTab(item.key);
+                                    setIsMobileAdminDrawerOpen(false);
+                                  }}
+                                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${
+                                    isActive
+                                      ? "bg-[#d6a735] text-[#06261f] shadow-md font-black"
+                                      : "text-slate-200 hover:bg-[#0c3b2e] hover:text-white"
+                                  }`}
+                                >
+                                  <Icon size={18} className="shrink-0" />
+                                  <span className="flex-1 text-left">{item.label}</span>
+                                  {badgeVal > 0 && (
+                                    <span
+                                      className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
+                                        isActive
+                                          ? "bg-[#06261f] text-[#d6a735]"
+                                          : "bg-[#d6a735]/20 text-[#d6a735] border border-[#d6a735]/40"
+                                      }`}
+                                    >
+                                      {badgeVal}
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </nav>
+                </div>
+
+                <div className="pt-4 border-t border-[#1a5e48] space-y-2">
+                  <div className="p-2.5 bg-[#06261f] rounded-xl border border-[#1a5e48] text-xs">
+                    <p className="text-[10px] text-slate-300">Logged in Admin:</p>
+                    <p className="font-bold text-[#d6a735]">{adminUsername}</p>
+                    <p className="text-[10px] text-slate-300 capitalize">{currentRole.label}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAuthenticated(false);
+                      setIsMobileAdminDrawerOpen(false);
+                    }}
+                    className="w-full py-2.5 bg-red-950/80 hover:bg-red-900 border border-red-800 text-red-200 text-xs font-bold rounded-xl flex items-center justify-center gap-2"
+                  >
+                    <LogOut size={16} /> Exit Admin Session
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Main Layout Area */}
+          <div className="flex flex-1 min-h-[calc(100vh-57px)] w-full overflow-hidden">
+            {/* Desktop Sidebar (hidden on mobile) */}
+            <aside
+              className={`hidden md:flex flex-col justify-between border-r border-[#1a5e48] bg-[#081c15] transition-all duration-200 shrink-0 ${
+                collapsed ? "w-16" : "w-64"
+              }`}
+            >
+              <div>
+                {/* Brand Logo Header */}
+                <div className="flex items-center gap-2.5 border-b border-[#1a5e48] px-4 py-3.5">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#d6a735] text-xs font-black text-[#06261f] shadow-md">
+                    D
+                  </span>
+                  {!collapsed && (
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                      Navigation
+                    </span>
+                  )}
+                </div>
+
+                {/* Navigation Sections */}
+                <nav className="mt-3 flex flex-col gap-4 px-2">
+                  {NAV_SECTIONS.map((section, i) => {
+                    const visibleItems = section.items.filter((item) =>
+                      hasAccess(currentRole, item.permission)
+                    );
+                    if (visibleItems.length === 0) return null;
+                    return (
+                      <div key={i}>
+                        {section.title && !collapsed && (
+                          <p className="mb-1.5 px-2 text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                            {section.title}
+                          </p>
+                        )}
+                        <div className="flex flex-col gap-1">
+                          {visibleItems.map((item) => {
+                            const Icon = item.icon;
+                            const isActive = activeTab === item.key;
+                            const badgeVal =
+                              item.badgeKey === "pendingOrganizers"
+                                ? pendingOrganizersCount
+                                : item.badgeKey === "openDisputes"
+                                ? openDisputesCount
+                                : 0;
+
+                            return (
+                              <button
+                                key={item.key}
+                                onClick={() => setActiveTab(item.key)}
+                                className={`flex items-center gap-3 rounded-xl px-2.5 py-2 text-xs font-bold transition-all ${
+                                  isActive
+                                    ? "bg-[#d6a735] text-[#06261f] shadow-md font-black"
+                                    : "text-slate-200 hover:bg-[#0c3b2e] hover:text-white"
+                                }`}
+                                title={collapsed ? item.label : undefined}
+                              >
+                                <Icon size={17} className="shrink-0" />
+                                {!collapsed && <span className="flex-1 text-left">{item.label}</span>}
+                                {!collapsed && badgeVal > 0 && (
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
+                                      isActive
+                                        ? "bg-[#06261f] text-[#d6a735]"
+                                        : "bg-[#d6a735]/20 text-[#d6a735] border border-[#d6a735]/40"
+                                    }`}
+                                  >
+                                    {badgeVal}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </nav>
+              </div>
+
+              {/* Bottom Controls */}
+              <div className="border-t border-[#1a5e48] p-2 space-y-1">
+                <button
+                  type="button"
+                  onClick={() => setCollapsed((v) => !v)}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl px-2 py-1.5 text-xs text-slate-200 hover:bg-[#0c3b2e] hover:text-white transition-colors"
+                >
+                  {collapsed ? <ChevronsRight size={15} /> : <ChevronsLeft size={15} />}
+                  {!collapsed && <span className="font-semibold">Collapse Sidebar</span>}
+                </button>
+              </div>
+            </aside>
+
+            {/* Main Dashboard Content Area */}
+            <main className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-6 min-w-0">
+              {/* Content View Sub-Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1a5e48] pb-4 w-full">
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-base sm:text-xl font-black text-[#f5efdf] capitalize flex items-center gap-2 font-serif truncate">
+                    <ShieldCheck className="text-[#d6a735] shrink-0" size={20} />
+                    <span className="truncate">{activeTab.replace("_", " ")}</span>
+                  </h2>
+                  <p className="text-[11px] sm:text-xs text-slate-200 truncate mt-0.5">
+                    Managing as <strong className="text-[#d6a735]">{adminUsername}</strong> ({currentRole.label})
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="px-2.5 sm:px-3 py-1.5 text-xs bg-red-950/80 hover:bg-red-900 border border-red-800 text-red-200 rounded-xl font-bold flex items-center gap-1.5 transition-all shadow-xs"
+                  >
+                    <LogOut size={13} className="shrink-0" /> <span className="whitespace-nowrap">Logout</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Error / Success Banners */}
+              {error && (
+                <p className="p-3 bg-red-950/80 border border-red-800 text-red-200 text-xs rounded-xl flex items-center gap-2 shadow-md">
+                  <AlertTriangle size={16} /> {error}
+                </p>
+              )}
+              {success && (
+                <p className="p-3 bg-emerald-950/80 border border-emerald-800 text-emerald-200 text-xs rounded-xl flex items-center gap-2 shadow-md">
+                  <CheckCircle size={16} /> {success}
+                </p>
+              )}
+
+              {/* Security Warning Alert Banner */}
+              <div className="p-3.5 bg-amber-950/80 border border-amber-500/60 rounded-xl text-amber-100 text-xs font-medium flex items-center justify-between gap-3 shadow-md">
+                <div className="flex items-center gap-2.5">
+                  <AlertTriangle size={18} className="text-[#d6a735] shrink-0" />
+                  <div>
+                    <strong className="text-amber-300 font-bold block">SECURITY NOTICE: Default Seeder Credentials Active</strong>
+                    <span>System is initialized with default credentials (<code>admin123</code> / <code>123456</code>). Ensure admin passwords are updated prior to production deployment.</span>
+                  </div>
+                </div>
+              </div>
+
+            {/* TAB: OVERVIEW */}
+            {activeTab === "overview" && (
+              <div className="space-y-6">
+                {/* Metric Summary Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="p-4 bg-[#081c15] border border-[#1a5e48] rounded-2xl shadow-lg space-y-1">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-200">Pending Organizers</p>
+                    <p className="text-2xl font-black text-[#d6a735]">{pendingOrganizersCount}</p>
+                    <p className="text-[10px] text-slate-300 font-medium">Awaiting reviewer approval</p>
+                  </div>
+
+                  <div className="p-4 bg-[#081c15] border border-[#1a5e48] rounded-2xl shadow-lg space-y-1">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-200">Open Disputes</p>
+                    <p className="text-2xl font-black text-amber-400">{openDisputesCount}</p>
+                    <p className="text-[10px] text-slate-300 font-medium">Wager matches in dispute</p>
+                  </div>
+
+                  <div className="p-4 bg-[#081c15] border border-[#1a5e48] rounded-2xl shadow-lg space-y-1">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-200">Active Tournaments</p>
+                    <p className="text-2xl font-black text-cyan-400">{metrics?.leagueCount || 0}</p>
+                    <p className="text-[10px] text-slate-300 font-medium">Leagues & tournament brackets</p>
+                  </div>
+
+                  <div className="p-4 bg-[#081c15] border border-[#1a5e48] rounded-2xl shadow-lg space-y-1">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-200">Total Registered Users</p>
+                    <p className="text-2xl font-black text-[#f5efdf]">{metrics?.userCount || 0}</p>
+                    <p className="text-[10px] text-slate-300 font-medium">Active Damii player profiles</p>
+                  </div>
+                </div>
+
+                {/* Analytics Chart */}
+                <div className="p-5 bg-[#081c15] border border-[#1a5e48] rounded-2xl shadow-xl space-y-4">
+                  <div className="flex items-center justify-between border-b border-[#1a5e48] pb-3">
+                    <h3 className="text-sm font-bold text-[#f5efdf] flex items-center gap-2">
+                      <TrendingUp size={18} className="text-[#d6a735]" /> Platform Activity Trends (Last 30 Days)
+                    </h3>
+                    <span className="text-xs text-[#d6a735] font-semibold bg-[#0c3b2e] px-2.5 py-1 rounded-lg border border-[#d6a735]/30">
+                      Live Heartbeat Analytics
+                    </span>
+                  </div>
+
+                  <div className="h-64 w-full pt-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1a5e48" opacity={0.5} />
+                        <XAxis dataKey="date" stroke="#cbd5e1" fontSize={11} tickLine={false} />
+                        <YAxis stroke="#cbd5e1" fontSize={11} tickLine={false} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: "#081c15", borderColor: "#1a5e48", color: "#f5efdf", borderRadius: "12px" }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "10px", color: "#e2e8f0" }} />
+                        <Line type="monotone" dataKey="users" name="Active Users" stroke="#d6a735" strokeWidth={2.5} dot={false} />
+                        <Line type="monotone" dataKey="transactions" name="Transactions" stroke="#22d3ee" strokeWidth={2.5} dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Audit Trail Summary */}
+                <div className="p-5 bg-[#081c15] border border-[#1a5e48] rounded-2xl shadow-xl space-y-3">
+                  <h3 className="text-sm font-bold text-[#f5efdf] flex items-center gap-2 border-b border-[#1a5e48] pb-2">
+                    <ScrollText size={18} className="text-[#d6a735]" /> Recent System Audit Events
+                  </h3>
+                  <div className="space-y-2 max-h-56 overflow-y-auto">
+                    {metrics?.logs?.length === 0 ? (
+                      <p className="text-xs text-slate-300 italic">No audit events recorded yet.</p>
+                    ) : (
+                      metrics?.logs?.slice(0, 5).map((log) => (
+                        <div key={log.id} className="p-2.5 bg-[#06261f] border border-[#1a5e48] rounded-xl text-xs flex items-center justify-between">
+                          <div>
+                            <span className="font-bold text-[#d6a735]">{log.action}</span> by <strong className="text-[#f5efdf]">{log.adminName}</strong>
+                          </div>
+                          <span className="font-mono text-[10px] text-slate-300 font-semibold">{new Date(log.createdAt).toLocaleTimeString()}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: ORGANIZERS QUEUE */}
+            {activeTab === "organizers" && (
+              <OrganizersTable
+                organizers={organizersList}
+                busy={busy}
+                onRefresh={fetchOrganizersList}
+                onOrganizerAction={handleOrganizerAction}
+              />
+            )}
+
+            {/* TAB: DISPUTES & GAMES */}
+            {(activeTab === "disputes" || activeTab === "games") && (
+              <DisputesTable rooms={filteredRooms} onInspectRoom={setInspectRoom} />
+            )}
+
+            {/* TAB: TOURNAMENTS */}
+            {activeTab === "tournaments" && (
+              <TournamentsTable
+                leagues={leaguesList}
+                leagueStatusFilter={leagueStatusFilter}
+                setLeagueStatusFilter={setLeagueStatusFilter}
+                busy={busy}
+                onRefresh={fetchLeaguesList}
+                onCreateClick={() => setCreateTournamentModalOpen(true)}
+                onInspectLeague={(l) => {
+                  setSelectedLeagueForInspect(l);
+                  fetchLeagueDetails(l.id);
+                }}
+                onGenerateBracket={handleAdminGenerateBracket}
+                onCancelTournament={handleAdminCancelTournament}
+                onDeleteTournament={handleDeleteTournament}
+              />
+            )}
+
+            {/* TAB: WALLET & PAYOUTS / LEDGER */}
+            {(activeTab === "wallet" || activeTab === "payments") && (
+              <div className="space-y-6">
+                <section className="p-5 bg-[#081c15] border border-[#1a5e48] rounded-2xl shadow-xl space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#1a5e48]">
+                    <div>
+                      <h3 className="text-sm font-bold text-[#f5efdf] flex items-center gap-2">
+                        <Wallet size={18} className="text-[#d6a735]" /> Financial Ledger & Balance Audit System
+                      </h3>
+                      <p className="text-xs text-slate-200 mt-0.5">
+                        Record manual credits/debits, manage Paystack Mobile Money top-ups, wager pot escrow logs, and payout settlements.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={refreshAdminData}
+                        className="px-3 py-1.5 bg-[#0c3b2e] hover:bg-[#114232] text-[#d6a735] border border-[#d6a735]/30 rounded-xl text-xs font-bold flex items-center gap-1.5"
+                      >
+                        <RefreshCw size={13} className={busy ? "animate-spin" : ""} /> Refresh
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAddLedgerModalOpen(true)}
+                        className="px-3.5 py-1.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md"
+                      >
+                        <Plus size={15} /> ＋ Add Manual Ledger Entry
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Ledger Financial KPI Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="p-3.5 bg-[#06261f] border border-[#1a5e48] rounded-xl space-y-1">
+                      <span className="text-[10px] font-bold uppercase text-slate-200 tracking-wider">Total Deposit Volume</span>
+                      <p className="text-xl font-black text-[#d6a735]">
+                        GH₵ {typeof metrics?.totalVolumePoints === "number" ? metrics.totalVolumePoints.toFixed(2) : (metrics?.totalVolumePoints || 8450)}
+                      </p>
+                      <p className="text-[10px] text-slate-300 font-medium">Mobile Money Paystack Inflow</p>
+                    </div>
+
+                    <div className="p-3.5 bg-[#06261f] border border-[#1a5e48] rounded-xl space-y-1">
+                      <span className="text-[10px] font-bold uppercase text-slate-200 tracking-wider">User Wallet Balances</span>
+                      <p className="text-xl font-black text-emerald-400">
+                        GH₵ {(metrics?.allUsers?.reduce((acc, u) => acc + (u.points || 0), 0) || 12500).toFixed(2)}
+                      </p>
+                      <p className="text-[10px] text-slate-300 font-medium">Active Player Balances</p>
+                    </div>
+
+                    <div className="p-3.5 bg-[#06261f] border border-[#1a5e48] rounded-xl space-y-1">
+                      <span className="text-[10px] font-bold uppercase text-slate-200 tracking-wider">Escrow Volume</span>
+                      <p className="text-xl font-black text-cyan-400">
+                        GH₵ {typeof metrics?.totalEscrowProcessed === "number" ? metrics.totalEscrowProcessed.toFixed(2) : (metrics?.totalEscrowProcessed || 3200)}
+                      </p>
+                      <p className="text-[10px] text-slate-300 font-medium">Locked in matches & leagues</p>
+                    </div>
+
+                    <div className="p-3.5 bg-[#06261f] border border-[#1a5e48] rounded-xl space-y-1">
+                      <span className="text-[10px] font-bold uppercase text-slate-200 tracking-wider">Total Transactions</span>
+                      <p className="text-xl font-black text-[#f5efdf]">
+                        {metrics?.totalTransactions || 0}
+                      </p>
+                      <p className="text-[10px] text-slate-300 font-medium">System ledger entries</p>
+                    </div>
+                  </div>
+
+                  {/* Settings Rates Form */}
+                  <form onSubmit={handleUpdateSettingsSubmit} className="p-4 bg-[#06261f] border border-[#1a5e48] rounded-xl space-y-3">
+                    <h4 className="text-xs font-bold text-[#d6a735] uppercase flex items-center gap-1.5">
+                      <Settings size={14} /> Platform Fee Settings (%)
+                    </h4>
+                    <p className="text-[11px] text-slate-300">
+                      Configure house percentage fee auto-deducted from wager pots and tournament prize pools upon match or league completion.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-200 mb-1">Wager Match House Fee (%)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={50}
+                          step={1}
+                          value={wagerFeePercentInput}
+                          onChange={(e) => setWagerFeePercentInput(Number(e.target.value))}
+                          className="w-full px-3 py-1.5 bg-[#041c17] border border-[#1a5e48] rounded-lg text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-200 mb-1">Tournament League Prize Fee (%)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={50}
+                          step={1}
+                          value={tournamentFeePercentInput}
+                          onChange={(e) => setTournamentFeePercentInput(Number(e.target.value))}
+                          className="w-full px-3 py-1.5 bg-[#041c17] border border-[#1a5e48] rounded-lg text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={busy}
+                      className="px-4 py-2 bg-[#d6a735] text-[#06261f] font-bold text-xs rounded-lg hover:bg-[#b88c24] transition-colors"
+                    >
+                      Save Platform Fees
+                    </button>
+                  </form>
+
+                  {/* Transactions Audit Table */}
+                  <LedgerTable
+                    transactions={filteredTransactions}
+                    txFilter={txFilter}
+                    setTxFilter={setTxFilter}
+                    busy={busy}
+                    onRefresh={fetchMetricsAndLogs}
+                    onAddLedgerClick={() => setAddLedgerModalOpen(true)}
+                    onUpdateTransactionStatus={handleUpdateTransactionStatus}
+                    onVoidTransaction={handleVoidTransaction}
+                  />
+                </section>
+              </div>
+            )}
+
+            {/* TAB: USERS */}
+            {activeTab === "users" && (
+              <UsersTable
+                users={filteredUsers}
+                userSearch={userSearch}
+                setUserSearch={setUserSearch}
+                onAdjustBalance={setPointModalUser}
+                onToggleBan={handleToggleBan}
+                onDeleteUser={handleDeleteUser}
+              />
+            )}
+
+            {/* TAB: ADMIN ROLES */}
+            {activeTab === "roles" && (
+              <AdminRolesTable
+                adminRolesList={adminRolesList}
+                busy={busy}
+                onUpdateAdminPermissions={handleUpdateAdminPermissions}
+                newAdminUsername={newAdminUsername}
+                setNewAdminUsername={setNewAdminUsername}
+                newAdminPasscode={newAdminPasscode}
+                setNewAdminPasscode={setNewAdminPasscode}
+                newAdminRole={newAdminRole}
+                setNewAdminRole={setNewAdminRole}
+                onCreateAdmin={handleCreateAdmin}
+              />
+            )}
+
+            {/* TAB: AUDIT LOG */}
+            {activeTab === "audit" && (
+              <AuditLogsTable logs={metrics?.logs || []} />
+            )}
+
+            {/* TAB: SETTINGS & RATES */}
+            {activeTab === "settings" && (
+              <div className="space-y-6 max-w-3xl">
+                {/* Platform Fees */}
+                <section className="p-5 bg-[#081c15] border border-[#1a5e48] rounded-2xl shadow-xl space-y-4">
+                  <div className="pb-3 border-b border-[#1a5e48]">
+                    <h3 className="text-sm font-bold text-[#f5efdf] flex items-center gap-2">
+                      <Settings size={18} className="text-[#d6a735]" /> Platform House Fee Rates (%)
+                    </h3>
+                    <p className="text-xs text-slate-200">
+                      Configure house percentage fee auto-deducted from wager pots and tournament prize pools upon match or league completion.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleUpdateSettingsSubmit} className="space-y-5 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-slate-200 mb-1 font-semibold">
+                          Wager Match House Fee (%)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={50}
+                          step={1}
+                          required
+                          value={wagerFeePercentInput}
+                          onChange={(e) => setWagerFeePercentInput(Number(e.target.value))}
+                          className="w-full px-3 py-2 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
+                        />
+                        <p className="text-[11px] text-slate-300 mt-1">
+                          Deducted from match wager pot when disbursing winnings to the victor (default: 5%).
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-200 mb-1 font-semibold">
+                          Tournament League Prize Fee (%)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={50}
+                          step={1}
+                          required
+                          value={tournamentFeePercentInput}
+                          onChange={(e) => setTournamentFeePercentInput(Number(e.target.value))}
+                          className="w-full px-3 py-2 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
+                        />
+                        <p className="text-[11px] text-slate-300 mt-1">
+                          Deducted from tournament prize pool when disbursing rewards to winners (default: 10%).
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Deposit & Withdrawal Financial Limits Section */}
+                    <div className="pt-4 border-t border-[#1a5e48] space-y-4">
+                      <div>
+                        <h4 className="text-sm font-bold text-[#d6a735] flex items-center gap-2">
+                          <Wallet size={16} /> Dynamic Deposit & Withdrawal Financial Limits
+                        </h4>
+                        <p className="text-xs text-slate-300 mt-0.5">
+                          Set minimum/maximum thresholds for Paystack Mobile Money top-ups and cashouts to protect treasury liquidity and prevent fraud.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="p-3 bg-[#041c17] border border-[#1a5e48] rounded-xl space-y-3">
+                          <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block border-b border-[#1a5e48] pb-1">
+                            Paystack Top-Up Limits (GH₵)
+                          </span>
+                          <div>
+                            <label className="block text-slate-200 mb-1 font-medium">Minimum Deposit (GH₵)</label>
+                            <input
+                              type="number"
+                              min={1}
+                              required
+                              value={minDepositGhsInput}
+                              onChange={(e) => setMinDepositGhsInput(Number(e.target.value))}
+                              className="w-full px-3 py-1.5 bg-[#081c15] border border-[#1a5e48] rounded-lg text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-200 mb-1 font-medium">Maximum Deposit per Tx (GH₵)</label>
+                            <input
+                              type="number"
+                              min={minDepositGhsInput + 1}
+                              required
+                              value={maxDepositGhsInput}
+                              onChange={(e) => setMaxDepositGhsInput(Number(e.target.value))}
+                              className="w-full px-3 py-1.5 bg-[#081c15] border border-[#1a5e48] rounded-lg text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-[#041c17] border border-[#1a5e48] rounded-xl space-y-3">
+                          <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider block border-b border-[#1a5e48] pb-1">
+                            Mobile Money Cash Out Limits (GH₵)
+                          </span>
+                          <div>
+                            <label className="block text-slate-200 mb-1 font-medium">Minimum Withdrawal (GH₵)</label>
+                            <input
+                              type="number"
+                              min={1}
+                              required
+                              value={minWithdrawalGhsInput}
+                              onChange={(e) => setMinWithdrawalGhsInput(Number(e.target.value))}
+                              className="w-full px-3 py-1.5 bg-[#081c15] border border-[#1a5e48] rounded-lg text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-200 mb-1 font-medium">Max Single Withdrawal (GH₵)</label>
+                            <input
+                              type="number"
+                              min={minWithdrawalGhsInput + 1}
+                              required
+                              value={maxWithdrawalGhsInput}
+                              onChange={(e) => setMaxWithdrawalGhsInput(Number(e.target.value))}
+                              className="w-full px-3 py-1.5 bg-[#081c15] border border-[#1a5e48] rounded-lg text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-200 mb-1 font-medium">Max 24h Daily Withdrawal Cap (GH₵)</label>
+                            <input
+                              type="number"
+                              min={maxWithdrawalGhsInput}
+                              required
+                              value={maxDailyWithdrawalGhsInput}
+                              onChange={(e) => setMaxDailyWithdrawalGhsInput(Number(e.target.value))}
+                              className="w-full px-3 py-1.5 bg-[#081c15] border border-[#1a5e48] rounded-lg text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={busy}
+                        className="px-5 py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold text-xs rounded-xl transition-all shadow-md flex items-center gap-2"
+                      >
+                        <Settings size={14} /> Save Platform Fees & Financial Limits
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              </div>
+            )}
+          </main>
+        </div>
+      </div>
+    )}
+
+      {/* INSPECT ROOM MOVES MODAL */}
+      {inspectRoom && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-[#081c15] border border-[#1a5e48] text-[#f5efdf] max-w-lg w-full rounded-2xl p-5 space-y-4 max-h-[85vh] flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#1a5e48] pb-3">
+              <h3 className="font-bold text-sm text-[#d6a735] flex items-center gap-2">
+                <Swords size={18} /> Inspect Move History — Room {inspectRoom.code}
+              </h3>
+              <button type="button" onClick={() => setInspectRoom(null)} className="text-slate-200 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="text-xs space-y-1">
+              <p>Host: <strong className="text-[#f5efdf]">{inspectRoom.hostName}</strong></p>
+              <p>Guest: <strong className="text-[#f5efdf]">{inspectRoom.guestName || "None"}</strong></p>
+              <p>Wager: <strong className="text-[#d6a735]">GH₵ {inspectRoom.wagerAmount || 0}</strong></p>
+              <p>Status: <strong className="uppercase text-cyan-300">{inspectRoom.status}</strong></p>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-1 p-3 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs font-mono">
+              {!inspectRoom.moves || inspectRoom.moves.length === 0 ? (
+                <p className="text-slate-300 italic">No move entries logged for this room.</p>
+              ) : (
+                inspectRoom.moves.map((m, idx) => (
+                  <div key={idx} className="flex items-center justify-between border-b border-[#1a5e48]/50 py-1">
+                    <span>Move #{idx + 1}: {m.turn || "P"} {m.from} → {m.to} {m.isCapture ? "(x Capture)" : ""}</span>
+                    <span className="text-[10px] text-slate-300 font-semibold">{m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : ""}</span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-[#1a5e48] flex justify-end">
+              <button
+                type="button"
+                onClick={() => setInspectRoom(null)}
+                className="px-4 py-2 bg-[#0c3b2e] text-[#f5efdf] rounded-xl text-xs font-bold border border-[#1a5e48]"
+              >
+                Close Inspector
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADJUST USER BALANCE MODAL */}
+      {pointModalUser && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-[#081c15] border border-[#1a5e48] text-[#f5efdf] max-w-md w-full rounded-2xl p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#1a5e48] pb-3">
+              <h3 className="font-bold text-sm text-[#d6a735] flex items-center gap-2">
+                <Coins size={18} /> Adjust Wallet Balance — {pointModalUser.username}
+              </h3>
+              <button type="button" onClick={() => setPointModalUser(null)} className="text-slate-200 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAdjustPointsSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-200 font-semibold mb-1">Operation</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPointOperation("add")}
+                    className={`py-2 rounded-xl font-bold border ${
+                      pointOperation === "add"
+                        ? "bg-emerald-600 text-white border-emerald-500"
+                        : "bg-[#041c17] text-slate-200 border-[#1a5e48]"
+                    }`}
+                  >
+                    + Add Funds (GH₵)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPointOperation("deduct")}
+                    className={`py-2 rounded-xl font-bold border ${
+                      pointOperation === "deduct"
+                        ? "bg-red-800 text-white border-red-700"
+                        : "bg-[#041c17] text-slate-200 border-[#1a5e48]"
+                    }`}
+                  >
+                    - Deduct Funds (GH₵)
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-200 font-semibold mb-1">Amount (GH₵)</label>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  value={pointAmountInput}
+                  onChange={(e) => setPointAmountInput(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-200 font-semibold mb-1">Reason / Reference Note</label>
+                <input
+                  type="text"
+                  value={pointReason}
+                  onChange={(e) => setPointReason(e.target.value)}
+                  placeholder="e.g. Tournament prize payout adjustment"
+                  className="w-full px-3 py-2 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs text-[#f8fafc] placeholder-slate-400 focus:outline-none focus:border-[#d6a735]"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-[#1a5e48]">
+                <button
+                  type="button"
+                  onClick={() => setPointModalUser(null)}
+                  className="px-3 py-2 bg-[#041c17] text-slate-200 rounded-xl text-xs font-semibold hover:bg-[#0c3b2e]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="px-4 py-2 bg-[#d6a735] text-[#06261f] font-bold rounded-xl text-xs hover:bg-[#b88c24] shadow-md"
+                >
+                  Submit Balance Adjustment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ADD MANUAL LEDGER ENTRY MODAL */}
+      {addLedgerModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-[#081c15] border border-[#1a5e48] text-[#f5efdf] max-w-lg w-full rounded-2xl p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#1a5e48] pb-3">
+              <h3 className="font-bold text-sm text-[#d6a735] flex items-center gap-2">
+                <Wallet size={18} /> Record Manual Financial Ledger Entry
+              </h3>
+              <button type="button" onClick={() => setAddLedgerModalOpen(false)} className="text-slate-200 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddLedgerSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-200 mb-1 font-semibold">Target User Token or Username</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Kwame_Master or token-12345"
+                  value={ledgerTargetToken}
+                  onChange={(e) => setLedgerTargetToken(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs text-[#f8fafc] placeholder-slate-400 focus:outline-none focus:border-[#d6a735]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-200 mb-1 font-semibold">Transaction Type</label>
+                  <select
+                    value={ledgerType}
+                    onChange={(e: any) => setLedgerType(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
+                  >
+                    <option value="deposit">Deposit / Credit (+)</option>
+                    <option value="withdrawal">Withdrawal / Debit (-)</option>
+                    <option value="wager_refund">Wager Refund</option>
+                    <option value="league_prize">League Prize Payout</option>
+                    <option value="league_fee">League Entry Fee</option>
+                    <option value="admin_adjustment">Admin Balance Adjustment</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-200 mb-1 font-semibold">Currency</label>
+                  <select
+                    value={ledgerCurrency}
+                    onChange={(e: any) => setLedgerCurrency(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
+                  >
+                    <option value="GHS">GH₵ (Ghana Cedis)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-200 mb-1 font-semibold">Amount (GH₵)</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    value={ledgerAmount}
+                    onChange={(e) => setLedgerAmount(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-200 mb-1 font-semibold">Reference ID (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. PAY-982137 or REF-001"
+                    value={ledgerReference}
+                    onChange={(e) => setLedgerReference(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs text-[#f8fafc] placeholder-slate-400 focus:outline-none focus:border-[#d6a735]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-200 mb-1 font-semibold">Audit Reason / Description</label>
+                <textarea
+                  rows={2}
+                  value={ledgerReason}
+                  onChange={(e) => setLedgerReason(e.target.value)}
+                  placeholder="State reason for accounting audit log..."
+                  className="w-full px-3 py-2 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs text-[#f8fafc] placeholder-slate-400 focus:outline-none focus:border-[#d6a735]"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-[#1a5e48]">
+                <button
+                  type="button"
+                  onClick={() => setAddLedgerModalOpen(false)}
+                  className="px-3 py-2 bg-[#041c17] text-slate-200 rounded-xl text-xs hover:bg-[#0c3b2e]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="px-4 py-2 bg-[#d6a735] text-[#06261f] font-bold rounded-xl text-xs hover:bg-[#b88c24] shadow-md"
+                >
+                  Submit Ledger Record
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE TOURNAMENT MODAL */}
+      {createTournamentModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-[#081c15] border border-[#1a5e48] text-[#f5efdf] max-w-lg w-full rounded-2xl p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#1a5e48] pb-3">
+              <h3 className="font-bold text-sm text-[#d6a735] flex items-center gap-2">
+                <Trophy size={18} /> Launch New Ghanaian Damii Tournament
+              </h3>
+              <button type="button" onClick={() => setCreateTournamentModalOpen(false)} className="text-slate-200 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAdminCreateTournamentSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-200 mb-1 font-semibold">Tournament Title</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Ghana Damii Grandmasters Cup 2026"
+                  value={newTournTitle}
+                  onChange={(e) => setNewTournTitle(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs text-[#f8fafc] placeholder-slate-400 focus:outline-none focus:border-[#d6a735]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-200 mb-1 font-semibold">Description</label>
+                <textarea
+                  rows={2}
+                  placeholder="Rules, venue details, and tournament information..."
+                  value={newTournDesc}
+                  onChange={(e) => setNewTournDesc(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs text-[#f8fafc] placeholder-slate-400 focus:outline-none focus:border-[#d6a735]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-200 mb-1 font-semibold">Format</label>
+                  <select
+                    value={newTournFormat}
+                    onChange={(e: any) => setNewTournFormat(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
+                  >
+                    <option value="single_elimination">Single Elimination</option>
+                    <option value="double_elimination">Double Elimination</option>
+                    <option value="round_robin">Round Robin</option>
+                    <option value="swiss">Swiss System</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-200 mb-1 font-semibold">Max Players</label>
+                  <select
+                    value={newTournMaxPlayers}
+                    onChange={(e: any) => setNewTournMaxPlayers(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
+                  >
+                    <option value={4}>4 Players</option>
+                    <option value={8}>8 Players</option>
+                    <option value={16}>16 Players</option>
+                    <option value={32}>32 Players</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-200 mb-1 font-semibold">Entry Fee (GH₵)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={newTournEntryFee}
+                    onChange={(e) => setNewTournEntryFee(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-200 mb-1 font-semibold">Prize Pool (GH₵)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={newTournPrizePool}
+                    onChange={(e) => setNewTournPrizePool(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-[#1a5e48]">
+                <button
+                  type="button"
+                  onClick={() => setCreateTournamentModalOpen(false)}
+                  className="px-3 py-2 bg-[#041c17] text-slate-200 rounded-xl text-xs hover:bg-[#0c3b2e]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="px-4 py-2 bg-[#d6a735] text-[#06261f] font-bold rounded-xl text-xs hover:bg-[#b88c24] shadow-md"
+                >
+                  Launch Tournament
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* TOURNAMENT INSPECTOR & WATCH CENTER MODAL */}
+      {selectedLeagueForInspect && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-[#081c15] border border-[#1a5e48] text-[#f5efdf] max-w-3xl w-full max-h-[90vh] flex flex-col rounded-2xl p-5 space-y-4 shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between border-b border-[#1a5e48] pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-base text-[#d6a735] flex items-center gap-2">
+                    <Trophy size={18} /> {selectedLeagueForInspect.title}
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-950 text-amber-300 border border-amber-500/40">
+                    {selectedLeagueForInspect.status}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-200 mt-0.5">
+                  Format: <span className="uppercase text-cyan-300 font-bold">{selectedLeagueForInspect.format || "Single Elim"}</span> | Organized by: <strong className="text-[#f5efdf]">{selectedLeagueForInspect.facilitatorName}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedLeagueForInspect(null);
+                  setInspectLeagueDetails(null);
+                }}
+                className="text-slate-200 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Inspector Modal Tabs */}
+            <div className="flex border-b border-[#1a5e48] gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setInspectLeagueTab("overview")}
+                className={`px-3 py-1.5 font-bold rounded-t-lg transition-all ${
+                  inspectLeagueTab === "overview"
+                    ? "bg-[#041c17] text-[#d6a735] border-t border-x border-[#1a5e48]"
+                    : "text-slate-200 hover:text-white"
+                }`}
+              >
+                Overview &amp; Settings
+              </button>
+              <button
+                type="button"
+                onClick={() => setInspectLeagueTab("roster")}
+                className={`px-3 py-1.5 font-bold rounded-t-lg transition-all ${
+                  inspectLeagueTab === "roster"
+                    ? "bg-[#041c17] text-[#d6a735] border-t border-x border-[#1a5e48]"
+                    : "text-slate-200 hover:text-white"
+                }`}
+              >
+                Participants Roster ({inspectLeagueDetails?.participants.length || 0})
+              </button>
+              <button
+                type="button"
+                onClick={() => setInspectLeagueTab("matches")}
+                className={`px-3 py-1.5 font-bold rounded-t-lg transition-all ${
+                  inspectLeagueTab === "matches"
+                    ? "bg-[#041c17] text-[#d6a735] border-t border-x border-[#1a5e48]"
+                    : "text-slate-200 hover:text-white"
+                }`}
+              >
+                Matches &amp; Watch Arena ({inspectLeagueDetails?.matches.length || 0})
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
+              {/* TAB 1: OVERVIEW */}
+              {inspectLeagueTab === "overview" && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="p-3 bg-[#041c17] border border-[#1a5e48] rounded-xl">
+                      <span className="text-[10px] text-slate-200 uppercase font-bold">Entry Fee</span>
+                      <p className="text-sm font-bold text-[#d6a735]">{selectedLeagueForInspect.entryFeePoints || 0} Pts</p>
+                    </div>
+                    <div className="p-3 bg-[#041c17] border border-[#1a5e48] rounded-xl">
+                      <span className="text-[10px] text-slate-200 uppercase font-bold">Prize Pool</span>
+                      <p className="text-sm font-bold text-emerald-400">{selectedLeagueForInspect.prizePoolPoints || 0} Pts</p>
+                    </div>
+                    <div className="p-3 bg-[#041c17] border border-[#1a5e48] rounded-xl">
+                      <span className="text-[10px] text-slate-200 uppercase font-bold">Max Capacity</span>
+                      <p className="text-sm font-bold text-[#f5efdf]">{selectedLeagueForInspect.maxParticipants || 8} Players</p>
+                    </div>
+                    <div className="p-3 bg-[#041c17] border border-[#1a5e48] rounded-xl">
+                      <span className="text-[10px] text-slate-200 uppercase font-bold">Turn Clock</span>
+                      <p className="text-sm font-bold text-cyan-300">{selectedLeagueForInspect.turnTimerSeconds || 60} Seconds</p>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 bg-[#041c17] border border-[#1a5e48] rounded-xl space-y-1">
+                    <span className="text-[10px] text-slate-200 uppercase font-bold">Tournament Description</span>
+                    <p className="text-[#f8fafc] leading-relaxed">
+                      {selectedLeagueForInspect.description || "Official Ghanaian Damii Tournament League under standard 10x10 compulsory jump rules."}
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 bg-[#041c17] border border-[#1a5e48] rounded-xl space-y-2">
+                    <span className="text-[10px] text-slate-200 uppercase font-bold">Admin Control Actions</span>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedLeagueForInspect.status === "registration" && (
+                        <button
+                          type="button"
+                          onClick={() => handleAdminGenerateBracket(selectedLeagueForInspect.id)}
+                          disabled={busy}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-md"
+                        >
+                          <Play size={13} /> Generate Bracket &amp; Launch
+                        </button>
+                      )}
+                      {selectedLeagueForInspect.status !== "cancelled" && selectedLeagueForInspect.status !== "completed" && (
+                        <button
+                          type="button"
+                          onClick={() => handleAdminCancelTournament(selectedLeagueForInspect.id)}
+                          disabled={busy}
+                          className="px-3 py-1.5 bg-red-950 hover:bg-red-900 border border-red-700 text-red-200 font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-md"
+                        >
+                          <Ban size={13} /> Cancel Tournament &amp; Refund
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: ROSTER & ADD PLAYER */}
+              {inspectLeagueTab === "roster" && (
+                <div className="space-y-4">
+                  {/* Add Player Box */}
+                  <div className="p-3 bg-[#041c17] border border-[#1a5e48] rounded-xl space-y-2">
+                    <span className="text-[11px] font-bold text-[#d6a735] uppercase">Add Player to Roster Manually</span>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Type player username (e.g. Kwame_Master)..."
+                        value={manualPlayerUsername}
+                        onChange={(e) => setManualPlayerUsername(e.target.value)}
+                        className="flex-1 px-3 py-1.5 bg-[#081c15] border border-[#1a5e48] rounded-lg text-xs text-[#f8fafc] placeholder-slate-400 focus:outline-none focus:border-[#d6a735]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleAdminAddPlayerToTournament(selectedLeagueForInspect.id)}
+                        disabled={busy}
+                        className="px-3 py-1.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold rounded-lg text-xs"
+                      >
+                        ＋ Add Player
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Participants List */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-[#1a5e48] text-slate-200 uppercase font-bold bg-[#041d17]">
+                          <th className="py-2 px-3">Seed</th>
+                          <th className="py-2 px-3">Player Username</th>
+                          <th className="py-2 px-3">Status</th>
+                          <th className="py-2 px-3">Check-in</th>
+                          <th className="py-2 px-3 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#114232]">
+                        {!inspectLeagueDetails?.participants || inspectLeagueDetails.participants.length === 0 ? (
+                          <tr><td colSpan={5} className="py-6 text-center text-slate-300 italic">No participants in roster yet.</td></tr>
+                        ) : (
+                          inspectLeagueDetails.participants.map((p: any) => (
+                            <tr key={p.id} className="hover:bg-[#0c3b2e]/50">
+                              <td className="py-2.5 px-3 font-mono font-bold text-[#d6a735]">#{p.seed || 1}</td>
+                              <td className="py-2.5 px-3 font-bold text-[#f8fafc]">{p.username}</td>
+                              <td className="py-2.5 px-3">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                  p.status === "approved" ? "bg-emerald-950 text-emerald-300 border border-emerald-500/40" : "bg-amber-950 text-amber-300 border border-amber-500/40"
+                                }`}>
+                                  {p.status}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 uppercase text-[10px] font-bold text-cyan-300">
+                                {p.checkedIn ? "Checked In" : "Pending"}
+                              </td>
+                              <td className="py-2.5 px-3 text-right">
+                                {p.status === "pending" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdminApproveParticipant(p.id, selectedLeagueForInspect.id)}
+                                    disabled={busy}
+                                    className="px-2 py-0.5 bg-emerald-600 text-white font-bold rounded text-[10px]"
+                                  >
+                                    Approve
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: MATCHES & WATCH ARENA ("WATCH OVER THEM") */}
+              {inspectLeagueTab === "matches" && (
+                <div className="space-y-4">
+                  <div className="p-3 bg-[#041c17] border border-[#1a5e48] rounded-xl flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-[#f5efdf] text-xs">Live Tournament Bracket & Matches</h4>
+                      <p className="text-[11px] text-slate-200">Spectate active games in real time or force-declare official match results.</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {!inspectLeagueDetails?.matches || inspectLeagueDetails.matches.length === 0 ? (
+                      <div className="p-6 text-center text-slate-300 italic bg-[#041c17] border border-[#1a5e48] rounded-xl">
+                        Bracket matches have not been generated yet. Go to Overview and click "Generate Bracket".
+                      </div>
+                    ) : (
+                      inspectLeagueDetails.matches.map((m: any, idx: number) => (
+                        <div key={m.id || idx} className="p-3.5 bg-[#041c17] border border-[#1a5e48] rounded-xl space-y-2">
+                          <div className="flex items-center justify-between text-xs border-b border-[#1a5e48] pb-2">
+                            <span className="font-bold uppercase text-[#d6a735]">
+                              Round {m.round || 1} — Match #{idx + 1}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                              m.status === "completed" ? "bg-cyan-950 text-cyan-300 border border-cyan-500/40" : m.status === "in_progress" ? "bg-emerald-950 text-emerald-300 border border-emerald-500/40 animate-pulse" : "bg-slate-800 text-slate-300"
+                            }`}>
+                              {m.status || "pending"}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3 my-2">
+                            <div className="flex-1 text-left p-2 bg-[#081c15] border border-[#1a5e48] rounded-lg">
+                              <p className="text-[10px] text-slate-300 font-semibold">Player 1 (White)</p>
+                              <p className="font-bold text-[#f8fafc] text-sm">{m.player1Name || m.player1Token || "TBD"}</p>
+                              {m.winnerToken === m.player1Token && m.status === "completed" && (
+                                <span className="text-[10px] font-bold text-emerald-400 uppercase">★ WINNER</span>
+                              )}
+                            </div>
+
+                            <span className="font-black text-sm text-[#d6a735]">VS</span>
+
+                            <div className="flex-1 text-right p-2 bg-[#081c15] border border-[#1a5e48] rounded-lg">
+                              <p className="text-[10px] text-slate-300 font-semibold">Player 2 (Black)</p>
+                              <p className="font-bold text-[#f8fafc] text-sm">{m.player2Name || m.player2Token || "TBD"}</p>
+                              {m.winnerToken === m.player2Token && m.status === "completed" && (
+                                <span className="text-[10px] font-bold text-emerald-400 uppercase">★ WINNER</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Match Control & Spectate Bar */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#1a5e48]">
+                            <button
+                              type="button"
+                              onClick={() => setSpectateMatch(m)}
+                              className="px-3 py-1 bg-[#0c3b2e] hover:bg-[#114232] text-[#d6a735] font-bold text-xs rounded-lg border border-[#d6a735]/40 flex items-center gap-1 shadow-xs"
+                            >
+                              <Eye size={12} /> Watch / Spectate Match Arena
+                            </button>
+
+                            {m.status !== "completed" && m.player1Token && m.player2Token && (
+                              <div className="flex items-center gap-1 text-[11px]">
+                                <span className="text-slate-200 font-semibold">Force Winner:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAdminSubmitMatchWinner(m.id, m.player1Token, selectedLeagueForInspect.id)}
+                                  className="px-2 py-0.5 bg-emerald-800 hover:bg-emerald-700 text-white font-bold rounded"
+                                >
+                                  P1 Win
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAdminSubmitMatchWinner(m.id, m.player2Token, selectedLeagueForInspect.id)}
+                                  className="px-2 py-0.5 bg-emerald-800 hover:bg-emerald-700 text-white font-bold rounded"
+                                >
+                                  P2 Win
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAdminSubmitMatchWinner(m.id, "draw", selectedLeagueForInspect.id)}
+                                  className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded"
+                                >
+                                  Draw
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-[#1a5e48] flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedLeagueForInspect(null);
+                  setInspectLeagueDetails(null);
+                }}
+                className="px-4 py-2 bg-[#0c3b2e] text-[#f5efdf] rounded-xl text-xs font-bold border border-[#1a5e48]"
+              >
+                Close Inspector
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LIVE MATCH SPECTATOR MODAL */}
+      {spectateMatch && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-[#081c15] border border-[#1a5e48] text-[#f5efdf] max-w-xl w-full rounded-2xl p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#1a5e48] pb-3">
+              <div>
+                <h3 className="font-bold text-sm text-[#d6a735] flex items-center gap-2">
+                  <Eye size={18} /> Spectate Live Match Arena — {spectateMatch.id || "Match"}
+                </h3>
+                <p className="text-xs text-slate-200 mt-0.5">
+                  {spectateMatch.player1Name || "P1"} vs {spectateMatch.player2Name || "P2"}
+                </p>
+              </div>
+              <button type="button" onClick={() => setSpectateMatch(null)} className="text-slate-200 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-4 bg-[#041c17] border border-[#1a5e48] rounded-xl space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-2 text-center font-bold">
+                <div className="p-2 bg-[#081c15] rounded-lg border border-[#1a5e48]">
+                  <p className="text-[10px] text-slate-300 font-semibold">WHITE PLAYER</p>
+                  <p className="text-[#f8fafc]">{spectateMatch.player1Name || "P1"}</p>
+                </div>
+                <div className="p-2 bg-[#081c15] rounded-lg border border-[#1a5e48]">
+                  <p className="text-[10px] text-slate-300 font-semibold">BLACK PLAYER</p>
+                  <p className="text-[#f8fafc]">{spectateMatch.player2Name || "P2"}</p>
+                </div>
+              </div>
+
+              <div className="p-3 bg-[#081c15] border border-[#1a5e48] rounded-lg space-y-1">
+                <p className="font-bold text-[#d6a735]">Match Status: <span className="uppercase text-cyan-300">{spectateMatch.status || "in_progress"}</span></p>
+                <p className="text-slate-200">Winner: <strong className="text-[#f8fafc]">{spectateMatch.winnerToken || "Match in progress..."}</strong></p>
+              </div>
+
+              {spectateMatch.roomCode && (
+                <a
+                  href={`/arena?code=${spectateMatch.roomCode}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-md"
+                >
+                  <ExternalLink size={14} /> Open Live Interactive Arena in New Tab
+                </a>
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-[#1a5e48] flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSpectateMatch(null)}
+                className="px-4 py-2 bg-[#0c3b2e] text-[#f5efdf] rounded-xl text-xs font-bold border border-[#1a5e48]"
+              >
+                Close Spectator
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOM CONFIRMATION MODAL */}
+      <ConfirmModal
+        confirmModal={confirmModal}
+        confirmExecuting={confirmExecuting}
+        setConfirmModal={setConfirmModal}
+        setConfirmExecuting={setConfirmExecuting}
+      />
+    </main>
+  );
+}

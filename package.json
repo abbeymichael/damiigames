@@ -1,0 +1,53 @@
+{
+  "name": "damii-game",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "install:ci": "node scripts/install-ci.js",
+    "dev": "node scripts/dev.js",
+    "build": "node scripts/build.js",
+    "start": "node scripts/start.js",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs",
+    "validate:artifact": "node scripts/validate-artifact.js",
+    "lint": "node scripts/lint.js",
+    "typecheck": "tsc --noEmit",
+    "seed": "node scripts/seed.js",
+    "db:generate": "node scripts/db-generate.js",
+    "db:migrate": "node scripts/db-migrate.js",
+    "db:push": "node scripts/db-generate.js --push",
+    "env:check": "node scripts/check-env.js"
+  },
+  "dependencies": {
+    "@types/d3": "^7.4.3",
+    "d3": "^7.9.0",
+    "drizzle-orm": "0.45.2",
+    "lucide-react": "^1.28.0",
+    "mysql2": "^3.23.2",
+    "next": "16.2.6",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "react-is": "19.2.6",
+    "recharts": "^3.10.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.2.1",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "@vitejs/plugin-rsc": "0.5.26",
+    "drizzle-kit": "0.31.10",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.2.6",
+    "react-server-dom-webpack": "19.2.6",
+    "tailwindcss": "4.2.1",
+    "typescript": "5.9.3",
+    "vinext": "0.0.50",
+    "vite": "8.0.13"
+  },
+  "type": "module",
+  "displayName": "DAMII Game"
+}
