@@ -161,9 +161,126 @@
         "createdAt": "2026-08-14T02:39:58.364Z",
         "updatedAt": "2026-08-14T02:39:58.364Z"
       }
+    ],
+    [
+      "usr-1786706784677-6a78a548",
+      {
+        "token": "usr-1786706784677-6a78a548",
+        "username": "michael abbey",
+        "phoneNumber": "0553340120",
+        "passcode": "d3dd3b0eb7fb2b3090eec7a36398634710a560ae6281140db4ee792bb6252a0d9508e3db368bd07ba1f9f4b94878da5ca009c63f39763aee22fc9e0bdda299c7",
+        "rating": 1000,
+        "marbles": 0,
+        "points": 0,
+        "wins": 0,
+        "losses": 0,
+        "draws": 0,
+        "role": "user",
+        "createdAt": "2026-08-14T11:26:24.685Z",
+        "updatedAt": "2026-08-14T11:26:24.687Z",
+        "passwordSalt": "b9023b6956648dc9c66bc8c9ea578168"
+      }
+    ],
+    [
+      "sess_9b3f2ced9e6215aed41e3d5e3e2d3472",
+      {
+        "token": "sess_9b3f2ced9e6215aed41e3d5e3e2d3472",
+        "username": "michael abbey",
+        "rating": 1000,
+        "marbles": 0,
+        "points": 0,
+        "wins": 0,
+        "losses": 0,
+        "draws": 0,
+        "role": "user",
+        "createdAt": "2026-08-14T11:44:01.396Z",
+        "updatedAt": "2026-08-14T11:44:20.848Z"
+      }
+    ],
+    [
+      "admin-1786708121802-b3j9sp",
+      {
+        "token": "admin-1786708121802-b3j9sp",
+        "username": "mike",
+        "passcode": "1234",
+        "rating": 1000,
+        "marbles": 0,
+        "points": 0,
+        "wins": 0,
+        "losses": 0,
+        "draws": 0,
+        "role": "admin",
+        "createdAt": "2026-08-14T11:48:41.803Z",
+        "updatedAt": "2026-08-14T11:48:41.804Z"
+      }
     ]
   ],
-  "sessions": [],
+  "sessions": [
+    [
+      "sess_14faaae997f07bfb79d287cab511ac21",
+      {
+        "id": "s_0ebe5cafaadc5f6b",
+        "userId": "usr-1786706784677-6a78a548",
+        "token": "sess_14faaae997f07bfb79d287cab511ac21",
+        "role": "user",
+        "csrfToken": "csrf_0f46ab3038f05b0dd06fde828373499a",
+        "createdAt": "2026-08-14T11:26:24.689Z",
+        "expiresAt": "2026-08-21T11:26:24.689Z",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0"
+      }
+    ],
+    [
+      "sess_6ab9cf5a323d3088876876e9a092f402",
+      {
+        "id": "s_1a7e98506aff371b",
+        "userId": "admin-token-001",
+        "token": "sess_6ab9cf5a323d3088876876e9a092f402",
+        "role": "super_admin",
+        "csrfToken": "csrf_40485a561a52ade893bd4c5ad32dc571",
+        "createdAt": "2026-08-14T11:37:39.009Z",
+        "expiresAt": "2026-08-21T11:37:39.009Z"
+      }
+    ],
+    [
+      "sess_9b3f2ced9e6215aed41e3d5e3e2d3472",
+      {
+        "id": "s_ab665c32147ab1ee",
+        "userId": "usr-1786706784677-6a78a548",
+        "token": "sess_9b3f2ced9e6215aed41e3d5e3e2d3472",
+        "role": "user",
+        "csrfToken": "csrf_b8694ade40d3b13ccdac99e8bbdb614c",
+        "createdAt": "2026-08-14T11:41:43.844Z",
+        "expiresAt": "2026-08-21T11:41:43.844Z",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0"
+      }
+    ],
+    [
+      "sess_3017be642711f94b005bf14000eb0030",
+      {
+        "id": "s_526775f7639d0459",
+        "userId": "admin-token-001",
+        "token": "sess_3017be642711f94b005bf14000eb0030",
+        "role": "super_admin",
+        "csrfToken": "csrf_2e1716cec801536a42f9ad0ebb9e5cca",
+        "createdAt": "2026-08-14T11:44:53.664Z",
+        "expiresAt": "2026-08-21T11:44:53.664Z"
+      }
+    ],
+    [
+      "sess_e8be21f660a89cc13aeb7a3202405a53",
+      {
+        "id": "s_f4c0e3f92f0df7dc",
+        "userId": "admin-1786708121802-b3j9sp",
+        "token": "sess_e8be21f660a89cc13aeb7a3202405a53",
+        "role": "admin",
+        "csrfToken": "csrf_e77b8d18252d158d70fe844641e5c845",
+        "createdAt": "2026-08-14T11:49:28.293Z",
+        "expiresAt": "2026-08-21T11:49:28.293Z"
+      }
+    ]
+  ],
   "adminProfiles": [
     [
       "admin-token-001",
@@ -263,7 +380,22 @@
     ]
   ],
   "rooms": [],
-  "transactions": [],
+  "transactions": [
+    [
+      "tx-league-fee-1786707591873",
+      {
+        "id": "tx-league-fee-1786707591873",
+        "userToken": "system-house",
+        "type": "platform_fee",
+        "currency": "points",
+        "amount": 1000,
+        "reference": "league-open-2026",
+        "status": "completed",
+        "metaJson": "{\"leagueTitle\":\"Championship Open 2026\",\"totalPrize\":10000,\"tournamentFeePercent\":10}",
+        "createdAt": "2026-08-14T11:39:51.873Z"
+      }
+    ]
+  ],
   "leagues": [
     [
       "league-open-2026",
@@ -274,18 +406,22 @@
         "entryFeeMarbles": 0,
         "entryFeePoints": 50,
         "prizePoolPoints": 10000,
-        "status": "registration",
+        "status": "completed",
         "format": "single_elimination",
         "facilitatorToken": "admin-token-001",
         "facilitatorName": "admin",
         "maxParticipants": 8,
         "participantCount": 3,
         "winnerToken": null,
-        "winnerName": null,
+        "winnerName": "Champion",
         "turnTimerSeconds": 60,
         "roundsCount": 3,
         "createdAt": "2026-08-14T02:39:58.364Z",
-        "updatedAt": "2026-08-14T02:39:58.364Z"
+        "updatedAt": "2026-08-14T11:39:51.872Z",
+        "runnerUpToken": null,
+        "runnerUpName": "Runner-Up",
+        "thirdPlaceToken": null,
+        "thirdPlaceName": "3rd Place"
       }
     ]
   ],
@@ -344,7 +480,56 @@
   ],
   "leagueMatches": [],
   "escrows": [],
-  "adminLogs": [],
+  "adminLogs": [
+    [
+      "adminlog-1786707459012-75n",
+      {
+        "id": "adminlog-1786707459012-75n",
+        "adminToken": "admin-token-001",
+        "adminName": "admin",
+        "action": "ADMIN_LOGIN",
+        "target": "admin",
+        "detailsJson": "{\"role\":\"super_admin\",\"loginTime\":\"2026-08-14T11:37:39.012Z\"}",
+        "createdAt": "2026-08-14T11:37:39.012Z"
+      }
+    ],
+    [
+      "adminlog-1786707893665-hco",
+      {
+        "id": "adminlog-1786707893665-hco",
+        "adminToken": "admin-token-001",
+        "adminName": "admin",
+        "action": "ADMIN_LOGIN",
+        "target": "admin",
+        "detailsJson": "{\"role\":\"super_admin\",\"loginTime\":\"2026-08-14T11:44:53.665Z\"}",
+        "createdAt": "2026-08-14T11:44:53.665Z"
+      }
+    ],
+    [
+      "adminlog-1786708121807-7h8",
+      {
+        "id": "adminlog-1786708121807-7h8",
+        "adminToken": "sess_3017be642711f94b005bf14000eb0030",
+        "adminName": "Admin",
+        "action": "CREATE_ADMIN_ACCOUNT",
+        "target": "mike",
+        "detailsJson": "{\"role\":\"admin\"}",
+        "createdAt": "2026-08-14T11:48:41.807Z"
+      }
+    ],
+    [
+      "adminlog-1786708168295-f4a",
+      {
+        "id": "adminlog-1786708168295-f4a",
+        "adminToken": "admin-1786708121802-b3j9sp",
+        "adminName": "mike",
+        "action": "ADMIN_LOGIN",
+        "target": "mike",
+        "detailsJson": "{\"role\":\"admin\",\"loginTime\":\"2026-08-14T11:49:28.295Z\"}",
+        "createdAt": "2026-08-14T11:49:28.295Z"
+      }
+    ]
+  ],
   "processedPaystackRefs": [],
   "adminSettings": {
     "wagerFeePercent": 5,
