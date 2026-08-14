@@ -213,6 +213,25 @@
         "createdAt": "2026-08-14T11:48:41.803Z",
         "updatedAt": "2026-08-14T11:48:41.804Z"
       }
+    ],
+    [
+      "usr-1786731571101-c472a9ff",
+      {
+        "token": "usr-1786731571101-c472a9ff",
+        "username": "michael",
+        "phoneNumber": "0553340120",
+        "passcode": "39c73124e6bb946377a42b5f73c84cbe66da2ac7b463c2bbf6b514819ad857193577620e46e9543107ef2110fe620325c34bd37dab415cae2d01c42efd7be79c",
+        "rating": 1000,
+        "marbles": 0,
+        "points": 0,
+        "wins": 0,
+        "losses": 0,
+        "draws": 0,
+        "role": "user",
+        "createdAt": "2026-08-14T18:19:31.105Z",
+        "updatedAt": "2026-08-14T18:19:31.109Z",
+        "passwordSalt": "3c09d91d56956e103df1abf0a490fb53"
+      }
     ]
   ],
   "sessions": [
@@ -278,6 +297,46 @@
         "csrfToken": "csrf_e77b8d18252d158d70fe844641e5c845",
         "createdAt": "2026-08-14T11:49:28.293Z",
         "expiresAt": "2026-08-21T11:49:28.293Z"
+      }
+    ],
+    [
+      "sess_d4e697f101701be11106ae856ea549ed",
+      {
+        "id": "s_0b9aae54af2d33c1",
+        "userId": "usr-1786731571101-c472a9ff",
+        "token": "sess_d4e697f101701be11106ae856ea549ed",
+        "role": "user",
+        "csrfToken": "csrf_1cc60b30e949f29fef83afa130f8bcb2",
+        "createdAt": "2026-08-14T18:19:31.111Z",
+        "expiresAt": "2026-08-21T18:19:31.111Z",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0"
+      }
+    ],
+    [
+      "sess_4713dd87671e7be4c980ccc8e4fb670e",
+      {
+        "id": "s_4f8474b4702f5837",
+        "userId": "usr-1786731571101-c472a9ff",
+        "token": "sess_4713dd87671e7be4c980ccc8e4fb670e",
+        "role": "user",
+        "csrfToken": "csrf_d19b5f4e4fe14d798e881158eac5512f",
+        "createdAt": "2026-08-14T18:28:03.707Z",
+        "expiresAt": "2026-08-21T18:28:03.707Z",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0"
+      }
+    ],
+    [
+      "sess_c1a6ad0a3684e2794653cbc372e2c4b8",
+      {
+        "id": "s_a215aa79b26adb63",
+        "userId": "admin-token-001",
+        "token": "sess_c1a6ad0a3684e2794653cbc372e2c4b8",
+        "role": "super_admin",
+        "csrfToken": "csrf_afba72af4947d77c0e81b6aed6ad21ca",
+        "createdAt": "2026-08-14T18:43:54.235Z",
+        "expiresAt": "2026-08-21T18:43:54.235Z"
       }
     ]
   ],
@@ -527,6 +586,18 @@
         "target": "mike",
         "detailsJson": "{\"role\":\"admin\",\"loginTime\":\"2026-08-14T11:49:28.295Z\"}",
         "createdAt": "2026-08-14T11:49:28.295Z"
+      }
+    ],
+    [
+      "adminlog-1786733034237-kzm",
+      {
+        "id": "adminlog-1786733034237-kzm",
+        "adminToken": "admin-token-001",
+        "adminName": "admin",
+        "action": "ADMIN_LOGIN",
+        "target": "admin",
+        "detailsJson": "{\"role\":\"super_admin\",\"loginTime\":\"2026-08-14T18:43:54.237Z\"}",
+        "createdAt": "2026-08-14T18:43:54.237Z"
       }
     ]
   ],
