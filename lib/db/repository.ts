@@ -18,23 +18,24 @@ import type {
 /**
  * The storage contract every DAMII backend must satisfy.
  *
- * Two implementations exist:
- *   - `lib/db/file-store.ts`  — JSON file store for local development/tests
- *   - `lib/db/mysql-store.ts` — production MySQL (Drizzle + mysql2)
+ * One implementation exists:
+ *   - `lib/db/mysql-store.ts` — MySQL (Drizzle ORM + mysql2), used in BOTH
+ *     local development and production. The old JSON file store was removed;
+ *     there is exactly one persistence path.
  *
  * Application code only ever talks to this interface via `lib/db-client.ts`,
- * so swapping dialects requires no changes to routes or services.
+ * so routes and services never touch SQL directly.
  */
 export interface DbRepository {
   /** Serialises mutations that must not interleave (money movement, settlement). */
   lockKey<T>(key: string, fn: () => Promise<T>): Promise<T>;
 
-  /** Optional lifecycle hook — MySQL uses it to verify connectivity and seed. */
+  /** Optional lifecycle hook — verifies connectivity, applies the schema check and seeds defaults. */
   init?(): Promise<void>;
   /** Optional teardown hook used by tests/graceful shutdown. */
   close?(): Promise<void>;
   /** Backend identifier, surfaced in health checks. */
-  readonly dialect: "mysql" | "file";
+  readonly dialect: "mysql";
 
   // --- Sessions & Auth ---
   createSession(userId: string, role: Role, ipAddress?: string, userAgent?: string): Promise<Session>;

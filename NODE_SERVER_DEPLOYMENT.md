@@ -11,10 +11,7 @@ DAMII is a full-stack Next.js App Router application requiring a persistent Node
 ### Prerequisites:
 - **Node.js**: `v22.13.0` or higher
 - **Package Manager**: `npm` v10+
-- **Database Options**:
-  - **SQLite** (Default): Local disk file with atomic mutexes (Requires persistent disk volume `.data/`)
-  - **PostgreSQL**: External PostgreSQL instance (`DATABASE_DIALECT=postgres`)
-  - **MySQL**: External MySQL instance (`DATABASE_DIALECT=mysql`)
+- **Database**: MySQL 8+ or MariaDB 10.4+ — the only supported dialect, used in development AND production. There is no SQLite/Postgres/JSON-file path any more.
 
 ---
 
@@ -32,13 +29,17 @@ ADMIN_SECRET_KEY=your_secure_admin_secret_key_here
 PAYSTACK_SECRET_KEY=sk_live_your_paystack_secret_key_here
 ADMIN_PASSCODE=admin123_change_in_production
 
-# Database Dialect Configuration
-# Options: 'sqlite' | 'postgres' | 'mysql'
-DATABASE_DIALECT=sqlite
-
-# External Database Connection Strings (If using PostgreSQL or MySQL)
-# DATABASE_URL=postgresql://user:password@localhost:5432/damii_db
-# DATABASE_URL=mysql://user:password@localhost:3306/damii_db
+# MySQL — the only supported database (required in every environment)
+DATABASE_DIALECT=mysql
+DATABASE_URL=mysql://user:password@localhost:3306/damii
+# ...or discrete variables (useful on cPanel / shared hosting):
+# MYSQL_HOST=localhost
+# MYSQL_PORT=3306
+# MYSQL_USER=damii_user
+# MYSQL_PASSWORD=strong-password
+# MYSQL_DATABASE=damii
+# MYSQL_SSL=false
+# MYSQL_POOL_SIZE=10
 
 # Hostname & Domain Configuration
 NEXT_PUBLIC_APP_URL=https://damii.app
@@ -60,10 +61,14 @@ npm ci --only=production
 npm run build
 ```
 
-### Step 3: Seed Initial Accounts & Databases (Optional)
+### Step 3: Create the MySQL Database & Apply the Schema
 ```bash
-npm run seed
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS damii CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+npm run db:migrate   # creates all tables (tracked in __drizzle_migrations)
+npm run env:check    # validates config + verifies connectivity
 ```
+
+Default admin/player accounts are seeded automatically on first boot (idempotent); `npm run seed` re-runs the seeder explicitly if needed.
 
 ### Step 4: Start the Production Node.js Server
 ```bash
@@ -99,9 +104,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
-
-# Create persistent data directory for SQLite
-RUN mkdir -p /app/.data && chown -R node:node /app/.data
+# MySQL is required — provide DATABASE_URL / MYSQL_* via the runtime environment.
 
 # Copy built artifacts and production node_modules
 COPY --from=builder /app/package.json ./
@@ -111,15 +114,14 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/lib ./lib
 COPY --from=builder /app/db ./db
+COPY --from=builder /app/drizzle ./drizzle
 
 USER node
 
 EXPOSE 3000
 
-# Persistent storage volume for SQLite fallback
-VOLUME ["/app/.data"]
-
-CMD ["npm", "start"]
+# Apply MySQL migrations, then boot. (All state lives in MySQL — no volume needed.)
+CMD ["sh", "-c", "npm run db:migrate && npm start"]
 ```
 
 ### Docker Build & Run Commands
@@ -127,11 +129,10 @@ CMD ["npm", "start"]
 # Build the Docker image
 docker build -t damii-game:latest .
 
-# Run the container with persistent storage
+# Run the container (MySQL connection supplied via env file — no app volume required)
 docker run -d \
   --name damii-server \
   -p 3000:3000 \
-  -v damii_data:/app/.data \
   --env-file .env.production \
   damii-game:latest
 ```
@@ -149,8 +150,10 @@ module.exports = {
     {
       name: 'damii-arena',
       script: 'scripts/start.js',
-      instances: 1, // Single instance for SQLite mutex safety, or 'max' for Postgres/MySQL
-      exec_mode: 'fork',
+      // MySQL handles cross-process concurrency (atomic updates + transactions),
+      // so multiple instances against one database are safe.
+      instances: 'max',
+      exec_mode: 'cluster',
       env: {
         NODE_ENV: 'production',
         PORT: 3000,
@@ -256,26 +259,31 @@ sudo certbot --nginx -d damii.app -d www.damii.app
      --region europe-west1 \
      --allow-unauthenticated \
      --port 3000 \
-     --set-env-vars DATABASE_DIALECT=postgres,DATABASE_URL="your-postgres-url"
+     --set-env-vars DATABASE_DIALECT=mysql,DATABASE_URL="mysql://user:pass@host:3306/damii"
    ```
+   (Provision a Cloud SQL MySQL 8 instance or any reachable MySQL server first.)
 
 ### B. Railway / Render
 1. Connect your GitHub repository.
-2. Set Build Command: `npm run build`
-3. Set Start Command: `npm start`
-4. Add environment variables in dashboard (`PAYSTACK_SECRET_KEY`, `ADMIN_SECRET_KEY`, `DATABASE_DIALECT`).
+2. Provision a MySQL database (Railway/Render MySQL plugin, PlanetScale, Aiven, etc.).
+3. Set Build Command: `npm run build`
+4. Set Start Command: `npm run db:migrate && npm start`
+5. Add environment variables in dashboard (`PAYSTACK_SECRET_KEY`, `ADMIN_SECRET_KEY`, `DATABASE_DIALECT=mysql`, `DATABASE_URL` or the `MYSQL_*` set).
 
 ---
 
 ## 8. Database Migration & Maintenance
 
-When deploying schema updates using Drizzle ORM:
+When deploying schema updates using Drizzle ORM (MySQL-only):
 
 ```bash
-# Generate database schema migrations
+# Regenerate SQL migrations from db/schema.mysql.ts into drizzle/mysql/
 npm run db:generate
 
-# Execute manual seeder to verify system setup
+# Apply pending migrations to the configured MySQL database
+npm run db:migrate
+
+# Re-run the idempotent seeder if default accounts are missing
 npm run seed
 ```
 
@@ -285,5 +293,5 @@ npm run seed
 
 - [x] **Secret Isolation**: `PAYSTACK_SECRET_KEY` and `ADMIN_SECRET_KEY` are kept strictly in server environment variables.
 - [x] **Session Security**: HttpOnly `damii_session` cookies and `x-csrf-token` verification enabled.
-- [x] **Data Persistence**: `.data/` folder mounted as a persistent volume if using SQLite.
+- [x] **Data Persistence**: MySQL 8+ database provisioned, schema applied via `npm run db:migrate`, and connectivity verified with `npm run env:check`.
 - [x] **SSL / HTTPS**: Reverse proxy correctly forwards `X-Forwarded-Proto: https` so secure cookies operate properly.

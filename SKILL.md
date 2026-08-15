@@ -10,10 +10,11 @@ This document outlines the core capabilities, architectural workflows, and speci
 - **Rules Implementation**: Located in `lib/damii-rules.ts`. Handles 10x10 board layout (50 dark playable squares), piece movement, mandatory maximum capture enforcement, multi-jump sequences, and flying kings.
 - **Clock & Disconnection Management**: Enforces 60-second turn clocks and a 45-second reconnection grace period before declaring automatic forfeits.
 
-### 2. Multi-Dialect Database Persistence
-- **Supported Dialects**: SQLite (Cloudflare D1 / File / Memory), PostgreSQL, and MySQL.
-- **Dialect Switcher**: Configured via `DATABASE_DIALECT` in `lib/db-client.ts` and `drizzle.config.ts`.
-- **Database Seeding**: Invoke `dbRepository.seedDatabase()` or `POST /api/admin` (`action: "seed"`) to populate default administrator and player accounts.
+### 2. MySQL Database Persistence (Single Dialect)
+- **Dialect**: MySQL 8 / MariaDB 10.4+ only — used in development AND production. There is no JSON/SQLite/Postgres fallback.
+- **Layers**: `db/schema.mysql.ts` (Drizzle schema) → `lib/db/mysql-connection.ts` (mysql2 pool) → `lib/db/mysql-store.ts` (repository implementation) → `lib/db-client.ts` (public entrypoint).
+- **Migrations**: `npm run db:generate` regenerates SQL into `drizzle/mysql/`; `npm run db:migrate` applies it (tracked in `__drizzle_migrations`); `npm run env:check` validates config + connectivity.
+- **Database Seeding**: Automatic on first boot against an empty database (idempotent), or explicitly via `dbRepository.seedDatabase()` / `POST /api/admin` (`action: "seed"`).
 
 ### 3. Paystack Mobile Money & Wager Escrow Engine
 - **Mobile Money Top-Up**: Integrates Paystack API for Ghanaian Mobile Money (MTN MoMo, Telecel Cash, AT Money).
