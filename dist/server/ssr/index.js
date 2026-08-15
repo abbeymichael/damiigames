@@ -1,33 +1,3338 @@
-import{createRequire as e}from"node:module";import t from"./__vite_rsc_assets_manifest.js";import*as n from"node:async_hooks";import{AsyncLocalStorage as r}from"node:async_hooks";import*as i from"react";import a,{Fragment as o,createElement as s,isValidElement as c,use as l}from"react";import{Fragment as u,jsx as d,jsxs as f}from"react/jsx-runtime";import{renderToReadableStream as p,renderToStaticMarkup as m}from"react-dom/server.edge";import*as h from"react-dom";import{preinitModule as g}from"react-dom";import _ from"./vinext-client-assets.js";var ee=Object.create,v=Object.defineProperty,y=Object.getOwnPropertyDescriptor,b=Object.getOwnPropertyNames,te=Object.getPrototypeOf,x=Object.prototype.hasOwnProperty,S=(e,t)=>()=>(t||(e((t={exports:{}}).exports,t),e=null),t.exports),C=(e,t)=>{let n={};for(var r in e)v(n,r,{get:e[r],enumerable:!0});return t||v(n,Symbol.toStringTag,{value:`Module`}),n},w=(e,t,n,r)=>{if(t&&typeof t==`object`||typeof t==`function`)for(var i=b(t),a=0,o=i.length,s;a<o;a++)s=i[a],!x.call(e,s)&&s!==n&&v(e,s,{get:(e=>t[e]).bind(null,s),enumerable:!(r=y(t,s))||r.enumerable});return e},T=(e,t,n)=>(n=e==null?{}:ee(te(e)),w(t||!e||!e.__esModule?v(n,`default`,{value:e,enumerable:!0}):n,e)),E=e(import.meta.url);function D(e){let t=Object.getOwnPropertyDescriptor(globalThis,e);if(!(!t&&Reflect.get(globalThis,e)===void 0)&&(t?t.configurable?Reflect.deleteProperty(globalThis,e):Reflect.set(globalThis,e,void 0):Object.defineProperty(globalThis,e,{configurable:!0,value:void 0,writable:!0}),Reflect.get(globalThis,e)!==void 0))throw Error(`[vinext] Server runtime exposes a non-removable \`${e}\` global. This breaks Next.js SSR semantics where browser globals must be absent.`)}function O(){D(`window`),D(`document`),Reflect.get(globalThis,`AsyncLocalStorage`)===void 0&&Object.defineProperty(globalThis,`AsyncLocalStorage`,{configurable:!0,value:r,writable:!0})}O();function k(e){return new Response(`This page could not be found`,{status:404,headers:e?.headers})}function A(e){if(!e.startsWith(`/`))return!1;let t=e.slice(1);if(t.startsWith(`/`)||t.startsWith(`\\`))return!0;if(t.length>=3&&t[0]===`%`){let e=t.slice(0,3).toLowerCase();if(e===`%5c`||e===`%2f`)return!0}return!1}function ne(e){return e.startsWith(`/`)&&!e.startsWith(`//`)&&!e.includes(`?`)&&!e.includes(`#`)&&!e.includes(`\0`)}var j=(e,t)=>e<t?-1:+(e>t);function M(e){return typeof e==`object`&&!!e&&!Array.isArray(e)}function N(e={}){return{schemaVersion:1,graphVersion:e.graphVersion??null,deploymentVersion:e.deploymentVersion??null,appElementsSchemaVersion:1,rscPayloadSchemaVersion:1,rootBoundaryId:e.rootBoundaryId??null,renderEpoch:e.renderEpoch??null}}function P(e){return typeof e==`string`||e===null}function re(e){return e.schemaVersion===1&&e.appElementsSchemaVersion===1&&e.rscPayloadSchemaVersion===1}function ie(e){return!M(e)||!re(e)||!P(e.graphVersion)||!P(e.deploymentVersion)||!P(e.rootBoundaryId)||!P(e.renderEpoch)?null:{schemaVersion:1,graphVersion:e.graphVersion,deploymentVersion:e.deploymentVersion,appElementsSchemaVersion:1,rscPayloadSchemaVersion:1,rootBoundaryId:e.rootBoundaryId,renderEpoch:e.renderEpoch}}var F=new WeakMap;function ae(e,t){F.get(e)?.get(t)?.release()}var oe=`\0`,se=`__sourcePage`,ce=`__artifactCompatibility`,I=`__cacheEntryReuseProof`,L=`__dynamicStaleTime`,R=`__interception`,le=`__interceptionContext`,z=`__layoutIds`,B=`__layoutFlags`,V=`__route`,H=`__rootLayout`,U=`__skippedLayoutIds`,ue=`__srcPage`,W=`__slotBindings`,de=`__bfcacheSegmentIdentities`,fe=`__VINEXT_UNMATCHED_SLOT__`,pe=Symbol.for(`vinext.unmatchedSlot`),me=new Set;function he(e){return new Set(e)}var ge=he(`CP_CACHE_ENTRY_PROOF_MISSING.CP_MODEL_DISABLED.CP_ARTIFACT_COMPATIBILITY_INCOMPATIBLE.CP_ARTIFACT_COMPATIBILITY_UNKNOWN.CP_DIMENSION_COUNT_EXCEEDED.CP_DIMENSION_NAME_MISSING.CP_DIMENSION_NAME_TOO_LONG.CP_DIMENSION_VALUE_COUNT_EXCEEDED.CP_DIMENSION_VALUE_TOO_LONG.CP_DIMENSION_VALUES_MISSING.CP_ENCODED_VARIANT_TOO_LONG.CP_INVALID_VARIANT_BUDGET.CP_ROUTE_VARIANT_BUDGET_ROUTE_MISMATCH.CP_ROUTE_VARIANT_CEILING_EXCEEDED.CP_UNSAFE_PUBLIC_DIMENSION.CP_BOUNDARY_OUTCOME_MISMATCH.CP_BOUNDARY_OUTCOME_UNKNOWN.CP_PRIVATE_DYNAMIC_DOWNGRADE.CP_STATIC_LAYOUT_CANDIDATE_OUTPUT_KIND.CP_STATIC_LAYOUT_CURRENT_OUTPUT_KIND.CP_STATIC_LAYOUT_ID_MISMATCH.CP_STATIC_LAYOUT_OBSERVATION_OUTPUT_KIND.CP_STATIC_LAYOUT_OBSERVATION_OUTPUT_MISMATCH.CP_STATIC_LAYOUT_PRIVATE_DYNAMIC_DOWNGRADE.CP_STATIC_LAYOUT_REQUEST_API_OBSERVED.CP_STATIC_LAYOUT_REQUEST_API_UNKNOWN.CP_STATIC_LAYOUT_ROOT_BOUNDARY_MISMATCH.CP_STATIC_LAYOUT_ROOT_BOUNDARY_UNKNOWN.CP_STATIC_LAYOUT_VARIANT_DIMENSION_UNPROVEN`.split(`.`)),_e=j;function ve(e,t){return _e(e.slotId,t.slotId)}function ye(e,t={}){let n=t.layoutIds?new Set(t.layoutIds):null,r=new Set,i=[];for(let t of e){if(r.has(t.slotId))throw Error(`[vinext] Invalid __slotBindings in App Router payload: duplicate slot id`);if(r.add(t.slotId),n&&t.ownerLayoutId!==null&&!n.has(t.ownerLayoutId))throw Error(`[vinext] Invalid __slotBindings in App Router payload: owner layout id missing from __layoutIds`);i.push({...t})}return i.sort(ve)}function G(e,t){return t===null?e:`${e}${oe}${t}`}function be(e,t){return G(`route:${e}`,t)}function xe(e,t){return G(`page:${e}`,t)}function Se(e){return`layout:${e}`}function Ce(e){return`template:${e}`}function we(e,t){return`slot:${e}:${t}`}function Te(e,t){return G(e,t)}function Ee(e){let t=e.indexOf(oe),n=t===-1?e:e.slice(0,t);return n.startsWith(`/`)?{interceptionContext:t===-1?null:e.slice(t+1),path:n}:null}function K(e){return e.startsWith(`/`)?e:null}function q(e){if(e.startsWith(`route:`)){let t=Ee(e.slice(6));return t?{interceptionContext:t.interceptionContext,kind:`route`,path:t.path}:null}if(e.startsWith(`page:`)){let t=Ee(e.slice(5));return t?{interceptionContext:t.interceptionContext,kind:`page`,path:t.path}:null}if(e.startsWith(`layout:`)){let t=K(e.slice(7));return t?{kind:`layout`,treePath:t}:null}if(e.startsWith(`template:`)){let t=K(e.slice(9));return t?{kind:`template`,treePath:t}:null}if(e.startsWith(`slot:`)){let t=e.slice(5),n=t.indexOf(`:`);if(n<=0)return null;let r=t.slice(0,n),i=K(t.slice(n+1));return i?{kind:`slot`,name:r,treePath:i}:null}return null}function De(e){let t=q(e)?.kind;return t===`page`||t===`layout`||t===`template`||t===`slot`}function Oe(e){if(!e.startsWith(`slot:`))return!1;let t=e.slice(5),n=t.indexOf(`:`);return n>0&&t.charCodeAt(n+1)===47}function ke(e){return Array.isArray(e)&&e.length>0&&e.every(e=>typeof e==`string`&&e.length>0&&!e.includes(`/`))}function Ae(e){if(typeof e!=`string`||!e.startsWith(`/`))return null;let t=e.slice(1).split(`/`);return ke(t)?t:null}function je(e){let t=[...e.layoutIds??[]],n=Ae(e.sourcePage),r={[V]:e.routeId,[le]:e.interceptionContext,[z]:t,[H]:e.rootLayoutTreePath,...e.dynamicStaleTimeSeconds===void 0?{}:{[L]:e.dynamicStaleTimeSeconds},...e.bfcacheSegmentIdentities&&Object.keys(e.bfcacheSegmentIdentities).length>0?{[de]:e.bfcacheSegmentIdentities}:{},...n===null?{}:{[ue]:n}},i=e.interception?{...r,[R]:e.interception}:r;return e.slotBindings&&e.slotBindings.length>0?{...i,[W]:ye(e.slotBindings,{layoutIds:t})}:i}function Me(e){let t=!1;for(let[n,r]of Object.entries(e))if(Oe(n)&&r===`__VINEXT_UNMATCHED_SLOT__`){t=!0;break}if(!t)return e;let n={};for(let[t,r]of Object.entries(e))n[t]=Oe(t)&&r===`__VINEXT_UNMATCHED_SLOT__`?pe:r;return n}function Ne(e){if(typeof e!=`object`||!e||Array.isArray(e))return!1;for(let t of Object.values(e))if(t!==`s`&&t!==`d`)return!1;return!0}function Pe(e){return Ne(e)?e:{}}function Fe(e,t){if(e===void 0)return[];if(!Array.isArray(e))throw Error(`[vinext] Invalid ${t} in App Router payload: expected layout id string[]`);let n=[];for(let r of e){if(typeof r!=`string`)throw Error(`[vinext] Invalid ${t} in App Router payload: expected layout id string[]`);if(q(r)?.kind!==`layout`)throw Error(`[vinext] Invalid ${t} in App Router payload: expected layout ids`);n.push(r)}return n}function Ie(e){return Fe(e,z)}function Le(e){return Fe(e,U)}function Re(e){return e===`active`||e===`default`||e===`unmatched`}function ze(e,t={}){if(e===void 0)return[];if(!Array.isArray(e))throw Error(`[vinext] Invalid __slotBindings in App Router payload: expected array`);let n=[];for(let t of e){if(!M(t))throw Error(`[vinext] Invalid __slotBindings in App Router payload: expected objects`);let e=t.slotId;if(typeof e!=`string`||q(e)?.kind!==`slot`)throw Error(`[vinext] Invalid __slotBindings in App Router payload: expected slot ids`);let r=t.ownerLayoutId;if(r!==null&&(typeof r!=`string`||q(r)?.kind!==`layout`))throw Error(`[vinext] Invalid __slotBindings in App Router payload: expected owner layout ids`);let i=t.state;if(!Re(i))throw Error(`[vinext] Invalid __slotBindings in App Router payload: expected state`);let a=t.activeRouteId;if(a!=null&&(typeof a!=`string`||q(a)?.kind!==`route`))throw Error(`[vinext] Invalid __slotBindings in App Router payload: expected route ids`);n.push({...a===void 0?{}:{activeRouteId:a},ownerLayoutId:r,slotId:e,state:i})}return ye(n,t)}function Be(e,t){let n=e[t];if(typeof n!=`string`)throw Error(`[vinext] Invalid __interception in App Router payload: expected strings`);return n}function Ve(e){if(!ne(e))throw Error(`[vinext] Invalid __interception in App Router payload: expected path URLs`);return e}function He(e,t){let n=q(e);if(n?.kind!==`route`||n.path!==t||n.interceptionContext!==null)throw Error(`[vinext] Invalid __interception in App Router payload: expected route ids`);return e}function Ue(e){if(q(e)?.kind!==`slot`)throw Error(`[vinext] Invalid __interception in App Router payload: expected slot id`);return e}function We(e){if(e==null)return null;if(!M(e))throw Error(`[vinext] Invalid __interception in App Router payload: expected object`);let t=Ve(Be(e,`sourceMatchedUrl`)),n=Ve(Be(e,`targetMatchedUrl`));return{sourceMatchedUrl:t,sourceRouteId:He(Be(e,`sourceRouteId`),t),slotId:Ue(Be(e,`slotId`)),targetMatchedUrl:n,targetRouteId:He(Be(e,`targetRouteId`),n)}}function Ge(e){return!(typeof e!=`object`||!e||Array.isArray(e)||c(e))}function Ke(e,t){return{...e,[B]:t}}function qe(e){if(!Ge(e.element))return e.element;let t=Je(e.skipDisposition),n={};for(let[r,i]of Object.entries(e.element)){if(t.has(r)){ae(e.element,r);continue}n[r]=i===pe?fe:i}return n[B]=e.layoutFlags,t.size>0&&(n[U]=[...t]),n[ce]=e.artifactCompatibility??N(),e.cacheEntryReuseProof&&(n[I]=e.cacheEntryReuseProof),e.dynamicStaleTimeSeconds!==void 0&&(n[L]=e.dynamicStaleTimeSeconds),n}function Je(e){if(e?.enabled!==!0)return me;let t=new Set;for(let n of e.skippedEntryIds)q(n)?.kind===`layout`&&t.add(n);return t}function Ye(e){return e===void 0?N():ie(e)??N()}function Xe(e){return e==null?null:typeof e==`string`?e.startsWith(`/`)?e:null:ke(e)?`/${e.join(`/`)}`:null}function Ze(){return{kind:`runtime-cache-entry`,decision:null}}function Qe(e){return typeof e==`string`&&ge.has(e)}function $e(e){return e===`renderFresh`||e===`privateUncacheable`}function et(e){return e===`affectedOutput`||e===`route`}function tt(e){if(e===void 0)return null;if(!M(e)||e.kind!==`runtime-cache-entry`)return Ze();let t=e.decision;return t===null||!M(t)?Ze():t.kind===`reuse`&&t.canReuse===!0&&t.code===`CP_STATIC_LAYOUT_REUSE_PROVEN`&&t.reuseClass===`static-layout`?{kind:`runtime-cache-entry`,decision:{canReuse:!0,code:t.code,kind:`reuse`,reuseClass:t.reuseClass}}:t.kind===`reject`&&t.canReuse===!1&&Qe(t.code)&&$e(t.mode)&&et(t.scope)?{kind:`runtime-cache-entry`,decision:{canReuse:!1,code:t.code,kind:`reject`,mode:t.mode,scope:t.scope}}:Ze()}function nt(e){if(!M(e))return{};let t={};for(let[n,r]of Object.entries(e)){if(typeof r!=`string`||!De(n))return{};t[n]=r}return t}function rt(e){let t=e[V];if(typeof t!=`string`)throw Error(`[vinext] Missing __route string in App Router payload`);let n=e[le];if(n!=null&&typeof n!=`string`)throw Error(`[vinext] Invalid __interceptionContext in App Router payload`);let r=e[H];if(r===void 0)throw Error(`[vinext] Missing __rootLayout key in App Router payload`);if(r!==null&&typeof r!=`string`)throw Error(`[vinext] Invalid __rootLayout in App Router payload: expected string or null`);let i=Pe(e[B]),a=Ie(e[z]),o=Le(e[U]),s=ze(e[W],{layoutIds:a}),c=We(e[R]),l=Ye(e[ce]),u=tt(e[I]),d=e[L],f=typeof d==`number`&&Number.isFinite(d)&&d>=0?d:void 0,p=Xe(Object.hasOwn(e,`__srcPage`)?e[ue]:e[se]),m=nt(e[de]);return{artifactCompatibility:l,...u?{cacheEntryReuseProof:u}:{},...f===void 0?{}:{dynamicStaleTimeSeconds:f},interception:c,interceptionContext:n??null,layoutIds:a,layoutFlags:i,routeId:t,rootLayoutTreePath:r,bfcacheSegmentIdentities:m,skippedLayoutIds:o,slotBindings:s,sourcePage:p}}var J={keys:{artifactCompatibility:ce,cacheEntryReuseProof:I,dynamicStaleTime:L,interception:R,interceptionContext:le,layoutIds:z,layoutFlags:B,rootLayout:H,route:V,bfcacheSegmentIdentities:de,skippedLayoutIds:U,slotBindings:W,sourcePageSegments:ue},unmatchedSlotValue:fe,createMetadataEntries:je,decode:Me,encodeCacheKey:Te,encodeLayoutId:Se,encodeOutgoingPayload:qe,encodePageId:xe,encodeRouteId:be,encodeSlotId:we,encodeTemplateId:Ce,isSlotId:Oe,parseElementKey:q,readMetadata:rt,withLayoutFlags:Ke};globalThis.AsyncLocalStorage=n.AsyncLocalStorage;var it=globalThis,at=Symbol.for(`vinext.als.registry`),ot=it[at]??=new Set,st=class{getStore(){}run(e,t,...n){return t(...n)}exit(e,...t){return e(...t)}enterWith(e){}disable(){}};function Y(e){let t=Symbol.for(e),n=it[t]??=typeof r==`function`?new r:new st;return ot.add(n),n}var ct=Y(`vinext.pprFallbackShell.als`),lt=Y(`vinext.pprFallbackShell.cacheTaskStack.als`);function ut(e){let t=setTimeout(()=>{t=null,n=setTimeout(()=>{n=null,e()},0)},0),n=null;return()=>{t!==null&&(clearTimeout(t),t=null),n!==null&&(clearTimeout(n),n=null)}}function dt(e){if(e.pendingCacheTasks!==0)return;let t=e.cacheReadyResolvers.splice(0);for(let e of t)e()}function ft(e){e.pendingCacheTasks!==0||e.pendingCacheReadyCleanup!==null||(e.pendingCacheReadyCleanup=ut(()=>{e.pendingCacheReadyCleanup=null,dt(e),e.phase===`final`&&pt(e)}))}function pt(e){e.phase!==`final`||!e.isFinalRenderStarted||!e.hasDynamicBoundary||e.pendingCacheTasks>0||e.pendingCacheReadyCleanup!==null||e.isAbortScheduled||(e.isAbortScheduled=!0,e.pendingAbortCleanup=ut(()=>{e.pendingAbortCleanup=null,e.isAbortScheduled=!1,e.phase===`final`&&e.hasDynamicBoundary&&e.pendingCacheTasks===0&&e.pendingCacheReadyCleanup===null&&!e.reactAbortController.signal.aborted&&(e.reactAbortController.abort(),e.abortController.abort())}))}function mt(e,t){t.isPending&&(t.isPending=!1,t.epoch===e.cacheEpoch&&(e.pendingCacheTasks--,ft(e)))}function ht(e,t){!t.isPending||t.isIgnored||(t.isIgnored=!0,mt(e,t))}function gt(){return ct.getStore()??null}function _t(e){e.hasDynamicBoundary=!0;for(let t of lt.getStore()??[])ht(e,t);ft(e)}function vt(){let e=gt();e===null||e.fallbackParamNames.size===0||_t(e)}function yt(e){return typeof DOMException<`u`&&e instanceof DOMException&&e.name===`AbortError`?!0:e instanceof Error&&e.name===`HangingPromiseRejectionError`}var bt=Symbol.for(`vinext.appRouterContext`),xt=Symbol.for(`vinext.globalLayoutRouterContext`),St=Symbol.for(`vinext.layoutRouterContext`),Ct=Symbol.for(`vinext.missingSlotContext`),wt=Symbol.for(`vinext.templateContext`);function Tt(e,t){if(typeof i.createContext!=`function`)return null;let n=globalThis;return n[e]||(n[e]=i.createContext(t)),n[e]??null}var Et=Tt(bt,null);Tt(xt,null),Tt(St,null),Tt(Ct,new Set),Tt(wt,null);function Dt(e,t=void 0){if(!t)return e;let n=e.indexOf(`#`),r=n===-1?e:e.slice(0,n),i=n===-1?``:e.slice(n);return new URL(r,`http://vinext.local`).searchParams.has(`dpl`)?e:`${r}${r.includes(`?`)?`&`:`?`}dpl=${t}${i}`}function Ot(e,t=void 0){return new URL(e,`http://vinext.local`).pathname.includes(`/_next/static/`)?Dt(e,t):e}var kt=typeof a.createContext==`function`?a.createContext(void 0):null;function At(e){return kt?a.createElement(kt.Provider,{value:e.nonce},e.children):a.createElement(a.Fragment,null,e.children)}function jt(e,t){return!t||!kt?e:a.createElement(At,{nonce:t},e)}function Mt(e){return!e||typeof a.useContext!=`function`?function(){}:function(){return a.useContext(e)}}Mt(kt);function X(e){return JSON.stringify(e).replace(/</g,`\\u003c`).replace(/>/g,`\\u003e`).replace(/&/g,`\\u0026`).replace(/\u2028/g,`\\u2028`).replace(/\u2029/g,`\\u2029`)}function Z(e){return e.replace(/&/g,`&amp;`).replace(/"/g,`&quot;`).replace(/</g,`&lt;`).replace(/>/g,`&gt;`)}var Nt=/[\t\n\f\r ]+/;function Pt(e,t){return e===null?!1:e.split(Nt).some(e=>e.length>0&&e.toLowerCase()===t.toLowerCase())}function Ft(e){return e?` nonce="${Z(e)}"`:``}function It(e,t){return`<script${Ft(t)}>${e}<\/script>`}var Lt={set(e,t,n){typeof t!=`string`||typeof n!=`string`||e.push({key:t,value:n})}},Rt=Symbol.for(`opentelemetry.js.api.1`),zt=Symbol.for(`OpenTelemetry Context Key SPAN`);function Bt(){let e=null;try{let t=globalThis[Rt];if(!t?.context||!t.propagation)return null;let n=t.context,r=t.propagation,i=n.active();e=i.getValue(zt)===void 0?t.trace?.getTracer(`vinext`).startSpan(`vinext.clientTraceMetadata`,void 0,i)??null:null;let a=e?i.setValue(zt,e):i,o=[];return n.with(a,()=>{r.inject(a,o,Lt)}),o}catch{return[]}finally{e?.end()}}function Vt(){let e=Bt();if(e)return e;let t;try{let e=globalThis.require;typeof e==`function`&&(t=e(`@opentelemetry/api`))}catch{return[]}if(!t)return[];try{let e=t.context.active(),n=[];return t.propagation.inject(e,n,Lt),n}catch{return[]}}function Ht(e,t){if(!t||t.length===0)return;let n=new Set(t);return e.filter(({key:e})=>n.has(e))}function Ut(e){if(!e||e.length===0)return``;let t=``;for(let{key:n,value:r}of e)t+=`<meta name="${Z(n)}" content="${Z(r)}"/>`;return t}function Wt(e){return!e||e.length===0||typeof process<`u`&&process.env.VINEXT_PRERENDER===`1`?``:Ut(Ht(Vt(),e))}var Gt=Symbol.for(`vinext.layoutSegmentContext`),Kt=Symbol.for(`vinext.serverInsertedHTMLContext`),qt=Symbol.for(`vinext.bfcacheIdMapContext`),Jt=Symbol.for(`vinext.bfcacheSegmentIdContext`),Yt=Symbol.for(`vinext.navigation.fallback`);function Xt(e){return typeof i.createContext==`function`?i.createContext(e):null}function Zt(){let e=globalThis;return e[Kt]||(e[Kt]=Xt(null)),e[Kt]??null}var Qt=Zt();function $t(){let e=globalThis;return e[Gt]||(e[Gt]=Xt({children:[]})),e[Gt]??null}function en(){let e=globalThis;return e[qt]||(e[qt]=Xt(null)),e[qt]??null}function tn(){let e=globalThis;return e[Jt]||(e[Jt]=Xt(null)),e[Jt]??null}var nn=Symbol.for(`vinext.navigation.globalAccessors`);function rn(){let e=globalThis;return e[Yt]??={serverContext:null,serverInsertedHTMLCallbacks:[]}}function an(){return globalThis[nn]}var on=()=>an()?.getServerContext()??rn().serverContext,sn=e=>{let t=an();t?t.setServerContext(e):rn().serverContext=e},cn=()=>an()?.getInsertedHTMLCallbacks()??rn().serverInsertedHTMLCallbacks,ln=()=>{let e=an();e?e.clearInsertedHTMLCallbacks():rn().serverInsertedHTMLCallbacks=[]};function un(e){on=e.getServerContext,sn=e.setServerContext,cn=e.getInsertedHTMLCallbacks,ln=e.clearInsertedHTMLCallbacks}function dn(){return on()}function fn(e){sn(e)}function pn(e){cn().push(e)}function mn(e){let t=cn(),n=[];for(let e of t)try{let t=e();t!=null&&n.push(t)}catch{}return e&&(t.length=0),n}function hn(){return mn(!1)}function gn(){ln()}var _n=`NEXT_REDIRECT;`;function vn(e){if(!e.startsWith(_n))return null;let t=e.indexOf(`;`,14);if(t===-1)return null;let n=e.slice(t+1),r=n.match(/;(303|307|308);?$/),i=n!==``&&e.endsWith(`;`);if(i&&!r)return null;let a=r?n.slice(0,-r[0].length):n,o=a;if(!i)try{o=decodeURIComponent(a)}catch{return null}return{status:r?Number(r[1]):307,type:e.slice(14,t)||null,url:o}}var yn=`NEXT_HTTP_ERROR_FALLBACK`,bn=class extends Error{digest;constructor(e,t){super(e),this.digest=t}};function xn(){throw new bn(`NEXT_NOT_FOUND`,`${yn};404`)}function Sn(e){return!!e&&typeof e==`object`&&`digest`in e&&typeof e.digest==`string`&&e.digest.startsWith(`NEXT_REDIRECT;`)}function Cn(e){let t=vn(e);return t?{url:t.url,type:t.type===`push`?`push`:`replace`}:null}var wn=C({default:()=>On}),Q={container:{fontFamily:`system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji"`,height:`100vh`,display:`flex`,alignItems:`center`,justifyContent:`center`},card:{marginTop:`-32px`,maxWidth:`325px`,padding:`32px 28px`,textAlign:`left`},icon:{marginBottom:`24px`},title:{fontSize:`24px`,fontWeight:500,letterSpacing:`-0.02em`,lineHeight:`32px`,margin:`0 0 12px 0`,color:`var(--next-error-title)`},message:{fontSize:`14px`,fontWeight:400,lineHeight:`21px`,margin:`0 0 20px 0`,color:`var(--next-error-message)`},form:{margin:0},buttonGroup:{display:`flex`,gap:`8px`,alignItems:`center`},button:{display:`inline-flex`,alignItems:`center`,justifyContent:`center`,height:`32px`,padding:`0 12px`,fontSize:`14px`,fontWeight:500,lineHeight:`20px`,borderRadius:`6px`,cursor:`pointer`,color:`var(--next-error-btn-text)`,background:`var(--next-error-btn-bg)`,border:`var(--next-error-btn-border)`},buttonSecondary:{display:`inline-flex`,alignItems:`center`,justifyContent:`center`,height:`32px`,padding:`0 12px`,fontSize:`14px`,fontWeight:500,lineHeight:`20px`,borderRadius:`6px`,cursor:`pointer`,color:`var(--next-error-btn-secondary-text)`,background:`var(--next-error-btn-secondary-bg)`,border:`var(--next-error-btn-secondary-border)`},digestFooter:{position:`fixed`,bottom:`32px`,left:`0`,right:`0`,textAlign:`center`,fontFamily:`ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace`,fontSize:`12px`,lineHeight:`18px`,fontWeight:400,margin:`0`,color:`var(--next-error-digest)`}},Tn=`
-:root {
-  --next-error-bg: #fff;
-  --next-error-text: #171717;
-  --next-error-title: #171717;
-  --next-error-message: #171717;
-  --next-error-digest: #666666;
-  --next-error-btn-text: #fff;
-  --next-error-btn-bg: #171717;
-  --next-error-btn-border: none;
-  --next-error-btn-secondary-text: #171717;
-  --next-error-btn-secondary-bg: transparent;
-  --next-error-btn-secondary-border: 1px solid rgba(0,0,0,0.08);
+import { createRequire } from "node:module";
+import __vite_rsc_assets_manifest from "./__vite_rsc_assets_manifest.js";
+import * as React$1 from "react";
+import React, { Fragment, createElement, isValidElement, use } from "react";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { jsx } from "react/jsx-runtime";
+import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server.edge";
+import * as ReactDOM from "react-dom";
+//#region \0rolldown/runtime.js
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __commonJSMin = (cb, mod) => () => (mod || (cb((mod = { exports: {} }).exports, mod), cb = null), mod.exports);
+var __exportAll = (all, no_symbols) => {
+	let target = {};
+	for (var name in all) __defProp(target, name, {
+		get: all[name],
+		enumerable: true
+	});
+	if (!no_symbols) __defProp(target, Symbol.toStringTag, { value: "Module" });
+	return target;
+};
+var __copyProps = (to, from, except, desc) => {
+	if (from && typeof from === "object" || typeof from === "function") for (var keys = __getOwnPropNames(from), i = 0, n = keys.length, key; i < n; i++) {
+		key = keys[i];
+		if (!__hasOwnProp.call(to, key) && key !== except) __defProp(to, key, {
+			get: ((k) => from[k]).bind(null, key),
+			enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable
+		});
+	}
+	return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", {
+	value: mod,
+	enumerable: true
+}) : target, mod));
+var __require = /* @__PURE__ */ createRequire(import.meta.url);
+//#endregion
+//#region node_modules/vinext/dist/server/http-error-responses.js
+/**
+* Build a 404 Not Found plain-text response.
+*
+* The `headers` option lets call sites merge middleware response headers into
+* the 404, matching the pattern used by `app-rsc-handler` after a route match
+* fails but middleware has already contributed headers.
+*/
+function notFoundResponse(init) {
+	return new Response("Not Found", {
+		status: 404,
+		headers: init?.headers
+	});
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --next-error-bg: #0a0a0a;
-    --next-error-text: #ededed;
-    --next-error-title: #ededed;
-    --next-error-message: #ededed;
-    --next-error-digest: #a0a0a0;
-    --next-error-btn-text: #0a0a0a;
-    --next-error-btn-bg: #ededed;
-    --next-error-btn-border: none;
-    --next-error-btn-secondary-text: #ededed;
-    --next-error-btn-secondary-bg: transparent;
-    --next-error-btn-secondary-border: 1px solid rgba(255,255,255,0.14);
-  }
+//#endregion
+//#region node_modules/vinext/dist/utils/base-path.js
+/**
+* Shared basePath helpers.
+*
+* Next.js only treats a pathname as being under basePath when it is an exact
+* match ("/app") or starts with the basePath followed by a path separator
+* ("/app/..."). Prefix-only matches like "/application" must be left intact.
+*/
+/**
+* Check whether a pathname is inside the configured basePath.
+*/
+function hasBasePath(pathname, basePath) {
+	if (!basePath) return false;
+	return pathname === basePath || pathname.startsWith(basePath + "/");
 }
-body { margin: 0; color: var(--next-error-text); background: var(--next-error-bg); }
-`.replace(/\n\s*/g,``);function En(){return d(`svg`,{width:`32`,height:`32`,viewBox:`-0.2 -1.5 32 32`,fill:`none`,style:Q.icon,children:d(`path`,{d:`M16.9328 0C18.0839 0.000116771 19.1334 0.658832 19.634 1.69531L31.4299 26.1309C32.0708 27.4588 31.1036 28.9999 29.6291 29H2.00215C0.527541 29 -0.439628 27.4588 0.201371 26.1309L11.9973 1.69531C12.4979 0.658823 13.5474 7.75066e-05 14.6984 0H16.9328ZM3.59493 26H28.0363L16.9328 3H14.6984L3.59493 26ZM15.8156 19C16.9202 19.0001 17.8156 19.8955 17.8156 21C17.8156 22.1045 16.9202 22.9999 15.8156 23C14.7111 23 13.8156 22.1046 13.8156 21C13.8156 19.8954 14.7111 19 15.8156 19ZM17.3156 16.5H14.3156V8.5H17.3156V16.5Z`,fill:`var(--next-error-title)`})})}function Dn(){}function On({error:e}){let t=e?.digest,n=!!t,r=n?`A server error occurred. Reload to try again.`:`Reload to try again, or go back.`;return f(`html`,{id:`__next_error__`,children:[d(`head`,{children:d(`style`,{dangerouslySetInnerHTML:{__html:Tn}})}),f(`body`,{children:[d(`div`,{style:Q.container,children:f(`div`,{style:Q.card,children:[d(En,{}),d(`h1`,{style:Q.title,children:`This page couldn’t load`}),d(`p`,{style:Q.message,children:r}),f(`div`,{style:Q.buttonGroup,children:[d(`form`,{style:Q.form,children:d(`button`,{type:`submit`,style:Q.button,children:`Reload`})}),!n&&d(`button`,{type:`button`,style:Q.buttonSecondary,onClick:Dn,children:`Back`})]})]})}),t&&f(`p`,{style:Q.digestFooter,children:[`ERROR `,t]})]})]})}var kn=C({BfcacheIdentityMapContext:()=>Rn,BfcacheSegmentBoundary:()=>ir,Children:()=>lr,ChildrenContext:()=>jn,ElementsContext:()=>$,ParallelSlot:()=>ur,ParallelSlotsContext:()=>Mn,Slot:()=>cr,UNMATCHED_SLOT:()=>pe,getNonCacheComponentsSegmentKey:()=>ar,resolveBfcacheSegmentStateKey:()=>or,stageBfcacheSlotEntryForRender:()=>Gn,updateBfcacheSlotEntryOrder:()=>Hn}),An=Object.freeze({}),$=i.createContext(An),jn=i.createContext(null),Mn=i.createContext(null),Nn=en(),Pn=tn(),Fn=Object.freeze({}),In=3,Ln=1,Rn=i.createContext(Fn);function zn(){return!1}function Bn(){return zn()?In:Ln}function Vn(e){return Number.isFinite(e)?Math.max(1,Math.trunc(e)):1}function Hn(e,t,n=Bn()){let r=Vn(n),i=[t];for(let n of e){if(i.length>=r)break;n!==t&&i.push(n)}return i}function Un(e,t){let n=new Set(t);for(let t of e.keys())n.has(t)||e.delete(t)}function Wn(e,t){if(e.length!==t.length)return!1;for(let n=0;n<e.length;n++)if(e[n]!==t[n])return!1;return!0}function Gn(e,t,n,r=Bn()){let i=new Map(e);i.set(n.stateKey,n);let a=Hn(t,n.stateKey,r);return Un(i,a),{entries:a.map(e=>i.get(e)).filter(e=>e!==void 0),order:a,snapshots:i}}function Kn(e){if(typeof e!=`object`||!e||Array.isArray(e))return!1;let t=Object.values(e);return t.length>0&&t.every(e=>e===`s`||e===`d`)}function qn(e){return typeof e!=`object`||!e||Array.isArray(e)?!1:`schemaVersion`in e&&`appElementsSchemaVersion`in e&&`rscPayloadSchemaVersion`in e&&`graphVersion`in e&&`deploymentVersion`in e&&`rootBoundaryId`in e&&`renderEpoch`in e}function Jn(e){return typeof e!=`object`||!e||Array.isArray(e)?!1:`ownerLayoutId`in e&&`slotId`in e&&`state`in e}function Yn(e){return Array.isArray(e)&&e.length>0&&e.every(Jn)}function Xn(e,t){return e===`__skippedLayoutIds`&&Array.isArray(t)&&t.every(e=>typeof e==`string`)}function Zn(e,t){return e!==`__bfcacheSegmentIdentities`||typeof t!=`object`||!t||Array.isArray(t)?!1:Object.entries(t).every(([e,t])=>{let n=J.parseElementKey(e);return n!==null&&n.kind!==`route`&&typeof t==`string`})}function Qn(e){return typeof e!=`object`||!e||Array.isArray(e)?!1:`sourceMatchedUrl`in e&&typeof e.sourceMatchedUrl==`string`&&`sourceRouteId`in e&&typeof e.sourceRouteId==`string`&&`slotId`in e&&typeof e.slotId==`string`&&`targetMatchedUrl`in e&&typeof e.targetMatchedUrl==`string`&&`targetRouteId`in e&&typeof e.targetRouteId==`string`}function $n(e){return typeof e!=`object`||!e||Array.isArray(e)?!1:`kind`in e&&e.kind===`runtime-cache-entry`&&`decision`in e}function er(e,t){return Kn(t)||Zn(e,t)||qn(t)||$n(t)||Qn(t)||Xn(e,t)||Yn(t)}function tr({entry:e,fallbackElements:t,fallbackSegmentId:n,fallbackStateKeyMap:r,SegmentContext:i}){return d(Rn.Provider,{value:e.stateKeyMap??r,children:d($.Provider,{value:e.elements??t,children:d(i.Provider,{value:e.segmentId??n,children:e.content})})})}function nr(e){let t=i.useRef(new Map),[n,r]=i.useState(()=>[e.stateKey]),a=Gn(t.current,n,e),o=a.order,s=!Wn(n,o);return i.useLayoutEffect(()=>{t.current=a.snapshots},[a.snapshots]),s&&r(o),a.entries}function rr({activeStateKey:e,content:t,elements:n,id:r,SegmentContext:a,stateKeyMap:o}){return d(u,{children:nr({content:t,elements:n,segmentId:r,stateKey:e,stateKeyMap:o}).map(t=>d(i.Activity,{mode:t.stateKey===e?`visible`:`hidden`,children:d(tr,{entry:t,fallbackElements:n,fallbackSegmentId:r,fallbackStateKeyMap:o,SegmentContext:a})},t.stateKey))})}function ir({children:e,id:t,stateKey:n}){let r=i.useContext($),a=i.useContext(Rn),o=or(t,a,i.useContext(Nn));return!Pn||o===void 0?d(i.Fragment,{children:e},n):zn()?d(rr,{activeStateKey:o,content:e,elements:r,id:t,SegmentContext:Pn,stateKeyMap:a}):d(Pn.Provider,{value:t,children:e},o)}function ar(e,t){let n=J.parseElementKey(e);return n!==null&&n.kind!==`route`?t:void 0}function or(e,t,n){return t[e]??n?.[e]}function sr({content:e,id:t}){let n=Pn,r=i.useContext($),a=i.useContext(Rn),o=or(t,a,i.useContext(Nn));return n?o===void 0?d(n.Provider,{value:t,children:e}):zn()?d(rr,{activeStateKey:o,content:e,elements:r,id:t,SegmentContext:n,stateKeyMap:a}):d(n.Provider,{value:t,children:e},ar(t,o)):d(u,{children:e})}function cr({id:e,children:t,parallelSlots:n}){let r=i.useContext($);if(!Object.hasOwn(r,e))return null;let a=r[e];if(er(e,a)||(a===pe&&xn(),a===null))return null;let o=d(Mn.Provider,{value:n??null,children:d(jn.Provider,{value:t??null,children:a})});return Nn&&Pn?d(sr,{id:e,content:o}):o}function lr(){return i.useContext(jn)}function ur({name:e}){return i.useContext(Mn)?.[e]??null}function dr(e,t){return t?e===t||e.startsWith(t+`/`):!1}function fr(e,t){return dr(e,t)?e.slice(t.length)||`/`:e}function pr(e,t){return!t||dr(e,t)?e:e===`/`?t:`${t}${e}`}function mr(e){return!e||typeof e!=`object`||!(`digest`in e)?null:String(e.digest)}function hr(e){return vn(e)}function gr(e){return e===`NEXT_NOT_FOUND`?{status:404}:e.startsWith(`NEXT_HTTP_ERROR_FALLBACK;`)?{status:parseInt(e.split(`;`)[1],10)}:null}var _r=308;function vr(e,t){if(!t||!e.startsWith(`/`))return e;let n=e.indexOf(`#`),r=e.indexOf(`?`),i=r===-1?n===-1?e.length:n:n===-1?r:Math.min(r,n);return pr(e.slice(0,i),t)+e.slice(i)}function yr(e,t){let n=mr(e);if(!n)return``;if(gr(n)){let e=`<meta name="robots" content="noindex"/>`;return(t.nodeEnv??`production`)===`development`&&(e+=`<meta name="next-error" content="not-found"/>`),e}let r=hr(n);if(!r)return``;let i=r.status===_r?0:1,a=vr(r.url,t.basePath);return`<meta id="__next-page-redirect" http-equiv="refresh" content="`+i+`;url=`+Z(a)+`"/>`}function br(e,t={}){let n=``;for(let r of e)n+=yr(r,t);return n}function xr(e={}){let t=[],n=0;return{capture(e){t.push(e)},flush(){if(n>=t.length)return``;let r=br(t.slice(n),e);return n=t.length,r}}}var Sr=32768;new TextEncoder;function Cr(e){let t=``;for(let n=0;n<e.byteLength;n+=Sr)t+=String.fromCharCode(...e.subarray(n,n+Sr));return btoa(t)}function wr(e){let t=0;for(let n of e)t+=n.byteLength;let n=new Uint8Array(t),r=0;for(let t of e)n.set(t,r),r+=t.byteLength;return n}var Tr=`vinext.navigationRuntime`;function Er(){return new Promise(e=>setTimeout(e,0))}var Dr=`self[Symbol.for(${X(Tr)})]`;function Or(){return`((${Dr}??={bootstrap:{routeManifest:null},functions:{}}).bootstrap.rsc??={rsc:[]})`}function kr(e,t,n){return`Object.assign(`+Or()+`,{params:`+X(e)+`,nav:`+X(t)+(n===void 0?``:`,dynamicStaleTimeSeconds:`+X(n))+`})`}function Ar(e){return Or()+`.rsc.push(`+X(e)+`)`}function jr(e){let t=Or();return(e===void 0?``:`Object.assign(`+t+`,`+X({initialCacheKind:e.kind,...e.dynamicStaleTimeSeconds===void 0?{}:{dynamicStaleTimeSeconds:e.dynamicStaleTimeSeconds},...e.staleTimeSeconds===void 0?{}:{staleTimeSeconds:e.staleTimeSeconds}})+`);`)+t+`.done=true`}function Mr(e,t,n){let r=e.getReader(),i=[],a=[],o=!1;async function s(){if(!o){o=!0;try{for(;;){let e=await r.read();if(e.done)break;a.push(e.value);try{let t=new TextDecoder(`utf-8`,{fatal:!0}).decode(e.value);i.push(t)}catch{i.push([3,Cr(e.value)])}}}catch(e){throw e}finally{o=!1}}}let c=s();return{flush(){if(i.length===0)return``;let e=i;i=[];let n=``;for(let r of e)n+=It(Ar(r),t);return n},async finalize(){await c;let e=this.flush();return e+=It(jr(n?.()),t),e},async getRawBuffer(){await c;let e=wr(a);return a.length=0,e.buffer}}}function Nr(e){return e.replace(/<link(?=[^>]*\srel="preload")[^>]*>/g,e=>e.replace(` as="stylesheet"`,` as="style"`))}var Pr=/<link\b[^>]*>/gi,Fr=/<!--[\s\S]*?-->|<(script|style|textarea|title)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,Ir=/<!--|<(script|style|textarea|title)\b[^>]*>/gi,Lr={script:/<\/script\s*>/i,style:/<\/style\s*>/i,textarea:/<\/textarea\s*>/i,title:/<\/title\s*>/i};function Rr(e,t){let n=/\s([^\s"'=<>`]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g,r;for(;(r=n.exec(e))!==null;)if(r[1]?.toLowerCase()===t.toLowerCase())return r[2]??r[3]??r[4]??``;return null}function zr(e,t,n){return Pt(Rr(e,t),n)}function Br(e,t){if(Object.prototype.hasOwnProperty.call(e,t))return e[t]??``;try{let n=new URL(t).pathname;if(Object.prototype.hasOwnProperty.call(e,n))return e[n]??``}catch{}return null}var Vr=/<link/gi;function Hr(e){Vr.lastIndex=0;let t=-1,n;for(;(n=Vr.exec(e))!==null;)t=n.index;return t===-1||e.indexOf(`>`,t)!==-1?{complete:e,trailing:``}:{complete:e.slice(0,t),trailing:e.slice(t)}}function Ur(e){let t;for(Ir.lastIndex=0;(t=Ir.exec(e))!==null;){let n=t.index;if(t[0]===`<!--`){let t=e.indexOf(`-->`,Ir.lastIndex);if(t===-1)return n;Ir.lastIndex=t+3;continue}let r=t[1]?.toLowerCase();if(!r)continue;let i=Lr[r];if(!i)continue;let a=i.exec(e.slice(Ir.lastIndex));if(!a)return n;Ir.lastIndex+=a.index+a[0].length}return null}function Wr(e){let t=Hr(e),n=t.trailing?t.complete.length:null,r=Ur(e),i=n===null?r:r===null?n:Math.min(n,r);return i===null?{complete:e,trailing:``}:{complete:e.slice(0,i),trailing:e.slice(i)}}function Gr(e){return e.replace(/<\/style/gi,`<\\/style`)}var Kr=/^\uFEFF?(?:\s|\/\*[\s\S]*?\*\/)*@(charset|import|layer|namespace)\b/i;function qr(e){return!Kr.test(e)}function Jr(e,t){return Pr.lastIndex=0,e.replace(Pr,t)}function Yr(e,t){let n=``,r=0,i;for(Fr.lastIndex=0;(i=Fr.exec(e))!==null;)n+=Jr(e.slice(r,i.index),t),n+=i[0],r=i.index+i[0].length;let a=e.slice(r),o=Ur(a);return o===null?n+Jr(a,t):n+Jr(a.slice(0,o),t)+a.slice(o)}function Xr(e,t,n,r){if(!t||Object.keys(t).length===0)return{html:e,consumedPrependCss:!1};let i=!1;return{html:Yr(e,e=>{if(!zr(e,`rel`,`stylesheet`))return e;let a=Rr(e,`href`),o=Rr(e,`data-precedence`)??Rr(e,`precedence`);if(!a||!o)return e;let s=Br(t,a);if(s===null)return e;let c=Rr(e,`nonce`)??r,l=c?` nonce="${Z(c)}"`:``,u=!i&&n.length>0&&qr(s)?`${n}\n`:``;return i||=u.length>0,`<style data-vinext-inline-css${l} data-precedence="${Z(o)}" data-href="${Z(a)}">${Gr(u+s)}</style>`}),consumedPrependCss:i}}var Zr=/<head\b[^>]*>/,Qr=`</body></html>`;function $r(e,t=``,n=``,r,i=``,a=``,o){let s=new TextDecoder,c=new TextEncoder,l=typeof t==`function`,u=!1,d=!1,f=!1,p=[],m=``,h=null,g=r!==void 0&&Object.keys(r).length>0,_=e=>{if(f)return e;let t=e.indexOf(Qr);return t===-1?e:(f=!0,e.slice(0,t)+e.slice(t+14))},ee=()=>typeof t==`function`?t():t,v=()=>typeof n==`function`?n():n,y=()=>!i||!a?``:(i=``,a),b=e=>{let t=y()+ee();t&&e.enqueue(c.encode(t))},te=e=>{if(d)return{chunk:e,spliced:!1};let t=v();if(!t)return{chunk:e,spliced:!1};let n=Zr.exec(e);if(!n)return{chunk:e,spliced:!1};let r=n.index+n[0].length;return{chunk:e.slice(0,r)+t+e.slice(r),spliced:!0}},x=(e,t=!1)=>{if(p.length===0&&!m)return;let n=m+p.join(``);p=[],m=``;let a=t||!g?{complete:n,trailing:``}:Wr(n);if(a.trailing&&(m=a.trailing),!a.complete)return;u&&l&&b(e);let s=Nr(a.complete),f=g?Xr(s,r,i,o):{html:s,consumedPrependCss:!1};f.consumedPrependCss&&(i=``);let h=f.html;if(!d){let e=te(h);e.spliced&&(h=e.chunk,d=!0)}if(!u){let t=h.indexOf(`</head>`);if(t!==-1){let n=h.slice(0,t),r=_(h.slice(t));e.enqueue(c.encode(n+y()+ee()+r)),u=!0;return}}h=_(h),e.enqueue(c.encode(h))};return new TransformStream({transform(t,n){p.push(s.decode(t,{stream:!0})),h===null&&(h=setTimeout(()=>{try{x(n);let t=e.flush();t&&n.enqueue(c.encode(t))}catch{}h=null},0))},async flush(t){h!==null&&(clearTimeout(h),h=null);let n=s.decode();n&&p.push(n),x(t,!0),u?l&&b(t):(b(t),u=!0);let r=await e.finalize();r&&t.enqueue(c.encode(r)),t.enqueue(c.encode(Qr))}})}var ei=`_b_0_`;function ti(e){let t=J.parseElementKey(e);return t?.kind===`layout`||t?.kind===`page`||t?.kind===`slot`||t?.kind===`template`}function ni(e){try{return J.readMetadata(e)}catch{return null}}function ri(e,t){let n=new Set(Object.keys(e)),r=t===void 0?ni(e):t;for(let e of r?.layoutIds??[])n.add(e);for(let e of Object.keys(r?.bfcacheSegmentIdentities??{}))n.add(e);return Array.from(n).filter(ti)}function ii(e){let t=e.metadata,n={};for(let r of ri(e.elements,t))n[r]=`0`;return{bfcacheIds:n,identities:t.bfcacheSegmentIdentities}}var ai=`__VINEXT_RSC_FORM_STATE__`,oi=Promise.resolve();function si(e){let t=!1,n=null,r=new Set,i=new Map;function a(t,n){if(r.has(t))return oi;let a=i.get(t);if(a)return a;let o=n(t).catch(n=>{e.onPreloadError?.(t,n)}).then(()=>{r.add(t)}).finally(()=>{i.delete(t)});return i.set(t,o),o}function o(e,t,n){let r=[];for(let i of e)Object.hasOwn(t,i)&&r.push(a(i,n));return r.length===0?oi:Promise.all(r).then(()=>{})}return{preload(r){let i=e.getReferences(),a=e.getClientRequire();return!i||!a?oi:r?o(r,i,a):t?oi:n||(n=o(Object.keys(i),i,a).then(()=>{t=!0}).finally(()=>{n=null}),n)}}}function ci(e,t){let n=!1,r=()=>{n||(n=!0,t())},i=new TransformStream({flush(){r()}}),a=e.pipeThrough(i).getReader();return new ReadableStream({pull(e){return a.read().then(({done:t,value:n})=>{t?e.close():e.enqueue(n)},t=>{r(),e.error(t)})},cancel(e){return r(),a.cancel(e)}})}var li=Symbol.for(`vinext.requestContext.als`),ui=globalThis,di=Y(`vinext.unifiedRequestContext.als`);function fi(){let e=di.getStore();return e?e.executionContext:ui[li]?.getStore()??null}function pi(e){return{headersContext:null,actionRevalidationKind:0,pendingRevalidatedTags:new Set,pendingRevalidations:new Set,dynamicUsageDetected:!1,renderRequestApiUsage:new Set,connectionProbe:null,invalidDynamicUsageError:null,pendingSetCookies:[],draftModeCookieHeader:null,phase:`render`,i18nContext:null,serverContext:null,serverInsertedHTMLCallbacks:[],requestScopedCacheLife:null,unstableCacheObservations:new Map,unstableCacheRevalidation:`foreground`,_privateCache:null,cacheableFetchUrls:new Set,currentRequestTags:[],currentFetchSoftTags:[],currentFetchCacheMode:null,currentForceDynamicFetchDefault:!1,dynamicFetchUrls:new Set,refreshStaleFetchesInForeground:!1,isFetchDedupeActive:!1,currentFetchDedupeEntries:new Map,executionContext:fi(),requestCache:new WeakMap,afterContext:{callbacks:[],responseClosed:!1,pendingCallbacks:0,pendingPromises:0,completion:null,resolveCompletion:null},ssrContext:null,ssrHeadChildren:[],documentInitialHead:[],rootParams:null,...e}}function mi(e,t){let n=di.getStore();if(!n)return t();let r={...n};return e(r),di.run(r,t)}function hi(){return di.getStore()??pi()}function gi(){return di.getStore()!=null}var _i=Symbol.for(`vinext.rootParams.fallback`),vi=globalThis,yi=Y(`vinext.rootParams.als`);Y(`vinext.rootParams.usage.als`),vi[_i]??={rootParams:null};function bi(e,t){return gi()?mi(t=>{t.rootParams=e},t):yi.run({rootParams:e},t)}var xi=Symbol.for(`vinext.navigation.fallback`),Si=globalThis,Ci=Y(`vinext.navigation.als`),wi=Si[xi]??={serverContext:null,serverInsertedHTMLCallbacks:[]};function Ti(){return gi()?hi():Ci.getStore()??wi}function Ei(e){return gi()?mi(e=>{e.serverContext=null,e.serverInsertedHTMLCallbacks=[]},e):Ci.run({serverContext:null,serverInsertedHTMLCallbacks:[]},e)}var Di={getServerContext(){return Ti().serverContext},setServerContext(e){Ti().serverContext=e},getInsertedHTMLCallbacks(){return Ti().serverInsertedHTMLCallbacks},clearInsertedHTMLCallbacks(){Ti().serverInsertedHTMLCallbacks=[]}};un(Di),globalThis[nn]=Di;var Oi=a.createContext(null),ki=/^[a-zA-Z][\w.-]*$/,Ai=/^on/i;function ji(e){if(e.length===0)return``;let t=``;for(let n of e){let e=``;if(n.id&&(e+=` id="${Z(n.id)}"`),n.src&&(e+=` src="${Z(n.src)}"`),e+=Ft(n.nonce),n.attributes)for(let[t,r]of Object.entries(n.attributes))ki.test(t)&&(Ai.test(t)||t!==`data-nscript`&&(r===!0?e+=` ${t}`:typeof r==`string`&&(e+=` ${t}="${Z(r)}"`)));e+=` data-nscript="beforeInteractive"`,t+=`<script${e}>${n.innerHTML??``}<\/script>`}return t}var Mi=`__VINEXT_INITIAL_DEV_ERRORS__`;function Ni(e){if(typeof e==`string`)return e;try{return String(e)}catch{return Object.prototype.toString.call(e)}}function Pi(e){return e instanceof Error?{message:e.message,name:e.name||void 0,stack:e.stack||void 0}:{message:Ni(e)}}function Fi(e,t,n=`production`){if(e==null||n===`production`)return``;let r=`self[`+X(Mi)+`]`;return It(`${r}=${r}||[];${r}.push(${X(Pi(e))})`,t)}var Ii=`[\\u0000-\\u001F \\u200B\\uFEFF]*`,Li=`[\\r\\n\\t]*`;function Ri(e){let t=e.split(``).join(Li);return RegExp(`^${Ii}${t}${Li}:`,`i`)}var zi=[Ri(`javascript`),Ri(`data`),Ri(`vbscript`)],Bi=`Next.js has blocked a javascript: URL as a security precaution.`;function Vi(e){let t=``+e;return zi.some(e=>e.test(t))}function Hi(){console.error(Bi)}function Ui(e,t=Error){if(Vi(e))throw Hi(),new t(Bi)}function Wi(e){Ui(e)}var Gi={bfcacheId:`0`,back(){},forward(){},refresh(){},push(e,t){Wi(e)},replace(e,t){Wi(e)},prefetch(e){Wi(e)}};function Ki(e){return e}function qi(e,t){let n=t?.keyFn??((...e)=>e[0]),r=t?.cache??new Map;return Ki(function(...t){let i=n(...t),a=r.get(i);if(a!==void 0)return a;let o=e.apply(this,t);return r.set(i,o),o})}function Ji(e){return e.split(`$$cache=`)[0]}function Yi(){globalThis.__vite_rsc_require__=e=>e.startsWith(`$$server:`)?(e=e.slice(9),globalThis.__vite_rsc_server_require__(e)):globalThis.__vite_rsc_client_require__(e)}var Xi=!1;function Zi(e){if(Xi)return;Xi=!0;let t=qi(t=>e.load(Ji(t)));globalThis.__vite_rsc_client_require__=t,Yi()}function Qi(){return{}}var $i=S((e=>{var t=E(`react-dom`),n={stream:!0},r=Object.prototype.hasOwnProperty;function i(e,t){if(e){var n=e[t[0]];if(e=n&&n[t[2]])n=e.name;else{if(e=n&&n[`*`],!e)throw Error(`Could not find the module "`+t[0]+`" in the React Server Consumer Manifest. This is probably a bug in the React Server Components bundler.`);n=t[2]}return t.length===4?[e.id,e.chunks,n,1]:[e.id,e.chunks,n]}return t}function a(e,t){var n=``,r=e[t];if(r)n=r.name;else{var i=t.lastIndexOf(`#`);if(i!==-1&&(n=t.slice(i+1),r=e[t.slice(0,i)]),!r)throw Error(`Could not find the module "`+t+`" in the React Server Manifest. This is probably a bug in the React Server Components bundler.`)}return r.async?[r.id,r.chunks,n,1]:[r.id,r.chunks,n]}var o=new Map;function s(e){var t=__vite_rsc_require__(e);return typeof t.then!=`function`||t.status===`fulfilled`?null:(t.then(function(e){t.status=`fulfilled`,t.value=e},function(e){t.status=`rejected`,t.reason=e}),t)}function c(){}function l(e){for(var t=e[1],n=[],r=0;r<t.length;){var i=t[r++];t[r++];var a=o.get(i);if(a===void 0){a=__webpack_chunk_load__(i),n.push(a);var l=o.set.bind(o,i,null);a.then(l,c),o.set(i,a)}else a!==null&&n.push(a)}return e.length===4?n.length===0?s(e[0]):Promise.all(n).then(function(){return s(e[0])}):0<n.length?Promise.all(n):null}function u(e){var t=__vite_rsc_require__(e[0]);if(e.length===4&&typeof t.then==`function`)if(t.status===`fulfilled`)t=t.value;else throw t.reason;if(e[2]===`*`)return t;if(e[2]===``)return t.__esModule?t.default:t;if(r.call(t,e[2]))return t[e[2]]}function d(e,t,n){if(e!==null)for(var r=1;r<t.length;r+=2){var i=n,a=f.d,o=a.X,s=e.prefix+t[r],c=e.crossOrigin;c=typeof c==`string`?c===`use-credentials`?c:``:void 0,o.call(a,s,{crossOrigin:c,nonce:i})}}var f=t.__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE,p=Symbol.for(`react.transitional.element`),m=Symbol.for(`react.lazy`),h=Symbol.iterator;function g(e){return typeof e!=`object`||!e?null:(e=h&&e[h]||e[`@@iterator`],typeof e==`function`?e:null)}var _=Symbol.asyncIterator,ee=Array.isArray,v=Object.getPrototypeOf,y=Object.prototype,b=new WeakMap;function te(e){return Number.isFinite(e)?e===0&&1/e==-1/0?`$-0`:e:e===1/0?`$Infinity`:e===-1/0?`$-Infinity`:`$NaN`}function x(e,t,n,r,i){function a(e,n){n=new Blob([new Uint8Array(n.buffer,n.byteOffset,n.byteLength)]);var r=f++;return x===null&&(x=new FormData),x.append(t+r,n),`$`+e+r.toString(16)}function o(e){function n(c){c.done?(c=f++,a.append(t+c,new Blob(s)),a.append(t+o,`"$o`+c.toString(16)+`"`),a.append(t+o,`C`),h--,h===0&&r(a)):(s.push(c.value),e.read(new Uint8Array(1024)).then(n,i))}x===null&&(x=new FormData);var a=x;h++;var o=f++,s=[];return e.read(new Uint8Array(1024)).then(n,i),`$r`+o.toString(16)}function s(e){function n(s){if(s.done)a.append(t+o,`C`),h--,h===0&&r(a);else try{var c=JSON.stringify(s.value,u);a.append(t+o,c),e.read().then(n,i)}catch(e){i(e)}}x===null&&(x=new FormData);var a=x;h++;var o=f++;return e.read().then(n,i),`$R`+o.toString(16)}function c(e){try{var t=e.getReader({mode:`byob`})}catch{return s(e.getReader())}return o(t)}function l(e,n){function a(e){if(e.done){if(e.value===void 0)o.append(t+s,`C`);else try{var c=JSON.stringify(e.value,u);o.append(t+s,`C`+c)}catch(e){i(e);return}h--,h===0&&r(o)}else try{var l=JSON.stringify(e.value,u);o.append(t+s,l),n.next().then(a,i)}catch(e){i(e)}}x===null&&(x=new FormData);var o=x;h++;var s=f++;return e=e===n,n.next().then(a,i),`$`+(e?`x`:`X`)+s.toString(16)}function u(e,o){if(o===null)return null;if(typeof o==`object`){switch(o.$$typeof){case p:if(n!==void 0&&e.indexOf(`:`)===-1){var s=S.get(this);if(s!==void 0)return n.set(s+`:`+e,o),`$T`}throw Error(`React Element cannot be passed to Server Functions from the Client without a temporary reference set. Pass a TemporaryReferenceSet to the options.`);case m:s=o._payload;var w=o._init;x===null&&(x=new FormData),h++;try{var T=w(s),E=f++,D=d(T,E);return x.append(t+E,D),`$`+E.toString(16)}catch(e){if(typeof e==`object`&&e&&typeof e.then==`function`){h++;var O=f++;return s=function(){try{var e=d(o,O),n=x;n.append(t+O,e),h--,h===0&&r(n)}catch(e){i(e)}},e.then(s,s),`$`+O.toString(16)}return i(e),null}finally{h--}}if(s=S.get(o),typeof o.then==`function`){if(s!==void 0)if(C===o)C=null;else return s;x===null&&(x=new FormData),h++;var k=f++;return e=`$@`+k.toString(16),S.set(o,e),o.then(function(e){try{var n=S.get(e),a=n===void 0?d(e,k):JSON.stringify(n);e=x,e.append(t+k,a),h--,h===0&&r(e)}catch(e){i(e)}},i),e}if(s!==void 0)if(C===o)C=null;else return s;else e.indexOf(`:`)===-1&&(s=S.get(this),s!==void 0&&(e=s+`:`+e,S.set(o,e),n!==void 0&&n.set(e,o)));if(ee(o))return o;if(o instanceof FormData){x===null&&(x=new FormData);var A=x;e=f++;var ne=t+`_`+e+`_`;return o.forEach(function(e,t){A.append(ne+t,e)}),`$K`+e.toString(16)}if(o instanceof Map)return e=f++,s=d(Array.from(o),e),x===null&&(x=new FormData),x.append(t+e,s),`$Q`+e.toString(16);if(o instanceof Set)return e=f++,s=d(Array.from(o),e),x===null&&(x=new FormData),x.append(t+e,s),`$W`+e.toString(16);if(o instanceof ArrayBuffer)return e=new Blob([o]),s=f++,x===null&&(x=new FormData),x.append(t+s,e),`$A`+s.toString(16);if(o instanceof Int8Array)return a(`O`,o);if(o instanceof Uint8Array)return a(`o`,o);if(o instanceof Uint8ClampedArray)return a(`U`,o);if(o instanceof Int16Array)return a(`S`,o);if(o instanceof Uint16Array)return a(`s`,o);if(o instanceof Int32Array)return a(`L`,o);if(o instanceof Uint32Array)return a(`l`,o);if(o instanceof Float32Array)return a(`G`,o);if(o instanceof Float64Array)return a(`g`,o);if(o instanceof BigInt64Array)return a(`M`,o);if(o instanceof BigUint64Array)return a(`m`,o);if(o instanceof DataView)return a(`V`,o);if(typeof Blob==`function`&&o instanceof Blob)return x===null&&(x=new FormData),e=f++,x.append(t+e,o),`$B`+e.toString(16);if(e=g(o))return s=e.call(o),s===o?(e=f++,s=d(Array.from(s),e),x===null&&(x=new FormData),x.append(t+e,s),`$i`+e.toString(16)):Array.from(s);if(typeof ReadableStream==`function`&&o instanceof ReadableStream)return c(o);if(e=o[_],typeof e==`function`)return l(o,e.call(o));if(e=v(o),e!==y&&(e===null||v(e)!==null)){if(n===void 0)throw Error(`Only plain objects, and a few built-ins, can be passed to Server Functions. Classes or null prototypes are not supported.`);return`$T`}return o}if(typeof o==`string`)return o[o.length-1]===`Z`&&this[e]instanceof Date?`$D`+o:(e=o[0]===`$`?`$`+o:o,e);if(typeof o==`boolean`)return o;if(typeof o==`number`)return te(o);if(o===void 0)return`$undefined`;if(typeof o==`function`){if(s=b.get(o),s!==void 0)return e=S.get(o),e===void 0?(e=JSON.stringify({id:s.id,bound:s.bound},u),x===null&&(x=new FormData),s=f++,x.set(t+s,e),e=`$h`+s.toString(16),S.set(o,e),e):e;if(n!==void 0&&e.indexOf(`:`)===-1&&(s=S.get(this),s!==void 0))return n.set(s+`:`+e,o),`$T`;throw Error(`Client Functions cannot be passed directly to Server Functions. Only Functions passed from the Server can be passed back again.`)}if(typeof o==`symbol`){if(n!==void 0&&e.indexOf(`:`)===-1&&(s=S.get(this),s!==void 0))return n.set(s+`:`+e,o),`$T`;throw Error(`Symbols cannot be passed to a Server Function without a temporary reference set. Pass a TemporaryReferenceSet to the options.`)}if(typeof o==`bigint`)return`$n`+o.toString(10);throw Error(`Type `+typeof o+` is not supported as an argument to a Server Function.`)}function d(e,t){return typeof e==`object`&&e&&(t=`$`+t.toString(16),S.set(e,t),n!==void 0&&n.set(t,e)),C=e,JSON.stringify(e,u)}var f=1,h=0,x=null,S=new WeakMap,C=e,w=d(e,0);return x===null?r(w):(x.set(t+`0`,w),h===0&&r(x)),function(){0<h&&(h=0,r(x===null?w:x))}}var S=new WeakMap;function C(e){var t,n,r=new Promise(function(e,r){t=e,n=r});return x(e,``,void 0,function(e){if(typeof e==`string`){var n=new FormData;n.append(`0`,e),e=n}r.status=`fulfilled`,r.value=e,t(e)},function(e){r.status=`rejected`,r.reason=e,n(e)}),r}function w(e){var t=b.get(this);if(!t)throw Error(`Tried to encode a Server Action from a different instance than the encoder is from. This is a bug in React.`);var n=null;if(t.bound!==null){if(n=S.get(t),n||(n=C({id:t.id,bound:t.bound}),S.set(t,n)),n.status===`rejected`)throw n.reason;if(n.status!==`fulfilled`)throw n;t=n.value;var r=new FormData;t.forEach(function(t,n){r.append(`$ACTION_`+e+`:`+n,t)}),n=r,t=`$ACTION_REF_`+e}else t=`$ACTION_ID_`+t.id;return{name:t,method:`POST`,encType:`multipart/form-data`,data:n}}function T(e,t){var n=b.get(this);if(!n)throw Error(`Tried to encode a Server Action from a different instance than the encoder is from. This is a bug in React.`);if(n.id!==e)return!1;var r=n.bound;if(r===null)return t===0;switch(r.status){case`fulfilled`:return r.value.length===t;case`pending`:throw r;case`rejected`:throw r.reason;default:throw typeof r.status!=`string`&&(r.status=`pending`,r.then(function(e){r.status=`fulfilled`,r.value=e},function(e){r.status=`rejected`,r.reason=e})),r}}function D(e,t,n,r){b.has(e)||(b.set(e,{id:t,originalBind:e.bind,bound:n}),Object.defineProperties(e,{$$FORM_ACTION:{value:r===void 0?w:function(){var e=b.get(this);if(!e)throw Error(`Tried to encode a Server Action from a different instance than the encoder is from. This is a bug in React.`);var t=e.bound;return t===null&&(t=Promise.resolve([])),r(e.id,t)}},$$IS_SIGNATURE_EQUAL:{value:T},bind:{value:A}}))}var O=Function.prototype.bind,k=Array.prototype.slice;function A(){var e=b.get(this);if(!e)return O.apply(this,arguments);var t=e.originalBind.apply(this,arguments),n=k.call(arguments,1),r=null;return r=e.bound===null?Promise.resolve(n):Promise.resolve(e.bound).then(function(e){return e.concat(n)}),b.set(t,{id:e.id,originalBind:t.bind,bound:r}),Object.defineProperties(t,{$$FORM_ACTION:{value:this.$$FORM_ACTION},$$IS_SIGNATURE_EQUAL:{value:T},bind:{value:A}}),t}function ne(e,t,n){function r(){var e=Array.prototype.slice.call(arguments);return a?a.status===`fulfilled`?t(i,a.value.concat(e)):Promise.resolve(a).then(function(n){return t(i,n.concat(e))}):t(i,e)}var i=e.id,a=e.bound;return D(r,i,a,n),r}function j(e,t,n){this.status=e,this.value=t,this.reason=n}j.prototype=Object.create(Promise.prototype),j.prototype.then=function(e,t){switch(this.status){case`resolved_model`:L(this);break;case`resolved_module`:R(this)}switch(this.status){case`fulfilled`:typeof e==`function`&&e(this.value);break;case`pending`:case`blocked`:typeof e==`function`&&(this.value===null&&(this.value=[]),this.value.push(e)),typeof t==`function`&&(this.reason===null&&(this.reason=[]),this.reason.push(t));break;case`halted`:break;default:typeof t==`function`&&t(this.reason)}};function M(e){switch(e.status){case`resolved_model`:L(e);break;case`resolved_module`:R(e)}switch(e.status){case`fulfilled`:return e.value;case`pending`:case`blocked`:case`halted`:throw e;default:throw e.reason}}function N(e,t,n){for(var r=0;r<e.length;r++){var i=e[r];typeof i==`function`?i(t):V(i,t,n)}}function P(e,t){for(var n=0;n<e.length;n++){var r=e[n];typeof r==`function`?r(t):H(r,t)}}function re(e,t){var n=t.handler.chunk;if(n===null)return null;if(n===e)return t.handler;if(t=n.value,t!==null)for(n=0;n<t.length;n++){var r=t[n];if(typeof r!=`function`&&(r=re(e,r),r!==null))return r}return null}function ie(e,t,n){switch(e.status){case`fulfilled`:N(t,e.value,e);break;case`blocked`:for(var r=0;r<t.length;r++){var i=t[r];if(typeof i!=`function`){var a=re(e,i);if(a!==null)switch(V(i,a.value,e),t.splice(r,1),r--,n!==null&&(i=n.indexOf(i),i!==-1&&n.splice(i,1)),e.status){case`fulfilled`:N(t,e.value,e);return;case`rejected`:n!==null&&P(n,e.reason);return}}}case`pending`:if(e.value)for(r=0;r<t.length;r++)e.value.push(t[r]);else e.value=t;if(e.reason){if(n)for(t=0;t<n.length;t++)e.reason.push(n[t])}else e.reason=n;break;case`rejected`:n&&P(n,e.reason)}}function F(e,t,n){t.status!==`pending`&&t.status!==`blocked`?t.reason.error(n):(e=t.reason,t.status=`rejected`,t.reason=n,e!==null&&P(e,n))}function ae(e,t,n){return new j(`resolved_model`,(n?`{"done":true,"value":`:`{"done":false,"value":`)+t+`}`,e)}function oe(e,t,n,r){se(e,t,(r?`{"done":true,"value":`:`{"done":false,"value":`)+n+`}`)}function se(e,t,n){if(t.status!==`pending`)t.reason.enqueueModel(n);else{var r=t.value,i=t.reason;t.status=`resolved_model`,t.value=n,t.reason=e,r!==null&&(L(t),ie(t,r,i))}}function ce(e,t,n){if(t.status===`pending`||t.status===`blocked`){e=t.value;var r=t.reason;t.status=`resolved_module`,t.value=n,t.reason=null,e!==null&&(R(t),ie(t,e,r))}}var I=null;function L(e){var t=I;I=null;var n=e.value,r=e.reason;e.status=`blocked`,e.value=null,e.reason=null;try{var i=JSON.parse(n,r._fromJSON),a=e.value;if(a!==null)for(e.value=null,e.reason=null,n=0;n<a.length;n++){var o=a[n];typeof o==`function`?o(i):V(o,i,e)}if(I!==null){if(I.errored)throw I.reason;if(0<I.deps){I.value=i,I.chunk=e;return}}e.status=`fulfilled`,e.value=i}catch(t){e.status=`rejected`,e.reason=t}finally{I=t}}function R(e){try{var t=u(e.value);e.status=`fulfilled`,e.value=t}catch(t){e.status=`rejected`,e.reason=t}}function le(e,t){e._closed=!0,e._closedReason=t,e._chunks.forEach(function(n){n.status===`pending`?F(e,n,t):n.status===`fulfilled`&&n.reason!==null&&n.reason.error(t)})}function z(e){return{$$typeof:m,_payload:e,_init:M}}function B(e,t){var n=e._chunks,r=n.get(t);return r||(r=e._closed?new j(`rejected`,null,e._closedReason):new j(`pending`,null,null),n.set(t,r)),r}function V(e,t){var n=e.response,i=e.handler,a=e.parentObject,o=e.key,s=e.map,c=e.path;try{for(var l=1;l<c.length;l++){for(;typeof t==`object`&&t&&t.$$typeof===m;){var u=t._payload;if(u===i.chunk)t=i.value;else{switch(u.status){case`resolved_model`:L(u);break;case`resolved_module`:R(u)}switch(u.status){case`fulfilled`:t=u.value;continue;case`blocked`:var d=re(u,e);if(d!==null){t=d.value;continue}case`pending`:c.splice(0,l-1),u.value===null?u.value=[e]:u.value.push(e),u.reason===null?u.reason=[e]:u.reason.push(e);return;case`halted`:return;default:H(e,u.reason);return}}}var f=c[l];if(typeof t==`object`&&t&&r.call(t,f))t=t[f];else throw Error(`Invalid reference.`)}for(;typeof t==`object`&&t&&t.$$typeof===m;){var h=t._payload;if(h===i.chunk)t=i.value;else{switch(h.status){case`resolved_model`:L(h);break;case`resolved_module`:R(h)}switch(h.status){case`fulfilled`:t=h.value;continue}break}}var g=s(n,t,a,o);if(o!==`__proto__`&&(a[o]=g),o===``&&i.value===null&&(i.value=g),a[0]===p&&typeof i.value==`object`&&i.value!==null&&i.value.$$typeof===p){var _=i.value;switch(o){case`3`:_.props=g}}}catch(t){H(e,t);return}i.deps--,i.deps===0&&(e=i.chunk,e!==null&&e.status===`blocked`&&(t=e.value,e.status=`fulfilled`,e.value=i.value,e.reason=i.reason,t!==null&&N(t,i.value,e)))}function H(e,t){var n=e.handler;e=e.response,n.errored||(n.errored=!0,n.value=null,n.reason=t,n=n.chunk,n!==null&&n.status===`blocked`&&F(e,n,t))}function U(e,t,n,r,i,a){if(I){var o=I;o.deps++}else o=I={parent:null,chunk:null,value:null,reason:null,deps:1,errored:!1};return t={response:r,handler:o,parentObject:t,key:n,map:i,path:a},e.value===null?e.value=[t]:e.value.push(t),e.reason===null?e.reason=[t]:e.reason.push(t),null}function ue(e,t,n,r){if(!e._serverReferenceConfig)return ne(t,e._callServer,e._encodeFormAction);var i=a(e._serverReferenceConfig,t.id),o=l(i);if(o)t.bound&&(o=Promise.all([o,t.bound]));else if(t.bound)o=Promise.resolve(t.bound);else return o=u(i),D(o,t.id,t.bound,e._encodeFormAction),o;if(I){var s=I;s.deps++}else s=I={parent:null,chunk:null,value:null,reason:null,deps:1,errored:!1};return o.then(function(){var a=u(i);if(t.bound){var o=t.bound.value.slice(0);o.unshift(null),a=a.bind.apply(a,o)}if(D(a,t.id,t.bound,e._encodeFormAction),r!==`__proto__`&&(n[r]=a),r===``&&s.value===null&&(s.value=a),n[0]===p&&typeof s.value==`object`&&s.value!==null&&s.value.$$typeof===p)switch(o=s.value,r){case`3`:o.props=a}s.deps--,s.deps===0&&(a=s.chunk,a!==null&&a.status===`blocked`&&(o=a.value,a.status=`fulfilled`,a.value=s.value,a.reason=null,o!==null&&N(o,s.value,a)))},function(t){if(!s.errored){s.errored=!0,s.value=null,s.reason=t;var n=s.chunk;n!==null&&n.status===`blocked`&&F(e,n,t)}}),null}function W(e,t,n,r,i){t=t.split(`:`);var a=parseInt(t[0],16);switch(a=B(e,a),a.status){case`resolved_model`:L(a);break;case`resolved_module`:R(a)}switch(a.status){case`fulfilled`:a=a.value;for(var o=1;o<t.length;o++){for(;typeof a==`object`&&a&&a.$$typeof===m;){switch(a=a._payload,a.status){case`resolved_model`:L(a);break;case`resolved_module`:R(a)}switch(a.status){case`fulfilled`:a=a.value;break;case`blocked`:case`pending`:return U(a,n,r,e,i,t.slice(o-1));case`halted`:return I?(e=I,e.deps++):I={parent:null,chunk:null,value:null,reason:null,deps:1,errored:!1},null;default:return I?(I.errored=!0,I.value=null,I.reason=a.reason):I={parent:null,chunk:null,value:null,reason:a.reason,deps:0,errored:!0},null}}a=a[t[o]]}for(;typeof a==`object`&&a&&a.$$typeof===m;){switch(t=a._payload,t.status){case`resolved_model`:L(t);break;case`resolved_module`:R(t)}switch(t.status){case`fulfilled`:a=t.value;continue}break}return i(e,a,n,r);case`pending`:case`blocked`:return U(a,n,r,e,i,t);case`halted`:return I?(e=I,e.deps++):I={parent:null,chunk:null,value:null,reason:null,deps:1,errored:!1},null;default:return I?(I.errored=!0,I.value=null,I.reason=a.reason):I={parent:null,chunk:null,value:null,reason:a.reason,deps:0,errored:!0},null}}function de(e,t){return new Map(t)}function fe(e,t){return new Set(t)}function pe(e,t){return new Blob(t.slice(1),{type:t[0]})}function me(e,t){e=new FormData;for(var n=0;n<t.length;n++)e.append(t[n][0],t[n][1]);return e}function he(e,t){return t[Symbol.iterator]()}function ge(e,t){return t}function _e(e,t,n,r){if(r[0]===`$`){if(r===`$`)return I!==null&&n===`0`&&(I={parent:I,chunk:null,value:null,reason:null,deps:0,errored:!1}),p;switch(r[1]){case`$`:return r.slice(1);case`L`:return t=parseInt(r.slice(2),16),e=B(e,t),z(e);case`@`:return t=parseInt(r.slice(2),16),B(e,t);case`S`:return Symbol.for(r.slice(2));case`h`:return r=r.slice(2),W(e,r,t,n,ue);case`T`:if(t=`$`+r.slice(2),e=e._tempRefs,e==null)throw Error(`Missing a temporary reference set but the RSC response returned a temporary reference. Pass a temporaryReference option with the set that was used with the reply.`);return e.get(t);case`Q`:return r=r.slice(2),W(e,r,t,n,de);case`W`:return r=r.slice(2),W(e,r,t,n,fe);case`B`:return r=r.slice(2),W(e,r,t,n,pe);case`K`:return r=r.slice(2),W(e,r,t,n,me);case`Z`:return Ee();case`i`:return r=r.slice(2),W(e,r,t,n,he);case`I`:return 1/0;case`-`:return r===`$-0`?-0:-1/0;case`N`:return NaN;case`u`:return;case`D`:return new Date(Date.parse(r.slice(2)));case`n`:return BigInt(r.slice(2));default:return r=r.slice(1),W(e,r,t,n,ge)}}return r}function ve(){throw Error(`Trying to call a function from "use server" but the callServer option was not implemented in your router runtime.`)}function ye(e,t,n,r,i,a,o){var s=new Map;this._bundlerConfig=e,this._serverReferenceConfig=t,this._moduleLoading=n,this._callServer=r===void 0?ve:r,this._encodeFormAction=i,this._nonce=a,this._chunks=s,this._stringDecoder=new TextDecoder,this._fromJSON=null,this._closed=!1,this._closedReason=null,this._tempRefs=o,this._fromJSON=Oe(this)}function G(e,t,n){e=e._chunks;var r=e.get(t);r&&r.status!==`pending`?r.reason.enqueueValue(n):(n=new j(`fulfilled`,n,null),e.set(t,n))}function be(e,t,n){var r=e._chunks,a=r.get(t);n=JSON.parse(n,e._fromJSON);var o=i(e._bundlerConfig,n);if(d(e._moduleLoading,n[1],e._nonce),n=l(o)){if(a){var s=a;s.status=`blocked`}else s=new j(`blocked`,null,null),r.set(t,s);n.then(function(){return ce(e,s,o)},function(t){return F(e,s,t)})}else a?ce(e,a,o):(a=new j(`resolved_module`,o,null),r.set(t,a))}function xe(e,t,n,r){e=e._chunks;var i=e.get(t);i?i.status===`pending`&&(t=i.value,i.status=`fulfilled`,i.value=n,i.reason=r,t!==null&&N(t,i.value,i)):(n=new j(`fulfilled`,n,r),e.set(t,n))}function Se(e,t,n){var r=null,i=!1;n=new ReadableStream({type:n,start:function(e){r=e}});var a=null;xe(e,t,n,{enqueueValue:function(e){a===null?r.enqueue(e):a.then(function(){r.enqueue(e)})},enqueueModel:function(t){if(a===null){var n=new j(`resolved_model`,t,e);L(n),n.status===`fulfilled`?r.enqueue(n.value):(n.then(function(e){return r.enqueue(e)},function(e){return r.error(e)}),a=n)}else{n=a;var i=new j(`pending`,null,null);i.then(function(e){return r.enqueue(e)},function(e){return r.error(e)}),a=i,n.then(function(){a===i&&(a=null),se(e,i,t)})}},close:function(){if(!i)if(i=!0,a===null)r.close();else{var e=a;a=null,e.then(function(){return r.close()})}},error:function(e){if(!i)if(i=!0,a===null)r.error(e);else{var t=a;a=null,t.then(function(){return r.error(e)})}}})}function Ce(){return this}function we(e){return e={next:e},e[_]=Ce,e}function Te(e,t,n){var r=[],i=!1,a=0,o={};o[_]=function(){var e=0;return we(function(t){if(t!==void 0)throw Error(`Values cannot be passed to next() of AsyncIterables passed to Client Components.`);if(e===r.length){if(i)return new j(`fulfilled`,{done:!0,value:void 0},null);r[e]=new j(`pending`,null,null)}return r[e++]})},xe(e,t,n?o[_]():o,{enqueueValue:function(e){if(a===r.length)r[a]=new j(`fulfilled`,{done:!1,value:e},null);else{var t=r[a],n=t.value,i=t.reason;t.status=`fulfilled`,t.value={done:!1,value:e},t.reason=null,n!==null&&ie(t,n,i)}a++},enqueueModel:function(t){a===r.length?r[a]=ae(e,t,!1):oe(e,r[a],t,!1),a++},close:function(t){if(!i)for(i=!0,a===r.length?r[a]=ae(e,t,!0):oe(e,r[a],t,!0),a++;a<r.length;)oe(e,r[a++],`"$undefined"`,!0)},error:function(t){if(!i)for(i=!0,a===r.length&&(r[a]=new j(`pending`,null,null));a<r.length;)F(e,r[a++],t)}})}function Ee(){var e=Error(`An error occurred in the Server Components render. The specific message is omitted in production builds to avoid leaking sensitive details. A digest property is included on this error instance which may provide additional details about the nature of the error.`);return e.stack=`Error: `+e.message,e}function K(e,t){for(var n=e.length,r=t.length,i=0;i<n;i++)r+=e[i].byteLength;r=new Uint8Array(r);for(var a=i=0;a<n;a++){var o=e[a];r.set(o,i),i+=o.byteLength}return r.set(t,i),r}function q(e,t,n,r,i,a){n=n.length===0&&r.byteOffset%a===0?r:K(n,r),i=new i(n.buffer,n.byteOffset,n.byteLength/a),G(e,t,i)}function De(e,t,r,i,a,o){switch(i){case 65:G(e,r,K(a,o).buffer);return;case 79:q(e,r,a,o,Int8Array,1);return;case 111:G(e,r,a.length===0?o:K(a,o));return;case 85:q(e,r,a,o,Uint8ClampedArray,1);return;case 83:q(e,r,a,o,Int16Array,2);return;case 115:q(e,r,a,o,Uint16Array,2);return;case 76:q(e,r,a,o,Int32Array,4);return;case 108:q(e,r,a,o,Uint32Array,4);return;case 71:q(e,r,a,o,Float32Array,4);return;case 103:q(e,r,a,o,Float64Array,8);return;case 77:q(e,r,a,o,BigInt64Array,8);return;case 109:q(e,r,a,o,BigUint64Array,8);return;case 86:q(e,r,a,o,DataView,1);return}t=e._stringDecoder;for(var s=``,c=0;c<a.length;c++)s+=t.decode(a[c],n);switch(a=s+=t.decode(o),i){case 73:be(e,r,a);break;case 72:switch(r=a[0],a=a.slice(1),e=JSON.parse(a,e._fromJSON),a=f.d,r){case`D`:a.D(e);break;case`C`:typeof e==`string`?a.C(e):a.C(e[0],e[1]);break;case`L`:r=e[0],i=e[1],e.length===3?a.L(r,i,e[2]):a.L(r,i);break;case`m`:typeof e==`string`?a.m(e):a.m(e[0],e[1]);break;case`X`:typeof e==`string`?a.X(e):a.X(e[0],e[1]);break;case`S`:typeof e==`string`?a.S(e):a.S(e[0],e[1]===0?void 0:e[1],e.length===3?e[2]:void 0);break;case`M`:typeof e==`string`?a.M(e):a.M(e[0],e[1])}break;case 69:i=e._chunks,o=i.get(r),a=JSON.parse(a),t=Ee(),t.digest=a.digest,o?F(e,o,t):(e=new j(`rejected`,null,t),i.set(r,e));break;case 84:e=e._chunks,(i=e.get(r))&&i.status!==`pending`?i.reason.enqueueValue(a):(a=new j(`fulfilled`,a,null),e.set(r,a));break;case 78:case 68:case 74:case 87:throw Error(`Failed to read a RSC payload created by a development version of React on the server while using a production version on the client. Always use matching versions on the server and the client.`);case 82:Se(e,r,void 0);break;case 114:Se(e,r,`bytes`);break;case 88:Te(e,r,!1);break;case 120:Te(e,r,!0);break;case 67:(r=e._chunks.get(r))&&r.status===`fulfilled`&&r.reason.close(a===``?`"$undefined"`:a);break;default:i=e._chunks,(o=i.get(r))?se(e,o,a):(e=new j(`resolved_model`,a,e),i.set(r,e))}}function Oe(e){return function(t,n){if(t!==`__proto__`){if(typeof n==`string`)return _e(e,this,t,n);if(typeof n==`object`&&n){if(n[0]===p){if(t={$$typeof:p,type:n[1],key:n[2],ref:null,props:n[3]},I!==null){if(n=I,I=n.parent,n.errored)t=new j(`rejected`,null,n.reason),t=z(t);else if(0<n.deps){var r=new j(`blocked`,null,null);n.value=t,n.chunk=r,t=z(r)}}}else t=n;return t}return n}}}function ke(e){le(e,Error(`Connection closed.`))}function Ae(){throw Error(`Server Functions cannot be called during initial render. This would create a fetch waterfall. Try to use a Server Component to pass data to Client Components instead.`)}function je(e){return new ye(e.serverConsumerManifest.moduleMap,e.serverConsumerManifest.serverModuleMap,e.serverConsumerManifest.moduleLoading,Ae,e.encodeFormAction,typeof e.nonce==`string`?e.nonce:void 0,e&&e.temporaryReferences?e.temporaryReferences:void 0)}function Me(e,t,n){function r(t){var s=t.value;if(t.done)return n();var c=0,l=a._rowState;t=a._rowID;for(var u=a._rowTag,d=a._rowLength,f=a._buffer,p=s.length;c<p;){var m=-1;switch(l){case 0:m=s[c++],m===58?l=1:t=t<<4|(96<m?m-87:m-48);continue;case 1:l=s[c],l===84||l===65||l===79||l===111||l===85||l===83||l===115||l===76||l===108||l===71||l===103||l===77||l===109||l===86?(u=l,l=2,c++):64<l&&91>l||l===35||l===114||l===120?(u=l,l=3,c++):(u=0,l=3);continue;case 2:m=s[c++],m===44?l=4:d=d<<4|(96<m?m-87:m-48);continue;case 3:m=s.indexOf(10,c);break;case 4:m=c+d,m>s.length&&(m=-1)}var h=s.byteOffset+c;if(-1<m)d=new Uint8Array(s.buffer,h,m-c),De(e,a,t,u,f,d),c=m,l===3&&c++,d=t=u=l=0,f.length=0;else{s=new Uint8Array(s.buffer,h,s.byteLength-c),f.push(s),d-=s.byteLength;break}}return a._rowState=l,a._rowID=t,a._rowTag=u,a._rowLength=d,o.read().then(r).catch(i)}function i(t){le(e,t)}var a={_rowState:0,_rowID:0,_rowTag:0,_rowLength:0,_buffer:[]},o=t.getReader();o.read().then(r).catch(i)}e.createFromReadableStream=function(e,t){return t=je(t),Me(t,e,ke.bind(null,t)),B(t,0)}})),ea=T(S(((e,t)=>{t.exports=$i()}))(),1);function ta(e,t={}){return ea.createFromReadableStream(e,{serverConsumerManifest:Qi(),...t})}var na={"0b874ad30386":async()=>{let e=await Promise.resolve().then(()=>wn);return{get default(){return e.default}}},"15c18cfaeeff":async()=>{let e=await import(`./_next/static/layout-segment-context-DAjzjyTr.js`);return{get LayoutSegmentProvider(){return e.LayoutSegmentProvider}}},"22ada6aae058":async()=>{let e=await import(`./_next/static/page-BCpbmBdc.js`);return{get default(){return e.default}}},"4a8dbe3a85e4":async()=>{let e=await import(`./_next/static/page-DSPfQKkt.js`);return{get default(){return e.default}}},"593f344dc510":async()=>{let e=await import(`./_next/static/error-boundary-AwbWYqyr.js`);return{get ErrorBoundary(){return e.ErrorBoundary},get ForbiddenBoundary(){return e.ForbiddenBoundary},get GlobalErrorBoundary(){return e.GlobalErrorBoundary},get NotFoundBoundary(){return e.NotFoundBoundary},get RedirectBoundary(){return e.RedirectBoundary},get SerializedErrorBoundary(){return e.SerializedErrorBoundary},get UnauthorizedBoundary(){return e.UnauthorizedBoundary}}},"6efdf509a785":async()=>{let e=await import(`./_next/static/page-BvG1-Pj-.js`);return{get default(){return e.default}}},"89c3cac48cb5":async()=>{let e=await import(`./_next/static/streamed-icons-CQmvcl0P.js`);return{get StreamedIconsInsertion(){return e.StreamedIconsInsertion}}},"8b82d763255b":async()=>{let e=await import(`./_next/static/page-dRZ9l_lm.js`);return{get default(){return e.default}}},"8c0f216c4604":async()=>{let e=await Promise.resolve().then(()=>kn);return{get BfcacheSegmentBoundary(){return e.BfcacheSegmentBoundary},get Children(){return e.Children},get ParallelSlot(){return e.ParallelSlot},get Slot(){return e.Slot}}},"9276801271d6":async()=>{let e=await import(`./_next/static/app-router-scroll-xmyuls9u.js`);return{get AppRouterScrollTarget(){return e.AppRouterScrollTarget}}},a7c2b21269ea:async()=>{let e=await import(`./_next/static/page-CGgPrHk9.js`);return{get default(){return e.default}}},bad85346fc72:async()=>(await import(`./_next/static/app-prefetch-fetch-queue-BPGWV3dr.js`).then(e=>e.t),{}),f095ee156794:async()=>{let e=await import(`./_next/static/page-BMxMVXNq.js`);return{get default(){return e.default}}}},ra;ia();function ia(){Zi({load:async e=>{{let n=na[e];if(!n)throw Error(`client reference not found '${e}'`);let r=t.clientReferenceDeps[e]??{js:[],css:[]};return oa(r),ra?.({id:e,deps:r}),aa(await n(),e,r)}}})}function aa(e,t,n){return new Proxy(e,{get(r,i,a){return i in e&&(oa(n),ra?.({id:t,deps:n})),Reflect.get(r,i,a)}})}function oa(e){for(let t of e.js)h.preloadModule(t,{as:`script`,crossOrigin:``});for(let n of e.css)h.preinit(n,{as:`style`,precedence:t.cssLinkPrecedence===!1?void 0:`vite-rsc/client-reference`})}var sa=6e3;function ca(){return!1}function la(e){return typeof e==`object`&&!!e&&`prerender`in e&&typeof e.prerender==`function`}async function ua(){let e=await import(`react-dom/static.edge`);if(la(e))return e.prerender;if(ca())try{let[{createRequire:e},t]=await Promise.all([import(`node:module`),import(`node:path`)]),n=e(import.meta.url).resolve(`react-dom/package.json`),r=t.dirname(n),i=await import(t.join(r,`cjs/react-dom-server.edge.development.js`));if(la(i))return i.prerender;let a=typeof i==`object`&&!!i&&`default`in i&&i.default;if(la(a))return a.prerender;throw Error(`react-dom development renderer did not expose prerender().`)}catch(e){throw Error(`[vinext] Failed to load React static development renderer.`,{cause:e})}throw Error(`[vinext] react-dom/static.edge did not expose prerender().`)}function da(e){let t=new TextEncoder;return new ReadableStream({start(n){n.enqueue(t.encode(e)),n.close()}})}function fa(e,t){return e?`<script type="module"${Ft(t)} src="`+Z(e)+`" id="_R_" async=""><\/script>`:``}function pa(e,t){let n=m(s(On,{error:null})).replace(`<style>`,`<style data-vinext-error-shell-style="">`),r=fa(e,t);if(!r)return da(`<!DOCTYPE html>${n}`);let i=`</body></html>`;return n.endsWith(i)?da(`<!DOCTYPE html>${n.slice(0,-14)}${r}${i}`):da(`<!DOCTYPE html>${n}${r}`)}var ma=si({getReferences(){return na},getClientRequire(){return globalThis.__vite_rsc_client_require__},onPreloadError(e,t){}}),ha=en();function ga(e){let t=5381;for(let n=e.length-1;n>=0;n--)t=t*33^e.charCodeAt(n);return(t>>>0).toString()}function _a(e){return e instanceof Error?e.message:typeof e==`string`?e:Object.prototype.toString.call(e)}function va(e){let t=``;for(let n of e)try{t+=m(s(o,null,n))}catch{}return t}function ya(e,t,n={}){if(!e)return``;let r=``,i=Ft(t),a=n.includeStyles??!0;for(let t of e.links??[])r+=`<link rel="stylesheet"${i} href="${Z(Ot(t))}" />\n`;for(let t of e.preloads??[])r+=`<link rel="preload"${i} href="${Z(t.href)}" as="font" type="${Z(t.type)}" crossorigin />\n`;return a&&e.styles&&e.styles.length>0&&(r+=`<style data-vinext-fonts${i}>${e.styles.join(`
-`)}</style>\n`),r}function ba(e){return e!==void 0&&Object.keys(e).length>0}function xa(e){if(e)return e.match(/import\(["']([^"']+)["']\)/)?.[1]??void 0}function Sa(e,t){return e?`<link rel="modulepreload"${Ft(t)} href="${Z(e)}" />\n`:``}function Ca(e,t,n,r,i,a,o){let s={pathname:e.pathname,searchParams:[...e.searchParams.entries()]};return It(kr(e.params,s,a),o)+(n===null?``:It(`self[`+X(ai)+`]=`+X(n),o))+Sa(t,o)+r+i}function wa(e){if(!e)throw Error(`App SSR requires navigation context for BFCache state keys`);return e}async function Ta(e,n,r,i){return Ei(async()=>{let a=wa(n);await ma.preload(),fn(a),gn();let o=()=>{fn(null),gn()};return bi(i?.rootParams??{},async()=>{try{let n,c;if(i?.sideStream)n=e,c=Mr(i.sideStream,i?.scriptNonce,i?.getInitialNavigationCacheMetadata),i.capturedRscDataRef&&(i.capturedRscDataRef.value=c.getRawBuffer());else{let[t,r]=e.tee();n=t,c=Mr(r,i?.scriptNonce,i?.getInitialNavigationCacheMetadata)}let u=null;function d(){for(let e of _.appBootstrapPreinitModules??[])g(e,{as:`script`,nonce:i?.scriptNonce});u||=ta(n);let e=l(u),t=J.decode(e),r=J.readMetadata(t),a=ii({elements:t,metadata:r}),o=s($.Provider,{value:t},s(cr,{id:r.routeId})),c=s(Rn.Provider,{value:a.identities},o);return ha?s(ha.Provider,{value:a.bfcacheIds},c):c}let f=s(d),m=Et?s(Et.Provider,{value:Gi},f):f,h=Qt?s(Qt.Provider,{value:pn},m):m,ee=[],v=jt(s(Oi.Provider,{value:e=>{ee.push(e)}},h),i?.scriptNonce),y=xa(await Promise.resolve(t.bootstrapScriptContent)),b=xr({basePath:i?.basePath}),te=i?.pprFallbackShellSignal,x=``,S=i?.reactMaxHeadersLength??sa,C=S>0,w={bootstrapModules:y?[y]:void 0,formState:i?.formState??null,nonce:i?.scriptNonce,onHeaders:C?e=>{let t=e.get(`Link`);t&&(x=t)}:void 0,maxHeadersLength:C?S:void 0,onError(e){if(!(te&&yt(e))){if(b.capture(e),e&&typeof e==`object`&&`digest`in e)return String(e.digest);if(e)return ga(_a(e)+(e instanceof Error?e.stack??``:``))}}},T,E=!1,D=!1;if(te){let e=await ua(),t=new AbortController,n=e(v,{...w,signal:t.signal});setTimeout(()=>t.abort(),0),T=(await n).prelude}else{let e;try{e=await p(v,{...w}),i?.waitForAllReady===!0?await e.allReady:D=!0,T=e}catch(t){if(e?.cancel().catch(()=>{}),i?.fallbackToErrorDocumentOnShellError!==!0||i?.waitForAllReady===!0||typeof t?.digest==`string`)throw t;E=!0,T=pa(y,i?.scriptNonce)}}let O=globalThis.__VINEXT_INLINE_CSS__,k=r?.styles??[],A=k.length>0&&ba(O),ne=A?k.join(`
-`):``,j=A?ya({styles:k},i?.scriptNonce):``,M=ya(r,i?.scriptNonce,{includeStyles:!A}),N=null,P=()=>(N===null&&(N=Wt(i?.clientTraceMetadata)),N),re=!1;return D&&await Er(),{htmlStream:ci(T.pipeThrough($r(c,()=>{let e=va(hn()),t=b.flush(),n=Fi(i?.initialDevServerError,i?.scriptNonce);return re?e+t:(re=!0,Ca(a,y,i?.formState??null,e+t+P()+n,M,i?.dynamicStaleTimeSeconds,i?.scriptNonce))},()=>ji(ee),O,ne,j,i?.scriptNonce)),o),metadataReady:Promise.resolve(),capturedRscData:i?.capturedRscDataRef?.value??null,shellErrorRecovered:E,linkHeader:x}}catch(e){throw o(),e}})})}var Ea={async fetch(e){if(A(new URL(e.url).pathname))return k();let t=await(await import(`../index.js`)).default(e);return t instanceof Response?t:t==null?k():new Response(String(t),{status:200})}};export{Sn as a,$t as c,vt as d,Ea as default,S as f,T as h,Ta as handleSsr,Cn as i,dn as l,E as m,fr as n,en as o,C as p,On as r,tn as s,ei as t,Et as u};
+/**
+* Strip the basePath prefix from a pathname when it matches on a segment
+* boundary. Returns the original pathname when it is outside the basePath.
+*/
+function stripBasePath(pathname, basePath) {
+	if (!hasBasePath(pathname, basePath)) return pathname;
+	return pathname.slice(basePath.length) || "/";
+}
+//#endregion
+//#region node_modules/vinext/dist/server/headers.js
+/** URL-encoded JSON route params carried on RSC responses. */
+var VINEXT_PARAMS_HEADER = "X-Vinext-Params";
+/** Deduplicated, sorted list of mounted layout slots for cache keying. */
+var VINEXT_MOUNTED_SLOTS_HEADER = "X-Vinext-Mounted-Slots";
+/** Route interception context for parallel/intercepting routes. */
+var VINEXT_INTERCEPTION_CONTEXT_HEADER = "X-Vinext-Interception-Context";
+/** RSC render mode (e.g. "navigation", "prefetch"). */
+var VINEXT_RSC_RENDER_MODE_HEADER = "X-Vinext-Rsc-Render-Mode";
+var NEXT_ROUTER_STATE_TREE_HEADER = "Next-Router-State-Tree";
+var NEXT_ROUTER_PREFETCH_HEADER = "Next-Router-Prefetch";
+var NEXT_ROUTER_SEGMENT_PREFETCH_HEADER = "Next-Router-Segment-Prefetch";
+var NEXT_URL_HEADER = "Next-Url";
+//#endregion
+//#region node_modules/vinext/dist/server/request-pipeline.js
+/**
+* Returns true if a request pathname looks like a protocol-relative open
+* redirect, in either literal or percent-encoded form.
+*
+* Exported for call sites that need to replicate the guard inline (Pages
+* Router worker codegen, Node production server) and for defense-in-depth
+* checks inside redirect emitters.
+*
+* A pathname is considered "open redirect shaped" when its first segment,
+* after decoding backslashes and encoded delimiters, would cause a browser
+* to resolve a `Location` containing the pathname as protocol-relative:
+*
+*   - literal   `//evil.com`
+*   - literal   `/\evil.com`             (browsers normalize `\` to `/`)
+*   - encoded   `/%5Cevil.com`           (`%5C` decodes to `\` in Location)
+*   - encoded   `/%2F/evil.com`          (`%2F` decodes to `/` → `//`)
+*   - mixed     `/%5C%2F`, `/%5C%5C`     (and other combinations)
+*
+* We explicitly do not require a valid percent sequence elsewhere in the
+* pathname — we only examine the leading bytes (up to the second real or
+* encoded delimiter) so malformed suffixes can still reach the normal
+* "400 Bad Request" decode path instead of being masked as "404".
+*/
+function isOpenRedirectShaped(rawPathname) {
+	if (!rawPathname.startsWith("/")) return false;
+	const afterSlash = rawPathname.slice(1);
+	if (afterSlash.startsWith("/") || afterSlash.startsWith("\\")) return true;
+	if (afterSlash.length >= 3 && afterSlash[0] === "%") {
+		const encoded = afterSlash.slice(0, 3).toLowerCase();
+		if (encoded === "%5c" || encoded === "%2f") return true;
+	}
+	return false;
+}
+//#endregion
+//#region node_modules/vinext/dist/server/artifact-compatibility.js
+function createArtifactCompatibilityEnvelope(input = {}) {
+	return {
+		schemaVersion: 1,
+		graphVersion: input.graphVersion ?? null,
+		deploymentVersion: input.deploymentVersion ?? null,
+		appElementsSchemaVersion: 1,
+		rscPayloadSchemaVersion: 1,
+		rootBoundaryId: input.rootBoundaryId ?? null,
+		renderEpoch: input.renderEpoch ?? null
+	};
+}
+function isRecord(value) {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isStringOrNull(value) {
+	return typeof value === "string" || value === null;
+}
+function hasCurrentSchemaVersions(record) {
+	return record.schemaVersion === 1 && record.appElementsSchemaVersion === 1 && record.rscPayloadSchemaVersion === 1;
+}
+function parseArtifactCompatibilityEnvelope(value) {
+	if (!isRecord(value)) return null;
+	if (!hasCurrentSchemaVersions(value)) return null;
+	if (!isStringOrNull(value.graphVersion)) return null;
+	if (!isStringOrNull(value.deploymentVersion)) return null;
+	if (!isStringOrNull(value.rootBoundaryId)) return null;
+	if (!isStringOrNull(value.renderEpoch)) return null;
+	return {
+		schemaVersion: 1,
+		graphVersion: value.graphVersion,
+		deploymentVersion: value.deploymentVersion,
+		appElementsSchemaVersion: 1,
+		rscPayloadSchemaVersion: 1,
+		rootBoundaryId: value.rootBoundaryId,
+		renderEpoch: value.renderEpoch
+	};
+}
+//#endregion
+//#region node_modules/vinext/dist/server/app-elements-wire.js
+var APP_INTERCEPTION_SEPARATOR = "\0";
+var APP_ARTIFACT_COMPATIBILITY_KEY = "__artifactCompatibility";
+var APP_INTERCEPTION_CONTEXT_KEY = "__interceptionContext";
+var APP_LAYOUT_IDS_KEY = "__layoutIds";
+var APP_LAYOUT_FLAGS_KEY = "__layoutFlags";
+var APP_ROUTE_KEY = "__route";
+var APP_ROOT_LAYOUT_KEY = "__rootLayout";
+var APP_UNMATCHED_SLOT_WIRE_VALUE = "__VINEXT_UNMATCHED_SLOT__";
+var UNMATCHED_SLOT = Symbol.for("vinext.unmatchedSlot");
+function appendInterceptionContext(identity, interceptionContext) {
+	return interceptionContext === null ? identity : `${identity}${APP_INTERCEPTION_SEPARATOR}${interceptionContext}`;
+}
+function createAppPayloadRouteId(routePath, interceptionContext) {
+	return appendInterceptionContext(`route:${routePath}`, interceptionContext);
+}
+function createAppPayloadPageId(routePath, interceptionContext) {
+	return appendInterceptionContext(`page:${routePath}`, interceptionContext);
+}
+function createAppPayloadLayoutId(treePath) {
+	return `layout:${treePath}`;
+}
+function createAppPayloadTemplateId(treePath) {
+	return `template:${treePath}`;
+}
+function createAppPayloadSlotId(slotName, treePath) {
+	return `slot:${slotName}:${treePath}`;
+}
+function createAppPayloadCacheKey(rscUrl, interceptionContext) {
+	return appendInterceptionContext(rscUrl, interceptionContext);
+}
+function parsePathWithInterception(input) {
+	const separatorIndex = input.indexOf(APP_INTERCEPTION_SEPARATOR);
+	const path = separatorIndex === -1 ? input : input.slice(0, separatorIndex);
+	if (!path.startsWith("/")) return null;
+	return {
+		interceptionContext: separatorIndex === -1 ? null : input.slice(separatorIndex + 1),
+		path
+	};
+}
+/**
+* AppElements tree paths are absolute route-tree paths on the wire.
+* Bare segment names are not valid layout/template/slot tree identities.
+*/
+function parseTreePath(input) {
+	return input.startsWith("/") ? input : null;
+}
+function parseAppElementsWireElementKey(key) {
+	if (key.startsWith("route:")) {
+		const parsed = parsePathWithInterception(key.slice(6));
+		if (!parsed) return null;
+		return {
+			interceptionContext: parsed.interceptionContext,
+			kind: "route",
+			path: parsed.path
+		};
+	}
+	if (key.startsWith("page:")) {
+		const parsed = parsePathWithInterception(key.slice(5));
+		if (!parsed) return null;
+		return {
+			interceptionContext: parsed.interceptionContext,
+			kind: "page",
+			path: parsed.path
+		};
+	}
+	if (key.startsWith("layout:")) {
+		const treePath = parseTreePath(key.slice(7));
+		return treePath ? {
+			kind: "layout",
+			treePath
+		} : null;
+	}
+	if (key.startsWith("template:")) {
+		const treePath = parseTreePath(key.slice(9));
+		return treePath ? {
+			kind: "template",
+			treePath
+		} : null;
+	}
+	if (key.startsWith("slot:")) {
+		const body = key.slice(5);
+		const separatorIndex = body.indexOf(":");
+		if (separatorIndex <= 0) return null;
+		const name = body.slice(0, separatorIndex);
+		const treePath = parseTreePath(body.slice(separatorIndex + 1));
+		return treePath ? {
+			kind: "slot",
+			name,
+			treePath
+		} : null;
+	}
+	return null;
+}
+function isAppElementsWireSlotId(key) {
+	if (!key.startsWith("slot:")) return false;
+	const body = key.slice(5);
+	const separatorIndex = body.indexOf(":");
+	return separatorIndex > 0 && body.charCodeAt(separatorIndex + 1) === 47;
+}
+function createAppElementsWireMetadataEntries(input) {
+	return {
+		[APP_ROUTE_KEY]: input.routeId,
+		[APP_INTERCEPTION_CONTEXT_KEY]: input.interceptionContext,
+		[APP_LAYOUT_IDS_KEY]: [...input.layoutIds ?? []],
+		[APP_ROOT_LAYOUT_KEY]: input.rootLayoutTreePath
+	};
+}
+function normalizeAppElements(elements) {
+	let needsNormalization = false;
+	for (const [key, value] of Object.entries(elements)) if (isAppElementsWireSlotId(key) && value === "__VINEXT_UNMATCHED_SLOT__") {
+		needsNormalization = true;
+		break;
+	}
+	if (!needsNormalization) return elements;
+	const normalized = {};
+	for (const [key, value] of Object.entries(elements)) normalized[key] = isAppElementsWireSlotId(key) && value === "__VINEXT_UNMATCHED_SLOT__" ? UNMATCHED_SLOT : value;
+	return normalized;
+}
+function isLayoutFlagsRecord(value) {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	for (const v of Object.values(value)) if (v !== "s" && v !== "d") return false;
+	return true;
+}
+function parseLayoutFlags(value) {
+	if (isLayoutFlagsRecord(value)) return value;
+	return {};
+}
+function parseLayoutIds(value) {
+	if (value === void 0) return [];
+	if (!Array.isArray(value)) throw new Error("[vinext] Invalid __layoutIds in App Router payload: expected layout id string[]");
+	const layoutIds = [];
+	for (const entry of value) {
+		if (typeof entry !== "string") throw new Error("[vinext] Invalid __layoutIds in App Router payload: expected layout id string[]");
+		if (parseAppElementsWireElementKey(entry)?.kind !== "layout") throw new Error("[vinext] Invalid __layoutIds in App Router payload: expected layout ids");
+		layoutIds.push(entry);
+	}
+	return layoutIds;
+}
+/**
+* Type predicate for a plain (non-null, non-array) record of app payload values.
+* Used to distinguish the App Router payload object from bare React elements at
+* the render boundary. Narrows to `Readonly<Record<string, unknown>>` because
+* the outgoing payload carries heterogeneous values (ReactNodes for the rendered
+* tree, plus metadata like `__layoutFlags` which is a plain object). Delegates
+* to React's canonical `isValidElement` so we don't depend on React's internal
+* `$$typeof` marker scheme.
+*/
+function isAppElementsRecord(value) {
+	if (typeof value !== "object" || value === null) return false;
+	if (Array.isArray(value)) return false;
+	if (isValidElement(value)) return false;
+	return true;
+}
+function withLayoutFlags(elements, layoutFlags) {
+	return {
+		...elements,
+		[APP_LAYOUT_FLAGS_KEY]: layoutFlags
+	};
+}
+function buildOutgoingAppPayload(input) {
+	if (!isAppElementsRecord(input.element)) return input.element;
+	return {
+		...input.element,
+		[APP_LAYOUT_FLAGS_KEY]: input.layoutFlags,
+		[APP_ARTIFACT_COMPATIBILITY_KEY]: input.artifactCompatibility ?? createArtifactCompatibilityEnvelope()
+	};
+}
+function readArtifactCompatibilityMetadata(value) {
+	if (value === void 0) return createArtifactCompatibilityEnvelope();
+	return parseArtifactCompatibilityEnvelope(value) ?? createArtifactCompatibilityEnvelope();
+}
+function readAppElementsMetadata(elements) {
+	const routeId = elements[APP_ROUTE_KEY];
+	if (typeof routeId !== "string") throw new Error("[vinext] Missing __route string in App Router payload");
+	const interceptionContext = elements[APP_INTERCEPTION_CONTEXT_KEY];
+	if (interceptionContext !== void 0 && interceptionContext !== null && typeof interceptionContext !== "string") throw new Error("[vinext] Invalid __interceptionContext in App Router payload");
+	const rootLayoutTreePath = elements[APP_ROOT_LAYOUT_KEY];
+	if (rootLayoutTreePath === void 0) throw new Error("[vinext] Missing __rootLayout key in App Router payload");
+	if (rootLayoutTreePath !== null && typeof rootLayoutTreePath !== "string") throw new Error("[vinext] Invalid __rootLayout in App Router payload: expected string or null");
+	const layoutFlags = parseLayoutFlags(elements[APP_LAYOUT_FLAGS_KEY]);
+	const layoutIds = parseLayoutIds(elements[APP_LAYOUT_IDS_KEY]);
+	return {
+		artifactCompatibility: readArtifactCompatibilityMetadata(elements[APP_ARTIFACT_COMPATIBILITY_KEY]),
+		interceptionContext: interceptionContext ?? null,
+		layoutIds,
+		layoutFlags,
+		routeId,
+		rootLayoutTreePath
+	};
+}
+var AppElementsWire = {
+	keys: {
+		artifactCompatibility: APP_ARTIFACT_COMPATIBILITY_KEY,
+		interceptionContext: APP_INTERCEPTION_CONTEXT_KEY,
+		layoutIds: APP_LAYOUT_IDS_KEY,
+		layoutFlags: APP_LAYOUT_FLAGS_KEY,
+		rootLayout: APP_ROOT_LAYOUT_KEY,
+		route: APP_ROUTE_KEY
+	},
+	unmatchedSlotValue: APP_UNMATCHED_SLOT_WIRE_VALUE,
+	createMetadataEntries: createAppElementsWireMetadataEntries,
+	decode: normalizeAppElements,
+	encodeCacheKey: createAppPayloadCacheKey,
+	encodeLayoutId: createAppPayloadLayoutId,
+	encodeOutgoingPayload: buildOutgoingAppPayload,
+	encodePageId: createAppPayloadPageId,
+	encodeRouteId: createAppPayloadRouteId,
+	encodeSlotId: createAppPayloadSlotId,
+	encodeTemplateId: createAppPayloadTemplateId,
+	isSlotId: isAppElementsWireSlotId,
+	parseElementKey: parseAppElementsWireElementKey,
+	readMetadata: readAppElementsMetadata,
+	withLayoutFlags
+};
+//#endregion
+//#region node_modules/vinext/dist/shims/url-safety.js
+/**
+* Shared URL safety utilities for Link, Form, and navigation shims.
+*
+* Centralizes dangerous URI scheme detection so all components and
+* navigation functions use the same validation logic.
+*/
+/**
+* Detect dangerous URI schemes that should never be navigated to.
+*
+* Adapted from Next.js's javascript URL detector:
+* packages/next/src/client/lib/javascript-url.ts
+* https://github.com/vercel/next.js/blob/canary/packages/next/src/client/lib/javascript-url.ts
+*
+* URL parsing ignores leading C0 control characters / spaces, and treats
+* embedded tab/newline characters in the scheme as insignificant. We mirror
+* that behavior here so obfuscated values like `java\nscript:` and
+* `\x00javascript:` are still blocked.
+*
+* Vinext intentionally extends this handling to `data:` and `vbscript:` too,
+* since both are also dangerous navigation targets.
+*/
+var LEADING_IGNORED = "[\\u0000-\\u001F \\u200B\\uFEFF]*";
+var SCHEME_IGNORED = "[\\r\\n\\t]*";
+function buildDangerousSchemeRegex(scheme) {
+	const chars = scheme.split("").join(SCHEME_IGNORED);
+	return new RegExp(`^${LEADING_IGNORED}${chars}${SCHEME_IGNORED}:`, "i");
+}
+var DANGEROUS_SCHEME_RES = [
+	buildDangerousSchemeRegex("javascript"),
+	buildDangerousSchemeRegex("data"),
+	buildDangerousSchemeRegex("vbscript")
+];
+var DANGEROUS_URL_BLOCK_MESSAGE = "Next.js has blocked a javascript: URL as a security precaution.";
+function isDangerousScheme(url) {
+	const str = "" + url;
+	return DANGEROUS_SCHEME_RES.some((re) => re.test(str));
+}
+function assertSafeNavigationUrl(url) {
+	if (isDangerousScheme(url)) throw new Error(DANGEROUS_URL_BLOCK_MESSAGE);
+}
+//#endregion
+//#region node_modules/vinext/dist/shims/url-utils.js
+/**
+* Shared URL utilities for same-origin detection.
+*
+* Used by link.tsx, navigation.ts, and router.ts to normalize
+* same-origin absolute URLs to local paths for client-side navigation.
+*/
+/**
+* If `url` is an absolute same-origin URL, return the local path
+* (pathname + search + hash). Returns null for truly external URLs
+* or on the server (where origin is unknown).
+*/
+function toSameOriginPath(url) {
+	if (typeof window === "undefined") return null;
+	try {
+		const parsed = url.startsWith("//") ? new URL(url, window.location.origin) : new URL(url);
+		if (parsed.origin === window.location.origin) return parsed.pathname + parsed.search + parsed.hash;
+	} catch {}
+	return null;
+}
+/**
+* If `url` is an absolute same-origin URL, return the app-relative path
+* (basePath stripped from the pathname, if configured). Returns null for
+* truly external URLs or on the server.
+*/
+function toSameOriginAppPath(url, basePath) {
+	const localPath = toSameOriginPath(url);
+	if (localPath == null || !basePath) return localPath;
+	try {
+		const parsed = new URL(localPath, "http://vinext.local");
+		if (!hasBasePath(parsed.pathname, basePath)) return null;
+		return stripBasePath(parsed.pathname, basePath) + parsed.search + parsed.hash;
+	} catch {
+		return localPath;
+	}
+}
+/**
+* Prepend basePath to a local path for browser URLs / fetches.
+*/
+function withBasePath(path, basePath) {
+	if (!basePath || !path.startsWith("/") || path.startsWith("http://") || path.startsWith("https://") || path.startsWith("//")) return path;
+	return basePath + path;
+}
+/**
+* Resolve a potentially relative href against the current URL.
+* Handles: "#hash", "?query", "?query#hash", and relative paths.
+*/
+function resolveRelativeHref(href, currentUrl, basePath = "") {
+	const base = currentUrl ?? (typeof window !== "undefined" ? window.location.href : void 0);
+	if (!base) return href;
+	if (href.startsWith("/") || href.startsWith("http://") || href.startsWith("https://") || href.startsWith("//")) return href;
+	try {
+		const resolved = new URL(href, base);
+		return (basePath && resolved.pathname === basePath ? "" : basePath ? stripBasePath(resolved.pathname, basePath) : resolved.pathname) + resolved.search + resolved.hash;
+	} catch {
+		return href;
+	}
+}
+/**
+* Convert a local navigation target into the browser URL that should be used
+* for history entries, fetches, and onNavigate callbacks.
+*/
+function toBrowserNavigationHref(href, currentUrl, basePath = "") {
+	const resolved = resolveRelativeHref(href, currentUrl, basePath);
+	if (!basePath) return withBasePath(resolved, basePath);
+	if (resolved === "") return basePath;
+	if (resolved.startsWith("?") || resolved.startsWith("#")) return basePath + resolved;
+	return withBasePath(resolved, basePath);
+}
+function isHashOnlyBrowserUrlChange(href, currentHref, basePath = "") {
+	try {
+		const current = new URL(currentHref);
+		const next = new URL(href, currentHref);
+		return stripBasePath(current.pathname, basePath) === stripBasePath(next.pathname, basePath) && current.search === next.search && next.hash !== "";
+	} catch {
+		return false;
+	}
+}
+//#endregion
+//#region node_modules/vinext/dist/client/instrumentation-client-state.js
+var clientInstrumentationHooks = null;
+function notifyAppRouterTransitionStart(href, navigationType) {
+	clientInstrumentationHooks?.onRouterTransitionStart?.(href, navigationType);
+}
+//#endregion
+//#region node_modules/vinext/dist/server/app-rsc-render-mode.js
+var APP_RSC_RENDER_MODE_NAVIGATION = "navigation";
+var APP_RSC_RENDER_MODE_REFRESH_PRESERVE_UI = "refresh-preserve-ui";
+var APP_RSC_RENDER_MODE_ACTION_RERENDER_PRESERVE_UI = "action-rerender-preserve-ui";
+function parseAppRscRenderMode(value) {
+	switch (value) {
+		case APP_RSC_RENDER_MODE_REFRESH_PRESERVE_UI: return APP_RSC_RENDER_MODE_REFRESH_PRESERVE_UI;
+		case APP_RSC_RENDER_MODE_ACTION_RERENDER_PRESERVE_UI: return APP_RSC_RENDER_MODE_ACTION_RERENDER_PRESERVE_UI;
+		default: return APP_RSC_RENDER_MODE_NAVIGATION;
+	}
+}
+//#endregion
+//#region node_modules/vinext/dist/server/app-rsc-cache-busting.js
+/**
+* RSC cache-busting hashes cover the headers that make a `.rsc` payload vary.
+* Client-side variant headers must survive transit through CDNs and reverse
+* proxies; stripping them changes the server hash and turns stale URLs into
+* repeated canonicalization redirects.
+*/
+var VINEXT_RSC_CACHE_BUSTING_SEARCH_PARAM = "_rsc";
+var VINEXT_RSC_CONTENT_TYPE = "text/x-component";
+[
+	"RSC",
+	"Accept",
+	NEXT_ROUTER_STATE_TREE_HEADER,
+	NEXT_ROUTER_PREFETCH_HEADER,
+	NEXT_ROUTER_SEGMENT_PREFETCH_HEADER,
+	NEXT_URL_HEADER,
+	VINEXT_INTERCEPTION_CONTEXT_HEADER,
+	VINEXT_MOUNTED_SLOTS_HEADER,
+	VINEXT_RSC_RENDER_MODE_HEADER
+].join(", ");
+var CACHE_BUSTING_DIGEST_BYTES = 12;
+var textEncoder = new TextEncoder();
+function encodeBase64Url(bytes) {
+	let binary = "";
+	for (const byte of bytes) binary += String.fromCharCode(byte);
+	return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
+function normalizeHeaderValue(value) {
+	return value ?? "0";
+}
+function normalizeRenderModeHeaderValue(value) {
+	const renderMode = parseAppRscRenderMode(value);
+	return renderMode === "navigation" ? null : renderMode;
+}
+function createCacheBustingInput(headers, options = {}) {
+	const values = [
+		headers.get(NEXT_ROUTER_PREFETCH_HEADER),
+		headers.get(NEXT_ROUTER_SEGMENT_PREFETCH_HEADER),
+		headers.get(NEXT_ROUTER_STATE_TREE_HEADER),
+		headers.get(NEXT_URL_HEADER),
+		headers.get(VINEXT_INTERCEPTION_CONTEXT_HEADER),
+		headers.get(VINEXT_MOUNTED_SLOTS_HEADER),
+		...options.includeRenderModeHeader === false ? [] : [normalizeRenderModeHeaderValue(headers.get(VINEXT_RSC_RENDER_MODE_HEADER))]
+	];
+	if (values.every((value) => value === null)) return null;
+	return values.map(normalizeHeaderValue).join(",");
+}
+async function sha256CacheBustingHash(input) {
+	const digest = await globalThis.crypto.subtle.digest("SHA-256", textEncoder.encode(input));
+	return encodeBase64Url(new Uint8Array(digest).subarray(0, CACHE_BUSTING_DIGEST_BYTES));
+}
+function getSearchPairsWithoutRscCacheBusting(url) {
+	return (url.search.startsWith("?") ? url.search.slice(1) : url.search).split("&").filter((pair) => pair.length > 0 && !isRscCacheBustingSearchPair(pair));
+}
+function isRscCacheBustingSearchPair(pair) {
+	const separatorIndex = pair.indexOf("=");
+	const rawKey = separatorIndex === -1 ? pair : pair.slice(0, separatorIndex);
+	try {
+		return decodeURIComponent(rawKey.replaceAll("+", " ")) === VINEXT_RSC_CACHE_BUSTING_SEARCH_PARAM;
+	} catch {
+		return rawKey === VINEXT_RSC_CACHE_BUSTING_SEARCH_PARAM;
+	}
+}
+async function computeRscCacheBustingSearchParam(headers) {
+	const input = createCacheBustingInput(headers);
+	if (input === null) return "";
+	return sha256CacheBustingHash(input);
+}
+function setRscCacheBustingSearchParam(url, hash) {
+	const pairs = getSearchPairsWithoutRscCacheBusting(url);
+	pairs.push(hash.length > 0 ? `${VINEXT_RSC_CACHE_BUSTING_SEARCH_PARAM}=${hash}` : VINEXT_RSC_CACHE_BUSTING_SEARCH_PARAM);
+	url.search = `?${pairs.join("&")}`;
+}
+function createRscRequestHeaders(options = {}) {
+	const headers = new Headers({
+		Accept: VINEXT_RSC_CONTENT_TYPE,
+		["RSC"]: "1"
+	});
+	if (options.interceptionContext !== void 0 && options.interceptionContext !== null) headers.set(VINEXT_INTERCEPTION_CONTEXT_HEADER, options.interceptionContext);
+	if (options.mountedSlotsHeader !== void 0 && options.mountedSlotsHeader !== null) headers.set(VINEXT_MOUNTED_SLOTS_HEADER, options.mountedSlotsHeader);
+	const renderMode = options.renderMode ?? "navigation";
+	if (renderMode !== "navigation") headers.set(VINEXT_RSC_RENDER_MODE_HEADER, renderMode);
+	return headers;
+}
+function toRscRequestPath(href) {
+	const hashIndex = href.indexOf("#");
+	const beforeHash = hashIndex === -1 ? href : href.slice(0, hashIndex);
+	const queryIndex = beforeHash.indexOf("?");
+	const pathname = queryIndex === -1 ? beforeHash : beforeHash.slice(0, queryIndex);
+	const query = queryIndex === -1 ? "" : beforeHash.slice(queryIndex);
+	return `${pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname}.rsc${query}`;
+}
+async function createRscRequestUrl(href, headers) {
+	const url = new URL(toRscRequestPath(href), "http://vinext.local");
+	setRscCacheBustingSearchParam(url, await computeRscCacheBustingSearchParam(headers));
+	return `${url.pathname}${url.search}`;
+}
+//#endregion
+//#region node_modules/vinext/dist/shims/readonly-url-search-params.js
+var ReadonlyURLSearchParamsError = class extends Error {
+	constructor() {
+		super("Method unavailable on `ReadonlyURLSearchParams`. Read more: https://nextjs.org/docs/app/api-reference/functions/use-search-params#updating-searchparams");
+	}
+};
+/**
+* Read-only URLSearchParams wrapper matching Next.js runtime behavior.
+* Mutation methods remain present for instanceof/API compatibility but throw.
+*/
+var ReadonlyURLSearchParams = class extends URLSearchParams {
+	append(_name, _value) {
+		throw new ReadonlyURLSearchParamsError();
+	}
+	delete(_name, _value) {
+		throw new ReadonlyURLSearchParamsError();
+	}
+	set(_name, _value) {
+		throw new ReadonlyURLSearchParamsError();
+	}
+	sort() {
+		throw new ReadonlyURLSearchParamsError();
+	}
+};
+//#endregion
+//#region node_modules/vinext/dist/shims/navigation.js
+/**
+* next/navigation shim
+*
+* App Router navigation hooks. These work on both server (RSC) and client.
+* Server-side: reads from a request context set by the RSC handler.
+* Client-side: reads from browser Location API and provides navigation.
+*/
+var _LAYOUT_SEGMENT_CTX_KEY = Symbol.for("vinext.layoutSegmentContext");
+var _SERVER_INSERTED_HTML_CTX_KEY = Symbol.for("vinext.serverInsertedHTMLContext");
+function getServerInsertedHTMLContext() {
+	if (typeof React$1.createContext !== "function") return null;
+	const globalState = globalThis;
+	if (!globalState[_SERVER_INSERTED_HTML_CTX_KEY]) globalState[_SERVER_INSERTED_HTML_CTX_KEY] = React$1.createContext(null);
+	return globalState[_SERVER_INSERTED_HTML_CTX_KEY] ?? null;
+}
+var ServerInsertedHTMLContext = getServerInsertedHTMLContext();
+/**
+* Get or create the layout segment context.
+* Returns null in the RSC environment (createContext unavailable).
+*/
+function getLayoutSegmentContext() {
+	if (typeof React$1.createContext !== "function") return null;
+	const globalState = globalThis;
+	if (!globalState[_LAYOUT_SEGMENT_CTX_KEY]) globalState[_LAYOUT_SEGMENT_CTX_KEY] = React$1.createContext({ children: [] });
+	return globalState[_LAYOUT_SEGMENT_CTX_KEY] ?? null;
+}
+var GLOBAL_ACCESSORS_KEY = Symbol.for("vinext.navigation.globalAccessors");
+var _GLOBAL_ACCESSORS_KEY = GLOBAL_ACCESSORS_KEY;
+var _GLOBAL_HYDRATION_CONTEXT_KEY = Symbol.for("vinext.navigation.clientHydrationContext");
+function _getGlobalAccessors() {
+	return globalThis[_GLOBAL_ACCESSORS_KEY];
+}
+function _getClientHydrationContext() {
+	const globalState = globalThis;
+	if (Object.prototype.hasOwnProperty.call(globalState, _GLOBAL_HYDRATION_CONTEXT_KEY)) return globalState[_GLOBAL_HYDRATION_CONTEXT_KEY] ?? null;
+}
+function _setClientHydrationContext(ctx) {
+	globalThis[_GLOBAL_HYDRATION_CONTEXT_KEY] = ctx;
+}
+var _serverContext = null;
+var _serverInsertedHTMLCallbacks = [];
+var _getServerContext = () => {
+	if (typeof window !== "undefined") {
+		const hydrationContext = _getClientHydrationContext();
+		return hydrationContext !== void 0 ? hydrationContext : _serverContext;
+	}
+	const g = _getGlobalAccessors();
+	return g ? g.getServerContext() : _serverContext;
+};
+var _setServerContext = (ctx) => {
+	if (typeof window !== "undefined") {
+		_serverContext = ctx;
+		_setClientHydrationContext(ctx);
+		return;
+	}
+	const g = _getGlobalAccessors();
+	if (g) g.setServerContext(ctx);
+	else _serverContext = ctx;
+};
+var _getInsertedHTMLCallbacks = () => {
+	const g = _getGlobalAccessors();
+	return g ? g.getInsertedHTMLCallbacks() : _serverInsertedHTMLCallbacks;
+};
+var _clearInsertedHTMLCallbacks = () => {
+	const g = _getGlobalAccessors();
+	if (g) g.clearInsertedHTMLCallbacks();
+	else _serverInsertedHTMLCallbacks = [];
+};
+/**
+* Register ALS-backed state accessors. Called by navigation-state.ts on import.
+* @internal
+*/
+function _registerStateAccessors(accessors) {
+	_getServerContext = accessors.getServerContext;
+	_setServerContext = accessors.setServerContext;
+	_getInsertedHTMLCallbacks = accessors.getInsertedHTMLCallbacks;
+	_clearInsertedHTMLCallbacks = accessors.clearInsertedHTMLCallbacks;
+}
+/**
+* Set the navigation context for the current SSR/RSC render.
+* Called by the framework entry before rendering each request.
+*/
+function setNavigationContext(ctx) {
+	_setServerContext(ctx);
+}
+var isServer = typeof window === "undefined";
+function getCurrentInterceptionContext() {
+	if (isServer) return null;
+	return stripBasePath(window.location.pathname, "");
+}
+/** Get or create the shared in-memory RSC prefetch cache on window. */
+function getPrefetchCache() {
+	if (isServer) return /* @__PURE__ */ new Map();
+	if (!window.__VINEXT_RSC_PREFETCH_CACHE__) window.__VINEXT_RSC_PREFETCH_CACHE__ = /* @__PURE__ */ new Map();
+	return window.__VINEXT_RSC_PREFETCH_CACHE__;
+}
+/**
+* Get or create the shared set of already-prefetched RSC URLs on window.
+* Keyed by interception-aware cache key so distinct source routes do not alias.
+*/
+function getPrefetchedUrls() {
+	if (isServer) return /* @__PURE__ */ new Set();
+	if (!window.__VINEXT_RSC_PREFETCHED_URLS__) window.__VINEXT_RSC_PREFETCHED_URLS__ = /* @__PURE__ */ new Set();
+	return window.__VINEXT_RSC_PREFETCHED_URLS__;
+}
+/**
+* Evict prefetch cache entries if at capacity.
+* First sweeps expired entries, then falls back to FIFO eviction.
+*/
+function evictPrefetchCacheIfNeeded() {
+	const cache = getPrefetchCache();
+	if (cache.size < 50) return;
+	const now = Date.now();
+	const prefetched = getPrefetchedUrls();
+	for (const [key, entry] of cache) if (now - entry.timestamp >= 3e4) {
+		cache.delete(key);
+		prefetched.delete(key);
+	}
+	while (cache.size >= 50) {
+		const oldest = cache.keys().next().value;
+		if (oldest !== void 0) {
+			cache.delete(oldest);
+			prefetched.delete(oldest);
+		} else break;
+	}
+}
+/**
+* Snapshot an RSC response to an ArrayBuffer for caching and replay.
+* Consumes the response body and stores it with content-type and URL metadata.
+*/
+async function snapshotRscResponse(response) {
+	return {
+		buffer: await response.arrayBuffer(),
+		contentType: response.headers.get("content-type") ?? "text/x-component",
+		mountedSlotsHeader: response.headers.get(VINEXT_MOUNTED_SLOTS_HEADER),
+		paramsHeader: response.headers.get(VINEXT_PARAMS_HEADER),
+		url: response.url
+	};
+}
+/**
+* Prefetch an RSC response and snapshot it for later consumption.
+* Stores the in-flight promise so immediate clicks can await it instead
+* of firing a duplicate fetch.
+* Enforces a maximum cache size to prevent unbounded memory growth on
+* link-heavy pages.
+*/
+function prefetchRscResponse(rscUrl, fetchPromise, interceptionContext = null, mountedSlotsHeader = null) {
+	const cacheKey = AppElementsWire.encodeCacheKey(rscUrl, interceptionContext);
+	const cache = getPrefetchCache();
+	const prefetched = getPrefetchedUrls();
+	const entry = {
+		outcome: "pending",
+		timestamp: Date.now()
+	};
+	entry.pending = fetchPromise.then(async (response) => {
+		if (response.ok) entry.snapshot = {
+			...await snapshotRscResponse(response),
+			mountedSlotsHeader
+		};
+		else {
+			prefetched.delete(cacheKey);
+			cache.delete(cacheKey);
+		}
+	}).catch(() => {
+		prefetched.delete(cacheKey);
+		cache.delete(cacheKey);
+	}).finally(() => {
+		entry.pending = void 0;
+		if (entry.snapshot) entry.outcome = "cache-seeded";
+	});
+	cache.set(cacheKey, entry);
+	evictPrefetchCacheIfNeeded();
+}
+var _CLIENT_NAV_STATE_KEY = Symbol.for("vinext.clientNavigationState");
+var _MOUNTED_SLOTS_HEADER_KEY = Symbol.for("vinext.mountedSlotsHeader");
+function getMountedSlotsHeader() {
+	if (isServer) return null;
+	return window[_MOUNTED_SLOTS_HEADER_KEY] ?? null;
+}
+function getClientNavigationState() {
+	if (isServer) return null;
+	const globalState = window;
+	globalState[_CLIENT_NAV_STATE_KEY] ??= {
+		listeners: /* @__PURE__ */ new Set(),
+		cachedSearch: window.location.search,
+		cachedReadonlySearchParams: new ReadonlyURLSearchParams(window.location.search),
+		cachedPathname: stripBasePath(window.location.pathname, ""),
+		clientParams: {},
+		clientParamsJson: "{}",
+		pendingClientParams: null,
+		pendingClientParamsJson: null,
+		pendingPathname: null,
+		pendingPathnameNavId: null,
+		originalPushState: window.history.pushState.bind(window.history),
+		originalReplaceState: window.history.replaceState.bind(window.history),
+		patchInstalled: false,
+		hasPendingNavigationUpdate: false,
+		suppressUrlNotifyCount: 0,
+		navigationSnapshotActiveCount: 0
+	};
+	return globalState[_CLIENT_NAV_STATE_KEY];
+}
+function notifyNavigationListeners() {
+	const state = getClientNavigationState();
+	if (!state) return;
+	for (const fn of state.listeners) fn();
+}
+/**
+* Get cached pathname snapshot for useSyncExternalStore.
+* Note: Returns cached value from ClientNavigationState, not live window.location.
+* The cache is updated by syncCommittedUrlStateFromLocation() after navigation commits.
+* This ensures referential stability and prevents infinite re-renders.
+* External pushState/replaceState while URL notifications are suppressed won't
+* be visible until the next commit.
+*/
+function getPathnameSnapshot() {
+	return getClientNavigationState()?.cachedPathname ?? "/";
+}
+function syncCommittedUrlStateFromLocation() {
+	const state = getClientNavigationState();
+	if (!state) return false;
+	let changed = false;
+	const pathname = stripBasePath(window.location.pathname, "");
+	if (pathname !== state.cachedPathname) {
+		state.cachedPathname = pathname;
+		changed = true;
+	}
+	const search = window.location.search;
+	if (search !== state.cachedSearch) {
+		state.cachedSearch = search;
+		state.cachedReadonlySearchParams = new ReadonlyURLSearchParams(search);
+		changed = true;
+	}
+	return changed;
+}
+var _CLIENT_NAV_RENDER_CTX_KEY = Symbol.for("vinext.clientNavigationRenderContext");
+function getClientNavigationRenderContext() {
+	if (typeof React$1.createContext !== "function") return null;
+	const globalState = globalThis;
+	if (!globalState[_CLIENT_NAV_RENDER_CTX_KEY]) globalState[_CLIENT_NAV_RENDER_CTX_KEY] = React$1.createContext(null);
+	return globalState[_CLIENT_NAV_RENDER_CTX_KEY] ?? null;
+}
+function useClientNavigationRenderSnapshot() {
+	const ctx = getClientNavigationRenderContext();
+	if (!ctx || typeof React$1.useContext !== "function") return null;
+	try {
+		return React$1.useContext(ctx);
+	} catch {
+		return null;
+	}
+}
+function subscribeToNavigation(cb) {
+	const state = getClientNavigationState();
+	if (!state) return () => {};
+	state.listeners.add(cb);
+	return () => {
+		state.listeners.delete(cb);
+	};
+}
+/**
+* Returns the current pathname.
+* Server: from request context. Client: from window.location.
+*/
+function usePathname() {
+	if (isServer) return _getServerContext()?.pathname ?? "/";
+	const renderSnapshot = useClientNavigationRenderSnapshot();
+	const pathname = React$1.useSyncExternalStore(subscribeToNavigation, getPathnameSnapshot, () => _getServerContext()?.pathname ?? "/");
+	if (renderSnapshot && (getClientNavigationState()?.navigationSnapshotActiveCount ?? 0) > 0) return renderSnapshot.pathname;
+	return pathname;
+}
+/**
+* Check if a href is an external URL (any URL scheme per RFC 3986, or protocol-relative).
+*/
+function isExternalUrl(href) {
+	return /^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//");
+}
+/**
+* Check if a href is only a hash change relative to the current URL.
+*/
+function isHashOnlyChange(href) {
+	if (typeof window === "undefined") return false;
+	if (href.startsWith("#")) return true;
+	return isHashOnlyBrowserUrlChange(href, window.location.href, "");
+}
+/**
+* Scroll to a hash target element, or to the top if no hash.
+*/
+function scrollToHash(hash) {
+	if (!hash || hash === "#") {
+		window.scrollTo(0, 0);
+		return;
+	}
+	const id = hash.slice(1);
+	const element = document.getElementById(id);
+	if (element) element.scrollIntoView({ behavior: "auto" });
+}
+function withSuppressedUrlNotifications(fn) {
+	const state = getClientNavigationState();
+	if (!state) return fn();
+	state.suppressUrlNotifyCount += 1;
+	try {
+		return fn();
+	} finally {
+		state.suppressUrlNotifyCount -= 1;
+	}
+}
+/**
+* Commit pending client navigation state to committed snapshots.
+*
+* navId is optional: callers that don't own pendingPathname (for example,
+* superseded pre-paint cleanup) may pass undefined to flush URL/params state
+* without clearing pendingPathname owned by the active navigation. Such callers
+* must opt in explicitly if they also own an activated render snapshot.
+*/
+function commitClientNavigationState(navId, options) {
+	if (isServer) return;
+	const state = getClientNavigationState();
+	if (!state) return;
+	if ((navId !== void 0 || options?.releaseSnapshot === true) && state.navigationSnapshotActiveCount > 0) state.navigationSnapshotActiveCount -= 1;
+	const urlChanged = syncCommittedUrlStateFromLocation();
+	if (state.pendingClientParams !== null && state.pendingClientParamsJson !== null) {
+		state.clientParams = state.pendingClientParams;
+		state.clientParamsJson = state.pendingClientParamsJson;
+		state.pendingClientParams = null;
+		state.pendingClientParamsJson = null;
+	}
+	if (state.pendingPathnameNavId === null || navId !== void 0 && state.pendingPathnameNavId === navId) {
+		state.pendingPathname = null;
+		state.pendingPathnameNavId = null;
+	}
+	const shouldNotify = urlChanged || state.hasPendingNavigationUpdate;
+	state.hasPendingNavigationUpdate = false;
+	if (shouldNotify) notifyNavigationListeners();
+}
+function pushHistoryStateWithoutNotify(data, unused, url) {
+	withSuppressedUrlNotifications(() => {
+		getClientNavigationState()?.originalPushState.call(window.history, data, unused, url);
+	});
+}
+function replaceHistoryStateWithoutNotify(data, unused, url) {
+	withSuppressedUrlNotifications(() => {
+		getClientNavigationState()?.originalReplaceState.call(window.history, data, unused, url);
+	});
+}
+/**
+* Save the current scroll position into the current history state.
+* Called before every navigation to enable scroll restoration on back/forward.
+*
+* Uses replaceHistoryStateWithoutNotify to avoid triggering the patched
+* history.replaceState interception (which would cause spurious re-renders).
+*/
+function saveScrollPosition() {
+	replaceHistoryStateWithoutNotify({
+		...window.history.state ?? {},
+		__vinext_scrollX: window.scrollX,
+		__vinext_scrollY: window.scrollY
+	}, "");
+}
+/**
+* Restore scroll position from a history state object (used on popstate).
+*
+* When an RSC navigation is in flight (back/forward triggers both this
+* handler and the browser entry's popstate handler which calls
+* __VINEXT_RSC_NAVIGATE__), we must wait for the new content to render
+* before scrolling. Otherwise the user sees old content flash at the
+* restored scroll position.
+*
+* This handler fires before the browser entry's popstate handler (because
+* navigation.ts is loaded before hydration completes), so we defer via a
+* microtask to give the browser entry handler a chance to set
+* __VINEXT_RSC_PENDING__. Promise.resolve() schedules a microtask
+* that runs after all synchronous event listeners have completed.
+*/
+function restoreScrollPosition(state) {
+	if (state && typeof state === "object" && "__vinext_scrollY" in state) {
+		const { __vinext_scrollX: x, __vinext_scrollY: y } = state;
+		Promise.resolve().then(() => {
+			const pending = window.__VINEXT_RSC_PENDING__ ?? null;
+			if (pending) pending.then(() => {
+				requestAnimationFrame(() => {
+					window.scrollTo(x, y);
+				});
+			});
+			else requestAnimationFrame(() => {
+				window.scrollTo(x, y);
+			});
+		});
+	}
+}
+/**
+* Navigate to a URL, handling external URLs, hash-only changes, and RSC navigation.
+*/
+async function navigateClientSide(href, mode, scroll, programmaticTransition = false) {
+	let normalizedHref = href;
+	if (isExternalUrl(href)) {
+		const localPath = toSameOriginAppPath(href, "");
+		if (localPath == null) {
+			if (mode === "replace") window.location.replace(href);
+			else window.location.assign(href);
+			return;
+		}
+		normalizedHref = localPath;
+	}
+	const fullHref = toBrowserNavigationHref(normalizedHref, window.location.href, "");
+	notifyAppRouterTransitionStart(fullHref, mode);
+	if (mode === "push") saveScrollPosition();
+	if (isHashOnlyChange(fullHref)) {
+		const hash = fullHref.includes("#") ? fullHref.slice(fullHref.indexOf("#")) : "";
+		if (mode === "replace") replaceHistoryStateWithoutNotify(null, "", fullHref);
+		else pushHistoryStateWithoutNotify(null, "", fullHref);
+		commitClientNavigationState();
+		if (scroll) scrollToHash(hash);
+		return;
+	}
+	const hashIdx = fullHref.indexOf("#");
+	const hash = hashIdx !== -1 ? fullHref.slice(hashIdx) : "";
+	if (typeof window.__VINEXT_RSC_NAVIGATE__ === "function") await window.__VINEXT_RSC_NAVIGATE__(fullHref, 0, "navigate", mode, void 0, programmaticTransition);
+	else {
+		if (mode === "replace") replaceHistoryStateWithoutNotify(null, "", fullHref);
+		else pushHistoryStateWithoutNotify(null, "", fullHref);
+		commitClientNavigationState();
+	}
+	if (scroll) if (hash) scrollToHash(hash);
+	else window.scrollTo(0, 0);
+}
+/**
+* App Router public router instance. Mirrors Next.js's
+* `publicAppRouterInstance` from
+* `packages/next/src/client/components/app-router-instance.ts`.
+*
+* Exported so the App Router browser entry can install it on
+* `window.next.router` for Next.js parity (see `client/window-next.ts`).
+* Internal callers in this file continue to use `_appRouter` for brevity.
+*/
+var _appRouter = {
+	bfcacheId: "0",
+	push(href, options) {
+		assertSafeNavigationUrl(href);
+		if (isServer) return;
+		React$1.startTransition(() => {
+			navigateClientSide(href, "push", options?.scroll !== false, true);
+		});
+	},
+	replace(href, options) {
+		assertSafeNavigationUrl(href);
+		if (isServer) return;
+		React$1.startTransition(() => {
+			navigateClientSide(href, "replace", options?.scroll !== false, true);
+		});
+	},
+	back() {
+		if (isServer) return;
+		window.history.back();
+	},
+	forward() {
+		if (isServer) return;
+		window.history.forward();
+	},
+	refresh() {
+		if (isServer) return;
+		const clearCaches = window.__VINEXT_CLEAR_NAV_CACHES__;
+		if (typeof clearCaches === "function") clearCaches();
+		const rscNavigate = window.__VINEXT_RSC_NAVIGATE__;
+		if (typeof rscNavigate === "function") {
+			const navigate = () => {
+				rscNavigate(window.location.href, 0, "refresh", void 0, void 0, true);
+			};
+			React$1.startTransition(navigate);
+		}
+	},
+	prefetch(href) {
+		assertSafeNavigationUrl(href);
+		if (isServer) return;
+		(async () => {
+			let prefetchHref = href;
+			if (href.startsWith("http://") || href.startsWith("https://") || href.startsWith("//")) {
+				const localPath = toSameOriginAppPath(href, "");
+				if (localPath == null) return;
+				prefetchHref = localPath;
+			}
+			const fullHref = toBrowserNavigationHref(prefetchHref, window.location.href, "");
+			const interceptionContext = getCurrentInterceptionContext();
+			const mountedSlotsHeader = getMountedSlotsHeader();
+			const headers = createRscRequestHeaders({ interceptionContext });
+			if (mountedSlotsHeader) headers.set(VINEXT_MOUNTED_SLOTS_HEADER, mountedSlotsHeader);
+			const rscUrl = await createRscRequestUrl(fullHref, headers);
+			const cacheKey = AppElementsWire.encodeCacheKey(rscUrl, interceptionContext);
+			const prefetched = getPrefetchedUrls();
+			if (prefetched.has(cacheKey)) return;
+			prefetched.add(cacheKey);
+			prefetchRscResponse(rscUrl, fetch(rscUrl, {
+				headers,
+				credentials: "include",
+				priority: "low"
+			}), interceptionContext, mountedSlotsHeader);
+		})().catch((error) => {
+			console.error("[vinext] RSC prefetch setup error:", error);
+		});
+	}
+};
+/**
+* App Router's useRouter — returns push/replace/back/forward/refresh.
+* Different from Pages Router's useRouter (next/router).
+*
+* Returns a stable singleton: the same object reference on every call,
+* matching Next.js behavior so components using referential equality
+* (e.g. useMemo / useEffect deps, React.memo) don't re-render unnecessarily.
+*/
+function useRouter() {
+	return _appRouter;
+}
+/**
+* useServerInsertedHTML — inject HTML during SSR from client components.
+*
+* Used by CSS-in-JS libraries (styled-components, emotion, StyleX) to inject
+* <style> tags during SSR so styles appear in the initial HTML (no FOUC).
+*
+* The callback is called once after each SSR render pass. The returned JSX/HTML
+* is serialized and injected into the HTML stream.
+*
+* Usage (in a "use client" component wrapping children):
+*   useServerInsertedHTML(() => {
+*     const styles = sheet.getStyleElement();
+*     sheet.instance.clearTag();
+*     return <>{styles}</>;
+*   });
+*/
+function useServerInsertedHTML(callback) {
+	if (typeof document !== "undefined") return;
+	_getInsertedHTMLCallbacks().push(callback);
+}
+/**
+* Render collected useServerInsertedHTML callbacks without unregistering them.
+*
+* Streaming SSR needs to invoke the same style-registry callbacks after each
+* Fizz flush. Libraries such as styled-components and Emotion clear their own
+* per-flush buffers inside the callback; the registration itself must survive
+* until the request stream is closed.
+*/
+function renderServerInsertedHTML() {
+	const callbacks = _getInsertedHTMLCallbacks();
+	const results = [];
+	for (const cb of callbacks) try {
+		const result = cb();
+		if (result != null) results.push(result);
+	} catch {}
+	return results;
+}
+/**
+* Clear all collected useServerInsertedHTML callbacks without flushing.
+* Used for cleanup between requests.
+*/
+function clearServerInsertedHTML() {
+	_clearInsertedHTMLCallbacks();
+}
+/**
+* HTTP Access Fallback error code — shared prefix for notFound/forbidden/unauthorized.
+* Matches Next.js 16's unified error handling approach.
+*/
+var HTTP_ERROR_FALLBACK_ERROR_CODE = "NEXT_HTTP_ERROR_FALLBACK";
+/**
+* Internal error class used by redirect/notFound/forbidden/unauthorized.
+* The `digest` field is the serialised control-flow signal read by the
+* framework's error boundary and server-side request handlers.
+*/
+var VinextNavigationError = class extends Error {
+	digest;
+	constructor(message, digest) {
+		super(message);
+		this.digest = digest;
+	}
+};
+/**
+* Trigger a not-found response (404). Caught by the framework.
+*/
+function notFound() {
+	throw new VinextNavigationError("NEXT_NOT_FOUND", `${HTTP_ERROR_FALLBACK_ERROR_CODE};404`);
+}
+if (!isServer) {
+	const state = getClientNavigationState();
+	if (state && !state.patchInstalled) {
+		state.patchInstalled = true;
+		window.addEventListener("popstate", (event) => {
+			if (typeof window.__VINEXT_RSC_NAVIGATE__ !== "function") {
+				commitClientNavigationState();
+				restoreScrollPosition(event.state);
+			}
+		});
+		window.history.pushState = function patchedPushState(data, unused, url) {
+			state.originalPushState.call(window.history, data, unused, url);
+			if (state.suppressUrlNotifyCount === 0) commitClientNavigationState();
+		};
+		window.history.replaceState = function patchedReplaceState(data, unused, url) {
+			state.originalReplaceState.call(window.history, data, unused, url);
+			if (state.suppressUrlNotifyCount === 0) commitClientNavigationState();
+		};
+	}
+}
+//#endregion
+//#region node_modules/vinext/dist/shims/internal/als-registry.js
+/**
+* Shared helper for registering AsyncLocalStorage instances on `globalThis`
+* via `Symbol.for(...)` so that they survive multiple module instances.
+*
+* Why this helper exists
+* ----------------------
+* Vite's multi-environment setup (RSC / SSR / client) and HMR can load a
+* single source module under several different specifiers, producing more
+* than one module instance at runtime. If each instance kept its own
+* module-local `new AsyncLocalStorage()`, request-scoped state would silently
+* fork across instances — `headers()` in one environment wouldn't see what
+* `connection()` registered in another, concurrent requests would stomp each
+* other, etc.
+*
+* The fix every shim was applying inline:
+*
+*   const _ALS_KEY = Symbol.for("vinext.foo.als");
+*   const _g = globalThis as unknown as Record<PropertyKey, unknown>;
+*   const _als = (_g[_ALS_KEY] ??=
+*     new AsyncLocalStorage<T>()) as AsyncLocalStorage<T>;
+*
+* This helper packages that pattern.
+*
+* Cross-bundle singleton property — preserved
+* -------------------------------------------
+* - `Symbol.for(key)` consults the global symbol registry and returns the
+*   same symbol regardless of which module instance calls it.
+* - `globalThis[sym]` is a single slot shared by every module instance.
+* - `??=` only assigns when the slot is empty, so the first caller wins and
+*   every subsequent caller (in any module instance) reads the same ALS.
+*
+* The helper module itself never holds the ALS by reference — it always
+* round-trips through `globalThis`. So even if this helper file is itself
+* loaded under multiple module instances, every copy still hands back the
+* one true ALS for a given key.
+*/
+var _g$2 = globalThis;
+/**
+* Get (or lazily create) the AsyncLocalStorage registered on `globalThis`
+* under `Symbol.for(key)`. Multiple callers — including callers in different
+* module instances — that pass the same `key` receive the same ALS instance.
+*
+* @param key - String key fed to `Symbol.for(...)`. By convention vinext
+*   shims use a dotted namespace such as `"vinext.cache.als"`.
+*/
+function getOrCreateAls(key) {
+	const sym = Symbol.for(key);
+	return _g$2[sym] ??= new AsyncLocalStorage();
+}
+//#endregion
+//#region node_modules/vinext/dist/shims/unified-request-context.js
+var _REQUEST_CONTEXT_ALS_KEY = Symbol.for("vinext.requestContext.als");
+var _g$1 = globalThis;
+var _als$1 = getOrCreateAls("vinext.unifiedRequestContext.als");
+function _getInheritedExecutionContext() {
+	const unifiedStore = _als$1.getStore();
+	if (unifiedStore) return unifiedStore.executionContext;
+	return _g$1[_REQUEST_CONTEXT_ALS_KEY]?.getStore() ?? null;
+}
+/**
+* Create a fresh `UnifiedRequestContext` with defaults for all fields.
+* Pass partial overrides for the fields you need to pre-populate.
+*/
+function createRequestContext(opts) {
+	return {
+		headersContext: null,
+		actionRevalidationKind: 0,
+		dynamicUsageDetected: false,
+		invalidDynamicUsageError: null,
+		pendingSetCookies: [],
+		draftModeCookieHeader: null,
+		phase: "render",
+		i18nContext: null,
+		serverContext: null,
+		serverInsertedHTMLCallbacks: [],
+		requestScopedCacheLife: null,
+		unstableCacheRevalidation: "foreground",
+		_privateCache: null,
+		currentRequestTags: [],
+		currentFetchSoftTags: [],
+		currentFetchCacheMode: null,
+		isFetchDedupeActive: false,
+		currentFetchDedupeEntries: /* @__PURE__ */ new Map(),
+		executionContext: _getInheritedExecutionContext(),
+		requestCache: /* @__PURE__ */ new WeakMap(),
+		ssrContext: null,
+		ssrHeadChildren: [],
+		rootParams: null,
+		...opts
+	};
+}
+function runWithUnifiedStateMutation(mutate, fn) {
+	const parentCtx = _als$1.getStore();
+	if (!parentCtx) return fn();
+	const childCtx = { ...parentCtx };
+	mutate(childCtx);
+	return _als$1.run(childCtx, fn);
+}
+/**
+* Get the current unified request context.
+* Returns the ALS store when inside a `runWithRequestContext()` scope,
+* or a fresh detached context otherwise. Unlike the legacy per-shim fallback
+* singletons, this detached value is ephemeral — mutations do not persist
+* across calls. This is intentional to prevent state leakage outside request
+* scopes.
+*
+* Only direct callers observe this detached fallback. Shim `_getState()`
+* helpers should continue to gate on `isInsideUnifiedScope()` and fall back
+* to their standalone ALS/fallback singletons outside the unified scope.
+* If called inside a standalone `runWithExecutionContext()` scope, the
+* detached context still reflects that inherited `executionContext`.
+*/
+function getRequestContext() {
+	return _als$1.getStore() ?? createRequestContext();
+}
+/**
+* Check whether the current execution is inside a `runWithRequestContext()` scope.
+* Shim modules use this to decide whether to read from the unified store
+* or fall back to their own standalone ALS.
+*/
+function isInsideUnifiedScope() {
+	return _als$1.getStore() != null;
+}
+//#endregion
+//#region node_modules/vinext/dist/shims/navigation-state.js
+/**
+* Server-only navigation state backed by AsyncLocalStorage.
+*
+* This module provides request-scoped isolation for navigation context
+* and useServerInsertedHTML callbacks. Without ALS, concurrent requests
+* on Cloudflare Workers would share module-level state and leak data
+* (pathnames, params, CSS-in-JS styles) between requests.
+*
+* This module is server-only — it imports node:async_hooks and must NOT
+* be bundled for the browser. The dual-environment navigation.ts shim
+* uses a registration pattern so it works in both environments.
+*/
+var _FALLBACK_KEY = Symbol.for("vinext.navigation.fallback");
+var _g = globalThis;
+var _als = getOrCreateAls("vinext.navigation.als");
+var _fallbackState = _g[_FALLBACK_KEY] ??= {
+	serverContext: null,
+	serverInsertedHTMLCallbacks: []
+};
+function _getState() {
+	if (isInsideUnifiedScope()) return getRequestContext();
+	return _als.getStore() ?? _fallbackState;
+}
+function runWithNavigationContext(fn) {
+	if (isInsideUnifiedScope()) return runWithUnifiedStateMutation((uCtx) => {
+		uCtx.serverContext = null;
+		uCtx.serverInsertedHTMLCallbacks = [];
+	}, fn);
+	return _als.run({
+		serverContext: null,
+		serverInsertedHTMLCallbacks: []
+	}, fn);
+}
+var _accessors = {
+	getServerContext() {
+		return _getState().serverContext;
+	},
+	setServerContext(ctx) {
+		_getState().serverContext = ctx;
+	},
+	getInsertedHTMLCallbacks() {
+		return _getState().serverInsertedHTMLCallbacks;
+	},
+	clearInsertedHTMLCallbacks() {
+		_getState().serverInsertedHTMLCallbacks = [];
+	}
+};
+_registerStateAccessors(_accessors);
+globalThis[GLOBAL_ACCESSORS_KEY] = _accessors;
+//#endregion
+//#region node_modules/vinext/dist/shims/script-nonce-context.js
+var ScriptNonceContext = React.createContext(void 0);
+function ScriptNonceProvider(props) {
+	return React.createElement(ScriptNonceContext.Provider, { value: props.nonce }, props.children);
+}
+function withScriptNonce(element, nonce) {
+	if (!nonce) return element;
+	return React.createElement(ScriptNonceProvider, { nonce }, element);
+}
+//#endregion
+//#region node_modules/vinext/dist/server/html.js
+/**
+* HTML-safe JSON serialization for embedding data in <script> tags.
+*
+* JSON.stringify does NOT escape characters that are meaningful to the
+* HTML parser. If a JSON string value contains "<\/script>", the browser
+* closes the script tag early — anything after it executes as HTML.
+* This is a well-known stored XSS vector in SSR frameworks.
+*
+* Next.js mitigates this with htmlEscapeJsonString(). We do the same.
+*
+* Characters escaped:
+*   <   → \u003c   (prevents <\/script> and <!-- breakout)
+*   >   → \u003e   (prevents --> and other HTML close sequences)
+*   &   → \u0026   (prevents &lt; entity interpretation in XHTML)
+*   \u2028 → \\u2028 (line separator — invalid in JS string literals pre-ES2019)
+*   \u2029 → \\u2029 (paragraph separator — same)
+*
+* The result is valid JSON that is also safe to embed in any HTML context
+* without additional escaping.
+*/
+function safeJsonStringify(data) {
+	return JSON.stringify(data).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+}
+function escapeHtmlAttr(value) {
+	return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
+function createNonceAttribute(nonce) {
+	if (!nonce) return "";
+	return ` nonce="${escapeHtmlAttr(nonce)}"`;
+}
+function createInlineScriptTag(content, nonce) {
+	return `<script${createNonceAttribute(nonce)}>${content}<\/script>`;
+}
+//#endregion
+//#region node_modules/vinext/dist/shims/slot.js
+var slot_exports = /* @__PURE__ */ __exportAll({
+	Children: () => Children,
+	ChildrenContext: () => ChildrenContext,
+	ElementsContext: () => ElementsContext,
+	ParallelSlot: () => ParallelSlot,
+	ParallelSlotsContext: () => ParallelSlotsContext,
+	Slot: () => Slot,
+	UNMATCHED_SLOT: () => UNMATCHED_SLOT
+});
+var EMPTY_ELEMENTS = Object.freeze({});
+/**
+* Holds resolved AppElements (not a Promise). React 19's use(Promise) during
+* hydration triggers "async Client Component" for native Promises that lack
+* React's internal .status property. Storing resolved values sidesteps this.
+*/
+var ElementsContext = React$1.createContext(EMPTY_ELEMENTS);
+var ChildrenContext = React$1.createContext(null);
+var ParallelSlotsContext = React$1.createContext(null);
+function Slot({ id, children, parallelSlots }) {
+	const elements = React$1.useContext(ElementsContext);
+	if (!Object.hasOwn(elements, id)) return null;
+	const element = elements[id];
+	if (element === UNMATCHED_SLOT) notFound();
+	return /* @__PURE__ */ jsx(ParallelSlotsContext.Provider, {
+		value: parallelSlots ?? null,
+		children: /* @__PURE__ */ jsx(ChildrenContext.Provider, {
+			value: children ?? null,
+			children: element
+		})
+	});
+}
+function Children() {
+	return React$1.useContext(ChildrenContext);
+}
+function ParallelSlot({ name }) {
+	return React$1.useContext(ParallelSlotsContext)?.[name] ?? null;
+}
+//#endregion
+//#region node_modules/vinext/dist/server/app-browser-hydration.js
+var RSC_FORM_STATE_GLOBAL = "__VINEXT_RSC_FORM_STATE__";
+//#endregion
+//#region node_modules/vinext/dist/server/app-client-reference-preloader.js
+var resolvedPreload = Promise.resolve();
+function createClientReferencePreloader(options) {
+	let allReferencesPreloaded = false;
+	let allReferencesPreloadPromise = null;
+	const preloadedReferences = /* @__PURE__ */ new Set();
+	const referencePreloadPromises = /* @__PURE__ */ new Map();
+	function preloadReference(id, clientRequire) {
+		if (preloadedReferences.has(id)) return resolvedPreload;
+		const existing = referencePreloadPromises.get(id);
+		if (existing) return existing;
+		const preloadPromise = clientRequire(id).catch((error) => {
+			options.onPreloadError?.(id, error);
+		}).then(() => {
+			preloadedReferences.add(id);
+		}).finally(() => {
+			referencePreloadPromises.delete(id);
+		});
+		referencePreloadPromises.set(id, preloadPromise);
+		return preloadPromise;
+	}
+	function preloadReferenceSet(referenceIds, refs, clientRequire) {
+		const pending = [];
+		for (const id of referenceIds) if (Object.hasOwn(refs, id)) pending.push(preloadReference(id, clientRequire));
+		if (pending.length === 0) return resolvedPreload;
+		return Promise.all(pending).then(() => {});
+	}
+	return { preload(referenceIds) {
+		const refs = options.getReferences();
+		const clientRequire = options.getClientRequire();
+		if (!refs || !clientRequire) return resolvedPreload;
+		if (referenceIds) return preloadReferenceSet(referenceIds, refs, clientRequire);
+		if (allReferencesPreloaded) return resolvedPreload;
+		if (allReferencesPreloadPromise) return allReferencesPreloadPromise;
+		allReferencesPreloadPromise = preloadReferenceSet(Object.keys(refs), refs, clientRequire).then(() => {
+			allReferencesPreloaded = true;
+		}).finally(() => {
+			allReferencesPreloadPromise = null;
+		});
+		return allReferencesPreloadPromise;
+	} };
+}
+//#endregion
+//#region node_modules/vinext/dist/server/app-page-stream.js
+/**
+* Wraps a stream so that `onFlush` is called when the last byte has been read
+* by the downstream consumer (i.e. when the HTTP layer finishes draining the
+* response body). This is the correct place to clear per-request context,
+* because the RSC/SSR pipeline is lazy — components execute while the stream
+* is being consumed, not when the stream handle is first obtained.
+*/
+function deferUntilStreamConsumed(stream, onFlush) {
+	let called = false;
+	const once = () => {
+		if (!called) {
+			called = true;
+			onFlush();
+		}
+	};
+	const cleanup = new TransformStream({ flush() {
+		once();
+	} });
+	const reader = stream.pipeThrough(cleanup).getReader();
+	return new ReadableStream({
+		pull(controller) {
+			return reader.read().then(({ done, value }) => {
+				if (done) controller.close();
+				else controller.enqueue(value);
+			}, (error) => {
+				once();
+				controller.error(error);
+			});
+		},
+		cancel(reason) {
+			once();
+			return reader.cancel(reason);
+		}
+	});
+}
+//#endregion
+//#region node_modules/vinext/dist/server/app-ssr-stream.js
+/**
+* Fix invalid preload "as" values in RSC Flight hint lines before they reach
+* the client. React Flight emits HL hints with as="stylesheet" for CSS, but
+* the HTML spec requires as="style" for <link rel="preload">.
+*/
+function fixFlightHints(text) {
+	return text.replace(/(\d*:HL\[.*?),"stylesheet"(\]|,)/g, "$1,\"style\"$2");
+}
+/**
+* Create a helper that progressively embeds RSC chunks as inline <script> tags.
+* The browser entry turns the embedded text chunks back into Uint8Array data.
+*/
+function createRscEmbedTransform(embedStream, scriptNonce) {
+	const reader = embedStream.getReader();
+	const decoder = new TextDecoder();
+	let pendingChunks = [];
+	const rawChunks = [];
+	let reading = false;
+	async function pumpReader() {
+		if (reading) return;
+		reading = true;
+		try {
+			while (true) {
+				const result = await reader.read();
+				if (result.done) break;
+				rawChunks.push(result.value);
+				const text = decoder.decode(result.value, { stream: true });
+				pendingChunks.push(fixFlightHints(text));
+			}
+		} catch (error) {
+			throw error;
+		} finally {
+			reading = false;
+		}
+	}
+	const pumpPromise = pumpReader();
+	return {
+		flush() {
+			if (pendingChunks.length === 0) return "";
+			const chunks = pendingChunks;
+			pendingChunks = [];
+			let scripts = "";
+			for (const chunk of chunks) scripts += createInlineScriptTag("self.__VINEXT_RSC_CHUNKS__=self.__VINEXT_RSC_CHUNKS__||[];self.__VINEXT_RSC_CHUNKS__.push(" + safeJsonStringify(chunk) + ")", scriptNonce);
+			return scripts;
+		},
+		async finalize() {
+			await pumpPromise;
+			let scripts = this.flush();
+			scripts += createInlineScriptTag("self.__VINEXT_RSC_DONE__=true", scriptNonce);
+			return scripts;
+		},
+		async getRawBuffer() {
+			await pumpPromise;
+			let totalLength = 0;
+			for (const chunk of rawChunks) totalLength += chunk.byteLength;
+			const buffer = new Uint8Array(totalLength);
+			let offset = 0;
+			for (const chunk of rawChunks) {
+				buffer.set(chunk, offset);
+				offset += chunk.byteLength;
+			}
+			rawChunks.length = 0;
+			return buffer.buffer;
+		}
+	};
+}
+/**
+* Fix invalid preload "as" values in server-rendered HTML.
+* React Fizz emits <link rel="preload" as="stylesheet"> for CSS, but the
+* HTML spec requires as="style" for <link rel="preload">.
+*/
+function fixPreloadAs(html) {
+	return html.replace(/<link(?=[^>]*\srel="preload")[^>]*>/g, (tag) => tag.replace(" as=\"stylesheet\"", " as=\"style\""));
+}
+/**
+* Create the tick-buffered HTML transform that injects RSC scripts between
+* React Fizz flush cycles without corrupting split HTML chunks.
+*/
+function createTickBufferedTransform(rscEmbed, injectHTML = "") {
+	const decoder = new TextDecoder();
+	const encoder = new TextEncoder();
+	const insertsPerFlush = typeof injectHTML === "function";
+	let injected = false;
+	let buffered = [];
+	let timeoutId = null;
+	const readInsertion = () => typeof injectHTML === "function" ? injectHTML() : injectHTML;
+	const emitInsertion = (controller) => {
+		const insertion = readInsertion();
+		if (insertion) controller.enqueue(encoder.encode(insertion));
+	};
+	const flushBuffered = (controller) => {
+		if (buffered.length === 0) return;
+		if (injected && insertsPerFlush) emitInsertion(controller);
+		for (const chunk of buffered) {
+			if (!injected) {
+				const headEnd = chunk.indexOf("</head>");
+				if (headEnd !== -1) {
+					const before = chunk.slice(0, headEnd);
+					const after = chunk.slice(headEnd);
+					controller.enqueue(encoder.encode(before + readInsertion() + after));
+					injected = true;
+					continue;
+				}
+			}
+			controller.enqueue(encoder.encode(chunk));
+		}
+		buffered = [];
+	};
+	return new TransformStream({
+		transform(chunk, controller) {
+			buffered.push(fixPreloadAs(decoder.decode(chunk, { stream: true })));
+			if (timeoutId !== null) return;
+			timeoutId = setTimeout(() => {
+				try {
+					flushBuffered(controller);
+					const rscScripts = rscEmbed.flush();
+					if (rscScripts) controller.enqueue(encoder.encode(rscScripts));
+				} catch {}
+				timeoutId = null;
+			}, 0);
+		},
+		async flush(controller) {
+			if (timeoutId !== null) {
+				clearTimeout(timeoutId);
+				timeoutId = null;
+			}
+			flushBuffered(controller);
+			if (!injected) {
+				emitInsertion(controller);
+				injected = true;
+			} else if (insertsPerFlush) emitInsertion(controller);
+			const finalScripts = await rscEmbed.finalize();
+			if (finalScripts) controller.enqueue(encoder.encode(finalScripts));
+		}
+	});
+}
+//#endregion
+//#region node_modules/@vitejs/plugin-rsc/dist/dist-rz-Bnebz.js
+function safeFunctionCast(f) {
+	return f;
+}
+function memoize(f, options) {
+	const keyFn = options?.keyFn ?? ((...args) => args[0]);
+	const cache = options?.cache ?? /* @__PURE__ */ new Map();
+	return safeFunctionCast(function(...args) {
+		const key = keyFn(...args);
+		const value = cache.get(key);
+		if (typeof value !== "undefined") return value;
+		const newValue = f.apply(this, args);
+		cache.set(key, newValue);
+		return newValue;
+	});
+}
+//#endregion
+//#region node_modules/@vitejs/plugin-rsc/dist/shared-BViDMJTQ.js
+function removeReferenceCacheTag(id) {
+	return id.split("$$cache=")[0];
+}
+function setInternalRequire() {
+	globalThis.__vite_rsc_require__ = (id) => {
+		if (id.startsWith("$$server:")) {
+			id = id.slice(9);
+			return globalThis.__vite_rsc_server_require__(id);
+		}
+		return globalThis.__vite_rsc_client_require__(id);
+	};
+}
+//#endregion
+//#region node_modules/@vitejs/plugin-rsc/dist/core/ssr.js
+var init = false;
+function setRequireModule(options) {
+	if (init) return;
+	init = true;
+	const requireModule = memoize((id) => {
+		return options.load(removeReferenceCacheTag(id));
+	});
+	globalThis.__vite_rsc_client_require__ = requireModule;
+	setInternalRequire();
+}
+function createServerConsumerManifest() {
+	return {};
+}
+//#endregion
+//#region node_modules/react-server-dom-webpack/cjs/react-server-dom-webpack-client.edge.production.js
+/**
+* @license React
+* react-server-dom-webpack-client.edge.production.js
+*
+* Copyright (c) Meta Platforms, Inc. and affiliates.
+*
+* This source code is licensed under the MIT license found in the
+* LICENSE file in the root directory of this source tree.
+*/
+var require_react_server_dom_webpack_client_edge_production = /* @__PURE__ */ __commonJSMin(((exports) => {
+	var ReactDOM$1 = __require("react-dom"), decoderOptions = { stream: !0 }, hasOwnProperty = Object.prototype.hasOwnProperty;
+	function resolveClientReference(bundlerConfig, metadata) {
+		if (bundlerConfig) {
+			var moduleExports = bundlerConfig[metadata[0]];
+			if (bundlerConfig = moduleExports && moduleExports[metadata[2]]) moduleExports = bundlerConfig.name;
+			else {
+				bundlerConfig = moduleExports && moduleExports["*"];
+				if (!bundlerConfig) throw Error("Could not find the module \"" + metadata[0] + "\" in the React Server Consumer Manifest. This is probably a bug in the React Server Components bundler.");
+				moduleExports = metadata[2];
+			}
+			return 4 === metadata.length ? [
+				bundlerConfig.id,
+				bundlerConfig.chunks,
+				moduleExports,
+				1
+			] : [
+				bundlerConfig.id,
+				bundlerConfig.chunks,
+				moduleExports
+			];
+		}
+		return metadata;
+	}
+	function resolveServerReference(bundlerConfig, id) {
+		var name = "", resolvedModuleData = bundlerConfig[id];
+		if (resolvedModuleData) name = resolvedModuleData.name;
+		else {
+			var idx = id.lastIndexOf("#");
+			-1 !== idx && (name = id.slice(idx + 1), resolvedModuleData = bundlerConfig[id.slice(0, idx)]);
+			if (!resolvedModuleData) throw Error("Could not find the module \"" + id + "\" in the React Server Manifest. This is probably a bug in the React Server Components bundler.");
+		}
+		return resolvedModuleData.async ? [
+			resolvedModuleData.id,
+			resolvedModuleData.chunks,
+			name,
+			1
+		] : [
+			resolvedModuleData.id,
+			resolvedModuleData.chunks,
+			name
+		];
+	}
+	var chunkCache = /* @__PURE__ */ new Map();
+	function requireAsyncModule(id) {
+		var promise = __vite_rsc_require__(id);
+		if ("function" !== typeof promise.then || "fulfilled" === promise.status) return null;
+		promise.then(function(value) {
+			promise.status = "fulfilled";
+			promise.value = value;
+		}, function(reason) {
+			promise.status = "rejected";
+			promise.reason = reason;
+		});
+		return promise;
+	}
+	function ignoreReject() {}
+	function preloadModule(metadata) {
+		for (var chunks = metadata[1], promises = [], i = 0; i < chunks.length;) {
+			var chunkId = chunks[i++];
+			chunks[i++];
+			var entry = chunkCache.get(chunkId);
+			if (void 0 === entry) {
+				entry = __webpack_chunk_load__(chunkId);
+				promises.push(entry);
+				var resolve = chunkCache.set.bind(chunkCache, chunkId, null);
+				entry.then(resolve, ignoreReject);
+				chunkCache.set(chunkId, entry);
+			} else null !== entry && promises.push(entry);
+		}
+		return 4 === metadata.length ? 0 === promises.length ? requireAsyncModule(metadata[0]) : Promise.all(promises).then(function() {
+			return requireAsyncModule(metadata[0]);
+		}) : 0 < promises.length ? Promise.all(promises) : null;
+	}
+	function requireModule(metadata) {
+		var moduleExports = __vite_rsc_require__(metadata[0]);
+		if (4 === metadata.length && "function" === typeof moduleExports.then) if ("fulfilled" === moduleExports.status) moduleExports = moduleExports.value;
+		else throw moduleExports.reason;
+		if ("*" === metadata[2]) return moduleExports;
+		if ("" === metadata[2]) return moduleExports.__esModule ? moduleExports.default : moduleExports;
+		if (hasOwnProperty.call(moduleExports, metadata[2])) return moduleExports[metadata[2]];
+	}
+	function prepareDestinationWithChunks(moduleLoading, chunks, nonce$jscomp$0) {
+		if (null !== moduleLoading) for (var i = 1; i < chunks.length; i += 2) {
+			var nonce = nonce$jscomp$0, JSCompiler_temp_const = ReactDOMSharedInternals.d, JSCompiler_temp_const$jscomp$0 = JSCompiler_temp_const.X, JSCompiler_temp_const$jscomp$1 = moduleLoading.prefix + chunks[i];
+			var JSCompiler_inline_result = moduleLoading.crossOrigin;
+			JSCompiler_inline_result = "string" === typeof JSCompiler_inline_result ? "use-credentials" === JSCompiler_inline_result ? JSCompiler_inline_result : "" : void 0;
+			JSCompiler_temp_const$jscomp$0.call(JSCompiler_temp_const, JSCompiler_temp_const$jscomp$1, {
+				crossOrigin: JSCompiler_inline_result,
+				nonce
+			});
+		}
+	}
+	var ReactDOMSharedInternals = ReactDOM$1.__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element"), REACT_LAZY_TYPE = Symbol.for("react.lazy"), MAYBE_ITERATOR_SYMBOL = Symbol.iterator;
+	function getIteratorFn(maybeIterable) {
+		if (null === maybeIterable || "object" !== typeof maybeIterable) return null;
+		maybeIterable = MAYBE_ITERATOR_SYMBOL && maybeIterable[MAYBE_ITERATOR_SYMBOL] || maybeIterable["@@iterator"];
+		return "function" === typeof maybeIterable ? maybeIterable : null;
+	}
+	var ASYNC_ITERATOR = Symbol.asyncIterator, isArrayImpl = Array.isArray, getPrototypeOf = Object.getPrototypeOf, ObjectPrototype = Object.prototype, knownServerReferences = /* @__PURE__ */ new WeakMap();
+	function serializeNumber(number) {
+		return Number.isFinite(number) ? 0 === number && -Infinity === 1 / number ? "$-0" : number : Infinity === number ? "$Infinity" : -Infinity === number ? "$-Infinity" : "$NaN";
+	}
+	function processReply(root, formFieldPrefix, temporaryReferences, resolve, reject) {
+		function serializeTypedArray(tag, typedArray) {
+			typedArray = new Blob([new Uint8Array(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength)]);
+			var blobId = nextPartId++;
+			null === formData && (formData = new FormData());
+			formData.append(formFieldPrefix + blobId, typedArray);
+			return "$" + tag + blobId.toString(16);
+		}
+		function serializeBinaryReader(reader) {
+			function progress(entry) {
+				entry.done ? (entry = nextPartId++, data.append(formFieldPrefix + entry, new Blob(buffer)), data.append(formFieldPrefix + streamId, "\"$o" + entry.toString(16) + "\""), data.append(formFieldPrefix + streamId, "C"), pendingParts--, 0 === pendingParts && resolve(data)) : (buffer.push(entry.value), reader.read(new Uint8Array(1024)).then(progress, reject));
+			}
+			null === formData && (formData = new FormData());
+			var data = formData;
+			pendingParts++;
+			var streamId = nextPartId++, buffer = [];
+			reader.read(new Uint8Array(1024)).then(progress, reject);
+			return "$r" + streamId.toString(16);
+		}
+		function serializeReader(reader) {
+			function progress(entry) {
+				if (entry.done) data.append(formFieldPrefix + streamId, "C"), pendingParts--, 0 === pendingParts && resolve(data);
+				else try {
+					var partJSON = JSON.stringify(entry.value, resolveToJSON);
+					data.append(formFieldPrefix + streamId, partJSON);
+					reader.read().then(progress, reject);
+				} catch (x) {
+					reject(x);
+				}
+			}
+			null === formData && (formData = new FormData());
+			var data = formData;
+			pendingParts++;
+			var streamId = nextPartId++;
+			reader.read().then(progress, reject);
+			return "$R" + streamId.toString(16);
+		}
+		function serializeReadableStream(stream) {
+			try {
+				var binaryReader = stream.getReader({ mode: "byob" });
+			} catch (x) {
+				return serializeReader(stream.getReader());
+			}
+			return serializeBinaryReader(binaryReader);
+		}
+		function serializeAsyncIterable(iterable, iterator) {
+			function progress(entry) {
+				if (entry.done) {
+					if (void 0 === entry.value) data.append(formFieldPrefix + streamId, "C");
+					else try {
+						var partJSON = JSON.stringify(entry.value, resolveToJSON);
+						data.append(formFieldPrefix + streamId, "C" + partJSON);
+					} catch (x) {
+						reject(x);
+						return;
+					}
+					pendingParts--;
+					0 === pendingParts && resolve(data);
+				} else try {
+					var partJSON$21 = JSON.stringify(entry.value, resolveToJSON);
+					data.append(formFieldPrefix + streamId, partJSON$21);
+					iterator.next().then(progress, reject);
+				} catch (x$22) {
+					reject(x$22);
+				}
+			}
+			null === formData && (formData = new FormData());
+			var data = formData;
+			pendingParts++;
+			var streamId = nextPartId++;
+			iterable = iterable === iterator;
+			iterator.next().then(progress, reject);
+			return "$" + (iterable ? "x" : "X") + streamId.toString(16);
+		}
+		function resolveToJSON(key, value) {
+			if (null === value) return null;
+			if ("object" === typeof value) {
+				switch (value.$$typeof) {
+					case REACT_ELEMENT_TYPE:
+						if (void 0 !== temporaryReferences && -1 === key.indexOf(":")) {
+							var parentReference = writtenObjects.get(this);
+							if (void 0 !== parentReference) return temporaryReferences.set(parentReference + ":" + key, value), "$T";
+						}
+						throw Error("React Element cannot be passed to Server Functions from the Client without a temporary reference set. Pass a TemporaryReferenceSet to the options.");
+					case REACT_LAZY_TYPE:
+						parentReference = value._payload;
+						var init = value._init;
+						null === formData && (formData = new FormData());
+						pendingParts++;
+						try {
+							var resolvedModel = init(parentReference), lazyId = nextPartId++, partJSON = serializeModel(resolvedModel, lazyId);
+							formData.append(formFieldPrefix + lazyId, partJSON);
+							return "$" + lazyId.toString(16);
+						} catch (x) {
+							if ("object" === typeof x && null !== x && "function" === typeof x.then) {
+								pendingParts++;
+								var lazyId$23 = nextPartId++;
+								parentReference = function() {
+									try {
+										var partJSON$24 = serializeModel(value, lazyId$23), data$25 = formData;
+										data$25.append(formFieldPrefix + lazyId$23, partJSON$24);
+										pendingParts--;
+										0 === pendingParts && resolve(data$25);
+									} catch (reason) {
+										reject(reason);
+									}
+								};
+								x.then(parentReference, parentReference);
+								return "$" + lazyId$23.toString(16);
+							}
+							reject(x);
+							return null;
+						} finally {
+							pendingParts--;
+						}
+				}
+				parentReference = writtenObjects.get(value);
+				if ("function" === typeof value.then) {
+					if (void 0 !== parentReference) if (modelRoot === value) modelRoot = null;
+					else return parentReference;
+					null === formData && (formData = new FormData());
+					pendingParts++;
+					var promiseId = nextPartId++;
+					key = "$@" + promiseId.toString(16);
+					writtenObjects.set(value, key);
+					value.then(function(partValue) {
+						try {
+							var previousReference = writtenObjects.get(partValue);
+							var partJSON$27 = void 0 !== previousReference ? JSON.stringify(previousReference) : serializeModel(partValue, promiseId);
+							partValue = formData;
+							partValue.append(formFieldPrefix + promiseId, partJSON$27);
+							pendingParts--;
+							0 === pendingParts && resolve(partValue);
+						} catch (reason) {
+							reject(reason);
+						}
+					}, reject);
+					return key;
+				}
+				if (void 0 !== parentReference) if (modelRoot === value) modelRoot = null;
+				else return parentReference;
+				else -1 === key.indexOf(":") && (parentReference = writtenObjects.get(this), void 0 !== parentReference && (key = parentReference + ":" + key, writtenObjects.set(value, key), void 0 !== temporaryReferences && temporaryReferences.set(key, value)));
+				if (isArrayImpl(value)) return value;
+				if (value instanceof FormData) {
+					null === formData && (formData = new FormData());
+					var data$31 = formData;
+					key = nextPartId++;
+					var prefix = formFieldPrefix + "_" + key + "_";
+					value.forEach(function(originalValue, originalKey) {
+						data$31.append(prefix + originalKey, originalValue);
+					});
+					return "$K" + key.toString(16);
+				}
+				if (value instanceof Map) return key = nextPartId++, parentReference = serializeModel(Array.from(value), key), null === formData && (formData = new FormData()), formData.append(formFieldPrefix + key, parentReference), "$Q" + key.toString(16);
+				if (value instanceof Set) return key = nextPartId++, parentReference = serializeModel(Array.from(value), key), null === formData && (formData = new FormData()), formData.append(formFieldPrefix + key, parentReference), "$W" + key.toString(16);
+				if (value instanceof ArrayBuffer) return key = new Blob([value]), parentReference = nextPartId++, null === formData && (formData = new FormData()), formData.append(formFieldPrefix + parentReference, key), "$A" + parentReference.toString(16);
+				if (value instanceof Int8Array) return serializeTypedArray("O", value);
+				if (value instanceof Uint8Array) return serializeTypedArray("o", value);
+				if (value instanceof Uint8ClampedArray) return serializeTypedArray("U", value);
+				if (value instanceof Int16Array) return serializeTypedArray("S", value);
+				if (value instanceof Uint16Array) return serializeTypedArray("s", value);
+				if (value instanceof Int32Array) return serializeTypedArray("L", value);
+				if (value instanceof Uint32Array) return serializeTypedArray("l", value);
+				if (value instanceof Float32Array) return serializeTypedArray("G", value);
+				if (value instanceof Float64Array) return serializeTypedArray("g", value);
+				if (value instanceof BigInt64Array) return serializeTypedArray("M", value);
+				if (value instanceof BigUint64Array) return serializeTypedArray("m", value);
+				if (value instanceof DataView) return serializeTypedArray("V", value);
+				if ("function" === typeof Blob && value instanceof Blob) return null === formData && (formData = new FormData()), key = nextPartId++, formData.append(formFieldPrefix + key, value), "$B" + key.toString(16);
+				if (key = getIteratorFn(value)) return parentReference = key.call(value), parentReference === value ? (key = nextPartId++, parentReference = serializeModel(Array.from(parentReference), key), null === formData && (formData = new FormData()), formData.append(formFieldPrefix + key, parentReference), "$i" + key.toString(16)) : Array.from(parentReference);
+				if ("function" === typeof ReadableStream && value instanceof ReadableStream) return serializeReadableStream(value);
+				key = value[ASYNC_ITERATOR];
+				if ("function" === typeof key) return serializeAsyncIterable(value, key.call(value));
+				key = getPrototypeOf(value);
+				if (key !== ObjectPrototype && (null === key || null !== getPrototypeOf(key))) {
+					if (void 0 === temporaryReferences) throw Error("Only plain objects, and a few built-ins, can be passed to Server Functions. Classes or null prototypes are not supported.");
+					return "$T";
+				}
+				return value;
+			}
+			if ("string" === typeof value) {
+				if ("Z" === value[value.length - 1] && this[key] instanceof Date) return "$D" + value;
+				key = "$" === value[0] ? "$" + value : value;
+				return key;
+			}
+			if ("boolean" === typeof value) return value;
+			if ("number" === typeof value) return serializeNumber(value);
+			if ("undefined" === typeof value) return "$undefined";
+			if ("function" === typeof value) {
+				parentReference = knownServerReferences.get(value);
+				if (void 0 !== parentReference) {
+					key = writtenObjects.get(value);
+					if (void 0 !== key) return key;
+					key = JSON.stringify({
+						id: parentReference.id,
+						bound: parentReference.bound
+					}, resolveToJSON);
+					null === formData && (formData = new FormData());
+					parentReference = nextPartId++;
+					formData.set(formFieldPrefix + parentReference, key);
+					key = "$h" + parentReference.toString(16);
+					writtenObjects.set(value, key);
+					return key;
+				}
+				if (void 0 !== temporaryReferences && -1 === key.indexOf(":") && (parentReference = writtenObjects.get(this), void 0 !== parentReference)) return temporaryReferences.set(parentReference + ":" + key, value), "$T";
+				throw Error("Client Functions cannot be passed directly to Server Functions. Only Functions passed from the Server can be passed back again.");
+			}
+			if ("symbol" === typeof value) {
+				if (void 0 !== temporaryReferences && -1 === key.indexOf(":") && (parentReference = writtenObjects.get(this), void 0 !== parentReference)) return temporaryReferences.set(parentReference + ":" + key, value), "$T";
+				throw Error("Symbols cannot be passed to a Server Function without a temporary reference set. Pass a TemporaryReferenceSet to the options.");
+			}
+			if ("bigint" === typeof value) return "$n" + value.toString(10);
+			throw Error("Type " + typeof value + " is not supported as an argument to a Server Function.");
+		}
+		function serializeModel(model, id) {
+			"object" === typeof model && null !== model && (id = "$" + id.toString(16), writtenObjects.set(model, id), void 0 !== temporaryReferences && temporaryReferences.set(id, model));
+			modelRoot = model;
+			return JSON.stringify(model, resolveToJSON);
+		}
+		var nextPartId = 1, pendingParts = 0, formData = null, writtenObjects = /* @__PURE__ */ new WeakMap(), modelRoot = root, json = serializeModel(root, 0);
+		null === formData ? resolve(json) : (formData.set(formFieldPrefix + "0", json), 0 === pendingParts && resolve(formData));
+		return function() {
+			0 < pendingParts && (pendingParts = 0, null === formData ? resolve(json) : resolve(formData));
+		};
+	}
+	var boundCache = /* @__PURE__ */ new WeakMap();
+	function encodeFormData(reference) {
+		var resolve, reject, thenable = new Promise(function(res, rej) {
+			resolve = res;
+			reject = rej;
+		});
+		processReply(reference, "", void 0, function(body) {
+			if ("string" === typeof body) {
+				var data = new FormData();
+				data.append("0", body);
+				body = data;
+			}
+			thenable.status = "fulfilled";
+			thenable.value = body;
+			resolve(body);
+		}, function(e) {
+			thenable.status = "rejected";
+			thenable.reason = e;
+			reject(e);
+		});
+		return thenable;
+	}
+	function defaultEncodeFormAction(identifierPrefix) {
+		var referenceClosure = knownServerReferences.get(this);
+		if (!referenceClosure) throw Error("Tried to encode a Server Action from a different instance than the encoder is from. This is a bug in React.");
+		var data = null;
+		if (null !== referenceClosure.bound) {
+			data = boundCache.get(referenceClosure);
+			data || (data = encodeFormData({
+				id: referenceClosure.id,
+				bound: referenceClosure.bound
+			}), boundCache.set(referenceClosure, data));
+			if ("rejected" === data.status) throw data.reason;
+			if ("fulfilled" !== data.status) throw data;
+			referenceClosure = data.value;
+			var prefixedData = new FormData();
+			referenceClosure.forEach(function(value, key) {
+				prefixedData.append("$ACTION_" + identifierPrefix + ":" + key, value);
+			});
+			data = prefixedData;
+			referenceClosure = "$ACTION_REF_" + identifierPrefix;
+		} else referenceClosure = "$ACTION_ID_" + referenceClosure.id;
+		return {
+			name: referenceClosure,
+			method: "POST",
+			encType: "multipart/form-data",
+			data
+		};
+	}
+	function isSignatureEqual(referenceId, numberOfBoundArgs) {
+		var referenceClosure = knownServerReferences.get(this);
+		if (!referenceClosure) throw Error("Tried to encode a Server Action from a different instance than the encoder is from. This is a bug in React.");
+		if (referenceClosure.id !== referenceId) return !1;
+		var boundPromise = referenceClosure.bound;
+		if (null === boundPromise) return 0 === numberOfBoundArgs;
+		switch (boundPromise.status) {
+			case "fulfilled": return boundPromise.value.length === numberOfBoundArgs;
+			case "pending": throw boundPromise;
+			case "rejected": throw boundPromise.reason;
+			default: throw "string" !== typeof boundPromise.status && (boundPromise.status = "pending", boundPromise.then(function(boundArgs) {
+				boundPromise.status = "fulfilled";
+				boundPromise.value = boundArgs;
+			}, function(error) {
+				boundPromise.status = "rejected";
+				boundPromise.reason = error;
+			})), boundPromise;
+		}
+	}
+	function registerBoundServerReference(reference, id, bound, encodeFormAction) {
+		knownServerReferences.has(reference) || (knownServerReferences.set(reference, {
+			id,
+			originalBind: reference.bind,
+			bound
+		}), Object.defineProperties(reference, {
+			$$FORM_ACTION: { value: void 0 === encodeFormAction ? defaultEncodeFormAction : function() {
+				var referenceClosure = knownServerReferences.get(this);
+				if (!referenceClosure) throw Error("Tried to encode a Server Action from a different instance than the encoder is from. This is a bug in React.");
+				var boundPromise = referenceClosure.bound;
+				null === boundPromise && (boundPromise = Promise.resolve([]));
+				return encodeFormAction(referenceClosure.id, boundPromise);
+			} },
+			$$IS_SIGNATURE_EQUAL: { value: isSignatureEqual },
+			bind: { value: bind }
+		}));
+	}
+	var FunctionBind = Function.prototype.bind, ArraySlice = Array.prototype.slice;
+	function bind() {
+		var referenceClosure = knownServerReferences.get(this);
+		if (!referenceClosure) return FunctionBind.apply(this, arguments);
+		var newFn = referenceClosure.originalBind.apply(this, arguments), args = ArraySlice.call(arguments, 1), boundPromise = null;
+		boundPromise = null !== referenceClosure.bound ? Promise.resolve(referenceClosure.bound).then(function(boundArgs) {
+			return boundArgs.concat(args);
+		}) : Promise.resolve(args);
+		knownServerReferences.set(newFn, {
+			id: referenceClosure.id,
+			originalBind: newFn.bind,
+			bound: boundPromise
+		});
+		Object.defineProperties(newFn, {
+			$$FORM_ACTION: { value: this.$$FORM_ACTION },
+			$$IS_SIGNATURE_EQUAL: { value: isSignatureEqual },
+			bind: { value: bind }
+		});
+		return newFn;
+	}
+	function createBoundServerReference(metaData, callServer, encodeFormAction) {
+		function action() {
+			var args = Array.prototype.slice.call(arguments);
+			return bound ? "fulfilled" === bound.status ? callServer(id, bound.value.concat(args)) : Promise.resolve(bound).then(function(boundArgs) {
+				return callServer(id, boundArgs.concat(args));
+			}) : callServer(id, args);
+		}
+		var id = metaData.id, bound = metaData.bound;
+		registerBoundServerReference(action, id, bound, encodeFormAction);
+		return action;
+	}
+	function ReactPromise(status, value, reason) {
+		this.status = status;
+		this.value = value;
+		this.reason = reason;
+	}
+	ReactPromise.prototype = Object.create(Promise.prototype);
+	ReactPromise.prototype.then = function(resolve, reject) {
+		switch (this.status) {
+			case "resolved_model":
+				initializeModelChunk(this);
+				break;
+			case "resolved_module": initializeModuleChunk(this);
+		}
+		switch (this.status) {
+			case "fulfilled":
+				"function" === typeof resolve && resolve(this.value);
+				break;
+			case "pending":
+			case "blocked":
+				"function" === typeof resolve && (null === this.value && (this.value = []), this.value.push(resolve));
+				"function" === typeof reject && (null === this.reason && (this.reason = []), this.reason.push(reject));
+				break;
+			case "halted": break;
+			default: "function" === typeof reject && reject(this.reason);
+		}
+	};
+	function readChunk(chunk) {
+		switch (chunk.status) {
+			case "resolved_model":
+				initializeModelChunk(chunk);
+				break;
+			case "resolved_module": initializeModuleChunk(chunk);
+		}
+		switch (chunk.status) {
+			case "fulfilled": return chunk.value;
+			case "pending":
+			case "blocked":
+			case "halted": throw chunk;
+			default: throw chunk.reason;
+		}
+	}
+	function wakeChunk(listeners, value, chunk) {
+		for (var i = 0; i < listeners.length; i++) {
+			var listener = listeners[i];
+			"function" === typeof listener ? listener(value) : fulfillReference(listener, value, chunk);
+		}
+	}
+	function rejectChunk(listeners, error) {
+		for (var i = 0; i < listeners.length; i++) {
+			var listener = listeners[i];
+			"function" === typeof listener ? listener(error) : rejectReference(listener, error);
+		}
+	}
+	function resolveBlockedCycle(resolvedChunk, reference) {
+		var referencedChunk = reference.handler.chunk;
+		if (null === referencedChunk) return null;
+		if (referencedChunk === resolvedChunk) return reference.handler;
+		reference = referencedChunk.value;
+		if (null !== reference) for (referencedChunk = 0; referencedChunk < reference.length; referencedChunk++) {
+			var listener = reference[referencedChunk];
+			if ("function" !== typeof listener && (listener = resolveBlockedCycle(resolvedChunk, listener), null !== listener)) return listener;
+		}
+		return null;
+	}
+	function wakeChunkIfInitialized(chunk, resolveListeners, rejectListeners) {
+		switch (chunk.status) {
+			case "fulfilled":
+				wakeChunk(resolveListeners, chunk.value, chunk);
+				break;
+			case "blocked": for (var i = 0; i < resolveListeners.length; i++) {
+				var listener = resolveListeners[i];
+				if ("function" !== typeof listener) {
+					var cyclicHandler = resolveBlockedCycle(chunk, listener);
+					if (null !== cyclicHandler) switch (fulfillReference(listener, cyclicHandler.value, chunk), resolveListeners.splice(i, 1), i--, null !== rejectListeners && (listener = rejectListeners.indexOf(listener), -1 !== listener && rejectListeners.splice(listener, 1)), chunk.status) {
+						case "fulfilled":
+							wakeChunk(resolveListeners, chunk.value, chunk);
+							return;
+						case "rejected":
+							null !== rejectListeners && rejectChunk(rejectListeners, chunk.reason);
+							return;
+					}
+				}
+			}
+			case "pending":
+				if (chunk.value) for (i = 0; i < resolveListeners.length; i++) chunk.value.push(resolveListeners[i]);
+				else chunk.value = resolveListeners;
+				if (chunk.reason) {
+					if (rejectListeners) for (resolveListeners = 0; resolveListeners < rejectListeners.length; resolveListeners++) chunk.reason.push(rejectListeners[resolveListeners]);
+				} else chunk.reason = rejectListeners;
+				break;
+			case "rejected": rejectListeners && rejectChunk(rejectListeners, chunk.reason);
+		}
+	}
+	function triggerErrorOnChunk(response, chunk, error) {
+		"pending" !== chunk.status && "blocked" !== chunk.status ? chunk.reason.error(error) : (response = chunk.reason, chunk.status = "rejected", chunk.reason = error, null !== response && rejectChunk(response, error));
+	}
+	function createResolvedIteratorResultChunk(response, value, done) {
+		return new ReactPromise("resolved_model", (done ? "{\"done\":true,\"value\":" : "{\"done\":false,\"value\":") + value + "}", response);
+	}
+	function resolveIteratorResultChunk(response, chunk, value, done) {
+		resolveModelChunk(response, chunk, (done ? "{\"done\":true,\"value\":" : "{\"done\":false,\"value\":") + value + "}");
+	}
+	function resolveModelChunk(response, chunk, value) {
+		if ("pending" !== chunk.status) chunk.reason.enqueueModel(value);
+		else {
+			var resolveListeners = chunk.value, rejectListeners = chunk.reason;
+			chunk.status = "resolved_model";
+			chunk.value = value;
+			chunk.reason = response;
+			null !== resolveListeners && (initializeModelChunk(chunk), wakeChunkIfInitialized(chunk, resolveListeners, rejectListeners));
+		}
+	}
+	function resolveModuleChunk(response, chunk, value) {
+		if ("pending" === chunk.status || "blocked" === chunk.status) {
+			response = chunk.value;
+			var rejectListeners = chunk.reason;
+			chunk.status = "resolved_module";
+			chunk.value = value;
+			chunk.reason = null;
+			null !== response && (initializeModuleChunk(chunk), wakeChunkIfInitialized(chunk, response, rejectListeners));
+		}
+	}
+	var initializingHandler = null;
+	function initializeModelChunk(chunk) {
+		var prevHandler = initializingHandler;
+		initializingHandler = null;
+		var resolvedModel = chunk.value, response = chunk.reason;
+		chunk.status = "blocked";
+		chunk.value = null;
+		chunk.reason = null;
+		try {
+			var value = JSON.parse(resolvedModel, response._fromJSON), resolveListeners = chunk.value;
+			if (null !== resolveListeners) for (chunk.value = null, chunk.reason = null, resolvedModel = 0; resolvedModel < resolveListeners.length; resolvedModel++) {
+				var listener = resolveListeners[resolvedModel];
+				"function" === typeof listener ? listener(value) : fulfillReference(listener, value, chunk);
+			}
+			if (null !== initializingHandler) {
+				if (initializingHandler.errored) throw initializingHandler.reason;
+				if (0 < initializingHandler.deps) {
+					initializingHandler.value = value;
+					initializingHandler.chunk = chunk;
+					return;
+				}
+			}
+			chunk.status = "fulfilled";
+			chunk.value = value;
+		} catch (error) {
+			chunk.status = "rejected", chunk.reason = error;
+		} finally {
+			initializingHandler = prevHandler;
+		}
+	}
+	function initializeModuleChunk(chunk) {
+		try {
+			var value = requireModule(chunk.value);
+			chunk.status = "fulfilled";
+			chunk.value = value;
+		} catch (error) {
+			chunk.status = "rejected", chunk.reason = error;
+		}
+	}
+	function reportGlobalError(weakResponse, error) {
+		weakResponse._closed = !0;
+		weakResponse._closedReason = error;
+		weakResponse._chunks.forEach(function(chunk) {
+			"pending" === chunk.status ? triggerErrorOnChunk(weakResponse, chunk, error) : "fulfilled" === chunk.status && null !== chunk.reason && chunk.reason.error(error);
+		});
+	}
+	function createLazyChunkWrapper(chunk) {
+		return {
+			$$typeof: REACT_LAZY_TYPE,
+			_payload: chunk,
+			_init: readChunk
+		};
+	}
+	function getChunk(response, id) {
+		var chunks = response._chunks, chunk = chunks.get(id);
+		chunk || (chunk = response._closed ? new ReactPromise("rejected", null, response._closedReason) : new ReactPromise("pending", null, null), chunks.set(id, chunk));
+		return chunk;
+	}
+	function fulfillReference(reference, value) {
+		var response = reference.response, handler = reference.handler, parentObject = reference.parentObject, key = reference.key, map = reference.map, path = reference.path;
+		try {
+			for (var i = 1; i < path.length; i++) {
+				for (; "object" === typeof value && null !== value && value.$$typeof === REACT_LAZY_TYPE;) {
+					var referencedChunk = value._payload;
+					if (referencedChunk === handler.chunk) value = handler.value;
+					else {
+						switch (referencedChunk.status) {
+							case "resolved_model":
+								initializeModelChunk(referencedChunk);
+								break;
+							case "resolved_module": initializeModuleChunk(referencedChunk);
+						}
+						switch (referencedChunk.status) {
+							case "fulfilled":
+								value = referencedChunk.value;
+								continue;
+							case "blocked":
+								var cyclicHandler = resolveBlockedCycle(referencedChunk, reference);
+								if (null !== cyclicHandler) {
+									value = cyclicHandler.value;
+									continue;
+								}
+							case "pending":
+								path.splice(0, i - 1);
+								null === referencedChunk.value ? referencedChunk.value = [reference] : referencedChunk.value.push(reference);
+								null === referencedChunk.reason ? referencedChunk.reason = [reference] : referencedChunk.reason.push(reference);
+								return;
+							case "halted": return;
+							default:
+								rejectReference(reference, referencedChunk.reason);
+								return;
+						}
+					}
+				}
+				var name = path[i];
+				if ("object" === typeof value && null !== value && hasOwnProperty.call(value, name)) value = value[name];
+				else throw Error("Invalid reference.");
+			}
+			for (; "object" === typeof value && null !== value && value.$$typeof === REACT_LAZY_TYPE;) {
+				var referencedChunk$44 = value._payload;
+				if (referencedChunk$44 === handler.chunk) value = handler.value;
+				else {
+					switch (referencedChunk$44.status) {
+						case "resolved_model":
+							initializeModelChunk(referencedChunk$44);
+							break;
+						case "resolved_module": initializeModuleChunk(referencedChunk$44);
+					}
+					switch (referencedChunk$44.status) {
+						case "fulfilled":
+							value = referencedChunk$44.value;
+							continue;
+					}
+					break;
+				}
+			}
+			var mappedValue = map(response, value, parentObject, key);
+			"__proto__" !== key && (parentObject[key] = mappedValue);
+			"" === key && null === handler.value && (handler.value = mappedValue);
+			if (parentObject[0] === REACT_ELEMENT_TYPE && "object" === typeof handler.value && null !== handler.value && handler.value.$$typeof === REACT_ELEMENT_TYPE) {
+				var element = handler.value;
+				switch (key) {
+					case "3": element.props = mappedValue;
+				}
+			}
+		} catch (error) {
+			rejectReference(reference, error);
+			return;
+		}
+		handler.deps--;
+		0 === handler.deps && (reference = handler.chunk, null !== reference && "blocked" === reference.status && (value = reference.value, reference.status = "fulfilled", reference.value = handler.value, reference.reason = handler.reason, null !== value && wakeChunk(value, handler.value, reference)));
+	}
+	function rejectReference(reference, error) {
+		var handler = reference.handler;
+		reference = reference.response;
+		handler.errored || (handler.errored = !0, handler.value = null, handler.reason = error, handler = handler.chunk, null !== handler && "blocked" === handler.status && triggerErrorOnChunk(reference, handler, error));
+	}
+	function waitForReference(referencedChunk, parentObject, key, response, map, path) {
+		if (initializingHandler) {
+			var handler = initializingHandler;
+			handler.deps++;
+		} else handler = initializingHandler = {
+			parent: null,
+			chunk: null,
+			value: null,
+			reason: null,
+			deps: 1,
+			errored: !1
+		};
+		parentObject = {
+			response,
+			handler,
+			parentObject,
+			key,
+			map,
+			path
+		};
+		null === referencedChunk.value ? referencedChunk.value = [parentObject] : referencedChunk.value.push(parentObject);
+		null === referencedChunk.reason ? referencedChunk.reason = [parentObject] : referencedChunk.reason.push(parentObject);
+		return null;
+	}
+	function loadServerReference(response, metaData, parentObject, key) {
+		if (!response._serverReferenceConfig) return createBoundServerReference(metaData, response._callServer, response._encodeFormAction);
+		var serverReference = resolveServerReference(response._serverReferenceConfig, metaData.id), promise = preloadModule(serverReference);
+		if (promise) metaData.bound && (promise = Promise.all([promise, metaData.bound]));
+		else if (metaData.bound) promise = Promise.resolve(metaData.bound);
+		else return promise = requireModule(serverReference), registerBoundServerReference(promise, metaData.id, metaData.bound, response._encodeFormAction), promise;
+		if (initializingHandler) {
+			var handler = initializingHandler;
+			handler.deps++;
+		} else handler = initializingHandler = {
+			parent: null,
+			chunk: null,
+			value: null,
+			reason: null,
+			deps: 1,
+			errored: !1
+		};
+		promise.then(function() {
+			var resolvedValue = requireModule(serverReference);
+			if (metaData.bound) {
+				var boundArgs = metaData.bound.value.slice(0);
+				boundArgs.unshift(null);
+				resolvedValue = resolvedValue.bind.apply(resolvedValue, boundArgs);
+			}
+			registerBoundServerReference(resolvedValue, metaData.id, metaData.bound, response._encodeFormAction);
+			"__proto__" !== key && (parentObject[key] = resolvedValue);
+			"" === key && null === handler.value && (handler.value = resolvedValue);
+			if (parentObject[0] === REACT_ELEMENT_TYPE && "object" === typeof handler.value && null !== handler.value && handler.value.$$typeof === REACT_ELEMENT_TYPE) switch (boundArgs = handler.value, key) {
+				case "3": boundArgs.props = resolvedValue;
+			}
+			handler.deps--;
+			0 === handler.deps && (resolvedValue = handler.chunk, null !== resolvedValue && "blocked" === resolvedValue.status && (boundArgs = resolvedValue.value, resolvedValue.status = "fulfilled", resolvedValue.value = handler.value, resolvedValue.reason = null, null !== boundArgs && wakeChunk(boundArgs, handler.value, resolvedValue)));
+		}, function(error) {
+			if (!handler.errored) {
+				handler.errored = !0;
+				handler.value = null;
+				handler.reason = error;
+				var chunk = handler.chunk;
+				null !== chunk && "blocked" === chunk.status && triggerErrorOnChunk(response, chunk, error);
+			}
+		});
+		return null;
+	}
+	function getOutlinedModel(response, reference, parentObject, key, map) {
+		reference = reference.split(":");
+		var id = parseInt(reference[0], 16);
+		id = getChunk(response, id);
+		switch (id.status) {
+			case "resolved_model":
+				initializeModelChunk(id);
+				break;
+			case "resolved_module": initializeModuleChunk(id);
+		}
+		switch (id.status) {
+			case "fulfilled":
+				id = id.value;
+				for (var i = 1; i < reference.length; i++) {
+					for (; "object" === typeof id && null !== id && id.$$typeof === REACT_LAZY_TYPE;) {
+						id = id._payload;
+						switch (id.status) {
+							case "resolved_model":
+								initializeModelChunk(id);
+								break;
+							case "resolved_module": initializeModuleChunk(id);
+						}
+						switch (id.status) {
+							case "fulfilled":
+								id = id.value;
+								break;
+							case "blocked":
+							case "pending": return waitForReference(id, parentObject, key, response, map, reference.slice(i - 1));
+							case "halted": return initializingHandler ? (response = initializingHandler, response.deps++) : initializingHandler = {
+								parent: null,
+								chunk: null,
+								value: null,
+								reason: null,
+								deps: 1,
+								errored: !1
+							}, null;
+							default: return initializingHandler ? (initializingHandler.errored = !0, initializingHandler.value = null, initializingHandler.reason = id.reason) : initializingHandler = {
+								parent: null,
+								chunk: null,
+								value: null,
+								reason: id.reason,
+								deps: 0,
+								errored: !0
+							}, null;
+						}
+					}
+					id = id[reference[i]];
+				}
+				for (; "object" === typeof id && null !== id && id.$$typeof === REACT_LAZY_TYPE;) {
+					reference = id._payload;
+					switch (reference.status) {
+						case "resolved_model":
+							initializeModelChunk(reference);
+							break;
+						case "resolved_module": initializeModuleChunk(reference);
+					}
+					switch (reference.status) {
+						case "fulfilled":
+							id = reference.value;
+							continue;
+					}
+					break;
+				}
+				return map(response, id, parentObject, key);
+			case "pending":
+			case "blocked": return waitForReference(id, parentObject, key, response, map, reference);
+			case "halted": return initializingHandler ? (response = initializingHandler, response.deps++) : initializingHandler = {
+				parent: null,
+				chunk: null,
+				value: null,
+				reason: null,
+				deps: 1,
+				errored: !1
+			}, null;
+			default: return initializingHandler ? (initializingHandler.errored = !0, initializingHandler.value = null, initializingHandler.reason = id.reason) : initializingHandler = {
+				parent: null,
+				chunk: null,
+				value: null,
+				reason: id.reason,
+				deps: 0,
+				errored: !0
+			}, null;
+		}
+	}
+	function createMap(response, model) {
+		return new Map(model);
+	}
+	function createSet(response, model) {
+		return new Set(model);
+	}
+	function createBlob(response, model) {
+		return new Blob(model.slice(1), { type: model[0] });
+	}
+	function createFormData(response, model) {
+		response = new FormData();
+		for (var i = 0; i < model.length; i++) response.append(model[i][0], model[i][1]);
+		return response;
+	}
+	function extractIterator(response, model) {
+		return model[Symbol.iterator]();
+	}
+	function createModel(response, model) {
+		return model;
+	}
+	function parseModelString(response, parentObject, key, value) {
+		if ("$" === value[0]) {
+			if ("$" === value) return null !== initializingHandler && "0" === key && (initializingHandler = {
+				parent: initializingHandler,
+				chunk: null,
+				value: null,
+				reason: null,
+				deps: 0,
+				errored: !1
+			}), REACT_ELEMENT_TYPE;
+			switch (value[1]) {
+				case "$": return value.slice(1);
+				case "L": return parentObject = parseInt(value.slice(2), 16), response = getChunk(response, parentObject), createLazyChunkWrapper(response);
+				case "@": return parentObject = parseInt(value.slice(2), 16), getChunk(response, parentObject);
+				case "S": return Symbol.for(value.slice(2));
+				case "h": return value = value.slice(2), getOutlinedModel(response, value, parentObject, key, loadServerReference);
+				case "T":
+					parentObject = "$" + value.slice(2);
+					response = response._tempRefs;
+					if (null == response) throw Error("Missing a temporary reference set but the RSC response returned a temporary reference. Pass a temporaryReference option with the set that was used with the reply.");
+					return response.get(parentObject);
+				case "Q": return value = value.slice(2), getOutlinedModel(response, value, parentObject, key, createMap);
+				case "W": return value = value.slice(2), getOutlinedModel(response, value, parentObject, key, createSet);
+				case "B": return value = value.slice(2), getOutlinedModel(response, value, parentObject, key, createBlob);
+				case "K": return value = value.slice(2), getOutlinedModel(response, value, parentObject, key, createFormData);
+				case "Z": return resolveErrorProd();
+				case "i": return value = value.slice(2), getOutlinedModel(response, value, parentObject, key, extractIterator);
+				case "I": return Infinity;
+				case "-": return "$-0" === value ? -0 : -Infinity;
+				case "N": return NaN;
+				case "u": return;
+				case "D": return new Date(Date.parse(value.slice(2)));
+				case "n": return BigInt(value.slice(2));
+				default: return value = value.slice(1), getOutlinedModel(response, value, parentObject, key, createModel);
+			}
+		}
+		return value;
+	}
+	function missingCall() {
+		throw Error("Trying to call a function from \"use server\" but the callServer option was not implemented in your router runtime.");
+	}
+	function ResponseInstance(bundlerConfig, serverReferenceConfig, moduleLoading, callServer, encodeFormAction, nonce, temporaryReferences) {
+		var chunks = /* @__PURE__ */ new Map();
+		this._bundlerConfig = bundlerConfig;
+		this._serverReferenceConfig = serverReferenceConfig;
+		this._moduleLoading = moduleLoading;
+		this._callServer = void 0 !== callServer ? callServer : missingCall;
+		this._encodeFormAction = encodeFormAction;
+		this._nonce = nonce;
+		this._chunks = chunks;
+		this._stringDecoder = new TextDecoder();
+		this._fromJSON = null;
+		this._closed = !1;
+		this._closedReason = null;
+		this._tempRefs = temporaryReferences;
+		this._fromJSON = createFromJSONCallback(this);
+	}
+	function resolveBuffer(response, id, buffer) {
+		response = response._chunks;
+		var chunk = response.get(id);
+		chunk && "pending" !== chunk.status ? chunk.reason.enqueueValue(buffer) : (buffer = new ReactPromise("fulfilled", buffer, null), response.set(id, buffer));
+	}
+	function resolveModule(response, id, model) {
+		var chunks = response._chunks, chunk = chunks.get(id);
+		model = JSON.parse(model, response._fromJSON);
+		var clientReference = resolveClientReference(response._bundlerConfig, model);
+		prepareDestinationWithChunks(response._moduleLoading, model[1], response._nonce);
+		if (model = preloadModule(clientReference)) {
+			if (chunk) {
+				var blockedChunk = chunk;
+				blockedChunk.status = "blocked";
+			} else blockedChunk = new ReactPromise("blocked", null, null), chunks.set(id, blockedChunk);
+			model.then(function() {
+				return resolveModuleChunk(response, blockedChunk, clientReference);
+			}, function(error) {
+				return triggerErrorOnChunk(response, blockedChunk, error);
+			});
+		} else chunk ? resolveModuleChunk(response, chunk, clientReference) : (chunk = new ReactPromise("resolved_module", clientReference, null), chunks.set(id, chunk));
+	}
+	function resolveStream(response, id, stream, controller) {
+		response = response._chunks;
+		var chunk = response.get(id);
+		chunk ? "pending" === chunk.status && (id = chunk.value, chunk.status = "fulfilled", chunk.value = stream, chunk.reason = controller, null !== id && wakeChunk(id, chunk.value, chunk)) : (stream = new ReactPromise("fulfilled", stream, controller), response.set(id, stream));
+	}
+	function startReadableStream(response, id, type) {
+		var controller = null, closed = !1;
+		type = new ReadableStream({
+			type,
+			start: function(c) {
+				controller = c;
+			}
+		});
+		var previousBlockedChunk = null;
+		resolveStream(response, id, type, {
+			enqueueValue: function(value) {
+				null === previousBlockedChunk ? controller.enqueue(value) : previousBlockedChunk.then(function() {
+					controller.enqueue(value);
+				});
+			},
+			enqueueModel: function(json) {
+				if (null === previousBlockedChunk) {
+					var chunk = new ReactPromise("resolved_model", json, response);
+					initializeModelChunk(chunk);
+					"fulfilled" === chunk.status ? controller.enqueue(chunk.value) : (chunk.then(function(v) {
+						return controller.enqueue(v);
+					}, function(e) {
+						return controller.error(e);
+					}), previousBlockedChunk = chunk);
+				} else {
+					chunk = previousBlockedChunk;
+					var chunk$55 = new ReactPromise("pending", null, null);
+					chunk$55.then(function(v) {
+						return controller.enqueue(v);
+					}, function(e) {
+						return controller.error(e);
+					});
+					previousBlockedChunk = chunk$55;
+					chunk.then(function() {
+						previousBlockedChunk === chunk$55 && (previousBlockedChunk = null);
+						resolveModelChunk(response, chunk$55, json);
+					});
+				}
+			},
+			close: function() {
+				if (!closed) if (closed = !0, null === previousBlockedChunk) controller.close();
+				else {
+					var blockedChunk = previousBlockedChunk;
+					previousBlockedChunk = null;
+					blockedChunk.then(function() {
+						return controller.close();
+					});
+				}
+			},
+			error: function(error) {
+				if (!closed) if (closed = !0, null === previousBlockedChunk) controller.error(error);
+				else {
+					var blockedChunk = previousBlockedChunk;
+					previousBlockedChunk = null;
+					blockedChunk.then(function() {
+						return controller.error(error);
+					});
+				}
+			}
+		});
+	}
+	function asyncIterator() {
+		return this;
+	}
+	function createIterator(next) {
+		next = { next };
+		next[ASYNC_ITERATOR] = asyncIterator;
+		return next;
+	}
+	function startAsyncIterable(response, id, iterator) {
+		var buffer = [], closed = !1, nextWriteIndex = 0, iterable = {};
+		iterable[ASYNC_ITERATOR] = function() {
+			var nextReadIndex = 0;
+			return createIterator(function(arg) {
+				if (void 0 !== arg) throw Error("Values cannot be passed to next() of AsyncIterables passed to Client Components.");
+				if (nextReadIndex === buffer.length) {
+					if (closed) return new ReactPromise("fulfilled", {
+						done: !0,
+						value: void 0
+					}, null);
+					buffer[nextReadIndex] = new ReactPromise("pending", null, null);
+				}
+				return buffer[nextReadIndex++];
+			});
+		};
+		resolveStream(response, id, iterator ? iterable[ASYNC_ITERATOR]() : iterable, {
+			enqueueValue: function(value) {
+				if (nextWriteIndex === buffer.length) buffer[nextWriteIndex] = new ReactPromise("fulfilled", {
+					done: !1,
+					value
+				}, null);
+				else {
+					var chunk = buffer[nextWriteIndex], resolveListeners = chunk.value, rejectListeners = chunk.reason;
+					chunk.status = "fulfilled";
+					chunk.value = {
+						done: !1,
+						value
+					};
+					chunk.reason = null;
+					null !== resolveListeners && wakeChunkIfInitialized(chunk, resolveListeners, rejectListeners);
+				}
+				nextWriteIndex++;
+			},
+			enqueueModel: function(value) {
+				nextWriteIndex === buffer.length ? buffer[nextWriteIndex] = createResolvedIteratorResultChunk(response, value, !1) : resolveIteratorResultChunk(response, buffer[nextWriteIndex], value, !1);
+				nextWriteIndex++;
+			},
+			close: function(value) {
+				if (!closed) for (closed = !0, nextWriteIndex === buffer.length ? buffer[nextWriteIndex] = createResolvedIteratorResultChunk(response, value, !0) : resolveIteratorResultChunk(response, buffer[nextWriteIndex], value, !0), nextWriteIndex++; nextWriteIndex < buffer.length;) resolveIteratorResultChunk(response, buffer[nextWriteIndex++], "\"$undefined\"", !0);
+			},
+			error: function(error) {
+				if (!closed) for (closed = !0, nextWriteIndex === buffer.length && (buffer[nextWriteIndex] = new ReactPromise("pending", null, null)); nextWriteIndex < buffer.length;) triggerErrorOnChunk(response, buffer[nextWriteIndex++], error);
+			}
+		});
+	}
+	function resolveErrorProd() {
+		var error = Error("An error occurred in the Server Components render. The specific message is omitted in production builds to avoid leaking sensitive details. A digest property is included on this error instance which may provide additional details about the nature of the error.");
+		error.stack = "Error: " + error.message;
+		return error;
+	}
+	function mergeBuffer(buffer, lastChunk) {
+		for (var l = buffer.length, byteLength = lastChunk.length, i = 0; i < l; i++) byteLength += buffer[i].byteLength;
+		byteLength = new Uint8Array(byteLength);
+		for (var i$56 = i = 0; i$56 < l; i$56++) {
+			var chunk = buffer[i$56];
+			byteLength.set(chunk, i);
+			i += chunk.byteLength;
+		}
+		byteLength.set(lastChunk, i);
+		return byteLength;
+	}
+	function resolveTypedArray(response, id, buffer, lastChunk, constructor, bytesPerElement) {
+		buffer = 0 === buffer.length && 0 === lastChunk.byteOffset % bytesPerElement ? lastChunk : mergeBuffer(buffer, lastChunk);
+		constructor = new constructor(buffer.buffer, buffer.byteOffset, buffer.byteLength / bytesPerElement);
+		resolveBuffer(response, id, constructor);
+	}
+	function processFullBinaryRow(response, streamState, id, tag, buffer, chunk) {
+		switch (tag) {
+			case 65:
+				resolveBuffer(response, id, mergeBuffer(buffer, chunk).buffer);
+				return;
+			case 79:
+				resolveTypedArray(response, id, buffer, chunk, Int8Array, 1);
+				return;
+			case 111:
+				resolveBuffer(response, id, 0 === buffer.length ? chunk : mergeBuffer(buffer, chunk));
+				return;
+			case 85:
+				resolveTypedArray(response, id, buffer, chunk, Uint8ClampedArray, 1);
+				return;
+			case 83:
+				resolveTypedArray(response, id, buffer, chunk, Int16Array, 2);
+				return;
+			case 115:
+				resolveTypedArray(response, id, buffer, chunk, Uint16Array, 2);
+				return;
+			case 76:
+				resolveTypedArray(response, id, buffer, chunk, Int32Array, 4);
+				return;
+			case 108:
+				resolveTypedArray(response, id, buffer, chunk, Uint32Array, 4);
+				return;
+			case 71:
+				resolveTypedArray(response, id, buffer, chunk, Float32Array, 4);
+				return;
+			case 103:
+				resolveTypedArray(response, id, buffer, chunk, Float64Array, 8);
+				return;
+			case 77:
+				resolveTypedArray(response, id, buffer, chunk, BigInt64Array, 8);
+				return;
+			case 109:
+				resolveTypedArray(response, id, buffer, chunk, BigUint64Array, 8);
+				return;
+			case 86:
+				resolveTypedArray(response, id, buffer, chunk, DataView, 1);
+				return;
+		}
+		streamState = response._stringDecoder;
+		for (var row = "", i = 0; i < buffer.length; i++) row += streamState.decode(buffer[i], decoderOptions);
+		buffer = row += streamState.decode(chunk);
+		switch (tag) {
+			case 73:
+				resolveModule(response, id, buffer);
+				break;
+			case 72:
+				id = buffer[0];
+				buffer = buffer.slice(1);
+				response = JSON.parse(buffer, response._fromJSON);
+				buffer = ReactDOMSharedInternals.d;
+				switch (id) {
+					case "D":
+						buffer.D(response);
+						break;
+					case "C":
+						"string" === typeof response ? buffer.C(response) : buffer.C(response[0], response[1]);
+						break;
+					case "L":
+						id = response[0];
+						tag = response[1];
+						3 === response.length ? buffer.L(id, tag, response[2]) : buffer.L(id, tag);
+						break;
+					case "m":
+						"string" === typeof response ? buffer.m(response) : buffer.m(response[0], response[1]);
+						break;
+					case "X":
+						"string" === typeof response ? buffer.X(response) : buffer.X(response[0], response[1]);
+						break;
+					case "S":
+						"string" === typeof response ? buffer.S(response) : buffer.S(response[0], 0 === response[1] ? void 0 : response[1], 3 === response.length ? response[2] : void 0);
+						break;
+					case "M": "string" === typeof response ? buffer.M(response) : buffer.M(response[0], response[1]);
+				}
+				break;
+			case 69:
+				tag = response._chunks;
+				chunk = tag.get(id);
+				buffer = JSON.parse(buffer);
+				streamState = resolveErrorProd();
+				streamState.digest = buffer.digest;
+				chunk ? triggerErrorOnChunk(response, chunk, streamState) : (response = new ReactPromise("rejected", null, streamState), tag.set(id, response));
+				break;
+			case 84:
+				response = response._chunks;
+				(tag = response.get(id)) && "pending" !== tag.status ? tag.reason.enqueueValue(buffer) : (buffer = new ReactPromise("fulfilled", buffer, null), response.set(id, buffer));
+				break;
+			case 78:
+			case 68:
+			case 74:
+			case 87: throw Error("Failed to read a RSC payload created by a development version of React on the server while using a production version on the client. Always use matching versions on the server and the client.");
+			case 82:
+				startReadableStream(response, id, void 0);
+				break;
+			case 114:
+				startReadableStream(response, id, "bytes");
+				break;
+			case 88:
+				startAsyncIterable(response, id, !1);
+				break;
+			case 120:
+				startAsyncIterable(response, id, !0);
+				break;
+			case 67:
+				(id = response._chunks.get(id)) && "fulfilled" === id.status && id.reason.close("" === buffer ? "\"$undefined\"" : buffer);
+				break;
+			default: tag = response._chunks, (chunk = tag.get(id)) ? resolveModelChunk(response, chunk, buffer) : (response = new ReactPromise("resolved_model", buffer, response), tag.set(id, response));
+		}
+	}
+	function createFromJSONCallback(response) {
+		return function(key, value) {
+			if ("__proto__" !== key) {
+				if ("string" === typeof value) return parseModelString(response, this, key, value);
+				if ("object" === typeof value && null !== value) {
+					if (value[0] === REACT_ELEMENT_TYPE) {
+						if (key = {
+							$$typeof: REACT_ELEMENT_TYPE,
+							type: value[1],
+							key: value[2],
+							ref: null,
+							props: value[3]
+						}, null !== initializingHandler) {
+							if (value = initializingHandler, initializingHandler = value.parent, value.errored) key = new ReactPromise("rejected", null, value.reason), key = createLazyChunkWrapper(key);
+							else if (0 < value.deps) {
+								var blockedChunk = new ReactPromise("blocked", null, null);
+								value.value = key;
+								value.chunk = blockedChunk;
+								key = createLazyChunkWrapper(blockedChunk);
+							}
+						}
+					} else key = value;
+					return key;
+				}
+				return value;
+			}
+		};
+	}
+	function close(weakResponse) {
+		reportGlobalError(weakResponse, Error("Connection closed."));
+	}
+	function noServerCall() {
+		throw Error("Server Functions cannot be called during initial render. This would create a fetch waterfall. Try to use a Server Component to pass data to Client Components instead.");
+	}
+	function createResponseFromOptions(options) {
+		return new ResponseInstance(options.serverConsumerManifest.moduleMap, options.serverConsumerManifest.serverModuleMap, options.serverConsumerManifest.moduleLoading, noServerCall, options.encodeFormAction, "string" === typeof options.nonce ? options.nonce : void 0, options && options.temporaryReferences ? options.temporaryReferences : void 0);
+	}
+	function startReadingFromStream(response, stream, onDone) {
+		function progress(_ref) {
+			var value = _ref.value;
+			if (_ref.done) return onDone();
+			var i = 0, rowState = streamState._rowState;
+			_ref = streamState._rowID;
+			for (var rowTag = streamState._rowTag, rowLength = streamState._rowLength, buffer = streamState._buffer, chunkLength = value.length; i < chunkLength;) {
+				var lastIdx = -1;
+				switch (rowState) {
+					case 0:
+						lastIdx = value[i++];
+						58 === lastIdx ? rowState = 1 : _ref = _ref << 4 | (96 < lastIdx ? lastIdx - 87 : lastIdx - 48);
+						continue;
+					case 1:
+						rowState = value[i];
+						84 === rowState || 65 === rowState || 79 === rowState || 111 === rowState || 85 === rowState || 83 === rowState || 115 === rowState || 76 === rowState || 108 === rowState || 71 === rowState || 103 === rowState || 77 === rowState || 109 === rowState || 86 === rowState ? (rowTag = rowState, rowState = 2, i++) : 64 < rowState && 91 > rowState || 35 === rowState || 114 === rowState || 120 === rowState ? (rowTag = rowState, rowState = 3, i++) : (rowTag = 0, rowState = 3);
+						continue;
+					case 2:
+						lastIdx = value[i++];
+						44 === lastIdx ? rowState = 4 : rowLength = rowLength << 4 | (96 < lastIdx ? lastIdx - 87 : lastIdx - 48);
+						continue;
+					case 3:
+						lastIdx = value.indexOf(10, i);
+						break;
+					case 4: lastIdx = i + rowLength, lastIdx > value.length && (lastIdx = -1);
+				}
+				var offset = value.byteOffset + i;
+				if (-1 < lastIdx) rowLength = new Uint8Array(value.buffer, offset, lastIdx - i), processFullBinaryRow(response, streamState, _ref, rowTag, buffer, rowLength), i = lastIdx, 3 === rowState && i++, rowLength = _ref = rowTag = rowState = 0, buffer.length = 0;
+				else {
+					value = new Uint8Array(value.buffer, offset, value.byteLength - i);
+					buffer.push(value);
+					rowLength -= value.byteLength;
+					break;
+				}
+			}
+			streamState._rowState = rowState;
+			streamState._rowID = _ref;
+			streamState._rowTag = rowTag;
+			streamState._rowLength = rowLength;
+			return reader.read().then(progress).catch(error);
+		}
+		function error(e) {
+			reportGlobalError(response, e);
+		}
+		var streamState = {
+			_rowState: 0,
+			_rowID: 0,
+			_rowTag: 0,
+			_rowLength: 0,
+			_buffer: []
+		}, reader = stream.getReader();
+		reader.read().then(progress).catch(error);
+	}
+	exports.createFromReadableStream = function(stream, options) {
+		options = createResponseFromOptions(options);
+		startReadingFromStream(options, stream, close.bind(null, options));
+		return getChunk(options, 0);
+	};
+}));
+//#endregion
+//#region node_modules/@vitejs/plugin-rsc/dist/react/ssr.js
+var import_client_edge = /* @__PURE__ */ __toESM((/* @__PURE__ */ __commonJSMin(((exports, module) => {
+	module.exports = require_react_server_dom_webpack_client_edge_production();
+})))(), 1);
+function createFromReadableStream(stream, options = {}) {
+	return import_client_edge.createFromReadableStream(stream, {
+		serverConsumerManifest: createServerConsumerManifest(),
+		...options
+	});
+}
+//#endregion
+//#region \0virtual:vite-rsc/client-references
+var client_references_default = {
+	"15c18cfaeeff": async () => {
+		const m = await import("./assets/layout-segment-context-CjQJq5QC.js");
+		return { get "LayoutSegmentProvider"() {
+			return m["LayoutSegmentProvider"];
+		} };
+	},
+	"22ada6aae058": async () => {
+		const m = await import("./assets/page-BrYAgQRU.js");
+		return { get "default"() {
+			return m["default"];
+		} };
+	},
+	"4a8dbe3a85e4": async () => {
+		const m = await import("./assets/page-C3VnSSC1.js");
+		return { get "default"() {
+			return m["default"];
+		} };
+	},
+	"593f344dc510": async () => {
+		const m = await import("./assets/error-boundary-G3rvRCqK.js");
+		return {
+			get "ErrorBoundary"() {
+				return m["ErrorBoundary"];
+			},
+			get "ForbiddenBoundary"() {
+				return m["ForbiddenBoundary"];
+			},
+			get "NotFoundBoundary"() {
+				return m["NotFoundBoundary"];
+			},
+			get "RedirectBoundary"() {
+				return m["RedirectBoundary"];
+			},
+			get "UnauthorizedBoundary"() {
+				return m["UnauthorizedBoundary"];
+			}
+		};
+	},
+	"6efdf509a785": async () => {
+		const m = await import("./assets/page-BNcx3t7Y.js");
+		return { get "default"() {
+			return m["default"];
+		} };
+	},
+	"8b82d763255b": async () => {
+		const m = await import("./assets/page-iKPKamKB.js");
+		return { get "default"() {
+			return m["default"];
+		} };
+	},
+	"8c0f216c4604": async () => {
+		const m = await Promise.resolve().then(() => slot_exports);
+		return {
+			get "Children"() {
+				return m["Children"];
+			},
+			get "ParallelSlot"() {
+				return m["ParallelSlot"];
+			},
+			get "Slot"() {
+				return m["Slot"];
+			}
+		};
+	},
+	"a7c2b21269ea": async () => {
+		const m = await import("./assets/page-DnRjt7tk.js");
+		return { get "default"() {
+			return m["default"];
+		} };
+	},
+	"f095ee156794": async () => {
+		const m = await import("./assets/page-B2jg1sg6.js");
+		return { get "default"() {
+			return m["default"];
+		} };
+	}
+};
+//#endregion
+//#region node_modules/@vitejs/plugin-rsc/dist/ssr.js
+var onClientReference;
+initialize();
+function initialize() {
+	setRequireModule({ load: async (id) => {
+		{
+			const import_ = client_references_default[id];
+			if (!import_) throw new Error(`client reference not found '${id}'`);
+			const deps = __vite_rsc_assets_manifest.clientReferenceDeps[id] ?? {
+				js: [],
+				css: []
+			};
+			preloadDeps(deps);
+			onClientReference?.({
+				id,
+				deps
+			});
+			return wrapResourceProxy(await import_(), id, deps);
+		}
+	} });
+}
+function wrapResourceProxy(mod, id, deps) {
+	return new Proxy(mod, { get(target, p, receiver) {
+		if (p in mod) {
+			preloadDeps(deps);
+			onClientReference?.({
+				id,
+				deps
+			});
+		}
+		return Reflect.get(target, p, receiver);
+	} });
+}
+function preloadDeps(deps) {
+	for (const href of deps.js) ReactDOM.preloadModule(href, {
+		as: "script",
+		crossOrigin: ""
+	});
+	for (const href of deps.css) ReactDOM.preinit(href, {
+		as: "style",
+		precedence: __vite_rsc_assets_manifest.cssLinkPrecedence !== false ? "vite-rsc/client-reference" : void 0
+	});
+}
+//#endregion
+//#region node_modules/vinext/dist/server/app-ssr-entry.js
+var clientReferencePreloader = createClientReferencePreloader({
+	getReferences() {
+		return client_references_default;
+	},
+	getClientRequire() {
+		return globalThis.__vite_rsc_client_require__;
+	},
+	onPreloadError(id, error) {}
+});
+function ssrErrorDigest(input) {
+	let hash = 5381;
+	for (let i = input.length - 1; i >= 0; i--) hash = hash * 33 ^ input.charCodeAt(i);
+	return (hash >>> 0).toString();
+}
+function getErrorMessage(error) {
+	if (error instanceof Error) return error.message;
+	if (typeof error === "string") return error;
+	return Object.prototype.toString.call(error);
+}
+function renderInsertedHtml(insertedElements) {
+	let insertedHTML = "";
+	for (const element of insertedElements) try {
+		insertedHTML += renderToStaticMarkup(createElement(Fragment, null, element));
+	} catch {}
+	return insertedHTML;
+}
+function renderFontHtml(fontData, nonce) {
+	if (!fontData) return "";
+	let fontHTML = "";
+	const nonceAttr = createNonceAttribute(nonce);
+	for (const url of fontData.links ?? []) fontHTML += `<link rel="stylesheet"${nonceAttr} href="${escapeHtmlAttr(url)}" />\n`;
+	for (const preload of fontData.preloads ?? []) fontHTML += `<link rel="preload"${nonceAttr} href="${escapeHtmlAttr(preload.href)}" as="font" type="${escapeHtmlAttr(preload.type)}" crossorigin />\n`;
+	if (fontData.styles && fontData.styles.length > 0) fontHTML += `<style data-vinext-fonts${nonceAttr}>${fontData.styles.join("\n")}</style>\n`;
+	return fontHTML;
+}
+function extractModulePreloadHtml(bootstrapScriptContent, nonce) {
+	if (!bootstrapScriptContent) return "";
+	const match = bootstrapScriptContent.match(/import\("([^"]+)"\)/);
+	if (!match?.[1]) return "";
+	return `<link rel="modulepreload"${createNonceAttribute(nonce)} href="${escapeHtmlAttr(match[1])}" />\n`;
+}
+function buildHeadInjectionHtml(navContext, bootstrapScriptContent, formState, insertedHTML, fontHTML, scriptNonce) {
+	const paramsScript = createInlineScriptTag("self.__VINEXT_RSC_PARAMS__=" + safeJsonStringify(navContext?.params ?? {}), scriptNonce);
+	const navScript = createInlineScriptTag("self.__VINEXT_RSC_NAV__=" + safeJsonStringify({
+		pathname: navContext?.pathname ?? "/",
+		searchParams: navContext?.searchParams ? [...navContext.searchParams.entries()] : []
+	}), scriptNonce);
+	const formStateScript = formState === null ? "" : createInlineScriptTag("self[" + safeJsonStringify(RSC_FORM_STATE_GLOBAL) + "]=" + safeJsonStringify(formState), scriptNonce);
+	return paramsScript + navScript + formStateScript + extractModulePreloadHtml(bootstrapScriptContent, scriptNonce) + insertedHTML + fontHTML;
+}
+async function handleSsr(rscStream, navContext, fontData, options) {
+	return runWithNavigationContext(async () => {
+		await clientReferencePreloader.preload();
+		if (navContext) setNavigationContext(navContext);
+		clearServerInsertedHTML();
+		const cleanup = () => {
+			setNavigationContext(null);
+			clearServerInsertedHTML();
+		};
+		try {
+			let ssrStream;
+			let rscEmbed;
+			if (options?.sideStream) {
+				ssrStream = rscStream;
+				rscEmbed = createRscEmbedTransform(options.sideStream, options?.scriptNonce);
+				if (options.capturedRscDataRef) options.capturedRscDataRef.value = rscEmbed.getRawBuffer();
+			} else {
+				const [s1, s2] = rscStream.tee();
+				ssrStream = s1;
+				rscEmbed = createRscEmbedTransform(s2, options?.scriptNonce);
+			}
+			let flightRoot = null;
+			function VinextFlightRoot() {
+				if (!flightRoot) flightRoot = createFromReadableStream(ssrStream);
+				const wireElements = use(flightRoot);
+				const elements = AppElementsWire.decode(wireElements);
+				const metadata = AppElementsWire.readMetadata(elements);
+				return createElement(ElementsContext.Provider, { value: elements }, createElement(Slot, { id: metadata.routeId }));
+			}
+			const root = createElement(VinextFlightRoot);
+			const ssrRoot = withScriptNonce(ServerInsertedHTMLContext ? createElement(ServerInsertedHTMLContext.Provider, { value: useServerInsertedHTML }, root) : root, options?.scriptNonce);
+			const bootstrapScriptContent = await Promise.resolve(__vite_rsc_assets_manifest.bootstrapScriptContent);
+			const htmlStream = await renderToReadableStream(ssrRoot, {
+				bootstrapScriptContent,
+				formState: options?.formState ?? null,
+				nonce: options?.scriptNonce,
+				onError(error) {
+					if (error && typeof error === "object" && "digest" in error) return String(error.digest);
+					if (error) return ssrErrorDigest(getErrorMessage(error) + (error instanceof Error ? error.stack ?? "" : ""));
+				}
+			});
+			if (options?.waitForAllReady === true) await htmlStream.allReady;
+			const fontHTML = renderFontHtml(fontData, options?.scriptNonce);
+			let didInjectHeadHTML = false;
+			const getInsertedHTML = () => {
+				const insertedHTML = renderInsertedHtml(renderServerInsertedHTML());
+				if (didInjectHeadHTML) return insertedHTML;
+				didInjectHeadHTML = true;
+				return buildHeadInjectionHtml(navContext, bootstrapScriptContent, options?.formState ?? null, insertedHTML, fontHTML, options?.scriptNonce);
+			};
+			return deferUntilStreamConsumed(htmlStream.pipeThrough(createTickBufferedTransform(rscEmbed, getInsertedHTML)), cleanup);
+		} catch (error) {
+			cleanup();
+			throw error;
+		}
+	});
+}
+var app_ssr_entry_default = { async fetch(request) {
+	if (isOpenRedirectShaped(new URL(request.url).pathname)) return notFoundResponse();
+	const result = await (await import("../index.js")).default(request);
+	if (result instanceof Response) return result;
+	if (result == null) return notFoundResponse();
+	return new Response(String(result), { status: 200 });
+} };
+//#endregion
+export { __exportAll as _, createRscRequestHeaders as a, isHashOnlyBrowserUrlChange as c, assertSafeNavigationUrl as d, app_ssr_entry_default as default, AppElementsWire as f, __commonJSMin as g, stripBasePath as h, handleSsr, ReadonlyURLSearchParams as i, toBrowserNavigationHref as l, VINEXT_PARAMS_HEADER as m, usePathname as n, createRscRequestUrl as o, VINEXT_MOUNTED_SLOTS_HEADER as p, useRouter as r, notifyAppRouterTransitionStart as s, getLayoutSegmentContext as t, toSameOriginAppPath as u, __require as v, __toESM as y };
