@@ -1,11 +1,11 @@
-# DAMII — Multi-Dialect Ghanaian Draughts Platform
+# DAMII — Ghanaian Draughts Platform (MySQL)
 
-DAMII is a modern web application for traditional Ghanaian 10x10 draughts, featuring multi-dialect database support (SQLite, PostgreSQL, MySQL), Paystack wallet top-ups, automated wager escrow, tournament leagues, turn timers, and role-guarded admin controls.
+DAMII is a modern web application for traditional Ghanaian 10x10 draughts, backed by a MySQL database (MySQL 8 / MariaDB 10.4+) via Drizzle ORM, featuring Paystack wallet top-ups, automated wager escrow, tournament leagues, turn timers, and role-guarded admin controls.
 
 ## Features Overview
 
 - **10x10 Draughts Engine**: Compulsory captures, flying kings, server-side move validation, 60s turn clocks, and 45s disconnection grace periods.
-- **Multi-Dialect Persistence**: DB client factory supporting SQLite (D1 / Local Memory), PostgreSQL, and MySQL using Drizzle ORM.
+- **MySQL Persistence**: A single production-grade backend (Drizzle ORM + mysql2 connection pool) used in BOTH development and production — no JSON/SQLite fallback, so dev behaves exactly like prod.
 - **User Authentication System**: Complete Sign In and Registration flow with welcome bonus Points and persistent session tokens.
 - **Paystack Points Wallet & Escrow**: Streamlined Points currency (1 GHS = 100 Points). Top-up Points via Paystack, lock wager pots in escrow during matches, and cash out to Mobile Money (MTN / Telecel / AT).
 - **Tournament Leagues**: Host single-elimination tournaments with automated bracket generation and prize pool payouts.
@@ -22,6 +22,7 @@ Follow these step-by-step instructions to get DAMII running locally on your comp
 - **Node.js**: v18.0.0 or higher (v20+ recommended)
 - **npm**: v9.0.0 or higher (comes with Node.js)
 - **Git**: Installed on your system
+- **MySQL 8+** (or MariaDB 10.4+): running locally or reachable over the network — DAMII uses MySQL in development AND production (there is no file-based store).
 
 ---
 
@@ -46,14 +47,35 @@ npm install
 
 ---
 
-### Step 3: Set Up Environment Variables
+### Step 3: Create the MySQL Database
+
+DAMII stores everything in MySQL — locally and in production. Create the database once:
+
+```bash
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS damii CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+```
+
+Then apply the schema (creates all tables, tracked in `__drizzle_migrations`):
+
+```bash
+npm run db:migrate
+```
+
+### Step 4: Set Up Environment Variables
 
 Create a new file named `.env.local` in the root folder of the project. Copy and paste the following configuration:
 
 ```env
-# Database Dialect: "sqlite" | "postgres" | "mysql"
-DATABASE_DIALECT=sqlite
-DATABASE_URL=sqlite.db
+# MySQL connection — used in development AND production.
+# Either a single URL:
+DATABASE_DIALECT=mysql
+DATABASE_URL=mysql://root:password@127.0.0.1:3306/damii
+# ...or discrete variables (handy on cPanel/shared hosting):
+# MYSQL_HOST=127.0.0.1
+# MYSQL_PORT=3306
+# MYSQL_USER=root
+# MYSQL_PASSWORD=password
+# MYSQL_DATABASE=damii
 
 # Paystack Secret Key (Optional test key for local wallet top-ups)
 PAYSTACK_SECRET_KEY=sk_test_xxx
@@ -63,11 +85,11 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 ADMIN_SECRET_KEY=damii-admin-2026
 ```
 
-> **Note**: For local development, `DATABASE_DIALECT=sqlite` works out-of-the-box in memory / local file without needing external database setup.
+> **Note**: If unset, DAMII defaults to `mysql://root@127.0.0.1:3306/damii` in development. Run `npm run env:check` at any time to validate the config and confirm the database is reachable. On first boot the app seeds the default admin/player accounts automatically (idempotent — safe to re-run `npm run seed`).
 
 ---
 
-### Step 4: Start the Development Server
+### Step 5: Start the Development Server
 
 Run the development command:
 
@@ -84,7 +106,7 @@ You will see output indicating that Next.js is running:
 
 ---
 
-### Step 5: Open Application in Browser
+### Step 6: Open Application in Browser
 
 Open your web browser and navigate to:
 
@@ -114,6 +136,15 @@ For initial system setup and platform administration, the following default acco
 
 ### Additional Commands
 
+- **Validate environment + MySQL connectivity**:
+  ```bash
+  npm run env:check
+  ```
+- **Apply / generate schema migrations**:
+  ```bash
+  npm run db:migrate    # apply SQL migrations to MySQL
+  npm run db:generate   # regenerate SQL from db/schema.mysql.ts
+  ```
 - **Production Build**:
   ```bash
   npm run build
@@ -122,11 +153,11 @@ For initial system setup and platform administration, the following default acco
   ```bash
   npm run start
   ```
-- **Run Tests**:
+- **Run Tests** (requires a reachable MySQL; set `DATABASE_URL` to a test database):
   ```bash
   npm run test
   ```
 
 ---
 
-See [START-HERE.md](./START-HERE.md) for full architecture and dialect details.
+See [START-HERE.md](./START-HERE.md) for full architecture details and [NODE_SERVER_DEPLOYMENT.md](./NODE_SERVER_DEPLOYMENT.md) for the production MySQL deployment guide.

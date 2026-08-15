@@ -20,7 +20,7 @@ This file provides system instructions, architectural standards, current platfor
   - Atomically updates profile balances (`updateProfileMarblesBalance` / `updateProfileBalance`), records reference IDs, and logs full audit metadata (`adminName`, `reason`, `recordedAt`).
   - Real-time financial KPI metrics dashboard (Marbles circulation, Points circulation, Escrow volume, Transaction counts) and filterable audit transaction tables.
 - **Paystack Wallet & Escrow (`/lib/wallet-service.ts`, `/app/api/wallet`)**: Marble top-ups using Paystack Mobile Money (MTN / Telecel / AT), Point-to-Marble conversions, wager pot escrow locks during matches, Mobile Money cashouts, and Paystack reference idempotency tracking (`processedPaystackRefs`) with atomic key mutexes.
-- **Multi-Dialect Database Configuration & Persistence (`/lib/db-client.ts`, `/db/*`)**: Configurable support for 3 database dialects via `DATABASE_DIALECT` (`sqlite` for local development, `postgres` for PostgreSQL, and `mysql` for MySQL). Includes an automatic disk-backed file store fallback (`.data/damii_db.json`) with atomic `lockKey` mutex locks for seamless local development persistence when no external database connection is configured.
+- **MySQL Database Persistence (`/lib/db-client.ts`, `/lib/db/*`, `/db/schema.mysql.ts`)**: MySQL (8+ / MariaDB 10.4+) is the ONLY database dialect — in development AND production. `lib/db-client.ts` exposes `dbRepository`, implemented by `lib/db/mysql-store.ts` over a pooled mysql2/Drizzle connection (`lib/db/mysql-connection.ts`). Money movement uses SQL-atomic updates inside transactions, and idempotency relies on PRIMARY KEY conflicts. The legacy `.data/damii_db.json` file store and the SQLite/Postgres paths were removed.
 
 ---
 
@@ -38,11 +38,18 @@ This file provides system instructions, architectural standards, current platfor
 │       ├── damii/         # Game Engine & Move Validation API
 │       ├── league/        # Tournament League & Player Check-in Endpoints
 │       └── wallet/        # Paystack Payments & Escrow Webhooks
-├── db/                    # Multi-dialect Drizzle Schemas (sqlite, postgres, mysql)
+├── db/                    # Drizzle Schemas (schema.mysql.ts is authoritative)
+├── drizzle/mysql/         # Generated SQL migrations (applied via `npm run db:migrate`)
 ├── lib/
 │   ├── admin-service.ts   # Admin logic, Audit logging & Manual Ledger Service
 │   ├── damii-rules.ts     # 10x10 Ghanaian Draughts Rules & Move Validator
-│   ├── db-client.ts       # Central DB Repository & Memory Store Seeder
+│   ├── db/
+│   │   ├── repository.ts        # DbRepository storage contract
+│   │   ├── mysql-connection.ts  # Shared mysql2 pool + Drizzle handle
+│   │   ├── mysql-mappers.ts     # Row <-> domain object mapping
+│   │   ├── mysql-store.ts       # MySQL repository implementation (dev + prod)
+│   │   └── seed-data.ts         # Canonical seed dataset
+│   ├── db-client.ts       # Public DB entrypoint (MySQL-only)
 │   ├── league-service.ts  # Tournament Bracket, Roster & League Logic
 │   ├── wallet-service.ts  # Paystack Integration & Wager Escrow Logic
 │   └── types.ts           # Central TypeScript Definitions
@@ -61,8 +68,8 @@ This file provides system instructions, architectural standards, current platfor
 3. **Security Constraints**:
    - `PAYSTACK_SECRET_KEY` and `ADMIN_SECRET_KEY` must **NEVER** be exposed in client-side code (`NEXT_PUBLIC_`). All sensitive financial and administrative logic must run in server-side API routes (`/app/api/*`).
    - New profile registration (`createRegisteredProfile` / `upsertProfile`) strictly assigns `"user"` role. Never auto-promote based on username content.
-   - All financial wallet mutations and Paystack verification calls must use idempotency checks and atomic `lockKey` mutexes to eliminate race conditions and duplicate credits.
-   - Database layer supports 3 configurable deployment dialects (`sqlite`, `postgres`, `mysql` via `DATABASE_DIALECT`). In development environments without external DB credentials, state automatically flushes to `.data/damii_db.json` to guarantee persistence across container restarts.
+   - All financial wallet mutations and Paystack verification calls must use idempotency checks (Paystack reference PRIMARY KEY conflicts) and SQL-atomic updates to eliminate race conditions and duplicate credits.
+   - The database layer is MySQL-only. `DATABASE_DIALECT` defaults to `mysql` in every environment; point `DATABASE_URL` (mysql://…) or the `MYSQL_*` variables at the server, run `npm run db:migrate` once, and both `npm run dev` and `npm run start` use the same MySQL backend.
 4. **Code Style & UI Integrity**:
    - Stick to the dark emerald/slate theme palette (`bg-[#081c15]`, `bg-[#06261f]`, `border-[#114232]`, `text-[#d6a735]`, `text-[#f5efdf]`).
    - Use exclusively `lucide-react` icons. Make sure any new icon used is explicitly imported at the top of the file.

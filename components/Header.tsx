@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Trophy,
@@ -43,6 +42,42 @@ type NotificationItem = {
   timestamp: string;
   link: string;
 };
+
+// vinext's current next/link shim has a broken internal click/navigate
+// handler (throws "e is not a function" and swallows the click, so nav
+// links stop working). This is a drop-in replacement that renders a plain
+// <a> and drives navigation through useRouter().push instead, which is
+// unaffected by that bug. Modifier-key clicks (cmd/ctrl/shift/middle-click)
+// are left alone so "open in new tab" still works normally.
+function NavLink({
+  href,
+  onClick,
+  className,
+  children,
+  title,
+}: {
+  href: string;
+  onClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void;
+  className?: string;
+  children: React.ReactNode;
+  title?: string;
+}) {
+  const router = useRouter();
+
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    onClick?.(e);
+    if (e.defaultPrevented) return;
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    router.push(href);
+  };
+
+  return (
+    <a href={href} onClick={handleClick} className={className} title={title}>
+      {children}
+    </a>
+  );
+}
 
 export function Header() {
   const pathname = usePathname();
@@ -452,54 +487,54 @@ export function Header() {
   return (
     <>
       <header className="topbar relative">
-        <Link className="brand" href="/" onClick={(e) => handleNavClick(e, "/")}>
+        <NavLink className="brand" href="/" onClick={(e) => handleNavClick(e, "/")}>
           <span className="brand-mark">D</span>
           <span>
             <strong>DAMII</strong>
             <small className="hidden sm:block">10×10 Strategy Arena</small>
           </span>
-        </Link>
+        </NavLink>
 
         {/* Desktop Navigation Menu */}
         <nav className="hidden md:flex topbar-desktop-nav items-center gap-5">
-          <Link
+          <NavLink
             className={`nav-link ${pathname === "/arena" ? "active" : ""}`}
             href="/arena"
             onClick={(e) => handleNavClick(e, "/arena")}
           >
             <Swords size={16} /> Arena
-          </Link>
-          <Link
+          </NavLink>
+          <NavLink
             className={`nav-link ${pathname === "/leagues" ? "active" : ""}`}
             href="/leagues"
             onClick={(e) => handleNavClick(e, "/leagues")}
           >
             <Trophy size={16} /> Tournaments
-          </Link>
+          </NavLink>
           {isOrganizerOrApplied && (
-            <Link
+            <NavLink
               className={`nav-link ${pathname === "/organizer" ? "active" : ""}`}
               href="/organizer"
               onClick={(e) => handleNavClick(e, "/organizer")}
             >
               <UserCog size={16} className="text-[#d6a735]" /> Organizer Hub
-            </Link>
+            </NavLink>
           )}
-          <Link
+          <NavLink
             className={`nav-link ${pathname === "/wallet" ? "active" : ""}`}
             href="/wallet"
             onClick={(e) => handleNavClick(e, "/wallet")}
           >
             <Wallet size={16} /> Wallet
-          </Link>
+          </NavLink>
           {role === "admin" && (
-            <Link
+            <NavLink
               className={`nav-link ${pathname === "/admin" ? "active" : ""}`}
               href="/admin"
               onClick={(e) => handleNavClick(e, "/admin")}
             >
               <Shield size={16} className="text-[#d6a735]" /> Admin
-            </Link>
+            </NavLink>
           )}
 
           <div className="topbar-user">
@@ -565,7 +600,7 @@ export function Header() {
                                 }`}
                               >
                                 <div className="flex items-start justify-between gap-2">
-                                  <Link
+                                  <NavLink
                                     href={n.link}
                                     onClick={() => {
                                       markNotificationRead(n.id);
@@ -588,7 +623,7 @@ export function Header() {
                                     <p className="text-[11px] text-[#cbd5e1] leading-tight mb-1">
                                       {n.message}
                                     </p>
-                                  </Link>
+                                  </NavLink>
                                   {isUnread && (
                                     <button
                                       type="button"
@@ -610,14 +645,14 @@ export function Header() {
                 </div>
 
                 {/* Points Balance Tag */}
-                <Link
+                <NavLink
                   href="/wallet"
                   onClick={(e) => handleNavClick(e, "/wallet")}
                   className="points-badge shrink-0 hover:scale-105 transition-transform flex items-center gap-1 font-black cursor-pointer shadow-sm"
                   title="Click to Open Wallet"
                 >
                   GH₵ {typeof points === "number" ? points.toFixed(2) : points}
-                </Link>
+                </NavLink>
 
                 {/* Desktop User Profile Button & Dropdown */}
                 <div className="relative">
@@ -753,7 +788,7 @@ export function Header() {
                                 <ChevronRight size={14} className="text-[#cbd5e1]" />
                               </button>
 
-                              <Link
+                              <NavLink
                                 href="/wallet"
                                 onClick={(e) => {
                                   handleNavClick(e, "/wallet");
@@ -765,9 +800,9 @@ export function Header() {
                                   <Wallet size={15} className="text-[#d6a735]" /> Wallet & Ledger
                                 </span>
                                 <span className="text-[10px] font-black text-[#d6a735]">GH₵ {typeof points === "number" ? points.toFixed(2) : points}</span>
-                              </Link>
+                              </NavLink>
 
-                              <Link
+                              <NavLink
                                 href="/leagues"
                                 onClick={(e) => {
                                   handleNavClick(e, "/leagues");
@@ -779,10 +814,10 @@ export function Header() {
                                   <Trophy size={15} className="text-[#d6a735]" /> Tournaments & Leagues
                                 </span>
                                 <ChevronRight size={14} className="text-[#cbd5e1]" />
-                              </Link>
+                              </NavLink>
 
                               {isOrganizerOrApplied && (
-                                <Link
+                                <NavLink
                                   href="/organizer"
                                   onClick={(e) => {
                                     handleNavClick(e, "/organizer");
@@ -794,11 +829,11 @@ export function Header() {
                                     <UserCog size={15} className="text-[#d6a735]" /> Organizer Portal & Studio
                                   </span>
                                   <ChevronRight size={14} className="text-[#cbd5e1]" />
-                                </Link>
+                                </NavLink>
                               )}
 
                               {role === "admin" && (
-                                <Link
+                                <NavLink
                                   href="/admin"
                                   onClick={(e) => {
                                     handleNavClick(e, "/admin");
@@ -810,7 +845,7 @@ export function Header() {
                                     <Shield size={15} className="text-[#d6a735]" /> Admin Control Center
                                   </span>
                                   <ChevronRight size={14} className="text-[#cbd5e1]" />
-                                </Link>
+                                </NavLink>
                               )}
                             </div>
 
@@ -1013,7 +1048,7 @@ export function Header() {
                   <small className="block text-[10px] font-extrabold text-[#d6a735]/80 uppercase tracking-widest px-1 mb-0.5">
                     Arena Navigation
                   </small>
-                  <Link
+                  <NavLink
                     href="/arena"
                     onClick={(e) => {
                       handleNavClick(e, "/arena");
@@ -1027,9 +1062,9 @@ export function Header() {
                   >
                     <Swords size={18} className={pathname === "/arena" ? "text-[#06261f]" : "text-[#d6a735]"} />
                     <span>Strategy Game Arena</span>
-                  </Link>
+                  </NavLink>
 
-                  <Link
+                  <NavLink
                     href="/leagues"
                     onClick={(e) => {
                       handleNavClick(e, "/leagues");
@@ -1043,9 +1078,9 @@ export function Header() {
                   >
                     <Trophy size={18} className={pathname === "/leagues" ? "text-[#06261f]" : "text-[#d6a735]"} />
                     <span>Tournaments & Leagues</span>
-                  </Link>
+                  </NavLink>
 
-                  <Link
+                  <NavLink
                     href="/wallet"
                     onClick={(e) => {
                       handleNavClick(e, "/wallet");
@@ -1059,10 +1094,10 @@ export function Header() {
                   >
                     <Wallet size={18} className={pathname === "/wallet" ? "text-[#06261f]" : "text-[#d6a735]"} />
                     <span>Wallet & Marbles Ledger</span>
-                  </Link>
+                  </NavLink>
 
                   {isOrganizerOrApplied && (
-                    <Link
+                    <NavLink
                       href="/organizer"
                       onClick={(e) => {
                         handleNavClick(e, "/organizer");
@@ -1076,11 +1111,11 @@ export function Header() {
                     >
                       <UserCog size={18} className={pathname === "/organizer" ? "text-[#06261f]" : "text-[#d6a735]"} />
                       <span>Organizer Studio</span>
-                    </Link>
+                    </NavLink>
                   )}
 
                   {role === "admin" && (
-                    <Link
+                    <NavLink
                       href="/admin"
                       onClick={(e) => {
                         handleNavClick(e, "/admin");
@@ -1094,7 +1129,7 @@ export function Header() {
                     >
                       <Shield size={18} className={pathname === "/admin" ? "text-[#06261f]" : "text-[#d6a735]"} />
                       <span>Admin Control Center</span>
-                    </Link>
+                    </NavLink>
                   )}
                 </nav>
               </div>
@@ -1168,7 +1203,7 @@ export function Header() {
           </div>
         ) : (
           <>
-            <Link
+            <NavLink
               href="/arena"
               onClick={(e) => handleNavClick(e, "/arena")}
               className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${
@@ -1179,9 +1214,9 @@ export function Header() {
             >
               <Swords size={18} className={pathname === "/arena" ? "text-[#d6a735]" : "text-[#94a3b8]"} />
               <span className="text-[10px] font-extrabold tracking-tight">Arena</span>
-            </Link>
+            </NavLink>
 
-            <Link
+            <NavLink
               href="/leagues"
               onClick={(e) => handleNavClick(e, "/leagues")}
               className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${
@@ -1192,9 +1227,9 @@ export function Header() {
             >
               <Trophy size={18} className={pathname === "/leagues" ? "text-[#d6a735]" : "text-[#94a3b8]"} />
               <span className="text-[10px] font-extrabold tracking-tight">Leagues</span>
-            </Link>
+            </NavLink>
 
-            <Link
+            <NavLink
               href="/wallet"
               onClick={(e) => handleNavClick(e, "/wallet")}
               className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${
@@ -1205,7 +1240,7 @@ export function Header() {
             >
               <Wallet size={18} className={pathname === "/wallet" ? "text-[#d6a735]" : "text-[#94a3b8]"} />
               <span className="text-[10px] font-extrabold tracking-tight">Wallet</span>
-            </Link>
+            </NavLink>
 
             {userToken && (
               <button

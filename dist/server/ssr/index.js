@@ -3098,25 +3098,25 @@ function createFromReadableStream(stream, options = {}) {
 //#region \0virtual:vite-rsc/client-references
 var client_references_default = {
 	"15c18cfaeeff": async () => {
-		const m = await import("./assets/layout-segment-context-DuGIyczZ.js");
+		const m = await import("./assets/layout-segment-context-CjQJq5QC.js");
 		return { get "LayoutSegmentProvider"() {
 			return m["LayoutSegmentProvider"];
 		} };
 	},
 	"22ada6aae058": async () => {
-		const m = await import("./assets/page-zLQrb0i2.js");
+		const m = await import("./assets/page-BrYAgQRU.js");
 		return { get "default"() {
 			return m["default"];
 		} };
 	},
 	"4a8dbe3a85e4": async () => {
-		const m = await import("./assets/page-DijTtgtz.js");
+		const m = await import("./assets/page-C3VnSSC1.js");
 		return { get "default"() {
 			return m["default"];
 		} };
 	},
 	"593f344dc510": async () => {
-		const m = await import("./assets/error-boundary-vqGwlbxn.js");
+		const m = await import("./assets/error-boundary-G3rvRCqK.js");
 		return {
 			get "ErrorBoundary"() {
 				return m["ErrorBoundary"];
@@ -3136,13 +3136,13 @@ var client_references_default = {
 		};
 	},
 	"6efdf509a785": async () => {
-		const m = await import("./assets/page-BFkrEYEp.js");
+		const m = await import("./assets/page-BNcx3t7Y.js");
 		return { get "default"() {
 			return m["default"];
 		} };
 	},
 	"8b82d763255b": async () => {
-		const m = await import("./assets/page-ot5f6SCR.js");
+		const m = await import("./assets/page-iKPKamKB.js");
 		return { get "default"() {
 			return m["default"];
 		} };
@@ -3162,13 +3162,13 @@ var client_references_default = {
 		};
 	},
 	"a7c2b21269ea": async () => {
-		const m = await import("./assets/page-DlUAI_Ks.js");
+		const m = await import("./assets/page-DnRjt7tk.js");
 		return { get "default"() {
 			return m["default"];
 		} };
 	},
 	"f095ee156794": async () => {
-		const m = await import("./assets/page-cvAjXq4d.js");
+		const m = await import("./assets/page-B2jg1sg6.js");
 		return { get "default"() {
 			return m["default"];
 		} };
@@ -3335,4 +3335,4 @@ var app_ssr_entry_default = { async fetch(request) {
 	return new Response(String(result), { status: 200 });
 } };
 //#endregion
-export { __require as C, __exportAll as S, AppElementsWire as _, navigateClientSide as a, stripBasePath as b, useRouter as c, isHashOnlyBrowserUrlChange as d, app_ssr_entry_default as default, resolveRelativeHref as f, isDangerousScheme as g, withBasePath as h, handleSsr, getPrefetchedUrls as i, createRscRequestHeaders as l, toSameOriginAppPath as m, getLayoutSegmentContext as n, prefetchRscResponse as o, toBrowserNavigationHref as p, getMountedSlotsHeader as r, usePathname as s, getCurrentInterceptionContext as t, createRscRequestUrl as u, VINEXT_MOUNTED_SLOTS_HEADER as v, __toESM as w, __commonJSMin as x, hasBasePath as y };
+export { __exportAll as _, createRscRequestHeaders as a, isHashOnlyBrowserUrlChange as c, assertSafeNavigationUrl as d, app_ssr_entry_default as default, AppElementsWire as f, __commonJSMin as g, stripBasePath as h, handleSsr, ReadonlyURLSearchParams as i, toBrowserNavigationHref as l, VINEXT_PARAMS_HEADER as m, usePathname as n, createRscRequestUrl as o, VINEXT_MOUNTED_SLOTS_HEADER as p, useRouter as r, notifyAppRouterTransitionStart as s, getLayoutSegmentContext as t, toSameOriginAppPath as u, __require as v, __toESM as y };

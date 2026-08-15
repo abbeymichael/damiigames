@@ -2,17 +2,22 @@
  * Centralised, fail-fast environment configuration for DAMII.
  *
  * Rules enforced here:
- *  - `DATABASE_DIALECT` is either `mysql` (production) or `file` (local dev
- *    JSON store). There is no SQLite/D1/Postgres path any more.
- *  - In production, MySQL connection details and a strong `ADMIN_SECRET_KEY`
- *    are mandatory; the server refuses to boot with dev placeholders.
+ *  - MySQL is the ONLY database dialect — in development and production.
+ *    `DATABASE_DIALECT` defaults to "mysql" everywhere; the legacy JSON file
+ *    store no longer exists.
+ *  - MySQL connection details come from `DATABASE_URL` (mysql://…) or the
+ *    discrete MYSQL_HOST/MYSQL_PORT/MYSQL_USER/MYSQL_PASSWORD/MYSQL_DATABASE
+ *    variables. Sensible local defaults (127.0.0.1:3306, root, damii) keep
+ *    `npm run dev` zero-config when a local MySQL is running.
+ *  - In production a strong `ADMIN_SECRET_KEY` is mandatory; the server
+ *    refuses to boot with dev placeholders.
  *  - Paystack keys are validated when wallet features are enabled.
  *
  * Import this module for any env access so that misconfiguration surfaces as a
  * single, readable error instead of a scattered runtime failure.
  */
 
-export type DatabaseDialect = "mysql" | "file";
+export type DatabaseDialect = "mysql";
 
 export interface MysqlConfig {
   host: string;
@@ -76,11 +81,12 @@ function int(value: string | undefined, fallback: number): number {
 function parseMysqlConfig(problems: string[]): MysqlConfig | null {
   const url = process.env.DATABASE_URL;
 
-  let host = process.env.MYSQL_HOST || "";
+  // Local-friendly defaults so `npm run dev` works against a stock MySQL install.
+  let host = process.env.MYSQL_HOST || "127.0.0.1";
   let port = int(process.env.MYSQL_PORT, 3306);
-  let user = process.env.MYSQL_USER || "";
+  let user = process.env.MYSQL_USER || "root";
   let password = process.env.MYSQL_PASSWORD || "";
-  let database = process.env.MYSQL_DATABASE || "";
+  let database = process.env.MYSQL_DATABASE || "damii";
 
   if (url) {
     if (!/^mysql(2)?:\/\//i.test(url)) {
@@ -123,31 +129,18 @@ function parseMysqlConfig(problems: string[]): MysqlConfig | null {
   };
 }
 
-function resolveDialect(problems: string[], isProduction: boolean): DatabaseDialect {
+function resolveDialect(problems: string[]): DatabaseDialect {
   const raw = (process.env.DATABASE_DIALECT || "").trim().toLowerCase();
 
-  if (raw === "mysql" || raw === "mariadb") return "mysql";
-  if (raw === "file" || raw === "json" || raw === "memory") return "file";
+  // Unset or explicitly MySQL — the only supported configuration.
+  if (!raw || raw === "mysql" || raw === "mariadb") return "mysql";
 
-  if (raw === "sqlite" || raw === "d1" || raw === "postgres" || raw === "postgresql") {
-    problems.push(
-      `DATABASE_DIALECT="${raw}" is no longer supported. DAMII runs on MySQL in production ` +
-        `(DATABASE_DIALECT=mysql) or the local JSON file store (DATABASE_DIALECT=file).`,
-    );
-    return isProduction ? "mysql" : "file";
-  }
-
-  if (!raw) {
-    // Unset: production must be explicit, development defaults to the file store.
-    if (isProduction) {
-      problems.push("DATABASE_DIALECT must be set to \"mysql\" in production");
-      return "mysql";
-    }
-    return "file";
-  }
-
-  problems.push(`DATABASE_DIALECT="${raw}" is not recognised (expected "mysql" or "file")`);
-  return isProduction ? "mysql" : "file";
+  problems.push(
+    `DATABASE_DIALECT="${raw}" is no longer supported. DAMII uses MySQL in every environment ` +
+      `(development and production). Remove DATABASE_DIALECT or set it to "mysql", then point ` +
+      `DATABASE_URL (mysql://user:pass@host:3306/db) or the MYSQL_* variables at your server.`,
+  );
+  return "mysql";
 }
 
 function buildEnv(): AppEnv {
@@ -157,14 +150,8 @@ function buildEnv(): AppEnv {
     rawNodeEnv === "production" ? "production" : rawNodeEnv === "test" ? "test" : "development";
   const isProduction = nodeEnv === "production";
 
-  const dialect = resolveDialect(problems, isProduction);
-  const mysql = dialect === "mysql" ? parseMysqlConfig(problems) : null;
-
-  if (isProduction && dialect === "file") {
-    problems.push(
-      "DATABASE_DIALECT=file is a development-only JSON store and must not be used in production; use mysql",
-    );
-  }
+  const dialect = resolveDialect(problems);
+  const mysql = parseMysqlConfig(problems);
 
   const adminSecretKey = (process.env.ADMIN_SECRET_KEY || "").trim();
   if (isProduction) {
