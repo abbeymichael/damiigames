@@ -10,7 +10,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import mysql from "mysql2/promise";
-import { loadEnvFiles, projectRoot, resolveMysqlConfig } from "./lib/load-env.mjs";
+import {
+  loadEnvFiles,
+  projectRoot,
+  resolveMysqlConfig
+} from "./lib/load-env.mjs";
 
 loadEnvFiles();
 
