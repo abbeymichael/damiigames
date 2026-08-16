@@ -1,10 +1,10 @@
-# DAMII — Multi-Dialect Ghanaian Draughts Arena & Tournament Platform
+# DAMII — Ghanaian Draughts Arena & Tournament Platform (MySQL)
 
-A full-stack, enterprise-grade implementation of traditional Ghanaian draughts (10x10 Damii) supporting multi-dialect persistence (SQLite, PostgreSQL, MySQL), Paystack Mobile Money integration, automated wager escrow, tournament leagues, turn clocks with disconnection handling, and role-guarded admin management.
+A full-stack, enterprise-grade implementation of traditional Ghanaian draughts (10x10 Damii) backed by MySQL via Drizzle ORM, with Paystack Mobile Money integration, automated wager escrow, tournament leagues, turn clocks with disconnection handling, and role-guarded admin management.
 
 ## Key Features
 
-* **Multi-Dialect Drizzle Architecture**: Native schemas for SQLite (Cloudflare D1 / memory), PostgreSQL, and MySQL switched dynamically via `DATABASE_DIALECT`.
+* **MySQL Persistence (dev + prod)**: A single Drizzle ORM schema (`db/schema.mysql.ts`) and a mysql2 connection pool (`lib/db/mysql-connection.ts`) serve every environment. The legacy JSON/SQLite/Postgres paths were removed — development and production share one code path and one schema.
 * **Multi-Mode Game Arena**:
   * Local Device Casual Play
   * Private Room Online Matches
@@ -21,9 +21,10 @@ A full-stack, enterprise-grade implementation of traditional Ghanaian draughts (
 Configure the following environment variables in `.env` or container settings:
 
 ```env
-# Database Dialect: "sqlite" | "postgres" | "mysql"
-DATABASE_DIALECT=sqlite
-DATABASE_URL=sqlite.db
+# MySQL — the only supported database, used in development AND production
+DATABASE_DIALECT=mysql
+DATABASE_URL=mysql://root:password@127.0.0.1:3306/damii
+# (or discrete MYSQL_HOST / MYSQL_PORT / MYSQL_USER / MYSQL_PASSWORD / MYSQL_DATABASE)
 
 # Paystack API Keys
 PAYSTACK_SECRET_KEY=sk_test_xxx
@@ -35,13 +36,14 @@ ADMIN_SECRET_KEY=damii-admin-2026
 
 ## Database Schema & Migrations
 
-- SQLite schema: `db/schema.ts`
-- PostgreSQL schema: `db/schema.pg.ts`
-- MySQL schema: `db/schema.mysql.ts`
+- MySQL schema: `db/schema.mysql.ts` (the single authoritative schema)
+- Migrations live in `drizzle/mysql/` and are tracked in the `__drizzle_migrations` table.
 
-Generate migrations per dialect:
+Generate & apply migrations:
 ```bash
-npm run db:generate
+npm run db:generate   # regenerate SQL from the schema
+npm run db:migrate    # apply pending migrations to MySQL
+npm run env:check     # validate config + verify MySQL connectivity
 ```
 
 ## Running the Application
@@ -50,11 +52,16 @@ npm run db:generate
    ```bash
    npm ci
    ```
-2. Start development server:
+2. Create the database and apply the schema:
+   ```bash
+   mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS damii CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+   npm run db:migrate
+   ```
+3. Start the development server (MySQL-backed, same as production):
    ```bash
    npm run dev
    ```
-3. Run tests and build:
+4. Run tests and build (tests require a reachable MySQL — point `DATABASE_URL` at a test database):
    ```bash
    npm run test
    ```
