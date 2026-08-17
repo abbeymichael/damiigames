@@ -43,6 +43,7 @@ import {
   Copy,
   Play,
   ExternalLink,
+  SlidersHorizontal,
 } from "lucide-react";
 import { getSessionToken, saveSessionToken, clearSessionToken } from "@/lib/client-auth";
 import { AdminLog, Role } from "@/lib/types";
@@ -56,6 +57,7 @@ import { OrganizersTable } from "@/components/admin/OrganizersTable";
 import { DisputesTable } from "@/components/admin/DisputesTable";
 import { AuditLogsTable } from "@/components/admin/AuditLogsTable";
 import { AdminRolesTable } from "@/components/admin/AdminRolesTable";
+import { GameLimitsTable } from "@/components/admin/GameLimitsTable";
 import {
   ResponsiveContainer,
   LineChart,
@@ -204,6 +206,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { key: "tournaments", label: "Tournaments", icon: Trophy, permission: "manage_tournaments" },
       { key: "wallet", label: "Wallet & payouts", icon: Wallet, permission: "manage_wallet" },
+      { key: "limits", label: "Game Limits & Escrow", icon: SlidersHorizontal, permission: "manage_wallet" },
       { key: "users", label: "Users", icon: Users, permission: "manage_users" },
     ],
   },
@@ -1758,7 +1761,7 @@ export default function AdminPage() {
                     txFilter={txFilter}
                     setTxFilter={setTxFilter}
                     busy={busy}
-                    onRefresh={fetchMetricsAndLogs}
+                    onRefresh={refreshAdminData}
                     onAddLedgerClick={() => setAddLedgerModalOpen(true)}
                     onUpdateTransactionStatus={handleUpdateTransactionStatus}
                     onVoidTransaction={handleVoidTransaction}
@@ -1793,6 +1796,11 @@ export default function AdminPage() {
                 setNewAdminRole={setNewAdminRole}
                 onCreateAdmin={handleCreateAdmin}
               />
+            )}
+
+            {/* TAB: GAME LIMITS & ESCROW */}
+            {activeTab === "limits" && (
+              <GameLimitsTable token={token} adminSecret={adminSecret} />
             )}
 
             {/* TAB: AUDIT LOG */}

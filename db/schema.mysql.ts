@@ -18,11 +18,14 @@
  */
 import {
   bigint,
+  decimal,
   index,
   int,
+  mysqlEnum,
   mysqlTable,
   primaryKey,
   text,
+  timestamp,
   tinyint,
   uniqueIndex,
   varchar,
@@ -401,7 +404,216 @@ export const adminSettings = mysqlTable(
   (t) => [primaryKey({ columns: [t.id] })],
 );
 
+/* ------------------------------------------------------------------------- */
+/* users — user account root with phone OTP verification & profile completion */
+/* ------------------------------------------------------------------------- */
+export const users = mysqlTable("users", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  phoneNumber: varchar("phone_number", { length: 20 }).notNull().unique(),
+  phoneVerifiedAt: timestamp("phone_verified_at"),
+  fullName: varchar("full_name", { length: 120 }),
+  email: varchar("email", { length: 160 }),
+  emailVerifiedAt: timestamp("email_verified_at"),
+  ghanaCardNumber: varchar("ghana_card_number", { length: 32 }),
+  dateOfBirth: timestamp("date_of_birth"),
+  gender: varchar("gender", { length: 16 }),
+  avatarUrl: varchar("avatar_url", { length: 255 }),
+  region: varchar("region", { length: 64 }),
+  city: varchar("city", { length: 64 }),
+  address: varchar("address", { length: 255 }),
+  momoNumber: varchar("momo_number", { length: 20 }),
+  momoNetwork: varchar("momo_network", { length: 32 }),
+  username: varchar("username", { length: 32 }).unique(),
+  referralCode: varchar("referral_code", { length: 32 }),
+  role: mysqlEnum("role", ["player", "organizer", "admin"]).notNull().default("player"),
+  profileCompletedAt: timestamp("profile_completed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/* ------------------------------------------------------------------------- */
+/* otp_requests — single-use phone OTP verification requests                 */
+/* ------------------------------------------------------------------------- */
+export const otpRequests = mysqlTable(
+  "otp_requests",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    phoneNumber: varchar("phone_number", { length: 20 }).notNull(),
+    codeHash: varchar("code_hash", { length: 128 }).notNull(), // never store the raw code
+    ipAddress: varchar("ip_address", { length: 45 }).notNull(),
+    expiresAt: timestamp("expires_at").notNull(), // sentAt + 4 minutes
+    consumedAt: timestamp("consumed_at"), // set on the one verification attempt, success or fail
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("otp_phone_idx").on(table.phoneNumber, table.createdAt),
+    index("otp_ip_idx").on(table.ipAddress, table.createdAt),
+  ],
+);
+
+/* ------------------------------------------------------------------------- */
+/* organizer_applications — detailed applications for organizer role         */
+/* ------------------------------------------------------------------------- */
+export const organizerApplications = mysqlTable("organizer_applications", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  userId: varchar("user_id", { length: 36 }).notNull(),
+  applicantType: mysqlEnum("applicant_type", ["individual", "organization"]).notNull(),
+  organizationName: varchar("organization_name", { length: 160 }),
+  organizationRegNumber: varchar("organization_reg_number", { length: 64 }),
+  ghanaCardFrontUrl: varchar("ghana_card_front_url", { length: 255 }).notNull(),
+  ghanaCardBackUrl: varchar("ghana_card_back_url", { length: 255 }).notNull(),
+  selfieUrl: varchar("selfie_url", { length: 255 }).notNull(),
+  physicalAddress: varchar("physical_address", { length: 255 }).notNull(),
+  proofOfAddressUrl: varchar("proof_of_address_url", { length: 255 }).notNull(),
+  intendedGameTypes: varchar("intended_game_types", { length: 255 }).notNull(), // comma separated or JSON
+  expectedTournamentSize: int("expected_tournament_size"),
+  expectedFrequency: varchar("expected_frequency", { length: 64 }),
+  priorExperience: varchar("prior_experience", { length: 500 }),
+  termsAcceptedAt: timestamp("terms_accepted_at").notNull(),
+  status: mysqlEnum("status", ["pending", "approved", "rejected", "needs_info"]).notNull().default("pending"),
+  reviewedByAdminId: varchar("reviewed_by_admin_id", { length: 36 }),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNote: varchar("review_note", { length: 500 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/* ------------------------------------------------------------------------- */
+/* regions — administrative / geographical regions for tournament & profiles  */
+/* ------------------------------------------------------------------------- */
+export const regions = mysqlTable(
+  "regions",
+  {
+    id: varchar("id", { length: 64 }).primaryKey(),
+    name: varchar("name", { length: 120 }).notNull(),
+    code: varchar("code", { length: 32 }),
+    sortOrder: int("sort_order").notNull().default(0),
+    active: tinyint("active").notNull().default(1),
+    createdAt: isoTimestamp("created_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("regions_name_uq").on(t.name),
+    index("regions_sort_order_idx").on(t.sortOrder),
+  ],
+);
+
+/* ------------------------------------------------------------------------- */
+/* matches — 1v1 wager matches with escrow lifecycle (Section 6)             */
+/* ------------------------------------------------------------------------- */
+export const matches = mysqlTable(
+  "matches",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    gameType: varchar("game_type", { length: 32 }).notNull(),
+    playerAId: varchar("player_a_id", { length: 36 }).notNull(),
+    playerBId: varchar("player_b_id", { length: 36 }),
+    wagerAmount: decimal("wager_amount", { precision: 14, scale: 2 }).notNull(),
+    status: mysqlEnum("status", ["open", "in_progress", "completed", "cancelled"]).notNull().default("open"),
+    winnerId: varchar("winner_id", { length: 36 }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    settledAt: timestamp("settled_at"),
+  },
+  (t) => [
+    index("matches_status_idx").on(t.status),
+    index("matches_player_a_idx").on(t.playerAId),
+    index("matches_player_b_idx").on(t.playerBId),
+    index("matches_game_type_idx").on(t.gameType),
+  ],
+);
+
+/* ------------------------------------------------------------------------- */
+/* tournaments — tournament prize escrow & bracket management (Section 7)     */
+/* ------------------------------------------------------------------------- */
+export const tournaments = mysqlTable(
+  "tournaments",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    organizerId: varchar("organizer_id", { length: 36 }).notNull(),
+    gameType: varchar("game_type", { length: 32 }).notNull(),
+    entryFee: decimal("entry_fee", { precision: 14, scale: 2 }).notNull().default("0.00"),
+    totalPrizePool: decimal("total_prize_pool", { precision: 14, scale: 2 }).notNull(),
+    status: mysqlEnum("status", ["open", "in_progress", "completed", "cancelled"]).notNull().default("open"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    completedAt: timestamp("completed_at"),
+  },
+  (t) => [
+    index("tournaments_status_idx").on(t.status),
+    index("tournaments_organizer_id_idx").on(t.organizerId),
+    index("tournaments_game_type_idx").on(t.gameType),
+  ],
+);
+
+export const tournamentPrizes = mysqlTable(
+  "tournament_prizes",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    tournamentId: varchar("tournament_id", { length: 36 }).notNull(),
+    placement: int("placement").notNull(), // 1, 2, 3...
+    amount: decimal("amount", { precision: 14, scale: 2 }).notNull(),
+  },
+  (t) => [
+    index("tournament_prizes_tournament_id_idx").on(t.tournamentId),
+  ],
+);
+
+export const tournamentEntries = mysqlTable(
+  "tournament_entries",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    tournamentId: varchar("tournament_id", { length: 36 }).notNull(),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    feePaid: decimal("fee_paid", { precision: 14, scale: 2 }).notNull().default("0.00"),
+    finalPlacement: int("final_placement"),
+    joinedAt: timestamp("joined_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("tournament_entries_tournament_id_idx").on(t.tournamentId),
+    index("tournament_entries_user_id_idx").on(t.userId),
+    uniqueIndex("tournament_entries_user_uq").on(t.tournamentId, t.userId),
+  ],
+);
+
+/* ------------------------------------------------------------------------- */
+/* game_type_limits — admin game-type wager/prize constraints (Section 8)    */
+/* ------------------------------------------------------------------------- */
+export const gameTypeLimits = mysqlTable(
+  "game_type_limits",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    gameType: varchar("game_type", { length: 32 }).notNull().unique(),
+    minWager: decimal("min_wager", { precision: 14, scale: 2 }).notNull(),
+    maxWager: decimal("max_wager", { precision: 14, scale: 2 }).notNull(),
+    minTournamentPrizePool: decimal("min_tournament_prize_pool", { precision: 14, scale: 2 }).notNull(),
+    maxTournamentPrizePool: decimal("max_tournament_prize_pool", { precision: 14, scale: 2 }).notNull(),
+    platformFeePercent: decimal("platform_fee_percent", { precision: 5, scale: 4 }).notNull(), // e.g. 0.0500 for 5%
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+);
+
+/* ------------------------------------------------------------------------- */
+/* ledger_entries — double-entry transaction ledger                          */
+/* ------------------------------------------------------------------------- */
+export const ledgerEntries = mysqlTable(
+  "ledger_entries",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    accountType: mysqlEnum("account_type", ["available", "escrow"]).notNull(),
+    entryType: varchar("entry_type", { length: 64 }).notNull(),
+    amount: decimal("amount", { precision: 14, scale: 2 }).notNull(),
+    referenceType: varchar("reference_type", { length: 32 }).notNull(),
+    referenceId: varchar("reference_id", { length: 64 }).notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("ledger_user_account_idx").on(t.userId, t.accountType),
+    index("ledger_reference_idx").on(t.referenceType, t.referenceId),
+    index("ledger_created_at_idx").on(t.createdAt),
+  ],
+);
+
 export type ProfileRow = typeof profiles.$inferSelect;
+export type UserRow = typeof users.$inferSelect;
+export type OtpRequestRow = typeof otpRequests.$inferSelect;
+export type OrganizerApplicationRow = typeof organizerApplications.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 export type AdminProfileRow = typeof adminProfiles.$inferSelect;
 export type OrganizerProfileRow = typeof organizerProfiles.$inferSelect;
@@ -413,3 +625,10 @@ export type LeagueParticipantRow = typeof leagueParticipants.$inferSelect;
 export type LeagueMatchRow = typeof leagueMatches.$inferSelect;
 export type AdminLogRow = typeof adminLogs.$inferSelect;
 export type AdminSettingsRow = typeof adminSettings.$inferSelect;
+export type RegionRow = typeof regions.$inferSelect;
+export type MatchRow = typeof matches.$inferSelect;
+export type TournamentRow = typeof tournaments.$inferSelect;
+export type TournamentPrizeRow = typeof tournamentPrizes.$inferSelect;
+export type TournamentEntryRow = typeof tournamentEntries.$inferSelect;
+export type GameTypeLimitRow = typeof gameTypeLimits.$inferSelect;
+export type LedgerEntryRow = typeof ledgerEntries.$inferSelect;

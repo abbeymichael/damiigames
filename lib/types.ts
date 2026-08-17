@@ -6,6 +6,73 @@ export type BaseRole = "player" | "organizer" | "admin";
 
 export type OrganizerStatus = "none" | "pending" | "approved" | "rejected" | "revoked";
 
+export type OrganizerApplicationStatus = "pending" | "approved" | "rejected" | "needs_info";
+export type OrganizerApplicantType = "individual" | "organization";
+
+export interface User {
+  id: string;
+  phoneNumber: string;
+  phoneVerifiedAt?: string | null;
+  fullName?: string | null;
+  email?: string | null;
+  emailVerifiedAt?: string | null;
+  ghanaCardNumber?: string | null;
+  dateOfBirth?: string | null;
+  gender?: string | null;
+  avatarUrl?: string | null;
+  region?: string | null;
+  city?: string | null;
+  address?: string | null;
+  momoNumber?: string | null;
+  momoNetwork?: string | null;
+  username?: string | null;
+  referralCode?: string | null;
+  role: "player" | "organizer" | "admin";
+  profileCompletedAt?: string | null;
+  createdAt: string;
+}
+
+export interface OtpRequest {
+  id: string;
+  phoneNumber: string;
+  codeHash: string;
+  ipAddress: string;
+  expiresAt: string | Date;
+  consumedAt?: string | Date | null;
+  createdAt: string | Date;
+}
+
+export interface Region {
+  id: string;
+  name: string;
+  code?: string;
+  sortOrder?: number;
+  active?: boolean;
+}
+
+export interface OrganizerApplication {
+  id: string;
+  userId: string;
+  applicantType: OrganizerApplicantType;
+  organizationName?: string | null;
+  organizationRegNumber?: string | null;
+  ghanaCardFrontUrl: string;
+  ghanaCardBackUrl: string;
+  selfieUrl: string;
+  physicalAddress: string;
+  proofOfAddressUrl: string;
+  intendedGameTypes: string;
+  expectedTournamentSize?: number | null;
+  expectedFrequency?: string | null;
+  priorExperience?: string | null;
+  termsAcceptedAt: string | Date;
+  status: OrganizerApplicationStatus;
+  reviewedByAdminId?: string | null;
+  reviewedAt?: string | Date | null;
+  reviewNote?: string | null;
+  createdAt: string | Date;
+}
+
 export type AdminPermission =
   | "manage_users"          // suspend/ban accounts, view PII
   | "manage_organizers"     // approve/reject/revoke organizer requests
@@ -258,3 +325,106 @@ export type AdminLog = {
   detailsJson: string;
   createdAt: string;
 };
+
+/* ------------------------------------------------------------------------- */
+/* Wager Match Escrow (Section 6)                                            */
+/* ------------------------------------------------------------------------- */
+export type MatchStatus = "open" | "in_progress" | "completed" | "cancelled";
+
+export interface Match {
+  id: string;
+  gameType: string;
+  playerAId: string;
+  playerBId?: string | null;
+  wagerAmount: number | string;
+  status: MatchStatus;
+  winnerId?: string | null;
+  createdAt: string | Date;
+  settledAt?: string | Date | null;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Tournament Prize Escrow (Section 7)                                       */
+/* ------------------------------------------------------------------------- */
+export type TournamentEscrowStatus = "open" | "in_progress" | "completed" | "cancelled";
+
+export interface Tournament {
+  id: string;
+  organizerId: string;
+  gameType: string;
+  entryFee: number | string;
+  totalPrizePool: number | string;
+  status: TournamentEscrowStatus;
+  createdAt: string | Date;
+  completedAt?: string | Date | null;
+}
+
+export interface TournamentPrize {
+  id: string;
+  tournamentId: string;
+  placement: number;
+  amount: number | string;
+}
+
+export interface TournamentEntry {
+  id: string;
+  tournamentId: string;
+  userId: string;
+  feePaid: number | string;
+  finalPlacement?: number | null;
+  joinedAt: string | Date;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Admin Controls: Game Type Limits (Section 8)                              */
+/* ------------------------------------------------------------------------- */
+export interface GameTypeLimit {
+  id: string;
+  gameType: string;
+  minWager: number | string;
+  maxWager: number | string;
+  minTournamentPrizePool: number | string;
+  maxTournamentPrizePool: number | string;
+  platformFeePercent: number | string;
+  updatedAt: string | Date;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Double-Entry Ledger Types                                                 */
+/* ------------------------------------------------------------------------- */
+export type LedgerAccountType = "available" | "escrow";
+
+export type LedgerEntryType =
+  | "wager_lock"
+  | "wager_payout"
+  | "wager_refund"
+  | "platform_fee"
+  | "prize_pool_lock"
+  | "prize_pool_refund"
+  | "entry_fee_lock"
+  | "entry_fee_release"
+  | "entry_fee_refund"
+  | "prize_disbursement"
+  | "deposit"
+  | "withdrawal"
+  | "adjustment";
+
+export interface LedgerEntry {
+  id: string;
+  userId: string;
+  accountType: LedgerAccountType;
+  entryType: string;
+  amount: number | string;
+  referenceType: string;
+  referenceId: string;
+  createdAt: string | Date;
+}
+
+export interface LedgerEntryInput {
+  userId: string;
+  accountType: LedgerAccountType;
+  entryType: string;
+  amount: string | number;
+  referenceType: string;
+  referenceId: string;
+}

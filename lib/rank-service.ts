@@ -3,13 +3,13 @@ import { Profile } from "./types";
 export interface RankInfo {
   tier: number;            // 1 - 8
   title: string;           // Rank title
-  aka: string;             // Ghanaian moniker / alias
+  aka: string;             // Arena moniker / alias
   badgeEmoji: string;      // Visual badge icon
   minRating: number;       // Minimum required Dynamic Performance Index (DPI)
   nextTierRating: number;  // Minimum DPI for next rank tier
   minGamesRequired: number; // Minimum matches played required
   progressPercent: number; // 0 - 100 progress percentage to next tier
-  description: string;     // Short description of status in Ghanaian draughts
+  description: string;     // Short description of status in draughts
   
   // Dynamic factors breakdown
   dpi: number;             // Dynamic Performance Index (Combined score)
@@ -38,7 +38,7 @@ export const GHANAIAN_RANKS: Omit<RankInfo, "progressPercent" | "dpi" | "baseRat
     minRating: 1080,
     nextTierRating: 1220,
     minGamesRequired: 3,
-    description: "Regular player at local draughts bases across Ghana.",
+    description: "Regular player at local draughts clubs and arenas.",
   },
   {
     tier: 3,
@@ -72,13 +72,13 @@ export const GHANAIAN_RANKS: Omit<RankInfo, "progressPercent" | "dpi" | "baseRat
   },
   {
     tier: 6,
-    title: "Ghana Damii Master",
+    title: "Arena Damii Master",
     aka: "National Master",
     badgeEmoji: "👑",
     minRating: 1720,
     nextTierRating: 1880,
     minGamesRequired: 40,
-    description: "Elite national draughts master recognized across Ghana.",
+    description: "Elite draughts master recognized across the platform.",
   },
   {
     tier: 7,
@@ -98,7 +98,7 @@ export const GHANAIAN_RANKS: Omit<RankInfo, "progressPercent" | "dpi" | "baseRat
     minRating: 2050,
     nextTierRating: 9999,
     minGamesRequired: 80,
-    description: "The supreme legend of Ghanaian 10x10 Damii.",
+    description: "The supreme legend of 10x10 Damii Draughts.",
   },
 ];
 

@@ -23,6 +23,17 @@ import {
   ChevronRight,
   UserCog,
   Eye,
+  Smartphone,
+  Clock,
+  RefreshCw,
+  CreditCard,
+  ArrowRight,
+  ShieldCheck,
+  Mail,
+  MapPin,
+  Calendar,
+  UserCheck,
+  Lock,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { getProfileRank } from "@/lib/rank-service";
@@ -156,13 +167,73 @@ export function Header() {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
   // Auth modal state
-  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authMode, setAuthMode] = useState<"login" | "register" | "complete_profile">("register");
+  const [regStep, setRegStep] = useState<1 | 2 | 3>(1);
+  const [regPhone, setRegPhone] = useState("");
+  const [regRequestId, setRegRequestId] = useState("");
+  const [regOtpCode, setRegOtpCode] = useState("");
+  const [regExpiresAt, setRegExpiresAt] = useState("");
+  const [regDebugCode, setRegDebugCode] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  // Profile completion state
+  const [profFullName, setProfFullName] = useState("");
+  const [profUsername, setProfUsername] = useState("");
+  const [profEmail, setProfEmail] = useState("");
+  const [profGhanaCard, setProfGhanaCard] = useState("");
+  const [profDob, setProfDob] = useState("");
+  const [profGender, setProfGender] = useState("male");
+  const [profRegion, setProfRegion] = useState("Greater Accra");
+  const [profCity, setProfCity] = useState("Accra");
+  const [profMomoNumber, setProfMomoNumber] = useState("");
+  const [profMomoNetwork, setProfMomoNetwork] = useState("MTN");
+  const [profileCompleted, setProfileCompleted] = useState(false);
+  const [dbRegions, setDbRegions] = useState<{ id: string; name: string; code?: string }[]>([]);
+
+  // Dynamic regions fetching from database
+  useEffect(() => {
+    fetch("/api/regions")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data.regions) && data.regions.length > 0) {
+          setDbRegions(data.regions);
+          if (!profRegion) {
+            setProfRegion(data.regions[0].name);
+          }
+        }
+      })
+      .catch(() => {
+        // Fallback default list
+        setDbRegions([
+          { id: "1", name: "Greater Accra" },
+          { id: "2", name: "Ashanti" },
+          { id: "3", name: "Western" },
+          { id: "4", name: "Eastern" },
+          { id: "5", name: "Central" },
+          { id: "6", name: "Northern" },
+          { id: "7", name: "Volta" },
+          { id: "8", name: "Upper East" },
+          { id: "9", name: "Upper West" },
+          { id: "10", name: "Bono" },
+        ]);
+      });
+  }, []);
+
+  // Existing login state
   const [formUsername, setFormUsername] = useState("");
   const [formPasscode, setFormPasscode] = useState("");
-  const [formPhone, setFormPhone] = useState("");
   const [authError, setAuthError] = useState("");
   const [authSuccess, setAuthSuccess] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Countdown timer for OTP resend
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   // Profile Edit modal state
   const [editUsername, setEditUsername] = useState("");
@@ -305,18 +376,192 @@ export function Header() {
     localStorage.setItem("damii-read-notifications", JSON.stringify(updated));
   };
 
-  const handleAuthSubmit = async (e: React.FormEvent) => {
+  const handleRequestOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setAuthError("");
+    setAuthSuccess("");
+
+    if (!regPhone.trim()) {
+      setAuthError("Valid phone number is required.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phoneNumber: regPhone.trim(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        setAuthError(data.error || "Failed to send verification OTP.");
+        setIsLoading(false);
+        return;
+      }
+
+      setRegRequestId(data.requestId);
+      setRegExpiresAt(data.expiresAt);
+      setRegDebugCode(data.debugCode || null);
+      setResendCooldown(60);
+      setRegStep(2);
+      setAuthSuccess(`6-digit code sent to ${regPhone.trim()}`);
+    } catch {
+      setAuthError("Network connection error. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    setAuthSuccess("");
+
+    if (!regRequestId || !regOtpCode.trim()) {
+      setAuthError("Please enter the 6-digit verification code.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requestId: regRequestId,
+          code: regOtpCode.trim(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        setAuthError(data.error || "Invalid or expired OTP code.");
+        setIsLoading(false);
+        return;
+      }
+
+      // Save credentials & active session
+      saveSessionToken(data.token, data.csrfToken);
+      localStorage.setItem("damii-player-token", data.token);
+      localStorage.setItem("damii-player-name", data.user?.username || `Player_${regPhone.slice(-4)}`);
+      localStorage.setItem(
+        "damii-auth-user",
+        JSON.stringify({
+          token: data.token,
+          username: data.user?.username || `Player_${regPhone.slice(-4)}`,
+          points: 500,
+          role: data.user?.role || "player",
+        })
+      );
+
+      setUserToken(data.token);
+      setPhoneNumber(data.user?.phoneNumber || regPhone);
+      setProfileCompleted(Boolean(data.profileCompleted));
+
+      if (data.profileCompleted) {
+        setAuthSuccess("Phone verified! Welcome back to DAMII Arena.");
+        window.dispatchEvent(new Event("damii-auth-changed"));
+        setTimeout(() => {
+          setIsAuthOpen(false);
+          setRegStep(1);
+          setRegOtpCode("");
+          setAuthSuccess("");
+        }, 1200);
+      } else {
+        // Pre-fill profile completion fields
+        setProfMomoNumber(regPhone);
+        setProfUsername(data.user?.username || "");
+        setProfFullName(data.user?.fullName || "");
+        setRegStep(3);
+        setAuthSuccess("Phone verified successfully! Complete your player profile below.");
+      }
+    } catch {
+      setAuthError("Verification failed. Please check your connection.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCompleteProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    setAuthSuccess("");
+
+    if (!profUsername.trim()) {
+      setAuthError("Please choose an Arena username / gamer tag.");
+      return;
+    }
+
+    if (!profFullName.trim()) {
+      setAuthError("Full legal name is required for platform registration.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const res = await fetch("/api/profile/complete", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          username: profUsername.trim(),
+          fullName: profFullName.trim(),
+          email: profEmail.trim() || undefined,
+          ghanaCardNumber: profGhanaCard.trim() || undefined,
+          dateOfBirth: profDob ? new Date(profDob).toISOString() : undefined,
+          gender: profGender,
+          region: profRegion,
+          city: profCity,
+          momoNumber: profMomoNumber.trim() || undefined,
+          momoNetwork: profMomoNetwork,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        setAuthError(data.error || "Failed to complete profile.");
+        setIsLoading(false);
+        return;
+      }
+
+      setAuthSuccess("Player profile registered & verified! Welcome to DAMII Arena.");
+      setProfileCompleted(true);
+      if (data.user?.username) {
+        localStorage.setItem("damii-player-name", data.user.username);
+        setUsername(data.user.username);
+      }
+
+      window.dispatchEvent(new Event("damii-auth-changed"));
+
+      setTimeout(() => {
+        setIsAuthOpen(false);
+        setRegStep(1);
+        setRegOtpCode("");
+        setAuthSuccess("");
+      }, 1200);
+    } catch {
+      setAuthError("Failed to save profile. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
     setAuthSuccess("");
 
     if (!formUsername.trim() || !formPasscode.trim()) {
       setAuthError("Username and passcode are required.");
-      return;
-    }
-
-    if (authMode === "register" && !formPhone.trim()) {
-      setAuthError("Phone number is required for registration.");
       return;
     }
 
@@ -327,10 +572,9 @@ export function Header() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: authMode,
+          action: "login",
           username: formUsername.trim(),
           passcode: formPasscode.trim(),
-          phoneNumber: formPhone.trim(),
         }),
       });
 
@@ -356,18 +600,12 @@ export function Header() {
         })
       );
 
-      setAuthSuccess(
-        authMode === "register"
-          ? `Account created! Welcome to DAMII Arena.`
-          : `Welcome back, ${data.profile.username}!`
-      );
-
+      setAuthSuccess(`Welcome back, ${data.profile.username}!`);
       window.dispatchEvent(new Event("damii-auth-changed"));
 
       setTimeout(() => {
         setIsAuthOpen(false);
         setFormPasscode("");
-        setFormPhone("");
         setAuthSuccess("");
       }, 1000);
     } catch {
@@ -1138,7 +1376,7 @@ export function Header() {
               <div className="pt-4 border-t border-[#0c3b2e] space-y-2">
                 <div className="p-3 bg-[#0c3b2e]/60 rounded-xl border border-[#d6a735]/20 text-[11px] text-[#cbd5e1] flex items-center justify-between">
                   <span className="flex items-center gap-1.5 font-bold text-[#f5efdf]">
-                    <Sparkles size={14} className="text-[#d6a735]" /> Ghanaian 10×10 Rules
+                    <Sparkles size={14} className="text-[#d6a735]" /> 10×10 Draughts Rules
                   </span>
                   <span className="text-[9px] bg-[#d6a735]/20 text-[#d6a735] px-1.5 py-0.5 rounded font-extrabold uppercase">
                     Official
@@ -1283,15 +1521,34 @@ export function Header() {
 
       {/* Auth Modal Overlay */}
       {isAuthOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <div className="w-full max-w-md bg-[#06261f] border border-[#d6a735]/40 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-[#f5efdf]">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 overflow-y-auto">
+          <div className="w-full max-w-lg bg-[#06261f] border border-[#d6a735]/40 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-[#f5efdf] my-8">
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#0c3b2e] bg-[#0c3b2e]/60">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#0c3b2e] bg-[#0c3b2e]/70">
               <div className="flex items-center gap-2">
-                <KeyRound className="text-[#d6a735]" size={20} />
-                <h3 className="text-lg font-black font-serif text-[#f5efdf]">
-                  {authMode === "login" ? "User Sign In" : "Create Player Account"}
-                </h3>
+                <ShieldCheck className="text-[#d6a735]" size={22} />
+                <div>
+                  <h3 className="text-base sm:text-lg font-black font-serif text-[#f5efdf]">
+                    {authMode === "login"
+                      ? "Player Account Sign In"
+                      : authMode === "complete_profile"
+                      ? "Complete Player Profile"
+                      : regStep === 1
+                      ? "Register with Phone & OTP"
+                      : regStep === 2
+                      ? "Verify 6-Digit OTP Code"
+                      : "Complete Player Profile"}
+                  </h3>
+                  <p className="text-[11px] text-[#d6a735]">
+                    {authMode === "login"
+                      ? "Sign in with your username and passcode"
+                      : authMode === "complete_profile" || regStep === 3
+                      ? "Step 3 of 3: Identity & Payout Account"
+                      : regStep === 2
+                      ? "Step 2 of 3: SMS Verification"
+                      : "Step 1 of 3: Instant Phone Verification"}
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
@@ -1299,14 +1556,49 @@ export function Header() {
                   setIsAuthOpen(false);
                   window.dispatchEvent(new CustomEvent("damii-auth-closed"));
                 }}
-                className="text-slate-400 hover:text-slate-100 transition-colors p-1"
+                className="text-slate-400 hover:text-slate-100 transition-colors p-1 rounded-lg hover:bg-[#0c3b2e]"
               >
                 <X size={20} />
               </button>
             </div>
 
-            {/* Auth Form */}
-            <form onSubmit={handleAuthSubmit} className="p-6 space-y-4">
+            {/* Mode Switcher Tabs */}
+            {authMode !== "complete_profile" && (
+              <div className="grid grid-cols-2 bg-[#06261f] border-b border-[#0c3b2e] p-1.5 gap-1.5 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("register");
+                    setAuthError("");
+                    setAuthSuccess("");
+                  }}
+                  className={`py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                    authMode === "register"
+                      ? "bg-[#d6a735] text-[#06261f] font-black shadow-md"
+                      : "text-slate-300 hover:text-white hover:bg-[#0c3b2e]"
+                  }`}
+                >
+                  <Smartphone size={14} /> Register (Phone OTP)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("login");
+                    setAuthError("");
+                    setAuthSuccess("");
+                  }}
+                  className={`py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                    authMode === "login"
+                      ? "bg-[#d6a735] text-[#06261f] font-black shadow-md"
+                      : "text-slate-300 hover:text-white hover:bg-[#0c3b2e]"
+                  }`}
+                >
+                  <LogIn size={14} /> Sign In (Passcode)
+                </button>
+              </div>
+            )}
+
+            <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
               {authError && (
                 <div className="p-3 bg-red-950/80 border border-red-800 rounded-xl text-red-200 text-xs flex items-center gap-2">
                   <AlertCircle size={16} className="shrink-0 text-red-400" />
@@ -1321,109 +1613,400 @@ export function Header() {
                 </div>
               )}
 
-              <div>
-                <label className="block text-xs font-bold text-[#f5efdf] mb-1.5">
-                  Username
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formUsername}
-                  onChange={(e) => setFormUsername(e.target.value)}
-                  placeholder="e.g. Kwame_Master"
-                  className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-sm focus:outline-none focus:border-[#d6a735] transition-colors"
-                />
-              </div>
+              {/* Registration Step 1: Phone Request OTP */}
+              {authMode === "register" && regStep === 1 && (
+                <form onSubmit={handleRequestOtp} className="space-y-4">
+                  <div className="p-3 bg-[#0c3b2e]/70 border border-[#d6a735]/30 rounded-xl text-xs space-y-1">
+                    <span className="font-bold text-[#d6a735] flex items-center gap-1">
+                      <Sparkles size={14} /> Draughts Arena Registration
+                    </span>
+                    <p className="text-slate-300 text-[11px]">
+                      Enter your phone number to receive a one-time 6-digit SMS verification code. No password required.
+                    </p>
+                  </div>
 
-              {authMode === "register" && (
-                <div>
-                  <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center gap-1">
-                    <Phone size={13} className="text-[#d6a735]" /> Phone Number (Ghana Mobile Money)
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    value={formPhone}
-                    onChange={(e) => setFormPhone(e.target.value)}
-                    placeholder="e.g. 0241234567 or +233241234567"
-                    className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-sm focus:outline-none focus:border-[#d6a735] transition-colors"
-                  />
-                  <small className="block text-[10px] text-slate-400 mt-1">
-                    Used for Mobile Money payouts &amp; wager victory settlements.
-                  </small>
-                </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center gap-1">
+                      <Phone size={13} className="text-[#d6a735]" /> Phone Number (Payout &amp; Verification)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="tel"
+                        required
+                        value={regPhone}
+                        onChange={(e) => setRegPhone(e.target.value)}
+                        placeholder="e.g. 0241234567 or +233241234567"
+                        className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-sm focus:outline-none focus:border-[#d6a735] transition-colors"
+                      />
+                    </div>
+                    <small className="block text-[10px] text-slate-400 mt-1">
+                      Supports MTN, Telecel, and AT networks. This number will be your permanently verified payout destination.
+                    </small>
+                  </div>
+
+                  <div className="p-3 bg-[#0c3b2e] border border-[#d6a735]/30 rounded-xl text-[#d6a735] text-xs">
+                    🎁 <strong>Welcome Bonus:</strong> Verified accounts receive <strong>GH₵ 500.00 balance</strong> for online matches &amp; tournament play.
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3 bg-[#d6a735] hover:bg-[#b88c24] disabled:opacity-50 text-[#06261f] font-black rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {isLoading ? (
+                      "Sending OTP Code..."
+                    ) : (
+                      <>
+                        <Smartphone size={16} /> Send 6-Digit OTP Code
+                      </>
+                    )}
+                  </button>
+                </form>
               )}
 
-              <div>
-                <label className="block text-xs font-bold text-[#f5efdf] mb-1.5">
-                  Passcode / PIN
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={formPasscode}
-                  onChange={(e) => setFormPasscode(e.target.value)}
-                  placeholder="Enter secret passcode"
-                  className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-sm focus:outline-none focus:border-[#d6a735] transition-colors"
-                />
-              </div>
+              {/* Registration Step 2: OTP Verification */}
+              {authMode === "register" && regStep === 2 && (
+                <form onSubmit={handleVerifyOtp} className="space-y-4">
+                  <div className="p-3 bg-[#0c3b2e]/70 border border-[#d6a735]/30 rounded-xl text-xs space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-[#d6a735] flex items-center gap-1">
+                        <Clock size={14} /> Enter Verification Code
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRegStep(1);
+                          setAuthError("");
+                        }}
+                        className="text-[11px] text-[#d6a735] hover:underline font-bold"
+                      >
+                        Change Number
+                      </button>
+                    </div>
+                    <p className="text-slate-300 text-[11px]">
+                      A 6-digit code was sent to <strong className="text-white">{regPhone}</strong>.
+                    </p>
+                  </div>
 
-              {authMode === "register" && (
-                <div className="p-3 bg-[#0c3b2e] border border-[#d6a735]/30 rounded-xl text-[#d6a735] text-xs">
-                  🎁 <strong>Welcome Bonus:</strong> New accounts receive <strong>GH₵ 500.00 free balance</strong> to play wager matches and join tournaments immediately!
-                </div>
+                  {regDebugCode && (
+                    <div className="p-2.5 bg-amber-950/60 border border-amber-800 rounded-xl text-amber-200 text-xs flex items-center justify-between">
+                      <span>Sandbox Code: <strong>{regDebugCode}</strong></span>
+                      <button
+                        type="button"
+                        onClick={() => setRegOtpCode(regDebugCode)}
+                        className="px-2 py-0.5 bg-amber-500 text-slate-950 text-[10px] font-black rounded hover:bg-amber-400"
+                      >
+                        Auto-Fill
+                      </button>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center gap-1">
+                      <KeyRound size={13} className="text-[#d6a735]" /> 6-Digit SMS Code
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      required
+                      autoFocus
+                      value={regOtpCode}
+                      onChange={(e) => setRegOtpCode(e.target.value.replace(/\D/g, ""))}
+                      placeholder="e.g. 123456"
+                      className="w-full px-3.5 py-3 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-center text-lg font-mono tracking-widest focus:outline-none focus:border-[#d6a735] transition-colors"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-slate-400">
+                    <span>
+                      {resendCooldown > 0 ? (
+                        <span>Resend code in <strong className="text-[#d6a735]">{resendCooldown}s</strong></span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleRequestOtp()}
+                          className="text-[#d6a735] hover:underline font-bold flex items-center gap-1"
+                        >
+                          <RefreshCw size={12} /> Resend OTP Code
+                        </button>
+                      )}
+                    </span>
+                    <span>Expires in 4 mins</span>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading || regOtpCode.length < 4}
+                    className="w-full py-3 bg-[#d6a735] hover:bg-[#b88c24] disabled:opacity-50 text-[#06261f] font-black rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {isLoading ? "Verifying..." : (
+                      <>
+                        <CheckCircle2 size={16} /> Verify &amp; Continue
+                      </>
+                    )}
+                  </button>
+                </form>
               )}
 
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-3 bg-[#d6a735] hover:bg-[#b88c24] disabled:opacity-50 text-[#06261f] font-black rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2"
-              >
-                {isLoading ? (
-                  "Processing..."
-                ) : authMode === "login" ? (
-                  <>
-                    <LogIn size={16} /> Sign In
-                  </>
-                ) : (
-                  <>
-                    <KeyRound size={16} /> Register &amp; Claim GH₵ 500.00
-                  </>
-                )}
-              </button>
+              {/* Registration Step 3 / Complete Profile */}
+              {((authMode === "register" && regStep === 3) || authMode === "complete_profile") && (
+                <form onSubmit={handleCompleteProfile} className="space-y-3.5">
+                  <div className="p-3 bg-[#0c3b2e]/70 border border-[#d6a735]/30 rounded-xl text-xs space-y-1">
+                    <span className="font-bold text-[#d6a735] flex items-center gap-1">
+                      <UserCheck size={14} /> Profile Completion &amp; Identity
+                    </span>
+                    <p className="text-slate-300 text-[11px]">
+                      Complete your official player credentials to participate in tournaments, unlock rank badges, and receive prize payouts.
+                    </p>
+                  </div>
 
-              <div className="pt-2 text-center text-xs text-slate-400">
-                {authMode === "login" ? (
-                  <span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1">
+                        Gamer Tag / Username *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={profUsername}
+                        onChange={(e) => setProfUsername(e.target.value)}
+                        placeholder="e.g. Kwame_Grandmaster"
+                        className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1">
+                        Full Legal Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={profFullName}
+                        onChange={(e) => setProfFullName(e.target.value)}
+                        placeholder="e.g. Kwame Mensah"
+                        className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1 flex items-center gap-1">
+                        <Mail size={11} className="text-[#d6a735]" /> Email Address
+                      </label>
+                      <input
+                        type="email"
+                        value={profEmail}
+                        onChange={(e) => setProfEmail(e.target.value)}
+                        placeholder="player@example.com"
+                        className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1 flex items-center gap-1">
+                        <CreditCard size={11} className="text-[#d6a735]" /> National ID / Card Number
+                      </label>
+                      <input
+                        type="text"
+                        value={profGhanaCard}
+                        onChange={(e) => setProfGhanaCard(e.target.value)}
+                        placeholder="e.g. ID-123456789-0"
+                        className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1 flex items-center gap-1">
+                        <Calendar size={11} className="text-[#d6a735]" /> Date of Birth
+                      </label>
+                      <input
+                        type="date"
+                        value={profDob}
+                        onChange={(e) => setProfDob(e.target.value)}
+                        className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1">
+                        Gender
+                      </label>
+                      <select
+                        value={profGender}
+                        onChange={(e) => setProfGender(e.target.value)}
+                        className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
+                      >
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1 flex items-center gap-1">
+                        <MapPin size={11} className="text-[#d6a735]" /> Region (Dynamic)
+                      </label>
+                      <select
+                        value={profRegion}
+                        onChange={(e) => setProfRegion(e.target.value)}
+                        className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
+                      >
+                        {dbRegions.length > 0 ? (
+                          dbRegions.map((r) => (
+                            <option key={r.id} value={r.name}>
+                              {r.name}
+                            </option>
+                          ))
+                        ) : (
+                          <>
+                            <option value="Greater Accra">Greater Accra</option>
+                            <option value="Ashanti">Ashanti</option>
+                            <option value="Western">Western</option>
+                            <option value="Eastern">Eastern</option>
+                            <option value="Central">Central</option>
+                            <option value="Northern">Northern</option>
+                            <option value="Volta">Volta</option>
+                            <option value="Upper East">Upper East</option>
+                            <option value="Upper West">Upper West</option>
+                            <option value="Bono">Bono</option>
+                          </>
+                        )}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1">
+                        City / Town (Type in)
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={profCity}
+                        onChange={(e) => setProfCity(e.target.value)}
+                        placeholder="Type your city or town"
+                        className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Payout Information - Phone number strictly locked to verified number */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[#0c3b2e]">
+                    <div>
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1 flex items-center justify-between">
+                        <span className="flex items-center gap-1">
+                          <Phone size={11} className="text-[#d6a735]" /> Payout Phone Number
+                        </span>
+                        <span className="text-[10px] text-amber-400 font-bold flex items-center gap-0.5">
+                          <Lock size={10} /> Locked
+                        </span>
+                      </label>
+                      <div className="w-full px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs font-mono flex items-center justify-between shadow-inner">
+                        <span>{regPhone || phoneNumber || "Verified Phone"}</span>
+                        <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-bold border border-amber-500/30">
+                          Verified Payout
+                        </span>
+                      </div>
+                      <small className="block text-[10px] text-slate-400 mt-1">
+                        Locked to your verified phone number for security.
+                      </small>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1">
+                        Payout Mobile Network
+                      </label>
+                      <select
+                        value={profMomoNetwork}
+                        onChange={(e) => setProfMomoNetwork(e.target.value)}
+                        className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
+                      >
+                        <option value="MTN">MTN MoMo</option>
+                        <option value="Telecel">Telecel Cash</option>
+                        <option value="AT">AT Money</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3 bg-[#d6a735] hover:bg-[#b88c24] disabled:opacity-50 text-[#06261f] font-black rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer mt-2"
+                  >
+                    {isLoading ? "Saving Profile..." : (
+                      <>
+                        <Sparkles size={16} /> Complete Profile &amp; Enter Arena
+                      </>
+                    )}
+                  </button>
+                </form>
+              )}
+
+              {/* Sign In Mode (Passcode / Token) */}
+              {authMode === "login" && (
+                <form onSubmit={handleLoginSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-[#f5efdf] mb-1.5">
+                      Username or Phone Number
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formUsername}
+                      onChange={(e) => setFormUsername(e.target.value)}
+                      placeholder="e.g. Kwame_Master"
+                      className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-sm focus:outline-none focus:border-[#d6a735] transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#f5efdf] mb-1.5">
+                      Passcode / PIN
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={formPasscode}
+                      onChange={(e) => setFormPasscode(e.target.value)}
+                      placeholder="Enter secret passcode"
+                      className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-sm focus:outline-none focus:border-[#d6a735] transition-colors"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3 bg-[#d6a735] hover:bg-[#b88c24] disabled:opacity-50 text-[#06261f] font-black rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {isLoading ? "Signing in..." : (
+                      <>
+                        <LogIn size={16} /> Sign In to Arena
+                      </>
+                    )}
+                  </button>
+
+                  <div className="pt-2 text-center text-xs text-slate-400">
                     Don&apos;t have an account?{" "}
                     <button
                       type="button"
                       onClick={() => {
                         setAuthMode("register");
+                        setRegStep(1);
                         setAuthError("");
                       }}
                       className="text-[#d6a735] hover:underline font-bold"
                     >
-                      Create one here
+                      Register via Phone OTP
                     </button>
-                  </span>
-                ) : (
-                  <span>
-                    Already have an account?{" "}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAuthMode("login");
-                        setAuthError("");
-                      }}
-                      className="text-[#d6a735] hover:underline font-bold"
-                    >
-                      Sign in here
-                    </button>
-                  </span>
-                )}
-              </div>
-            </form>
+                  </div>
+                </form>
+              )}
+            </div>
           </div>
         </div>
       )}
