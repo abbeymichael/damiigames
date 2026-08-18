@@ -1780,17 +1780,6 @@ export default function AdminPage() {
                 </p>
               )}
 
-              {/* Security Warning Alert Banner */}
-              <div className="p-3.5 bg-amber-950/80 border border-amber-500/60 rounded-xl text-amber-100 text-xs font-medium flex items-center justify-between gap-3 shadow-md">
-                <div className="flex items-center gap-2.5">
-                  <AlertTriangle size={18} className="text-[#d6a735] shrink-0" />
-                  <div>
-                    <strong className="text-amber-300 font-bold block">SECURITY NOTICE: Default Seeder Credentials Active</strong>
-                    <span>System is initialized with default credentials (<code>admin123</code> / <code>123456</code>). Ensure admin passwords are updated prior to production deployment.</span>
-                  </div>
-                </div>
-              </div>
-
             {/* TAB: OVERVIEW */}
             {activeTab === "overview" && (
               <div className="space-y-6">
