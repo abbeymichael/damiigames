@@ -59,6 +59,7 @@ import type {
   OrganizerProfile,
 } from "@/lib/types";
 import { BracketTreeView } from "@/components/BracketTreeView";
+import { getAuthHeaders, saveSessionToken } from "@/lib/client-auth";
 
 export default function OrganizerPage() {
   const [token, setToken] = useState("");
@@ -233,7 +234,7 @@ export default function OrganizerPage() {
     try {
       const res = await fetch("/api/auth", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           action: "login",
           username: loginUsername.trim(),
@@ -248,6 +249,7 @@ export default function OrganizerPage() {
         return;
       }
 
+      saveSessionToken(data.token, data.csrfToken);
       localStorage.setItem("damii-player-token", data.token);
       localStorage.setItem("damii-player-name", data.profile.username);
       localStorage.setItem(
@@ -300,10 +302,7 @@ export default function OrganizerPage() {
     try {
       const res = await fetch("/api/organizer/request", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           organizationName: appOrgName.trim(),
           contactPhone: appContactPhone.trim(),
@@ -347,7 +346,7 @@ export default function OrganizerPage() {
     try {
       const res = await fetch("/api/league", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           action: "create",
           token,
@@ -400,7 +399,7 @@ export default function OrganizerPage() {
     try {
       const res = await fetch("/api/league", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ action: "approve", token, participantId }),
       });
       const data = await res.json();
@@ -421,7 +420,7 @@ export default function OrganizerPage() {
     try {
       const res = await fetch("/api/league", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ action: "reject", token, participantId }),
       });
       const data = await res.json();
@@ -445,7 +444,7 @@ export default function OrganizerPage() {
     try {
       const res = await fetch("/api/league", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           action: "add_player_manual",
           token,
@@ -473,7 +472,7 @@ export default function OrganizerPage() {
     try {
       const res = await fetch("/api/league", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           action: "generate_bracket",
           token,
@@ -499,7 +498,7 @@ export default function OrganizerPage() {
     try {
       const res = await fetch("/api/league", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           action: "start_match_room",
           token,
@@ -525,7 +524,7 @@ export default function OrganizerPage() {
     try {
       const res = await fetch("/api/league", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           action: "result",
           token,
@@ -554,7 +553,7 @@ export default function OrganizerPage() {
     try {
       const res = await fetch("/api/league", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           action: "disburse_prizes",
           token,
@@ -586,7 +585,7 @@ export default function OrganizerPage() {
     try {
       const res = await fetch("/api/league", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           action: "cancel",
           token,

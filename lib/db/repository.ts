@@ -24,6 +24,7 @@ import type {
   Role,
   Room,
   Session,
+  SystemFundsReport,
   SystemSettingEntry,
   SystemSettingsCategory,
   Tournament,
@@ -197,10 +198,11 @@ export interface DbRepository {
   getGameTypeLimits(): Promise<GameTypeLimit[]>;
   saveGameTypeLimit(limit: GameTypeLimit): Promise<GameTypeLimit>;
 
-  // --- Double-Entry Ledger ---
+  // --- Double-Entry Ledger & System Funds ---
   writeLedger(entries: LedgerEntryInput[]): Promise<LedgerEntry[]>;
   getLedgerBalance(userId: string, accountType: LedgerAccountType): Promise<number>;
   getLedgerEntries(filter?: { userId?: string; referenceType?: string; referenceId?: string; limit?: number }): Promise<LedgerEntry[]>;
+  getSystemFundsSummary(): Promise<SystemFundsReport>;
 
   // --- Roles & RBAC (Section 1) ---
   listRoles(): Promise<AppRole[]>;

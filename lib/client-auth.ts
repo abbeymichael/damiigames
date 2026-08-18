@@ -24,6 +24,7 @@ export function saveSessionToken(token: string, csrfToken?: string) {
 export function saveCsrfToken(csrfToken: string) {
   if (typeof window === "undefined") return;
   localStorage.setItem("damii_csrf_token", csrfToken);
+  sessionStorage.setItem("damii_csrf_token", csrfToken);
 }
 
 export function getCsrfToken(): string | null {
@@ -35,8 +36,8 @@ export function getCsrfToken(): string | null {
     return decodeURIComponent(match[1]);
   }
 
-  // 2. Fallback to localStorage
-  return localStorage.getItem("damii_csrf_token");
+  // 2. Fallback to localStorage & sessionStorage
+  return localStorage.getItem("damii_csrf_token") || sessionStorage.getItem("damii_csrf_token");
 }
 
 export function clearSessionToken() {

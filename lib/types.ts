@@ -477,6 +477,45 @@ export interface GameTypeLimit {
 }
 
 /* ------------------------------------------------------------------------- */
+/* System Funds & Triple-Ledger Types                                        */
+/* ------------------------------------------------------------------------- */
+export type SystemFundType = "account_balances" | "escrow" | "platform_fee";
+
+export interface SystemFundSummary {
+  fundType: SystemFundType;
+  name: string;
+  description: string;
+  balance: number;
+  entryCount: number;
+  totalInflow: number;
+  totalOutflow: number;
+  netFlow: number;
+  activeHoldersCount?: number;
+  lastActivityAt?: string;
+}
+
+export interface SystemFundsReport {
+  accountBalancesFund: SystemFundSummary;
+  escrowFund: SystemFundSummary;
+  platformFeeFund: SystemFundSummary;
+  totalPlatformAssets: number;
+  totalUserAvailable: number;
+  totalEscrowLocked: number;
+  totalPlatformFeesEarned: number;
+  totalDeposits: number;
+  totalWithdrawals: number;
+  reconciliationStatus: "balanced" | "discrepancy";
+  discrepancyAmount: number;
+  generatedAt: string;
+}
+
+export interface FundLedgerConnection {
+  fromFund?: SystemFundType;
+  toFund?: SystemFundType;
+  description: string;
+}
+
+/* ------------------------------------------------------------------------- */
 /* Double-Entry Ledger Types                                                 */
 /* ------------------------------------------------------------------------- */
 export type LedgerAccountType = "available" | "escrow";
@@ -504,6 +543,7 @@ export interface LedgerEntry {
   amount: number | string;
   referenceType: string;
   referenceId: string;
+  fundType?: SystemFundType;
   createdAt: string | Date;
 }
 
@@ -514,6 +554,7 @@ export interface LedgerEntryInput {
   amount: string | number;
   referenceType: string;
   referenceId: string;
+  fundType?: SystemFundType;
 }
 
 /* ------------------------------------------------------------------------- */

@@ -58,6 +58,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, ...seedResult });
     }
 
+    if (action === "get_admin_profile" || action === "admin_profile") {
+      const res = await adminService.getAdminSelfProfile(token);
+      return NextResponse.json({ success: true, ...res });
+    }
+
+    if (action === "update_admin_profile" || action === "edit_admin_profile") {
+      const { updates } = body;
+      if (!updates || typeof updates !== "object") {
+        return NextResponse.json({ error: "Updates object is required" }, { status: 400 });
+      }
+      const updated = await adminService.updateAdminSelfProfile(token, updates);
+      return NextResponse.json({ success: true, profile: updated });
+    }
+
     if (action === "get_user_details") {
       const { targetToken } = body;
       if (!targetToken) return NextResponse.json({ error: "Target user token required" }, { status: 400 });
@@ -242,6 +256,16 @@ export async function POST(req: NextRequest) {
 
       const res = await adminService.updateTransactionStatus(token, txId, newStatus, notes);
       return NextResponse.json({ success: true, transaction: res });
+    }
+
+    if (action === "get_system_funds") {
+      const report = await adminService.getSystemFunds(token);
+      return NextResponse.json({ success: true, report });
+    }
+
+    if (action === "reconcile_funds") {
+      const report = await adminService.reconcileFunds(token);
+      return NextResponse.json({ success: true, report });
     }
 
     if (action === "create_admin") {

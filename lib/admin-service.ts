@@ -218,8 +218,8 @@ export const adminService = {
         date: dateStr,
         fullDate: isoDate,
         users: baseUsers,
-        transactions: dayTxCount > 0 ? dayTxCount : simulatedTxs,
-        volume: dayVolume > 0 ? dayVolume : (dayTxCount > 0 ? dayVolume : simulatedTxs * 120),
+        transactions: dayTxCount,
+        volume: dayVolume,
       });
     }
 
@@ -235,12 +235,12 @@ export const adminService = {
         /* fallback */
       }
       const room = rooms.find((r) => r.code === log.target);
-      return sum + (room && room.wagerAmount ? room.wagerAmount * 2 : 250);
+      return sum + (room && room.wagerAmount ? room.wagerAmount * 2 : 0);
     }, 0);
 
     if (resolvedDisputesVolume === 0) {
       const resolvedWagerRooms = rooms.filter((r) => r.status === "completed" && (r.wagerAmount || 0) > 0);
-      resolvedDisputesVolume = resolvedWagerRooms.reduce((sum, r) => sum + (r.wagerAmount * 2), 0) || 500;
+      resolvedDisputesVolume = resolvedWagerRooms.reduce((sum, r) => sum + (r.wagerAmount * 2), 0);
     }
 
     const escrowTxs = transactions.filter(
@@ -248,11 +248,21 @@ export const adminService = {
     );
     let totalEscrowProcessed = escrowTxs.reduce((sum, t) => sum + Math.abs(t.amount), 0);
     if (totalEscrowProcessed === 0) {
-      totalEscrowProcessed = rooms.reduce((sum, r) => sum + ((r.wagerAmount || 100) * 2), 0) || 2400;
+      totalEscrowProcessed = rooms.reduce((sum, r) => sum + ((r.wagerAmount || 0) * 2), 0);
     }
 
-    // Load RBAC, Games, Tournament Requests, Organizers, and System Settings
-    const [rolesList, permissionsList, adminAccountsList, gamesList, tournamentRequestsList, systemSettingsList, organizerApplications] = await Promise.all([
+    // Load RBAC, Games, Tournament Requests, Organizers, System Settings, 3 Funds, and Ledger
+    const [
+      rolesList,
+      permissionsList,
+      adminAccountsList,
+      gamesList,
+      tournamentRequestsList,
+      systemSettingsList,
+      organizerApplications,
+      systemFunds,
+      rawLedgerEntries,
+    ] = await Promise.all([
       dbRepository.listRoles().catch(() => []),
       dbRepository.listPermissions().catch(() => []),
       dbRepository.listAdminAccounts().catch(() => []),
@@ -260,7 +270,19 @@ export const adminService = {
       dbRepository.listTournamentActionRequests().catch(() => []),
       dbRepository.getSystemSettings().catch(() => []),
       dbRepository.listOrganizerApplications().catch(() => []),
+      dbRepository.getSystemFundsSummary().catch(() => null),
+      dbRepository.getLedgerEntries({ limit: 300 }).catch(() => []),
     ]);
+
+    // Tag each ledger entry with its connected system fund
+    const ledgerEntries = rawLedgerEntries.map((le) => {
+      const fundType = (le.userId === "platform-treasury" || le.entryType === "platform_fee")
+        ? "platform_fee"
+        : le.accountType === "escrow"
+        ? "escrow"
+        : "account_balances";
+      return { ...le, fundType };
+    });
 
     return {
       userCount: allUsers.length || leaderboard.length,
@@ -287,6 +309,8 @@ export const adminService = {
       tournamentRequests: tournamentRequestsList,
       systemSettings: systemSettingsList,
       organizerApplications,
+      systemFunds,
+      ledgerEntries,
     };
   },
 
@@ -1216,6 +1240,33 @@ export const adminService = {
     return tx;
   },
 
+  async getSystemFunds(adminToken: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    return dbRepository.getSystemFundsSummary();
+  },
+
+  async reconcileFunds(adminToken: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+    const report = await dbRepository.getSystemFundsSummary();
+
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "RECONCILE_SYSTEM_FUNDS",
+      `Audit Status: ${report.reconciliationStatus}`,
+      {
+        totalAssets: report.totalPlatformAssets,
+        available: report.totalUserAvailable,
+        escrow: report.totalEscrowLocked,
+        fees: report.totalPlatformFeesEarned,
+        discrepancy: report.discrepancyAmount,
+      }
+    );
+
+    return report;
+  },
+
   async setUserRole(adminToken: string, targetToken: string, role: Role) {
     if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
 
@@ -1820,6 +1871,115 @@ export const adminService = {
     );
 
     return snapshot;
+  },
+
+  async getAdminSelfProfile(adminToken: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const session = await dbRepository.getSession(adminToken);
+    const userId = session ? session.userId : adminToken;
+    const profile = await dbRepository.getProfile(userId);
+    if (!profile) throw new Error("Admin profile not found");
+
+    const recentLogs = (await dbRepository.listAdminLogs(20)).filter(
+      (log) => log.adminToken === adminToken || log.adminName === profile.username
+    );
+
+    return {
+      profile: {
+        token: profile.token,
+        username: profile.username,
+        fullName: profile.fullName || "",
+        email: profile.email || "",
+        phoneNumber: profile.phoneNumber || "",
+        role: profile.role,
+        points: profile.points,
+        marbles: profile.marbles || 0,
+        status: profile.status,
+        region: profile.region || "Greater Accra",
+        createdAt: profile.createdAt,
+        phoneVerifiedAt: profile.phoneVerifiedAt,
+      },
+      recentLogs,
+    };
+  },
+
+  async updateAdminSelfProfile(
+    adminToken: string,
+    updates: {
+      username?: string;
+      fullName?: string;
+      email?: string;
+      phoneNumber?: string;
+      currentPasscode?: string;
+      newPasscode?: string;
+    }
+  ) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const session = await dbRepository.getSession(adminToken);
+    const userId = session ? session.userId : adminToken;
+    const profile = await dbRepository.getProfile(userId);
+    if (!profile) throw new Error("Admin profile not found");
+
+    if (updates.newPasscode && updates.newPasscode.trim()) {
+      if (!updates.currentPasscode || !updates.currentPasscode.trim()) {
+        throw new Error("Current passcode is required to set a new passcode");
+      }
+      const isValidCurrent = securityService.hashOrVerifyPasscode(
+        updates.currentPasscode.trim(),
+        profile.passcode,
+        profile.passwordSalt
+      );
+      if (!isValidCurrent) {
+        throw new Error("Incorrect current passcode");
+      }
+      if (updates.newPasscode.trim().length < 6) {
+        throw new Error("New passcode must be at least 6 characters");
+      }
+      const { hash, salt } = securityService.hashPassword(updates.newPasscode.trim());
+      profile.passcode = hash;
+      profile.passwordSalt = salt;
+    }
+
+    if (updates.username && updates.username.trim() && updates.username.trim() !== profile.username) {
+      const cleanU = updates.username.trim();
+      if (cleanU.length < 2) throw new Error("Username must be at least 2 characters");
+      const existing = await dbRepository.findProfileByUsername(cleanU);
+      if (existing && existing.token !== profile.token) {
+        throw new Error(`Username '${cleanU}' is already taken`);
+      }
+      profile.username = cleanU;
+    }
+
+    if (updates.fullName !== undefined) profile.fullName = updates.fullName.trim();
+    if (updates.email !== undefined) profile.email = updates.email.trim();
+    if (updates.phoneNumber !== undefined) profile.phoneNumber = updates.phoneNumber.trim();
+    profile.updatedAt = new Date().toISOString();
+
+    const saved = await dbRepository.saveProfile(profile);
+
+    await this.logAdminAction(
+      adminToken,
+      profile.username,
+      "UPDATE_ADMIN_SELF_PROFILE",
+      profile.username,
+      {
+        hasPasswordChange: Boolean(updates.newPasscode),
+        updatedFields: Object.keys(updates).filter((k) => k !== "currentPasscode" && k !== "newPasscode"),
+      }
+    );
+
+    return {
+      token: saved.token,
+      username: saved.username,
+      fullName: saved.fullName || "",
+      email: saved.email || "",
+      phoneNumber: saved.phoneNumber || "",
+      role: saved.role,
+      points: saved.points,
+      marbles: saved.marbles || 0,
+      status: saved.status,
+      createdAt: saved.createdAt,
+    };
   },
 };
 

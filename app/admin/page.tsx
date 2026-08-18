@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
 import { SharedHeader } from "@/components/SharedHeader";
 import {
   LayoutDashboard,
@@ -48,7 +49,7 @@ import {
   Inbox,
 } from "lucide-react";
 import { getSessionToken, saveSessionToken, clearSessionToken } from "@/lib/client-auth";
-import type { AdminLog, Role, AppRole, Permission, AdminAccount, GameCatalogItem, TournamentActionRequest, OrganizerApplication, OrganizerApplicationDetailPayload } from "@/lib/types";
+import type { AdminLog, Role, AppRole, Permission, AdminAccount, GameCatalogItem, TournamentActionRequest, OrganizerApplication, OrganizerApplicationDetailPayload, LedgerEntry, SystemFundsReport } from "@/lib/types";
 import { ActionMenu } from "@/components/ActionMenu";
 import { AdminTable } from "@/components/AdminTable";
 import { ConfirmModal } from "@/components/admin/ConfirmModal";
@@ -159,6 +160,8 @@ type SystemMetrics = {
   games?: GameCatalogItem[];
   tournamentRequests?: TournamentActionRequest[];
   systemSettings?: any;
+  systemFunds?: SystemFundsReport | null;
+  ledgerEntries?: LedgerEntry[];
 };
 
 // Named permission bundles, matching lib/types.ts & lib/permissions.ts
@@ -367,11 +370,11 @@ export default function AdminPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Sidebar, Mobile Drawer & Role Switcher State
+  // Sidebar, Mobile Drawer & Profile Dropdown State
   const [roleKey, setRoleKey] = useState("super_admin");
   const [collapsed, setCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("overview");
-  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [isMobileAdminDrawerOpen, setIsMobileAdminDrawerOpen] = useState(false);
 
   // Organizer Approval & Admin Roles State
@@ -1280,6 +1283,30 @@ export default function AdminPage() {
     }
   }
 
+  // Reconcile 3 System Funds
+  async function handleReconcileSystemFunds() {
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reconcile_funds",
+          token,
+          secret: adminSecret,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "System funds reconciliation failed");
+      setSuccess(`System funds audit completed! Status: ${data.report.reconciliationStatus.toUpperCase()} (Total platform assets: GH₵ ${Number(data.report.totalPlatformAssets).toFixed(2)})`);
+      refreshAdminData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Funds reconciliation error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // Approve or Reject Transaction
   async function handleUpdateTransactionStatus(transactionId: string, newStatus: "completed" | "failed") {
     setBusy(true); setError(""); setSuccess("");
@@ -1473,70 +1500,79 @@ export default function AdminPage() {
             </div>
 
             {/* Top Admin Actions */}
-            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              {/* Active Role Selector */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setRoleMenuOpen((v) => !v)}
-                  className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl border border-[#1a5e48] bg-[#06261f] hover:bg-[#0c3b2e] text-xs transition-colors shrink-0"
-                  title={`Active Role: ${currentRole.label}`}
-                >
-                  <ShieldCheck size={15} className="text-[#d6a735] shrink-0" />
-                  <span className="font-bold text-[#f5efdf] hidden md:inline text-xs">{currentRole.label}</span>
-                  <ChevronDown size={14} className="text-slate-200 shrink-0" />
-                </button>
-
-                {roleMenuOpen && (
-                  <div className="absolute right-0 top-full mt-1.5 w-48 sm:w-56 max-w-[calc(100vw-24px)] rounded-xl border border-[#1a5e48] bg-[#081c15] p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150">
-                    <p className="px-2 py-1 text-[10px] font-bold text-amber-300 uppercase border-b border-[#1a5e48] mb-1">
-                      Switch Role View
-                    </p>
-                    {Object.entries(ROLE_BUNDLES).map(([key, r]) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => {
-                          setRoleKey(key);
-                          setRoleMenuOpen(false);
-                        }}
-                        className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs font-semibold ${
-                          key === roleKey
-                            ? "bg-[#d6a735]/20 text-[#d6a735]"
-                            : "text-slate-200 hover:bg-[#0c3b2e] hover:text-[#f5efdf]"
-                        }`}
-                      >
-                        <Circle
-                          size={6}
-                          className={key === roleKey ? "fill-[#d6a735] text-[#d6a735]" : "fill-[#114232] text-[#114232]"}
-                        />
-                        <span className="truncate">{r.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <button
                 type="button"
                 onClick={refreshAdminData}
                 disabled={busy}
                 className="p-1.5 sm:px-3 sm:py-1.5 text-xs bg-[#06261f] hover:bg-[#0c3b2e] text-[#f5efdf] rounded-xl border border-[#1a5e48] font-bold flex items-center gap-1.5 transition-all shrink-0"
                 title="Refresh Platform Data"
+                id="admin-header-refresh-btn"
               >
-                <RefreshCw size={14} className={`shrink-0 ${busy ? "animate-spin" : ""}`} />
+                <RefreshCw size={14} className={`shrink-0 ${busy ? "animate-spin text-[#d6a735]" : "text-[#d6a735]"}`} />
                 <span className="hidden md:inline">Refresh</span>
               </button>
 
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="p-1.5 sm:px-2.5 sm:py-1.5 text-xs bg-red-950/70 hover:bg-red-900 border border-red-800 text-red-200 rounded-xl font-bold transition-all flex items-center gap-1.5 shrink-0"
-                title="Logout Admin Session"
-              >
-                <LogOut size={14} className="shrink-0" />
-                <span className="hidden md:inline">Logout</span>
-              </button>
+              {/* Admin Profile Dropdown Menu */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setProfileDropdownOpen((v) => !v)}
+                  className="flex items-center gap-2 pl-2 pr-2.5 py-1.5 rounded-xl border border-[#1a5e48] bg-[#06261f] hover:bg-[#0c3b2e] text-xs transition-colors shrink-0 focus:outline-none focus:border-[#d6a735]"
+                  id="admin-profile-menu-btn"
+                  title="Admin Profile & Account Options"
+                >
+                  <div className="w-6 h-6 rounded-lg bg-[#d6a735] text-[#06261f] font-black flex items-center justify-center text-xs shrink-0 shadow-xs">
+                    {(adminUsername || "A").charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex flex-col text-left hidden sm:flex">
+                    <span className="font-bold text-[#f5efdf] text-xs leading-none max-w-[120px] truncate">
+                      {adminUsername || "Admin"}
+                    </span>
+                    <span className="text-[10px] text-[#d6a735] font-semibold leading-tight">
+                      {currentRole.label}
+                    </span>
+                  </div>
+                  <ChevronDown size={14} className={`text-slate-300 transition-transform duration-200 shrink-0 ${profileDropdownOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {profileDropdownOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-56 max-w-[calc(100vw-24px)] rounded-xl border border-[#1a5e48] bg-[#081c15] p-2 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="px-2.5 py-2 border-b border-[#1a5e48] mb-1.5">
+                      <p className="text-xs font-bold text-[#f5efdf] truncate">{adminUsername || "Administrator"}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        <span className="text-[10px] font-semibold text-[#d6a735] uppercase">{currentRole.label}</span>
+                      </div>
+                    </div>
+
+                    <Link
+                      href="/admin/profile"
+                      onClick={() => setProfileDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-semibold text-[#f5efdf] hover:bg-[#0c3b2e] hover:text-[#d6a735] transition-colors"
+                      id="admin-edit-profile-dropdown-link"
+                    >
+                      <UserCog size={15} className="text-[#d6a735] shrink-0" />
+                      <span>Edit Admin Profile</span>
+                    </Link>
+
+                    <div className="h-px bg-[#1a5e48] my-1" />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileDropdownOpen(false);
+                        handleLogout();
+                      }}
+                      className="flex w-full items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-bold text-red-300 hover:bg-red-950/60 hover:text-red-200 transition-colors text-left"
+                      id="admin-logout-dropdown-btn"
+                    >
+                      <LogOut size={15} className="text-red-400 shrink-0" />
+                      <span>Logout</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </header>
 
@@ -1633,15 +1669,22 @@ export default function AdminPage() {
                     <p className="font-bold text-[#d6a735]">{adminUsername}</p>
                     <p className="text-[10px] text-slate-300 capitalize">{currentRole.label}</p>
                   </div>
+                  <Link
+                    href="/admin/profile"
+                    onClick={() => setIsMobileAdminDrawerOpen(false)}
+                    className="w-full py-2.5 bg-[#06261f] hover:bg-[#0c3b2e] border border-[#1a5e48] text-[#d6a735] text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <UserCog size={16} /> Edit Admin Profile
+                  </Link>
                   <button
                     type="button"
                     onClick={() => {
-                      setIsAuthenticated(false);
                       setIsMobileAdminDrawerOpen(false);
+                      handleLogout();
                     }}
                     className="w-full py-2.5 bg-red-950/80 hover:bg-red-900 border border-red-800 text-red-200 text-xs font-bold rounded-xl flex items-center justify-center gap-2"
                   >
-                    <LogOut size={16} /> Exit Admin Session
+                    <LogOut size={16} /> Logout Admin Session
                   </button>
                 </div>
               </div>
@@ -1755,16 +1798,6 @@ export default function AdminPage() {
                   <p className="text-[11px] sm:text-xs text-slate-200 truncate mt-0.5">
                     Managing as <strong className="text-[#d6a735]">{adminUsername}</strong> ({currentRole.label})
                   </p>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    className="px-2.5 sm:px-3 py-1.5 text-xs bg-red-950/80 hover:bg-red-900 border border-red-800 text-red-200 rounded-xl font-bold flex items-center gap-1.5 transition-all shadow-xs"
-                  >
-                    <LogOut size={13} className="shrink-0" /> <span className="whitespace-nowrap">Logout</span>
-                  </button>
                 </div>
               </div>
 
@@ -1986,56 +2019,16 @@ export default function AdminPage() {
                     </div>
                   </div>
 
-                  {/* Settings Rates Form */}
-                  <form onSubmit={handleUpdateSettingsSubmit} className="p-4 bg-[#06261f] border border-[#1a5e48] rounded-xl space-y-3">
-                    <h4 className="text-xs font-bold text-[#d6a735] uppercase flex items-center gap-1.5">
-                      <Settings size={14} /> Platform Fee Settings (%)
-                    </h4>
-                    <p className="text-[11px] text-slate-300">
-                      Configure house percentage fee auto-deducted from wager pots and tournament prize pools upon match or league completion.
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-200 mb-1">Wager Match House Fee (%)</label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={50}
-                          step={1}
-                          value={wagerFeePercentInput}
-                          onChange={(e) => setWagerFeePercentInput(Number(e.target.value))}
-                          className="w-full px-3 py-1.5 bg-[#041c17] border border-[#1a5e48] rounded-lg text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-200 mb-1">Tournament League Prize Fee (%)</label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={50}
-                          step={1}
-                          value={tournamentFeePercentInput}
-                          onChange={(e) => setTournamentFeePercentInput(Number(e.target.value))}
-                          className="w-full px-3 py-1.5 bg-[#041c17] border border-[#1a5e48] rounded-lg text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
-                        />
-                      </div>
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={busy}
-                      className="px-4 py-2 bg-[#d6a735] text-[#06261f] font-bold text-xs rounded-lg hover:bg-[#b88c24] transition-colors"
-                    >
-                      Save Platform Fees
-                    </button>
-                  </form>
-
-                  {/* Transactions Audit Table */}
+                  {/* Transactions & Double-Entry Ledger Audit Table */}
                   <LedgerTable
                     transactions={filteredTransactions}
+                    ledgerEntries={metrics?.ledgerEntries || []}
+                    systemFunds={metrics?.systemFunds || null}
                     txFilter={txFilter}
                     setTxFilter={setTxFilter}
                     busy={busy}
                     onRefresh={refreshAdminData}
+                    onReconcileFunds={handleReconcileSystemFunds}
                     onAddLedgerClick={() => setAddLedgerModalOpen(true)}
                     onUpdateTransactionStatus={handleUpdateTransactionStatus}
                     onVoidTransaction={handleVoidTransaction}

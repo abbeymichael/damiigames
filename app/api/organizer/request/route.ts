@@ -62,6 +62,35 @@ export async function POST(req: NextRequest) {
 
     await dbRepository.saveOrganizerProfile(updatedOrgProfile);
 
+    // Also sync OrganizerApplication record
+    const existingApp = await dbRepository.getOrganizerApplicationByUserId(auth.user.token);
+    let appRecord = existingApp;
+    if (existingApp) {
+      appRecord = await dbRepository.updateOrganizerApplication(existingApp.id, {
+        organizationName: String(organizationName).trim(),
+        priorExperience: bio ? String(bio).trim() : null,
+        status: "pending",
+        reviewNote: null,
+      });
+    } else {
+      appRecord = await dbRepository.createOrganizerApplication({
+        id: `app-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        userId: auth.user.token,
+        applicantType: "individual",
+        organizationName: String(organizationName).trim(),
+        ghanaCardFrontUrl: "https://damii.app/docs/gh-card-front.png",
+        ghanaCardBackUrl: "https://damii.app/docs/gh-card-back.png",
+        selfieUrl: "https://damii.app/docs/selfie.png",
+        physicalAddress: "Accra, Ghana",
+        proofOfAddressUrl: "https://damii.app/docs/proof-of-address.pdf",
+        intendedGameTypes: JSON.stringify(["damii_10x10"]),
+        priorExperience: bio ? String(bio).trim() : null,
+        termsAcceptedAt: now,
+        status: "pending",
+        createdAt: now,
+      });
+    }
+
     // Write Audit Log
     await dbRepository.createAdminLog({
       id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -76,6 +105,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       organizerProfile: updatedOrgProfile,
+      application: appRecord,
       message: "Your organizer request has been submitted and is pending admin approval. You can continue playing matches while waiting.",
     });
   } catch (err) {

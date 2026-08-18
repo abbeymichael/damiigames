@@ -25,6 +25,9 @@ import type {
   Role,
   Room,
   Session,
+  SystemFundSummary,
+  SystemFundType,
+  SystemFundsReport,
   SystemSettingEntry,
   SystemSettingsCategory,
   Tournament,
@@ -177,9 +180,21 @@ async function seedIfEmpty(): Promise<void> {
   const [existing] = await db
     .select({ count: sql<number>`COUNT(*)` })
     .from(schema.profiles);
-  if (Number(existing?.count ?? 0) > 0) return;
-
+  
   const seed = buildSeedDataset();
+  if (Number(existing?.count ?? 0) > 0) {
+    // If profiles already exist, ensure organizer applications are seeded as well
+    const [appCount] = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(schema.organizerApplications);
+    if (Number(appCount?.count ?? 0) === 0) {
+      for (const app of seed.organizerApplications) {
+        await mysqlStore.createOrganizerApplication(app);
+      }
+    }
+    return;
+  }
+
   await withTransaction(async () => {
     for (const p of seed.profiles) {
       await db.insert(schema.profiles).values(profileToRow(p));
@@ -189,6 +204,9 @@ async function seedIfEmpty(): Promise<void> {
     }
     for (const o of seed.organizerProfiles) {
       await db.insert(schema.organizerProfiles).values(organizerProfileToRow(o));
+    }
+    for (const app of seed.organizerApplications) {
+      await mysqlStore.createOrganizerApplication(app);
     }
     for (const l of seed.leagues) {
       await db.insert(schema.leagues).values(leagueToRow(l));
@@ -1163,7 +1181,29 @@ export const mysqlStore: DbRepository = {
   // --- Organizer Applications ---
   async createOrganizerApplication(app) {
     const row = organizerApplicationToRow(app);
-    await getDb().insert(schema.organizerApplications).values(row);
+    await getDb()
+      .insert(schema.organizerApplications)
+      .values(row)
+      .onDuplicateKeyUpdate({
+        set: {
+          organizationName: row.organizationName,
+          organizationRegNumber: row.organizationRegNumber,
+          applicantType: row.applicantType,
+          status: row.status,
+          ghanaCardFrontUrl: row.ghanaCardFrontUrl,
+          ghanaCardBackUrl: row.ghanaCardBackUrl,
+          selfieUrl: row.selfieUrl,
+          physicalAddress: row.physicalAddress,
+          proofOfAddressUrl: row.proofOfAddressUrl,
+          intendedGameTypes: row.intendedGameTypes,
+          expectedTournamentSize: row.expectedTournamentSize,
+          expectedFrequency: row.expectedFrequency,
+          priorExperience: row.priorExperience,
+          reviewNote: row.reviewNote,
+          reviewedAt: row.reviewedAt,
+          reviewedByAdminId: row.reviewedByAdminId,
+        },
+      });
     return rowToOrganizerApplication(row as schema.OrganizerApplicationRow);
   },
 
@@ -1552,6 +1592,146 @@ export const mysqlStore: DbRepository = {
       .limit(filter.limit ?? 100);
 
     return rows.map(rowToLedgerEntry);
+  },
+
+  async getSystemFundsSummary(): Promise<SystemFundsReport> {
+    const allEntries = await getDb()
+      .select()
+      .from(schema.ledgerEntries)
+      .orderBy(desc(schema.ledgerEntries.createdAt));
+
+    const allProfiles = await getDb().select().from(schema.profiles);
+    const totalProfilesPoints = allProfiles.reduce((sum, p) => sum + (Number(p.points) || 0), 0);
+
+    let accBalanceInflow = 0;
+    let accBalanceOutflow = 0;
+    let accBalanceCount = 0;
+
+    let escrowInflow = 0;
+    let escrowOutflow = 0;
+    let escrowCount = 0;
+
+    let platformFeeInflow = 0;
+    let platformFeeOutflow = 0;
+    let platformFeeCount = 0;
+
+    let totalDeposits = 0;
+    let totalWithdrawals = 0;
+
+    const latestBalances = new Map<string, number>();
+
+    for (const entry of allEntries) {
+      const key = `${entry.userId}:${entry.accountType}`;
+      if (!latestBalances.has(key)) {
+        latestBalances.set(key, Number(entry.balanceAfter || 0));
+      }
+
+      const amt = Number(entry.amount || 0);
+      const isFee = entry.userId === "platform-treasury" || entry.entryType === "platform_fee";
+      const isEscrow = entry.accountType === "escrow";
+
+      if (entry.entryType === "deposit" && amt > 0) totalDeposits += amt;
+      else if (entry.entryType === "withdrawal" && amt < 0) totalWithdrawals += Math.abs(amt);
+
+      if (isFee) {
+        platformFeeCount++;
+        if (amt >= 0) platformFeeInflow += amt;
+        else platformFeeOutflow += Math.abs(amt);
+      } else if (isEscrow) {
+        escrowCount++;
+        if (amt >= 0) escrowInflow += amt;
+        else escrowOutflow += Math.abs(amt);
+      } else {
+        accBalanceCount++;
+        if (amt >= 0) accBalanceInflow += amt;
+        else accBalanceOutflow += Math.abs(amt);
+      }
+    }
+
+    let accountBalancesFundTotal = 0;
+    let escrowFundTotal = 0;
+    let platformFeeFundTotal = 0;
+    let activeUsersCount = 0;
+
+    for (const [key, bal] of latestBalances.entries()) {
+      const [userId, accType] = key.split(":");
+      if (userId === "platform-treasury") {
+        platformFeeFundTotal += bal;
+      } else if (accType === "escrow") {
+        escrowFundTotal += bal;
+      } else if (accType === "available") {
+        accountBalancesFundTotal += bal;
+        if (bal > 0) activeUsersCount++;
+      }
+    }
+
+    if (latestBalances.size === 0 && totalProfilesPoints > 0) {
+      accountBalancesFundTotal = totalProfilesPoints;
+      activeUsersCount = allProfiles.filter((p) => p.points > 0).length;
+    }
+
+    const totalPlatformAssets = Number((accountBalancesFundTotal + escrowFundTotal + platformFeeFundTotal).toFixed(2));
+    const expectedAssets = Number((totalDeposits - totalWithdrawals).toFixed(2));
+    const discrepancyAmount = Math.abs(Number((totalPlatformAssets - (totalDeposits > 0 ? expectedAssets : totalPlatformAssets)).toFixed(2)));
+    const isBalanced = discrepancyAmount < 0.01;
+
+    const now = new Date().toISOString();
+
+    const accountBalancesSummary: SystemFundSummary = {
+      fundType: "account_balances",
+      name: "Account Balances Fund",
+      description: "Total liquid funds available across all registered user wallets for gameplay, tournaments, and withdrawals.",
+      balance: Number(accountBalancesFundTotal.toFixed(2)),
+      entryCount: accBalanceCount,
+      totalInflow: Number(accBalanceInflow.toFixed(2)),
+      totalOutflow: Number(accBalanceOutflow.toFixed(2)),
+      netFlow: Number((accBalanceInflow - accBalanceOutflow).toFixed(2)),
+      activeHoldersCount: activeUsersCount,
+      lastActivityAt: allEntries[0]?.createdAt ? new Date(allEntries[0].createdAt).toISOString() : now,
+    };
+
+    const escrowSummary: SystemFundSummary = {
+      fundType: "escrow",
+      name: "Escrow Fund",
+      description: "Total funds actively locked in trust for ongoing wager matches, tournament prize pools, and participant entry fees.",
+      balance: Number(escrowFundTotal.toFixed(2)),
+      entryCount: escrowCount,
+      totalInflow: Number(escrowInflow.toFixed(2)),
+      totalOutflow: Number(escrowOutflow.toFixed(2)),
+      netFlow: Number((escrowInflow - escrowOutflow).toFixed(2)),
+      lastActivityAt: allEntries.find((e) => e.accountType === "escrow")?.createdAt
+        ? new Date(allEntries.find((e) => e.accountType === "escrow")!.createdAt).toISOString()
+        : now,
+    };
+
+    const platformFeeSummary: SystemFundSummary = {
+      fundType: "platform_fee",
+      name: "Platform Fee Fund",
+      description: "Accumulated platform commissions (5% match fees, 10% tournament fees, and cancellation surcharges) retained as platform revenue.",
+      balance: Number(platformFeeFundTotal.toFixed(2)),
+      entryCount: platformFeeCount,
+      totalInflow: Number(platformFeeInflow.toFixed(2)),
+      totalOutflow: Number(platformFeeOutflow.toFixed(2)),
+      netFlow: Number((platformFeeInflow - platformFeeOutflow).toFixed(2)),
+      lastActivityAt: allEntries.find((e) => e.userId === "platform-treasury" || e.entryType === "platform_fee")?.createdAt
+        ? new Date(allEntries.find((e) => e.userId === "platform-treasury" || e.entryType === "platform_fee")!.createdAt).toISOString()
+        : now,
+    };
+
+    return {
+      accountBalancesFund: accountBalancesSummary,
+      escrowFund: escrowSummary,
+      platformFeeFund: platformFeeSummary,
+      totalPlatformAssets,
+      totalUserAvailable: Number(accountBalancesFundTotal.toFixed(2)),
+      totalEscrowLocked: Number(escrowFundTotal.toFixed(2)),
+      totalPlatformFeesEarned: Number(platformFeeFundTotal.toFixed(2)),
+      totalDeposits: Number(totalDeposits.toFixed(2)),
+      totalWithdrawals: Number(totalWithdrawals.toFixed(2)),
+      reconciliationStatus: isBalanced ? "balanced" : "discrepancy",
+      discrepancyAmount,
+      generatedAt: now,
+    };
   },
 
   // --- Roles & RBAC (Section 1) ---
@@ -2040,93 +2220,7 @@ export const mysqlStore: DbRepository = {
       }, "system");
 
       // Seed standard organizer applications across all statuses
-      const sampleApplications: OrganizerApplication[] = [
-        {
-          id: "app-kwame-arena",
-          userId: "player-kwame-token",
-          applicantType: "individual",
-          organizationName: "Kwame Damii Arena",
-          ghanaCardFrontUrl: "https://picsum.photos/seed/ghana-card-kwame-front/600/380",
-          ghanaCardBackUrl: "https://picsum.photos/seed/ghana-card-kwame-back/600/380",
-          selfieUrl: "https://picsum.photos/seed/avatar-kwame/400/400",
-          physicalAddress: "Plot 14, Bantama High Street, Kumasi, Ashanti Region",
-          proofOfAddressUrl: "https://picsum.photos/seed/utility-bill-kwame/600/800",
-          intendedGameTypes: "damii-10x10,damii-blitz",
-          expectedTournamentSize: 32,
-          expectedFrequency: "Bi-weekly",
-          priorExperience: "5 years running local community draughts leagues in Ashanti Region.",
-          termsAcceptedAt: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
-          status: "pending",
-          createdAt: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
-        },
-        {
-          id: "app-kofi-league",
-          userId: "player-kofi-token",
-          applicantType: "organization",
-          organizationName: "Kofi Draughts League GH",
-          organizationRegNumber: "GH-CORP-2024-8891",
-          ghanaCardFrontUrl: "https://picsum.photos/seed/ghana-card-kofi-front/600/380",
-          ghanaCardBackUrl: "https://picsum.photos/seed/ghana-card-kofi-back/600/380",
-          selfieUrl: "https://picsum.photos/seed/avatar-kofi/400/400",
-          physicalAddress: "Suite 4B, Ridge Towers, Accra, Greater Accra",
-          proofOfAddressUrl: "https://picsum.photos/seed/utility-bill-kofi/600/800",
-          intendedGameTypes: "damii-10x10",
-          expectedTournamentSize: 64,
-          expectedFrequency: "Monthly Championship",
-          priorExperience: "Co-founded the Greater Accra Draughts Federation; certified tournament arbiter.",
-          termsAcceptedAt: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
-          status: "needs_info",
-          reviewedByAdminId: "admin-token-001",
-          reviewedAt: new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString(),
-          reviewNote: "Please upload a recent utility bill (dated within last 90 days) showing business name and registered address.",
-          createdAt: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
-        },
-        {
-          id: "app-kofi-approved",
-          userId: "organizer-kofi-token",
-          applicantType: "organization",
-          organizationName: "Kofi Draughts Club",
-          organizationRegNumber: "CS-GH-55421",
-          ghanaCardFrontUrl: "https://picsum.photos/seed/ghana-card-kofi-org-front/600/380",
-          ghanaCardBackUrl: "https://picsum.photos/seed/ghana-card-kofi-org-back/600/380",
-          selfieUrl: "https://picsum.photos/seed/avatar-org-kofi/400/400",
-          physicalAddress: "22 Ring Road Central, Accra, Greater Accra",
-          proofOfAddressUrl: "https://picsum.photos/seed/utility-bill-kofi-org/600/800",
-          intendedGameTypes: "damii-10x10,damii-blitz",
-          expectedTournamentSize: 16,
-          expectedFrequency: "Weekly",
-          priorExperience: "Official circuit tournament organizer with verified track record.",
-          termsAcceptedAt: new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString(),
-          status: "approved",
-          reviewedByAdminId: "admin-token-001",
-          reviewedAt: new Date(Date.now() - 12 * 24 * 3600 * 1000).toISOString(),
-          reviewNote: "Ghana Card verified, business registration confirmed, background check clear.",
-          createdAt: new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString(),
-        },
-        {
-          id: "app-ama-rejected",
-          userId: "player-ama-token",
-          applicantType: "individual",
-          organizationName: "Ama Draughts Circuit",
-          ghanaCardFrontUrl: "https://picsum.photos/seed/ghana-card-ama-front/600/380",
-          ghanaCardBackUrl: "https://picsum.photos/seed/ghana-card-ama-back/600/380",
-          selfieUrl: "https://picsum.photos/seed/avatar-ama/400/400",
-          physicalAddress: "Market Circle, Takoradi, Western Region",
-          proofOfAddressUrl: "https://picsum.photos/seed/utility-bill-ama/600/800",
-          intendedGameTypes: "damii-10x10",
-          expectedTournamentSize: 8,
-          expectedFrequency: "Monthly",
-          priorExperience: "Organized neighborhood matches.",
-          termsAcceptedAt: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(),
-          status: "rejected",
-          reviewedByAdminId: "admin-token-001",
-          reviewedAt: new Date(Date.now() - 8 * 24 * 3600 * 1000).toISOString(),
-          reviewNote: "Ghana Card photo was blurry and expired. Please update KYC documents and reapply.",
-          createdAt: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(),
-        },
-      ];
-
-      for (const sapp of sampleApplications) {
+      for (const sapp of seed.organizerApplications) {
         await mysqlStore.createOrganizerApplication(sapp);
       }
     });

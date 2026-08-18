@@ -5,12 +5,28 @@ import type {
   LedgerEntry,
   LedgerEntryInput,
   Match,
+  SystemFundType,
+  SystemFundsReport,
   Tournament,
   TournamentEntry,
   TournamentPrize,
 } from "./types";
 
 export const PLATFORM_ACCOUNT_ID = "platform-treasury";
+
+export function determineFundType(
+  userId: string,
+  accountType: LedgerAccountType | string,
+  entryType?: string
+): SystemFundType {
+  if (userId === PLATFORM_ACCOUNT_ID || entryType === "platform_fee") {
+    return "platform_fee";
+  }
+  if (accountType === "escrow") {
+    return "escrow";
+  }
+  return "account_balances";
+}
 
 export class LedgerValidationError extends Error {
   constructor(message: string, public code: string = "LIMIT_VIOLATION") {
@@ -585,5 +601,15 @@ export const ledgerService = {
     });
 
     return updated!;
+  },
+
+  /**
+   * Retrieves real-time summary and reconciliation report for the 3 System Funds:
+   * 1. Account Balances Fund (Liquid user balances)
+   * 2. Escrow Fund (Active wagers & tournament funds in escrow)
+   * 3. Platform Fee Fund (Retained platform commissions & fees)
+   */
+  async getSystemFundsSummary(): Promise<SystemFundsReport> {
+    return dbRepository.getSystemFundsSummary();
   },
 };

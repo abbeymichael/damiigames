@@ -5,7 +5,7 @@ export const profiles = sqliteTable("profiles", {
   username: text("username").notNull(),
   passcode: text("passcode"),
   rating: integer("rating").notNull().default(1000),
-  points: integer("points").notNull().default(500),
+  points: integer("points").notNull().default(0),
   wins: integer("wins").notNull().default(0),
   losses: integer("losses").notNull().default(0),
   draws: integer("draws").notNull().default(0),

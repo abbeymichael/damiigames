@@ -166,10 +166,11 @@ export const dbRepository: DbRepository = {
   getGameTypeLimits: withStore("getGameTypeLimits"),
   saveGameTypeLimit: withStore("saveGameTypeLimit"),
 
-  // Double-Entry Ledger
+  // Double-Entry Ledger & System Funds
   writeLedger: withStore("writeLedger"),
   getLedgerBalance: withStore("getLedgerBalance"),
   getLedgerEntries: withStore("getLedgerEntries"),
+  getSystemFundsSummary: withStore("getSystemFundsSummary"),
 
   // Roles & RBAC
   listRoles: withStore("listRoles"),

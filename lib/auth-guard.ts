@@ -63,8 +63,26 @@ export function validateCsrfToken(req: NextRequest, session?: Session | null) {
 
   const expectedCsrf = session?.csrfToken || req.cookies.get("damii_csrf")?.value;
 
-  // If a session or CSRF cookie exists, CSRF token verification is required
-  if (expectedCsrf) {
+  const hasCustomAuthHeader = Boolean(
+    req.headers.get("authorization") ||
+    req.headers.get("Authorization") ||
+    req.headers.get("x-session-token")
+  );
+
+  // If a client explicitly sends a CSRF token, verify it matches
+  if (clientCsrf && expectedCsrf) {
+    if (
+      !securityService.timingSafeCompare(clientCsrf, expectedCsrf) &&
+      (!session?.token || !securityService.timingSafeCompare(clientCsrf, session.token))
+    ) {
+      throw new AuthError("CSRF validation failed: Invalid or missing CSRF token", 403);
+    }
+    return;
+  }
+
+  // If request relies solely on ambient cookie authentication (no custom Authorization or x-session-token header)
+  const isCookieAuth = Boolean(req.cookies.get("damii_session")?.value) && !hasCustomAuthHeader;
+  if (isCookieAuth && expectedCsrf) {
     if (!clientCsrf || !securityService.timingSafeCompare(clientCsrf, expectedCsrf)) {
       throw new AuthError("CSRF validation failed: Invalid or missing CSRF token", 403);
     }

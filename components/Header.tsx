@@ -80,7 +80,20 @@ function NavLink({
     if (e.defaultPrevented) return;
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
-    router.push(href);
+    try {
+      const result = router.push(href) as unknown;
+      if (result && typeof (result as Promise<unknown>).catch === "function") {
+        (result as Promise<unknown>).catch(() => {
+          if (typeof window !== "undefined") {
+            window.location.assign(href);
+          }
+        });
+      }
+    } catch {
+      if (typeof window !== "undefined") {
+        window.location.assign(href);
+      }
+    }
   };
 
   return (
