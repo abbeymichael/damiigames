@@ -1,10 +1,12 @@
 import type {
   AdminProfile,
   AdminSettings,
+  GameTypeLimit,
   League,
   LeagueParticipant,
   OrganizerProfile,
   Profile,
+  Region,
 } from "../types";
 import { securityService } from "../security";
 
@@ -37,6 +39,68 @@ export const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
   updatedBy: "System",
 };
 
+export const DEFAULT_REGIONS: Region[] = [
+  { id: "reg-greater-accra", name: "Greater Accra", code: "GA", sortOrder: 1, active: true },
+  { id: "reg-ashanti", name: "Ashanti", code: "AS", sortOrder: 2, active: true },
+  { id: "reg-western", name: "Western", code: "WP", sortOrder: 3, active: true },
+  { id: "reg-eastern", name: "Eastern", code: "EP", sortOrder: 4, active: true },
+  { id: "reg-central", name: "Central", code: "CP", sortOrder: 5, active: true },
+  { id: "reg-northern", name: "Northern", code: "NP", sortOrder: 6, active: true },
+  { id: "reg-volta", name: "Volta", code: "VR", sortOrder: 7, active: true },
+  { id: "reg-upper-east", name: "Upper East", code: "UE", sortOrder: 8, active: true },
+  { id: "reg-upper-west", name: "Upper West", code: "UW", sortOrder: 9, active: true },
+  { id: "reg-bono", name: "Bono", code: "BO", sortOrder: 10, active: true },
+  { id: "reg-bono-east", name: "Bono East", code: "BE", sortOrder: 11, active: true },
+  { id: "reg-ahafo", name: "Ahafo", code: "AH", sortOrder: 12, active: true },
+  { id: "reg-western-north", name: "Western North", code: "WN", sortOrder: 13, active: true },
+  { id: "reg-oti", name: "Oti", code: "OT", sortOrder: 14, active: true },
+  { id: "reg-savannah", name: "Savannah", code: "SV", sortOrder: 15, active: true },
+  { id: "reg-north-east", name: "North East", code: "NE", sortOrder: 16, active: true },
+];
+
+export const DEFAULT_GAME_TYPE_LIMITS: GameTypeLimit[] = [
+  {
+    id: "limit-damii-10x10",
+    gameType: "damii_10x10",
+    minWager: "1.00",
+    maxWager: "1000.00",
+    minTournamentPrizePool: "10.00",
+    maxTournamentPrizePool: "10000.00",
+    platformFeePercent: "0.0500",
+    updatedAt: new Date(0).toISOString(),
+  },
+  {
+    id: "limit-draughts-classic",
+    gameType: "draughts_classic",
+    minWager: "1.00",
+    maxWager: "500.00",
+    minTournamentPrizePool: "10.00",
+    maxTournamentPrizePool: "5000.00",
+    platformFeePercent: "0.0500",
+    updatedAt: new Date(0).toISOString(),
+  },
+  {
+    id: "limit-rapid-damii",
+    gameType: "rapid_damii",
+    minWager: "2.00",
+    maxWager: "1500.00",
+    minTournamentPrizePool: "20.00",
+    maxTournamentPrizePool: "15000.00",
+    platformFeePercent: "0.0500",
+    updatedAt: new Date(0).toISOString(),
+  },
+  {
+    id: "limit-tournament-blitz",
+    gameType: "tournament_blitz",
+    minWager: "5.00",
+    maxWager: "2000.00",
+    minTournamentPrizePool: "50.00",
+    maxTournamentPrizePool: "20000.00",
+    platformFeePercent: "0.0500",
+    updatedAt: new Date(0).toISOString(),
+  },
+];
+
 const ALL_PERMISSIONS: AdminProfile["permissions"] = [
   "manage_users",
   "manage_organizers",
@@ -56,6 +120,8 @@ export interface SeedDataset {
   leagues: League[];
   leagueParticipants: LeagueParticipant[];
   adminSettings: AdminSettings;
+  regions: Region[];
+  gameTypeLimits: GameTypeLimit[];
 }
 
 /** Builds the full default dataset with freshly hashed credentials. */
@@ -128,7 +194,7 @@ export function buildSeedDataset(now = new Date().toISOString()): SeedDataset {
       draws: 2,
       role: "organizer",
     }),
-    profile("organizer-ghana-token", "Ghana_Damii_Org", playerCreds, {
+    profile("organizer-token-002", "Premier_Damii_Org", playerCreds, {
       rating: 1820,
       marbles: 1500,
       points: 12000,
@@ -208,14 +274,14 @@ export function buildSeedDataset(now = new Date().toISOString()): SeedDataset {
       contactPhone: "+233240001122",
     },
     {
-      userId: "organizer-ghana-token",
-      username: "Ghana_Damii_Org",
+      userId: "organizer-token-002",
+      username: "Premier_Damii_Org",
       status: "approved",
       requestedAt: now,
       reviewedBy: "admin-token-001",
       reviewedAt: now,
       organizationName: "Damii Association",
-      bio: "Official national circuit organizer",
+      bio: "Official circuit tournament organizer",
       contactPhone: "+233500003344",
     },
     {
@@ -288,5 +354,7 @@ export function buildSeedDataset(now = new Date().toISOString()): SeedDataset {
     leagues,
     leagueParticipants,
     adminSettings: { ...DEFAULT_ADMIN_SETTINGS, updatedAt: now },
+    regions: [...DEFAULT_REGIONS],
+    gameTypeLimits: [...DEFAULT_GAME_TYPE_LIMITS],
   };
 }

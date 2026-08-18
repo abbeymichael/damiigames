@@ -2,7 +2,7 @@
 
 import React from "react";
 import { ScrollText } from "lucide-react";
-import { AdminLog } from "@/lib/types";
+import type { AdminLog } from "@/lib/types";
 
 export interface AuditLogsTableProps {
   logs: AdminLog[];

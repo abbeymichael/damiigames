@@ -15,7 +15,7 @@ function formatRoomResponse(room: Room, token: string) {
   if (token && token === room.hostToken) role = "white";
   else if (token && token === room.guestToken) role = "black";
 
-  // Check turn timers
+  // Check turn timers & 90s disconnection grace
   const timerState = timerService.checkRoomTimers(room);
 
   let moves: MoveLogEntry[] = [];
@@ -40,9 +40,13 @@ function formatRoomResponse(room: Room, token: string) {
     leagueId: room.leagueId,
     matchId: room.matchId,
     moveCount: room.moveCount,
+    drawOfferedBy: room.drawOfferedBy || null,
+    disputeStatus: room.disputeStatus || "none",
+    disputeNotes: room.disputeNotes || null,
     moves,
     role,
     timerState,
+    createdAt: room.createdAt,
     updatedAt: room.updatedAt,
   };
 }
@@ -59,8 +63,17 @@ export async function GET(req: NextRequest) {
   const token = cleanToken(searchParams.get("token"));
 
   if (!code) {
-    const activeRooms = await dbRepository.listRooms(10);
-    return NextResponse.json({ activeRooms });
+    const activeRooms = await dbRepository.listRooms(20);
+    const now = Date.now();
+    // Filter out expired unjoined rooms (>10 mins)
+    const validRooms = activeRooms.filter((r) => {
+      if (r.status === "waiting" && !r.guestToken) {
+        const createdMs = new Date(r.createdAt).getTime();
+        return now - createdMs < 10 * 60 * 1000;
+      }
+      return r.status !== "cancelled";
+    });
+    return NextResponse.json({ activeRooms: validRooms });
   }
 
   const room = await dbRepository.getRoom(code);
@@ -68,7 +81,22 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
 
-  // Check timer & disconnection state
+  const now = Date.now();
+
+  // 1. Unjoined match 10-minute auto-expiry
+  if (room.status === "waiting" && !room.guestToken) {
+    const createdMs = new Date(room.createdAt).getTime();
+    if (now - createdMs > 10 * 60 * 1000) {
+      room.status = "cancelled";
+      await dbRepository.saveRoom(room);
+      return NextResponse.json({
+        room: formatRoomResponse(room, token),
+        message: "Room automatically expired after 10 minutes with no opponent.",
+      });
+    }
+  }
+
+  // 2. Check timer & 90s disconnection state
   const timerState = timerService.checkRoomTimers(room);
   if (timerState.timedOut && timerState.forfeitedPlayer && room.status === "playing") {
     room.winner = timerState.forfeitedPlayer === "white" ? "black" : "white";
@@ -349,6 +377,166 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ room: formatRoomResponse(room, token), profile });
     }
 
+    if (action === "offer_draw") {
+      const code = cleanCode(body.code);
+      const room = await dbRepository.getRoom(code);
+      if (!room || room.status !== "playing") {
+        return NextResponse.json({ error: "Game not found or not active" }, { status: 400 });
+      }
+
+      const playerRole: Player | null = token === room.hostToken ? "white" : token === room.guestToken ? "black" : null;
+      if (!playerRole) return NextResponse.json({ error: "Not a player in this match" }, { status: 403 });
+
+      room.drawOfferedBy = playerRole;
+      await dbRepository.saveRoom(room);
+
+      const profile = await dbRepository.getProfile(token);
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+    }
+
+    if (action === "accept_draw") {
+      const code = cleanCode(body.code);
+      const room = await dbRepository.getRoom(code);
+      if (!room || room.status !== "playing") {
+        return NextResponse.json({ error: "Game not found or not active" }, { status: 400 });
+      }
+
+      const playerRole: Player | null = token === room.hostToken ? "white" : token === room.guestToken ? "black" : null;
+      if (!playerRole) return NextResponse.json({ error: "Not a player in this match" }, { status: 403 });
+
+      if (!room.drawOfferedBy || room.drawOfferedBy === playerRole) {
+        return NextResponse.json({ error: "No active draw offer from your opponent to accept." }, { status: 400 });
+      }
+
+      room.winner = null;
+      room.status = "completed";
+      room.drawOfferedBy = null;
+      await dbRepository.saveRoom(room);
+
+      await applyGameFinishEffects(room);
+      const profile = await dbRepository.getProfile(token);
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+    }
+
+    if (action === "decline_draw") {
+      const code = cleanCode(body.code);
+      const room = await dbRepository.getRoom(code);
+      if (!room || room.status !== "playing") {
+        return NextResponse.json({ error: "Game not found or not active" }, { status: 400 });
+      }
+
+      room.drawOfferedBy = null;
+      await dbRepository.saveRoom(room);
+
+      const profile = await dbRepository.getProfile(token);
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+    }
+
+    if (action === "claim_timeout_win") {
+      const code = cleanCode(body.code);
+      const room = await dbRepository.getRoom(code);
+      if (!room || room.status !== "playing") {
+        return NextResponse.json({ error: "Game not found or not active" }, { status: 400 });
+      }
+
+      const playerRole: Player | null = token === room.hostToken ? "white" : token === room.guestToken ? "black" : null;
+      if (!playerRole) return NextResponse.json({ error: "Not a player in this match" }, { status: 403 });
+
+      const opponentRole: Player = playerRole === "white" ? "black" : "white";
+
+      // Check if opponent is disconnected and grace period expired (>90s)
+      if (room.disconnectedPlayer === opponentRole && room.disconnectTime) {
+        const elapsed = Math.floor((Date.now() - room.disconnectTime) / 1000);
+        if (elapsed >= timerService.DISCONNECT_GRACE_PERIOD_SECONDS) {
+          room.winner = playerRole;
+          room.status = "forfeited";
+          await dbRepository.saveRoom(room);
+
+          await applyGameFinishEffects(room);
+          const profile = await dbRepository.getProfile(token);
+          return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+        }
+        return NextResponse.json({
+          error: `Opponent is still within the 90s grace reconnection period (${timerService.DISCONNECT_GRACE_PERIOD_SECONDS - elapsed}s remaining).`,
+        }, { status: 400 });
+      }
+
+      // Check turn timer timeout
+      const timerState = timerService.checkRoomTimers(room);
+      if (timerState.timedOut && timerState.forfeitedPlayer === opponentRole) {
+        room.winner = playerRole;
+        room.status = "forfeited";
+        await dbRepository.saveRoom(room);
+
+        await applyGameFinishEffects(room);
+        const profile = await dbRepository.getProfile(token);
+        return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+      }
+
+      return NextResponse.json({ error: "Opponent has not timed out or disconnected beyond the allowed limit." }, { status: 400 });
+    }
+
+    if (action === "cancel_room") {
+      const code = cleanCode(body.code);
+      const room = await dbRepository.getRoom(code);
+      if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
+
+      // Unjoined match cancellation without penalty
+      if (room.status === "waiting" && !room.guestToken && token === room.hostToken) {
+        room.status = "cancelled";
+        await dbRepository.saveRoom(room);
+
+        // Refund any host wager lock if applicable
+        if (room.escrowId) {
+          await walletService.disburseWagerEscrow(room.escrowId, null);
+        }
+
+        const profile = await dbRepository.getProfile(token);
+        return NextResponse.json({
+          room: formatRoomResponse(room, token),
+          profile,
+          message: "Unjoined room cancelled immediately without penalty.",
+        });
+      }
+
+      return NextResponse.json({ error: "Only the host can cancel an unjoined waiting room." }, { status: 400 });
+    }
+
+    if (action === "report_dispute" || action === "request_review") {
+      const code = cleanCode(body.code);
+      const notes = String(body.notes || body.reason || "Under review by participant report").trim().slice(0, 500);
+      const room = await dbRepository.getRoom(code);
+      if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
+
+      const playerRole: Player | null = token === room.hostToken ? "white" : token === room.guestToken ? "black" : null;
+      const existingProfile = await dbRepository.getProfile(token);
+      const isAdmin = existingProfile && (existingProfile.role === "admin" || existingProfile.role === "super_admin");
+
+      if (!playerRole && !isAdmin) {
+        return NextResponse.json({ error: "Unauthorized to request review on this match" }, { status: 403 });
+      }
+
+      room.status = "under_review";
+      room.disputeStatus = "under_review";
+      room.disputeNotes = notes;
+      await dbRepository.saveRoom(room);
+
+      // Also mark linked tournament match under review if present
+      if (room.leagueId && room.matchId) {
+        const matches = await dbRepository.getLeagueMatches(room.leagueId);
+        const lMatch = matches.find((m) => m.id === room.matchId);
+        if (lMatch) {
+          lMatch.status = "under_review";
+          lMatch.disputeStatus = "under_review";
+          lMatch.disputeNotes = notes;
+          await dbRepository.saveLeagueMatch(lMatch);
+        }
+      }
+
+      const profile = await dbRepository.getProfile(token);
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile, message: "Match placed under review. Preserving all move logs and connection records." });
+    }
+
     if (action === "forfeit") {
       const code = cleanCode(body.code);
       const room = await dbRepository.getRoom(code);
@@ -411,23 +599,23 @@ async function applyGameFinishEffects(room: Room) {
     await dbRepository.updateProfileStats(room.guestToken, true, false, room.hostToken);
     await dbRepository.updateProfileStats(room.hostToken, false, false, room.guestToken);
   } else if (room.winner === null) {
-    // Draw outcome
+    // Draw outcome: record result equally and apply draw rating formula
     await dbRepository.updateProfileStats(room.hostToken, false, true, room.guestToken);
     if (room.guestToken) await dbRepository.updateProfileStats(room.guestToken, false, true, room.hostToken);
   }
 
-  // Wager escrow disbursement
+  // Wager escrow disbursement (on draw, refunds both players equally)
   if (room.escrowId) {
     const winnerToken = room.winner === "white" ? room.hostToken : room.winner === "black" ? room.guestToken : null;
     await walletService.disburseWagerEscrow(room.escrowId, winnerToken);
   }
 
   // League match result verification
-  if (room.leagueId && room.matchId && room.winner) {
-    const winnerToken = room.winner === "white" ? room.hostToken : room.guestToken;
-    if (winnerToken) {
+  if (room.leagueId && room.matchId) {
+    const resultToken = room.winner === "white" ? room.hostToken : room.winner === "black" ? room.guestToken : "draw";
+    if (resultToken) {
       try {
-        await leagueService.submitLeagueMatchResult(room.hostToken, room.matchId, winnerToken);
+        await leagueService.submitLeagueMatchResult(room.hostToken, room.matchId, resultToken);
       } catch {
         // Facilitator will verify if host token is not authorized
       }

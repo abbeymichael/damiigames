@@ -3,7 +3,7 @@
 import React from "react";
 import { Users, Search, Coins, Ban, X } from "lucide-react";
 import { ActionMenu } from "@/components/ActionMenu";
-import { Role } from "@/lib/types";
+import type { Role } from "@/lib/types";
 
 export interface UserProfileItem {
   token: string;

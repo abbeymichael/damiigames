@@ -2,15 +2,28 @@ import type {
   AdminLog,
   AdminProfile,
   AdminSettings,
+  GameTypeLimit,
   League,
   LeagueMatch,
   LeagueParticipant,
+  LedgerAccountType,
+  LedgerEntry,
+  LedgerEntryInput,
+  Match,
+  OrganizerApplication,
+  OrganizerApplicationStatus,
   OrganizerProfile,
   OrganizerStatus,
+  OtpRequest,
   Profile,
+  Region,
   Role,
   Room,
   Session,
+  Tournament,
+  TournamentEntry,
+  TournamentPrize,
+  User,
   WagerEscrow,
   WalletTransaction,
 } from "../types";
@@ -35,7 +48,7 @@ export interface DbRepository {
   /** Optional teardown hook used by tests/graceful shutdown. */
   close?(): Promise<void>;
   /** Backend identifier, surfaced in health checks. */
-  readonly dialect: "mysql";
+  readonly dialect: "mysql" | "memory";
 
   // --- Sessions & Auth ---
   createSession(userId: string, role: Role, ipAddress?: string, userAgent?: string): Promise<Session>;
@@ -130,6 +143,57 @@ export interface DbRepository {
   getAdminProfile(userId: string): Promise<AdminProfile | null>;
   saveAdminProfile(profile: AdminProfile): Promise<AdminProfile>;
   listAdminProfiles(): Promise<AdminProfile[]>;
+
+  // --- Users & Profile Completion ---
+  getUserById(id: string): Promise<User | null>;
+  getUserByPhone(phoneNumber: string): Promise<User | null>;
+  getUserByUsername(username: string): Promise<User | null>;
+  saveUser(user: Partial<User> & { id: string; phoneNumber: string }): Promise<User>;
+  updateUser(id: string, updates: Partial<User>): Promise<User | null>;
+
+  // --- OTP Requests ---
+  createOtpRequest(req: { id: string; phoneNumber: string; codeHash: string; ipAddress: string; expiresAt: Date }): Promise<OtpRequest>;
+  getOtpRequest(id: string): Promise<OtpRequest | null>;
+  consumeOtpRequest(id: string): Promise<OtpRequest | null>;
+  getRecentOtpRequestsByPhone(phoneNumber: string, since: Date): Promise<OtpRequest[]>;
+  getRecentOtpRequestsByIp(ipAddress: string, since: Date): Promise<OtpRequest[]>;
+
+  // --- Organizer Applications ---
+  createOrganizerApplication(app: OrganizerApplication): Promise<OrganizerApplication>;
+  getOrganizerApplication(id: string): Promise<OrganizerApplication | null>;
+  getOrganizerApplicationByUserId(userId: string): Promise<OrganizerApplication | null>;
+  listOrganizerApplications(status?: OrganizerApplicationStatus): Promise<OrganizerApplication[]>;
+  updateOrganizerApplication(id: string, updates: Partial<OrganizerApplication>): Promise<OrganizerApplication | null>;
+
+  // --- Regions ---
+  getRegions(): Promise<Region[]>;
+  saveRegion?(region: Region): Promise<Region>;
+
+  // --- Matches (Section 6) ---
+  createMatch(match: Match): Promise<Match>;
+  getMatch(id: string): Promise<Match | null>;
+  updateMatch(id: string, updates: Partial<Match>): Promise<Match | null>;
+  listMatches(filter?: { status?: string; gameType?: string; playerId?: string; limit?: number }): Promise<Match[]>;
+
+  // --- Tournaments & Prizes (Section 7) ---
+  createTournament(tournament: Tournament, prizes?: { placement: number; amount: number | string }[]): Promise<Tournament>;
+  getTournament(id: string): Promise<{ tournament: Tournament; prizes: TournamentPrize[]; entries: TournamentEntry[] } | null>;
+  listTournaments(filter?: { status?: string; organizerId?: string; gameType?: string; limit?: number }): Promise<Tournament[]>;
+  updateTournament(id: string, updates: Partial<Tournament>): Promise<Tournament | null>;
+  createTournamentEntry(entry: TournamentEntry): Promise<TournamentEntry>;
+  getTournamentEntries(tournamentId: string): Promise<TournamentEntry[]>;
+  updateTournamentEntryPlacement(entryId: string, placement: number): Promise<TournamentEntry | null>;
+  getTournamentPrizes(tournamentId: string): Promise<TournamentPrize[]>;
+
+  // --- Game Type Limits (Section 8) ---
+  getGameTypeLimit(gameType: string): Promise<GameTypeLimit | null>;
+  getGameTypeLimits(): Promise<GameTypeLimit[]>;
+  saveGameTypeLimit(limit: GameTypeLimit): Promise<GameTypeLimit>;
+
+  // --- Double-Entry Ledger ---
+  writeLedger(entries: LedgerEntryInput[]): Promise<LedgerEntry[]>;
+  getLedgerBalance(userId: string, accountType: LedgerAccountType): Promise<number>;
+  getLedgerEntries(filter?: { userId?: string; referenceType?: string; referenceId?: string; limit?: number }): Promise<LedgerEntry[]>;
 
   // --- Seeder ---
   seedDatabase(): Promise<Profile[]>;

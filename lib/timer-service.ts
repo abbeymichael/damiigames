@@ -2,7 +2,7 @@ import { Room, Player } from "./types";
 
 export const timerService = {
   TURN_TIME_LIMIT_SECONDS: 60,
-  DISCONNECT_GRACE_PERIOD_SECONDS: 45,
+  DISCONNECT_GRACE_PERIOD_SECONDS: 90,
 
   checkRoomTimers(room: Room): {
     timedOut: boolean;
@@ -10,6 +10,7 @@ export const timerService = {
     remainingTurnSeconds: number;
     remainingDisconnectSeconds: number | null;
     warning: string | null;
+    bothDisconnected?: boolean;
   } {
     if (room.status !== "playing" || room.winner) {
       return {
@@ -31,7 +32,7 @@ export const timerService = {
     let timedOut = false;
     let warning: string | null = null;
 
-    // Check disconnection window
+    // Check disconnection window (90 seconds grace period)
     if (room.disconnectTime && room.disconnectedPlayer) {
       const elapsedDisconnectSeconds = Math.floor((now - room.disconnectTime) / 1000);
       remainingDisconnectSeconds = Math.max(
@@ -42,9 +43,9 @@ export const timerService = {
       if (remainingDisconnectSeconds === 0) {
         timedOut = true;
         forfeitedPlayer = room.disconnectedPlayer;
-        warning = `${room.disconnectedPlayer === "white" ? room.hostName : room.guestName} forfeited due to disconnection.`;
+        warning = `${room.disconnectedPlayer === "white" ? room.hostName : room.guestName} disconnected and exceeded the 90s grace window. Opponent may claim win.`;
       } else {
-        warning = `${room.disconnectedPlayer === "white" ? room.hostName : room.guestName} disconnected. ${remainingDisconnectSeconds}s to reconnect.`;
+        warning = `${room.disconnectedPlayer === "white" ? room.hostName : room.guestName} disconnected. ${remainingDisconnectSeconds}s remaining to reconnect (timer paused).`;
       }
     } else {
       // Normal turn clock
@@ -60,7 +61,7 @@ export const timerService = {
     return {
       timedOut,
       forfeitedPlayer,
-      remainingTurnSeconds,
+      remainingTurnSeconds: room.disconnectTime ? this.TURN_TIME_LIMIT_SECONDS : remainingTurnSeconds,
       remainingDisconnectSeconds,
       warning,
     };

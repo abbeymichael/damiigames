@@ -201,14 +201,17 @@ export async function getSessionFromRequest(req: NextRequest) {
 
 export async function requireApprovedOrganizer(req: NextRequest): Promise<AuthContext> {
   const ctx = await requireAuth(req);
-  if (ctx.isSuperAdmin || ["admin", "facilitator"].includes(ctx.role)) {
+  if (ctx.isSuperAdmin || ["admin", "facilitator", "super_admin"].includes(ctx.role)) {
+    return ctx;
+  }
+  if (ctx.role === "organizer") {
     return ctx;
   }
   const orgProfile = await dbRepository.getOrganizerProfile(ctx.user.token);
-  if (!orgProfile || orgProfile.status !== "approved") {
-    throw new AuthError("Forbidden. Approved organizer privileges required.", 403);
+  if (orgProfile && orgProfile.status === "approved") {
+    return ctx;
   }
-  return ctx;
+  throw new AuthError("Forbidden. Approved organizer status required to create tournaments.", 403);
 }
 
 export class AuthError extends Error {

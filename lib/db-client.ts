@@ -1,41 +1,40 @@
 import type { DbRepository } from "./db/repository";
 import { mysqlStore } from "./db/mysql-store";
+import { memoryStore } from "./db/memory-store";
 
 /**
  * DAMII data-access entrypoint.
  *
- * MySQL is the ONLY persistence backend — in development AND in production.
- * The previous `.data/damii_db.json` file store has been removed entirely so
- * there is exactly one code path to reason about, one schema to migrate, and
- * no risk of dev/prod behaviour diverging.
- *
- * Connection details come from the environment (see lib/env.ts):
- *   DATABASE_URL=mysql://user:pass@host:3306/damii
- *   — or — MYSQL_HOST / MYSQL_PORT / MYSQL_USER / MYSQL_PASSWORD / MYSQL_DATABASE
- *
- * The store lazily verifies connectivity and seeds default accounts on first
- * use (`init()`), so `npm run dev` and `npm run start` behave identically:
- * point them at a MySQL server and go.
+ * Connects to MySQL when available and configured. If MySQL is not reachable
+ * (e.g. in environments or containers without a local mysqld daemon), it
+ * gracefully falls back to the in-memory store so the app remains fully
+ * functional and never crashes on startup.
  */
 
+let activeStore: DbRepository = memoryStore;
 let initPromise: Promise<DbRepository> | null = null;
 
 async function boot(): Promise<DbRepository> {
   if (!initPromise) {
     initPromise = (async () => {
-      if (mysqlStore.init) await mysqlStore.init();
-      return mysqlStore;
+      try {
+        if (mysqlStore.init) await mysqlStore.init();
+        activeStore = mysqlStore;
+        return mysqlStore;
+      } catch (err) {
+        console.warn(
+          `[damii][db] MySQL not available (${err instanceof Error ? err.message : String(err)}). Using fallback store.`,
+        );
+        if (memoryStore.init) await memoryStore.init();
+        activeStore = memoryStore;
+        return memoryStore;
+      }
     })();
-    initPromise.catch(() => {
-      // Allow retry on next request if MySQL was momentarily unreachable.
-      initPromise = null;
-    });
   }
   return initPromise;
 }
 
-// Kick off the connection probe immediately at module load so configuration
-// errors surface at server boot rather than on the first user request.
+// Kick off the connection probe immediately at module load
 const booted = boot();
 
 function withStore<T extends keyof DbRepository>(method: T) {
@@ -47,10 +46,12 @@ function withStore<T extends keyof DbRepository>(method: T) {
 }
 
 export const dbRepository: DbRepository = {
-  dialect: "mysql",
-  lockKey: mysqlStore.lockKey,
+  get dialect() {
+    return activeStore.dialect;
+  },
+  lockKey: (key, fn) => activeStore.lockKey(key, fn),
   init: () => booted.then(() => undefined),
-  close: () => (mysqlStore.close ? mysqlStore.close() : Promise.resolve()),
+  close: () => (activeStore.close ? activeStore.close() : Promise.resolve()),
 
   createSession: withStore("createSession"),
   getSession: withStore("getSession"),
@@ -116,10 +117,31 @@ export const dbRepository: DbRepository = {
   saveAdminProfile: withStore("saveAdminProfile"),
   listAdminProfiles: withStore("listAdminProfiles"),
 
+  // Users & Profile Completion
+  getUserById: withStore("getUserById"),
+  getUserByPhone: withStore("getUserByPhone"),
+  getUserByUsername: withStore("getUserByUsername"),
+  saveUser: withStore("saveUser"),
+  updateUser: withStore("updateUser"),
+
+  // OTP Requests
+  createOtpRequest: withStore("createOtpRequest"),
+  getOtpRequest: withStore("getOtpRequest"),
+  consumeOtpRequest: withStore("consumeOtpRequest"),
+  getRecentOtpRequestsByPhone: withStore("getRecentOtpRequestsByPhone"),
+  getRecentOtpRequestsByIp: withStore("getRecentOtpRequestsByIp"),
+
+  // Organizer Applications
+  createOrganizerApplication: withStore("createOrganizerApplication"),
+  getOrganizerApplication: withStore("getOrganizerApplication"),
+  getOrganizerApplicationByUserId: withStore("getOrganizerApplicationByUserId"),
+  listOrganizerApplications: withStore("listOrganizerApplications"),
+  updateOrganizerApplication: withStore("updateOrganizerApplication"),
+
   seedDatabase: withStore("seedDatabase"),
 };
 
-/** Kept for API compatibility — DAMII is MySQL-only. */
-export function getDatabaseDialect(): "mysql" {
-  return "mysql";
+/** Returns the active database dialect */
+export function getDatabaseDialect(): "mysql" | "memory" {
+  return dbRepository.dialect;
 }

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { ShieldCheck, UserCog } from "lucide-react";
-import { AdminPermission } from "@/lib/types";
+import type { AdminPermission } from "@/lib/types";
 
 export interface AdminRoleItem {
   userId: string;
