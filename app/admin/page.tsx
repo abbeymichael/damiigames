@@ -48,14 +48,16 @@ import {
   Inbox,
 } from "lucide-react";
 import { getSessionToken, saveSessionToken, clearSessionToken } from "@/lib/client-auth";
-import type { AdminLog, Role, AppRole, Permission, AdminAccount, GameCatalogItem, TournamentActionRequest } from "@/lib/types";
+import type { AdminLog, Role, AppRole, Permission, AdminAccount, GameCatalogItem, TournamentActionRequest, OrganizerApplication, OrganizerApplicationDetailPayload } from "@/lib/types";
 import { ActionMenu } from "@/components/ActionMenu";
 import { AdminTable } from "@/components/AdminTable";
 import { ConfirmModal } from "@/components/admin/ConfirmModal";
 import { UsersTable } from "@/components/admin/UsersTable";
+import { UserDetailModal } from "@/components/admin/UserDetailModal";
 import { TournamentsTable } from "@/components/admin/TournamentsTable";
 import { LedgerTable } from "@/components/admin/LedgerTable";
 import { OrganizersTable } from "@/components/admin/OrganizersTable";
+import { OrganizerApplicationDetailModal } from "@/components/admin/OrganizerApplicationDetailModal";
 import { DisputesTable } from "@/components/admin/DisputesTable";
 import { AuditLogsTable } from "@/components/admin/AuditLogsTable";
 import { AdminRolesTable } from "@/components/admin/AdminRolesTable";
@@ -79,14 +81,19 @@ import {
 type UserProfileItem = {
   token: string;
   username: string;
+  fullName?: string;
+  email?: string;
   role: Role;
   points: number;
-  status?: "active" | "banned";
+  marbles?: number;
+  status?: "active" | "suspended" | "banned";
   rating: number;
   wins: number;
   losses: number;
   draws: number;
   phoneNumber?: string;
+  phoneVerifiedAt?: string | null;
+  region?: string;
   createdAt?: string;
 };
 
@@ -369,6 +376,9 @@ export default function AdminPage() {
 
   // Organizer Approval & Admin Roles State
   const [organizersList, setOrganizersList] = useState<any[]>([]);
+  const [organizerApplications, setOrganizerApplications] = useState<OrganizerApplication[]>([]);
+  const [selectedAppDetail, setSelectedAppDetail] = useState<OrganizerApplicationDetailPayload | null>(null);
+  const [isAppDetailModalOpen, setIsAppDetailModalOpen] = useState(false);
   const [adminRolesList, setAdminRolesList] = useState<any[]>([]);
 
   // Filters & Search
@@ -380,6 +390,9 @@ export default function AdminPage() {
 
   // Selected Game Room for Inspection
   const [inspectRoom, setInspectRoom] = useState<RoomItem | null>(null);
+
+  // Selected User for Detail Inspector
+  const [selectedUserForInspect, setSelectedUserForInspect] = useState<UserProfileItem | null>(null);
 
   // User Point Adjustment Modal State
   const [pointModalUser, setPointModalUser] = useState<UserProfileItem | null>(null);
@@ -535,8 +548,10 @@ export default function AdminPage() {
   }, [metrics?.recentTransactions, txFilter]);
 
   const pendingOrganizersCount = useMemo(() => {
+    const fromApps = organizerApplications.filter((o) => o.status === "pending").length;
+    if (fromApps > 0) return fromApps;
     return organizersList.filter((o) => o.status === "pending").length;
-  }, [organizersList]);
+  }, [organizerApplications, organizersList]);
 
   const openDisputesCount = useMemo(() => {
     return metrics?.recentRooms?.filter((r) => r.status.toLowerCase() === "disputed").length || 0;
@@ -637,6 +652,7 @@ export default function AdminPage() {
       if (res.ok) {
         const data = await res.json();
         setOrganizersList(data.organizers || []);
+        setOrganizerApplications(data.applications || []);
       }
     } catch {
       /* silent */
@@ -912,6 +928,123 @@ export default function AdminPage() {
       refreshAdminData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed organizer action");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleInspectOrganizerApplication = async (applicationId: string) => {
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch(`/api/admin/organizers?id=${encodeURIComponent(applicationId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Failed to load application detail");
+      setSelectedAppDetail(data);
+      setIsAppDetailModalOpen(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load application detail");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleApproveOrganizerApplication = async (applicationId: string, reviewNote?: string) => {
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin/organizers", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ applicationId, action: "approve", reviewNote }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Approval failed");
+      setSuccess(data.message || "Organizer application approved successfully.");
+      setIsAppDetailModalOpen(false);
+      fetchOrganizersList();
+      refreshAdminData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to approve application");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRejectOrganizerApplication = async (applicationId: string, reviewNote: string) => {
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin/organizers", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ applicationId, action: "reject", reviewNote }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Rejection failed");
+      setSuccess(data.message || "Organizer application rejected.");
+      setIsAppDetailModalOpen(false);
+      fetchOrganizersList();
+      refreshAdminData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reject application");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRequestInfoOrganizerApplication = async (applicationId: string, reviewNote: string) => {
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin/organizers", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ applicationId, action: "request_info", reviewNote }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Request info failed");
+      setSuccess(data.message || "Additional information requested from applicant.");
+      setIsAppDetailModalOpen(false);
+      fetchOrganizersList();
+      refreshAdminData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to request more info");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRevokeOrganizerStatus = async (
+    applicationId: string,
+    reason: string,
+    tournamentHandling: "reassign_to_system" | "cancel_and_refund"
+  ) => {
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin/organizers", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ applicationId, action: "revoke", reason, tournamentHandling }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Revocation failed");
+      setSuccess(data.message || `Organizer privileges revoked.`);
+      setIsAppDetailModalOpen(false);
+      fetchOrganizersList();
+      refreshAdminData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to revoke organizer status");
     } finally {
       setBusy(false);
     }
@@ -1742,10 +1875,15 @@ export default function AdminPage() {
             {/* TAB: ORGANIZERS QUEUE */}
             {activeTab === "organizers" && (
               <OrganizersTable
-                organizers={organizersList}
+                applications={organizerApplications}
+                legacyOrganizers={organizersList}
                 busy={busy}
                 onRefresh={fetchOrganizersList}
-                onOrganizerAction={handleOrganizerAction}
+                onInspectApplication={handleInspectOrganizerApplication}
+                onQuickApprove={(id) => handleApproveOrganizerApplication(id)}
+                onQuickReject={(id) => handleRejectOrganizerApplication(id, "Requirements not met upon administrative review")}
+                onQuickRequestInfo={(id) => handleRequestInfoOrganizerApplication(id, "Please provide updated Ghana Card and proof of location documents")}
+                onQuickRevoke={(id) => handleRevokeOrganizerStatus(id, "Administrative revocation", "reassign_to_system")}
               />
             )}
 
@@ -1923,6 +2061,7 @@ export default function AdminPage() {
                 users={filteredUsers}
                 userSearch={userSearch}
                 setUserSearch={setUserSearch}
+                onInspectUser={setSelectedUserForInspect}
                 onAdjustBalance={setPointModalUser}
                 onToggleBan={handleToggleBan}
                 onDeleteUser={handleDeleteUser}
@@ -2704,6 +2843,32 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      {/* USER DETAIL INSPECTOR MODAL */}
+      {selectedUserForInspect && (
+        <UserDetailModal
+          userToken={selectedUserForInspect.token}
+          adminToken={token}
+          onClose={() => setSelectedUserForInspect(null)}
+          onRefreshParent={refreshAdminData}
+          showToast={(msg, type) => {
+            if (type === "error") setError(msg);
+            else setSuccess(msg);
+          }}
+        />
+      )}
+
+      {/* ORGANIZER APPLICATION DETAIL INSPECTOR MODAL */}
+      <OrganizerApplicationDetailModal
+        isOpen={isAppDetailModalOpen}
+        onClose={() => setIsAppDetailModalOpen(false)}
+        detail={selectedAppDetail}
+        busy={busy}
+        onApprove={handleApproveOrganizerApplication}
+        onReject={handleRejectOrganizerApplication}
+        onRequestInfo={handleRequestInfoOrganizerApplication}
+        onRevoke={handleRevokeOrganizerStatus}
+      />
 
       {/* CUSTOM CONFIRMATION MODAL */}
       <ConfirmModal

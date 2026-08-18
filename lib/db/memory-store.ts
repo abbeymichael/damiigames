@@ -1,27 +1,44 @@
 import type {
+  AdminAccount,
   AdminLog,
   AdminProfile,
   AdminSettings,
+  AppRole,
+  GameCatalogItem,
+  GameTypeLimit,
   League,
   LeagueMatch,
   LeagueParticipant,
+  LedgerAccountType,
+  LedgerEntry,
+  LedgerEntryInput,
+  Match,
   OrganizerApplication,
   OrganizerApplicationStatus,
   OrganizerProfile,
   OrganizerStatus,
   OtpRequest,
+  Permission,
   Profile,
+  Region,
   Role,
   Room,
   Session,
+  SystemSettingEntry,
+  SystemSettingsCategory,
+  Tournament,
+  TournamentActionRequest,
+  TournamentEntry,
+  TournamentPrize,
   User,
   WagerEscrow,
   WalletTransaction,
 } from "../types";
+import { SYSTEM_PERMISSIONS, SEED_ROLES_CONFIG } from "../permissions-constants";
 import { securityService } from "../security";
 import { calculateDynamicRatingUpdate, getProfileRank } from "../rank-service";
 import { getEnv } from "../env";
-import { buildSeedDataset, DEFAULT_ADMIN_SETTINGS } from "./seed-data";
+import { buildSeedDataset, DEFAULT_ADMIN_SETTINGS, DEFAULT_REGIONS } from "./seed-data";
 import { lockKey, type DbRepository } from "./repository";
 
 const VALID_ROLES: Role[] = ["admin", "super_admin", "facilitator", "treasurer", "organizer", "user", "player"];
@@ -51,6 +68,20 @@ interface MemoryData {
   leagueParticipants: Map<string, LeagueParticipant>;
   leagueMatches: Map<string, LeagueMatch>;
   adminLogs: AdminLog[];
+  regions: Map<string, Region>;
+  matches: Map<string, Match>;
+  tournaments: Map<string, Tournament>;
+  tournamentPrizes: Map<string, TournamentPrize[]>;
+  tournamentEntries: Map<string, TournamentEntry[]>;
+  gameTypeLimits: Map<string, GameTypeLimit>;
+  ledgerEntries: LedgerEntry[];
+  roles: Map<string, AppRole>;
+  permissions: Map<string, Permission>;
+  rolePermissions: Map<string, Set<string>>;
+  userRoles: Map<string, Set<string>>;
+  games: Map<string, GameCatalogItem>;
+  tournamentActionRequests: Map<string, TournamentActionRequest>;
+  systemSettings: Map<string, SystemSettingEntry>;
   initialized: boolean;
 }
 
@@ -75,6 +106,20 @@ function getMemoryData(): MemoryData {
       leagueParticipants: new Map(),
       leagueMatches: new Map(),
       adminLogs: [],
+      regions: new Map(),
+      matches: new Map(),
+      tournaments: new Map(),
+      tournamentPrizes: new Map(),
+      tournamentEntries: new Map(),
+      gameTypeLimits: new Map(),
+      ledgerEntries: [],
+      roles: new Map(),
+      permissions: new Map(),
+      rolePermissions: new Map(),
+      userRoles: new Map(),
+      games: new Map(),
+      tournamentActionRequests: new Map(),
+      systemSettings: new Map(),
       initialized: false,
     };
   }
@@ -485,6 +530,10 @@ export const memoryStore: DbRepository = {
       .map((r) => ({ ...r }));
   },
 
+  async getAllRooms(limit = 20) {
+    return memoryStore.listRooms(limit);
+  },
+
   // --- Wallet ---
   async createTransaction(tx) {
     const data = getMemoryData();
@@ -530,6 +579,10 @@ export const memoryStore: DbRepository = {
     return Array.from(data.leagues.values())
       .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
       .map((l) => ({ ...l }));
+  },
+
+  async getAllLeagues() {
+    return memoryStore.listLeagues();
   },
 
   async getLeague(id) {
@@ -633,6 +686,10 @@ export const memoryStore: DbRepository = {
   async listAdminLogs(limit = 30) {
     const data = getMemoryData();
     return data.adminLogs.slice(0, limit).map((l) => ({ ...l }));
+  },
+
+  async getAdminLogs(limit = 30) {
+    return memoryStore.listAdminLogs(limit);
   },
 
   // --- Organizer profiles ---
@@ -822,6 +879,444 @@ export const memoryStore: DbRepository = {
     };
     data.organizerApplications.set(id, updated);
     return { ...updated };
+  },
+
+  // --- Regions ---
+  async getRegions() {
+    const data = getMemoryData();
+    if (data.regions.size === 0) {
+      for (const r of DEFAULT_REGIONS) {
+        data.regions.set(r.id, { ...r });
+      }
+    }
+    return Array.from(data.regions.values()).map((r) => ({ ...r }));
+  },
+
+  async saveRegion(region) {
+    const data = getMemoryData();
+    data.regions.set(region.id, { ...region });
+    return { ...region };
+  },
+
+  // --- Matches ---
+  async createMatch(match) {
+    const data = getMemoryData();
+    data.matches.set(match.id, { ...match });
+    return { ...match };
+  },
+
+  async getMatch(id) {
+    const data = getMemoryData();
+    const m = data.matches.get(id);
+    return m ? { ...m } : null;
+  },
+
+  async updateMatch(id, updates) {
+    const data = getMemoryData();
+    const existing = data.matches.get(id);
+    if (!existing) return null;
+    const updated = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+    data.matches.set(id, updated);
+    return { ...updated };
+  },
+
+  async listMatches(filter) {
+    const data = getMemoryData();
+    let list = Array.from(data.matches.values());
+    if (filter?.status) list = list.filter((m) => m.status === filter.status);
+    if (filter?.gameType) list = list.filter((m) => m.gameType === filter.gameType);
+    if (filter?.playerId) {
+      list = list.filter((m) => m.player1Id === filter.playerId || m.player2Id === filter.playerId);
+    }
+    if (filter?.limit) list = list.slice(0, filter.limit);
+    return list.map((m) => ({ ...m }));
+  },
+
+  // --- Tournaments & Prizes ---
+  async createTournament(tournament, prizes) {
+    const data = getMemoryData();
+    data.tournaments.set(tournament.id, { ...tournament });
+    if (prizes && prizes.length > 0) {
+      const prizeObjs: TournamentPrize[] = prizes.map((p, idx) => ({
+        id: `prize-${tournament.id}-${idx}`,
+        tournamentId: tournament.id,
+        placement: p.placement,
+        amount: String(p.amount),
+        percentage: null,
+      }));
+      data.tournamentPrizes.set(tournament.id, prizeObjs);
+    }
+    return { ...tournament };
+  },
+
+  async getTournament(id) {
+    const data = getMemoryData();
+    const t = data.tournaments.get(id);
+    if (!t) return null;
+    const prizes = data.tournamentPrizes.get(id) || [];
+    const entries = data.tournamentEntries.get(id) || [];
+    return {
+      tournament: { ...t },
+      prizes: prizes.map((p) => ({ ...p })),
+      entries: entries.map((e) => ({ ...e })),
+    };
+  },
+
+  async listTournaments(filter) {
+    const data = getMemoryData();
+    let list = Array.from(data.tournaments.values());
+    if (filter?.status) list = list.filter((t) => t.status === filter.status);
+    if (filter?.organizerId) list = list.filter((t) => t.organizerId === filter.organizerId);
+    if (filter?.gameType) list = list.filter((t) => t.gameType === filter.gameType);
+    if (filter?.limit) list = list.slice(0, filter.limit);
+    return list.map((t) => ({ ...t }));
+  },
+
+  async updateTournament(id, updates) {
+    const data = getMemoryData();
+    const existing = data.tournaments.get(id);
+    if (!existing) return null;
+    const updated = { ...existing, ...updates };
+    data.tournaments.set(id, updated);
+    return { ...updated };
+  },
+
+  async createTournamentEntry(entry) {
+    const data = getMemoryData();
+    const entries = data.tournamentEntries.get(entry.tournamentId) || [];
+    entries.push({ ...entry });
+    data.tournamentEntries.set(entry.tournamentId, entries);
+    return { ...entry };
+  },
+
+  async getTournamentEntries(tournamentId) {
+    const data = getMemoryData();
+    const entries = data.tournamentEntries.get(tournamentId) || [];
+    return entries.map((e) => ({ ...e }));
+  },
+
+  async updateTournamentEntryPlacement(entryId, placement) {
+    const data = getMemoryData();
+    for (const [tId, entries] of data.tournamentEntries.entries()) {
+      const idx = entries.findIndex((e) => e.id === entryId);
+      if (idx !== -1) {
+        entries[idx].placement = placement;
+        data.tournamentEntries.set(tId, entries);
+        return { ...entries[idx] };
+      }
+    }
+    return null;
+  },
+
+  async getTournamentPrizes(tournamentId) {
+    const data = getMemoryData();
+    const prizes = data.tournamentPrizes.get(tournamentId) || [];
+    return prizes.map((p) => ({ ...p }));
+  },
+
+  // --- Game Type Limits ---
+  async getGameTypeLimit(gameType) {
+    const data = getMemoryData();
+    const l = data.gameTypeLimits.get(gameType);
+    return l ? { ...l } : null;
+  },
+
+  async getGameTypeLimits() {
+    const data = getMemoryData();
+    return Array.from(data.gameTypeLimits.values()).map((l) => ({ ...l }));
+  },
+
+  async saveGameTypeLimit(limit) {
+    const data = getMemoryData();
+    data.gameTypeLimits.set(limit.gameType, { ...limit });
+    return { ...limit };
+  },
+
+  // --- Double-Entry Ledger ---
+  async writeLedger(entries) {
+    const data = getMemoryData();
+    const created: LedgerEntry[] = [];
+    for (const item of entries) {
+      const entry: LedgerEntry = {
+        id: `ledger-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        userId: item.userId,
+        accountType: item.accountType,
+        currency: item.currency || "GHS",
+        amount: String(item.amount),
+        direction: item.direction,
+        balanceBefore: "0",
+        balanceAfter: String(item.amount),
+        referenceType: item.referenceType,
+        referenceId: item.referenceId,
+        metadataJson: item.metadataJson || "{}",
+        recordedAt: new Date().toISOString(),
+      };
+      data.ledgerEntries.push(entry);
+      created.push(entry);
+    }
+    return created;
+  },
+
+  async getLedgerBalance(userId, accountType) {
+    const data = getMemoryData();
+    let balance = 0;
+    for (const e of data.ledgerEntries) {
+      if (e.userId === userId && e.accountType === accountType) {
+        const amt = parseFloat(e.amount) || 0;
+        if (e.direction === "credit") balance += amt;
+        else if (e.direction === "debit") balance -= amt;
+      }
+    }
+    return balance;
+  },
+
+  async getLedgerEntries(filter) {
+    const data = getMemoryData();
+    let list = [...data.ledgerEntries];
+    if (filter?.userId) list = list.filter((e) => e.userId === filter.userId);
+    if (filter?.referenceType) list = list.filter((e) => e.referenceType === filter.referenceType);
+    if (filter?.referenceId) list = list.filter((e) => e.referenceId === filter.referenceId);
+    if (filter?.limit) list = list.slice(-filter.limit);
+    return list.map((e) => ({ ...e }));
+  },
+
+  // --- Roles & RBAC ---
+  async listRoles() {
+    const data = getMemoryData();
+    if (data.roles.size === 0) {
+      for (const r of SEED_ROLES_CONFIG) {
+        const roleObj: AppRole = {
+          id: `role-${r.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
+          name: r.name,
+          description: r.description,
+          isSystemRole: r.isSystemRole,
+          permissionKeys: r.permissionKeys,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        data.roles.set(roleObj.id, roleObj);
+        data.rolePermissions.set(roleObj.id, new Set(r.permissionKeys));
+      }
+    }
+    return Array.from(data.roles.values()).map((r) => {
+      const perms = data.rolePermissions.get(r.id);
+      return {
+        ...r,
+        permissionKeys: perms ? Array.from(perms) : r.permissionKeys || [],
+      };
+    });
+  },
+
+  async getRole(id) {
+    const roles = await memoryStore.listRoles();
+    return roles.find((r) => r.id === id || r.name.toLowerCase() === id.toLowerCase());
+  },
+
+  async createRole(role, permissionKeys) {
+    const data = getMemoryData();
+    await memoryStore.listRoles(); // ensure seeded
+    const newRole: AppRole = {
+      ...role,
+      id: role.id || `role-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      permissionKeys,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    data.roles.set(newRole.id, newRole);
+    data.rolePermissions.set(newRole.id, new Set(permissionKeys));
+    return { ...newRole };
+  },
+
+  async updateRole(id, updates, permissionKeys) {
+    const data = getMemoryData();
+    await memoryStore.listRoles();
+    const existing = data.roles.get(id);
+    if (!existing) throw new Error("Role not found");
+    const updated: AppRole = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    if (permissionKeys) {
+      updated.permissionKeys = permissionKeys;
+      data.rolePermissions.set(id, new Set(permissionKeys));
+    }
+    data.roles.set(id, updated);
+    return { ...updated };
+  },
+
+  async deleteRole(id) {
+    const data = getMemoryData();
+    data.roles.delete(id);
+    data.rolePermissions.delete(id);
+  },
+
+  async listPermissions() {
+    const data = getMemoryData();
+    if (data.permissions.size === 0) {
+      SYSTEM_PERMISSIONS.forEach((p, idx) => {
+        const perm: Permission = {
+          id: `perm-${idx + 1}`,
+          key: p.key,
+          category: p.category,
+          description: p.description,
+          createdAt: new Date().toISOString(),
+        };
+        data.permissions.set(perm.key, perm);
+      });
+    }
+    return Array.from(data.permissions.values()).map((p) => ({ ...p }));
+  },
+
+  async getAdminUserRoleAssignments(userId) {
+    const data = getMemoryData();
+    const roles = data.userRoles.get(userId);
+    return roles ? Array.from(roles) : [];
+  },
+
+  async setAdminUserRoleAssignments(userId, roleIds) {
+    const data = getMemoryData();
+    data.userRoles.set(userId, new Set(roleIds));
+  },
+
+  async listAdminAccounts() {
+    const profiles = await memoryStore.getAllProfiles();
+    const admins = profiles.filter((p) => p.role === "admin" || p.role === "super_admin");
+    const result: AdminAccount[] = [];
+    for (const a of admins) {
+      const roleIds = await memoryStore.getAdminUserRoleAssignments(a.token);
+      const allRoles = await memoryStore.listRoles();
+      const userRoles = allRoles.filter((r) => roleIds.includes(r.id));
+      result.push({
+        id: a.token,
+        username: a.username,
+        phoneNumber: a.phoneNumber || "",
+        status: a.status || "active",
+        createdAt: a.createdAt || new Date().toISOString(),
+        lastActive: a.updatedAt || new Date().toISOString(),
+        roles: userRoles,
+        isSuperAdmin: a.role === "super_admin" || userRoles.some((r) => r.isSystemRole),
+      });
+    }
+    return result;
+  },
+
+  // --- Games Catalog ---
+  async listGames() {
+    const data = getMemoryData();
+    if (data.games.size === 0) {
+      const defaultGames: GameCatalogItem[] = [
+        {
+          id: "game-damii-10x10",
+          name: "Ghanaian 10x10 Damii",
+          slug: "damii-10x10",
+          boardSize: 10,
+          description: "Traditional Ghanaian Draughts with flying kings and compulsory multi-hop captures.",
+          status: "enabled",
+          minTimerSeconds: 30,
+          maxTimerSeconds: 180,
+          defaultTimerSeconds: 60,
+          wagerAllowed: true,
+          rulesJson: JSON.stringify({ flyingKings: true, multiJumpCompulsory: true }),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: "game-damii-8x8",
+          name: "Ghanaian 8x8 Blitz Draughts",
+          slug: "damii-8x8",
+          boardSize: 8,
+          description: "Fast-paced compact 8x8 draughts format for quick blitz matches.",
+          status: "enabled",
+          minTimerSeconds: 15,
+          maxTimerSeconds: 90,
+          defaultTimerSeconds: 45,
+          wagerAllowed: true,
+          rulesJson: JSON.stringify({ flyingKings: true }),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ];
+      for (const g of defaultGames) {
+        data.games.set(g.id, { ...g });
+      }
+    }
+    return Array.from(data.games.values()).map((g) => ({ ...g }));
+  },
+
+  async getGame(slugOrId) {
+    const games = await memoryStore.listGames();
+    return games.find((g) => g.id === slugOrId || g.slug === slugOrId);
+  },
+
+  async saveGame(game) {
+    const data = getMemoryData();
+    await memoryStore.listGames();
+    data.games.set(game.id, { ...game, updatedAt: new Date().toISOString() });
+    return { ...game };
+  },
+
+  async toggleGameStatus(id, status) {
+    const data = getMemoryData();
+    await memoryStore.listGames();
+    const existing = data.games.get(id);
+    if (!existing) throw new Error("Game not found");
+    const updated = { ...existing, status, updatedAt: new Date().toISOString() };
+    data.games.set(id, updated);
+    return { ...updated };
+  },
+
+  // --- Tournament Action Requests Queue ---
+  async listTournamentActionRequests(status) {
+    const data = getMemoryData();
+    let list = Array.from(data.tournamentActionRequests.values());
+    if (status) list = list.filter((r) => r.status === status);
+    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  },
+
+  async createTournamentActionRequest(req) {
+    const data = getMemoryData();
+    data.tournamentActionRequests.set(req.id, { ...req });
+    return { ...req };
+  },
+
+  async reviewTournamentActionRequest(id, status, adminId, reviewNote) {
+    const data = getMemoryData();
+    const existing = data.tournamentActionRequests.get(id);
+    if (!existing) throw new Error("Request not found");
+    const updated: TournamentActionRequest = {
+      ...existing,
+      status,
+      reviewedByAdminId: adminId,
+      reviewedAt: new Date().toISOString(),
+      reviewNote: reviewNote || existing.reviewNote,
+      updatedAt: new Date().toISOString(),
+    };
+    data.tournamentActionRequests.set(id, updated);
+    return { ...updated };
+  },
+
+  // --- System Settings ---
+  async getSystemSettings(category) {
+    const data = getMemoryData();
+    let list = Array.from(data.systemSettings.values());
+    if (category) list = list.filter((s) => s.category === category);
+    return list.map((s) => ({ ...s }));
+  },
+
+  async saveSystemSetting(category, key, value, adminId) {
+    const data = getMemoryData();
+    const id = `setting-${category}-${key}`;
+    const entry: SystemSettingEntry = {
+      id,
+      category,
+      key,
+      valueJson: JSON.stringify(value),
+      updatedByAdminId: adminId,
+      updatedAt: new Date().toISOString(),
+    };
+    data.systemSettings.set(id, entry);
+    return { ...entry };
   },
 
   // --- Seeder ---

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbRepository } from "@/lib/db-client";
+import { adminService } from "@/lib/admin-service";
 import { requirePermission } from "@/lib/auth-guard";
 
 export async function GET(req: NextRequest) {
@@ -7,10 +8,24 @@ export async function GET(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
 
   const { searchParams } = new URL(req.url);
+  const idParam = searchParams.get("id");
   const statusParam = searchParams.get("status") as any;
 
-  const organizers = await dbRepository.listOrganizerProfiles(statusParam || undefined);
-  return NextResponse.json({ organizers });
+  if (idParam) {
+    try {
+      const detail = await adminService.getOrganizerApplicationDetail(auth.user.token, idParam);
+      return NextResponse.json({ success: true, ...detail });
+    } catch (e: any) {
+      return NextResponse.json({ error: e.message || "Failed to load organizer application detail" }, { status: 404 });
+    }
+  }
+
+  const applications = await dbRepository.listOrganizerApplications(
+    statusParam && statusParam !== "all" ? statusParam : undefined
+  );
+  const legacyProfiles = await dbRepository.listOrganizerProfiles(statusParam || undefined);
+
+  return NextResponse.json({ success: true, applications, organizers: legacyProfiles });
 }
 
 export async function POST(req: NextRequest) {
@@ -21,90 +36,91 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { targetUserId, action, reason } = body;
+    const {
+      applicationId,
+      targetUserId,
+      action,
+      reason,
+      reviewNote,
+      tournamentHandling,
+    } = body;
 
-    if (!targetUserId || !["approve", "reject", "revoke"].includes(action)) {
-      return NextResponse.json({ error: "Valid targetUserId and action (approve|reject|revoke) required" }, { status: 400 });
-    }
+    const note = reviewNote || reason || "";
 
-    const org = await dbRepository.getOrganizerProfile(targetUserId);
-    if (!org) {
-      return NextResponse.json({ error: "Organizer request not found" }, { status: 404 });
-    }
-
-    const targetUser = await dbRepository.getProfile(targetUserId);
-    const now = new Date().toISOString();
-
-    if (action === "approve") {
-      org.status = "approved";
-      org.reviewedBy = adminUser.token;
-      org.reviewedAt = now;
-      await dbRepository.saveOrganizerProfile(org);
-
-      if (targetUser && targetUser.role !== "admin" && targetUser.role !== "super_admin") {
-        targetUser.role = "organizer";
-        await dbRepository.saveProfile(targetUser);
+    // 1. New application-based actions
+    if (applicationId) {
+      if (action === "approve") {
+        const app = await adminService.approveOrganizerApplication(adminUser.token, applicationId, note);
+        return NextResponse.json({ success: true, application: app, message: "Organizer application approved successfully." });
       }
 
-      await dbRepository.createAdminLog({
-        id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        adminToken: adminUser.token,
-        adminName: adminUser.username,
-        action: "organizer.approved",
-        target: targetUserId,
-        detailsJson: JSON.stringify({ organizationName: org.organizationName }),
-        createdAt: now,
-      });
-
-      return NextResponse.json({ success: true, organizerProfile: org, message: "Organizer request approved successfully." });
-    }
-
-    if (action === "reject") {
-      org.status = "rejected";
-      org.rejectionReason = reason ? String(reason).trim() : "Did not meet organizer requirements";
-      org.reviewedBy = adminUser.token;
-      org.reviewedAt = now;
-      await dbRepository.saveOrganizerProfile(org);
-
-      await dbRepository.createAdminLog({
-        id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        adminToken: adminUser.token,
-        adminName: adminUser.username,
-        action: "organizer.rejected",
-        target: targetUserId,
-        detailsJson: JSON.stringify({ reason: org.rejectionReason }),
-        createdAt: now,
-      });
-
-      return NextResponse.json({ success: true, organizerProfile: org, message: "Organizer request rejected." });
-    }
-
-    if (action === "revoke") {
-      org.status = "revoked";
-      org.rejectionReason = reason ? String(reason).trim() : "Organizer privileges revoked by administrator";
-      org.reviewedBy = adminUser.token;
-      org.reviewedAt = now;
-      await dbRepository.saveOrganizerProfile(org);
-
-      if (targetUser && targetUser.role === "organizer") {
-        targetUser.role = "user";
-        await dbRepository.saveProfile(targetUser);
+      if (action === "reject") {
+        if (!note.trim()) {
+          return NextResponse.json({ error: "Review note / rejection reason required" }, { status: 400 });
+        }
+        const app = await adminService.rejectOrganizerApplication(adminUser.token, applicationId, note);
+        return NextResponse.json({ success: true, application: app, message: "Organizer application rejected." });
       }
 
-      await dbRepository.createAdminLog({
-        id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        adminToken: adminUser.token,
-        adminName: adminUser.username,
-        action: "organizer.revoked",
-        target: targetUserId,
-        detailsJson: JSON.stringify({ reason: org.rejectionReason }),
-        createdAt: now,
-      });
+      if (action === "request_info" || action === "needs_info") {
+        if (!note.trim()) {
+          return NextResponse.json({ error: "Instructions for required information or documents are required" }, { status: 400 });
+        }
+        const app = await adminService.requestMoreInfoOrganizerApplication(adminUser.token, applicationId, note);
+        return NextResponse.json({ success: true, application: app, message: "Additional information requested from applicant." });
+      }
 
-      return NextResponse.json({ success: true, organizerProfile: org, message: "Organizer status revoked." });
+      if (action === "revoke") {
+        const res = await adminService.revokeOrganizerStatus(
+          adminUser.token,
+          applicationId,
+          note,
+          tournamentHandling === "cancel_and_refund" ? "cancel_and_refund" : "reassign_to_system"
+        );
+        return NextResponse.json({ success: true, ...res });
+      }
+
+      if (action === "get_detail") {
+        const detail = await adminService.getOrganizerApplicationDetail(adminUser.token, applicationId);
+        return NextResponse.json({ success: true, ...detail });
+      }
     }
 
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+    // 2. User ID based actions / legacy compatibility
+    if (targetUserId) {
+      if (action === "approve") {
+        // Find application by user ID if exists
+        const app = await dbRepository.getOrganizerApplicationByUserId(targetUserId);
+        if (app) {
+          const updated = await adminService.approveOrganizerApplication(adminUser.token, app.id, note);
+          return NextResponse.json({ success: true, application: updated, message: "Organizer request approved successfully." });
+        }
+        const profile = await adminService.approveOrganizerRequest(adminUser.token, targetUserId);
+        return NextResponse.json({ success: true, organizerProfile: profile, message: "Organizer request approved successfully." });
+      }
+
+      if (action === "reject") {
+        const app = await dbRepository.getOrganizerApplicationByUserId(targetUserId);
+        if (app) {
+          const updated = await adminService.rejectOrganizerApplication(adminUser.token, app.id, note);
+          return NextResponse.json({ success: true, application: updated, message: "Organizer request rejected." });
+        }
+        const profile = await adminService.rejectOrganizerRequest(adminUser.token, targetUserId, note);
+        return NextResponse.json({ success: true, organizerProfile: profile, message: "Organizer request rejected." });
+      }
+
+      if (action === "revoke") {
+        const res = await adminService.revokeOrganizerStatus(
+          adminUser.token,
+          targetUserId,
+          note,
+          tournamentHandling === "cancel_and_refund" ? "cancel_and_refund" : "reassign_to_system"
+        );
+        return NextResponse.json({ success: true, ...res });
+      }
+    }
+
+    return NextResponse.json({ error: "Invalid action or missing applicationId / targetUserId" }, { status: 400 });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to process organizer action" },
@@ -112,3 +128,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+

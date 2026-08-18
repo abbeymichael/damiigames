@@ -1,6 +1,14 @@
 import { dbRepository } from "./db-client";
 import { securityService } from "./security";
-import { AdminLog, Role } from "./types";
+import {
+  AdminLog,
+  OrganizerApplication,
+  OrganizerApplicationDetailPayload,
+  OrganizerApplicationStatus,
+  Role,
+  UserDetailPayload,
+} from "./types";
+import { leagueService } from "./league-service";
 
 export const adminService = {
   async verifyAdminAccessAsync(token: string, secretKeyInput?: string): Promise<boolean> {
@@ -282,28 +290,293 @@ export const adminService = {
     };
   },
 
-  async revokeOrganizerStatus(adminToken: string, targetToken: string, reason: string) {
+  /* ------------------------------------------------------------------------- */
+  /* Organizer Applications & Lifecycle Management (Section 5)                */
+  /* ------------------------------------------------------------------------- */
+
+  async listOrganizerApplications(adminToken: string, status?: OrganizerApplicationStatus) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    return dbRepository.listOrganizerApplications(status);
+  },
+
+  async getOrganizerApplicationDetail(adminToken: string, applicationId: string): Promise<OrganizerApplicationDetailPayload> {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+
+    const app = await dbRepository.getOrganizerApplication(applicationId);
+    if (!app) throw new Error("Organizer application not found");
+
+    const applicant = await dbRepository.getProfile(app.userId);
+    const userAccount = await dbRepository.getUserById(app.userId);
+
+    // Get organizer's created tournaments
+    const allLeagues = await dbRepository.listLeagues();
+    const activeTournaments = allLeagues.filter(
+      (l) => l.facilitatorToken === app.userId || (applicant && l.facilitatorName === applicant.username)
+    );
+
+    // Match history stats
+    const totalMatches = (applicant?.wins || 0) + (applicant?.losses || 0) + (applicant?.draws || 0);
+    const winRate = totalMatches > 0 ? Math.round(((applicant?.wins || 0) / totalMatches) * 100) : 0;
+
+    const createdTime = applicant?.createdAt ? new Date(applicant.createdAt).getTime() : Date.now();
+    const accountAgeDays = Math.max(1, Math.floor((Date.now() - createdTime) / (1000 * 60 * 60 * 24)));
+
+    // Reviewer admin name if reviewed
+    let reviewerName: string | null = null;
+    if (app.reviewedByAdminId) {
+      const reviewerProfile = await dbRepository.getProfile(app.reviewedByAdminId);
+      reviewerName = reviewerProfile?.username || app.reviewedByAdminId;
+    }
+
+    return {
+      application: {
+        ...app,
+        reviewedByAdminName: reviewerName,
+      },
+      applicant: applicant || null,
+      userAccount: userAccount || null,
+      applicantContext: {
+        totalMatches,
+        winRate,
+        rating: applicant?.rating || 1200,
+        accountAgeDays,
+        pointsBalance: applicant?.points || 0,
+        marblesBalance: applicant?.marbles || 0,
+        activeTournamentsCount: activeTournaments.filter((t) => t.status === "active" || t.status === "registration").length,
+        completedTournamentsCount: activeTournaments.filter((t) => t.status === "completed").length,
+      },
+      activeTournaments,
+    };
+  },
+
+  async approveOrganizerApplication(adminToken: string, applicationId: string, reviewNote?: string) {
     if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
     const adminProfile = await dbRepository.getProfile(adminToken);
-    const targetProfile = await dbRepository.getProfile(targetToken);
-    if (!targetProfile) throw new Error("Target profile not found");
 
+    const app = await dbRepository.getOrganizerApplication(applicationId);
+    if (!app) throw new Error("Organizer application not found");
+
+    const now = new Date().toISOString();
+    const note = reviewNote?.trim() || "Application approved. Organizer permissions granted.";
+
+    const updatedApp = await dbRepository.updateOrganizerApplication(applicationId, {
+      status: "approved",
+      reviewedByAdminId: adminToken,
+      reviewedAt: now,
+      reviewNote: note,
+    });
+
+    // Update user role in profiles and users table (same transaction / atomic flow)
+    const applicant = await dbRepository.getProfile(app.userId);
+    if (applicant && applicant.role !== "admin" && applicant.role !== "super_admin") {
+      applicant.role = "organizer";
+      await dbRepository.saveProfile(applicant);
+    }
+
+    const userAccount = await dbRepository.getUserById(app.userId);
+    if (userAccount && userAccount.role !== "admin") {
+      await dbRepository.updateUser(app.userId, { role: "organizer" });
+    }
+
+    // Keep organizer_profiles table in sync for backwards compatibility
+    await dbRepository.saveOrganizerProfile({
+      userId: app.userId,
+      username: applicant?.username,
+      status: "approved",
+      requestedAt: String(app.createdAt),
+      reviewedBy: adminProfile?.username || "Admin",
+      reviewedAt: now,
+      organizationName: app.organizationName || undefined,
+      contactPhone: applicant?.phoneNumber || undefined,
+    });
+
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "ORGANIZER_APPLICATION_APPROVED",
+      applicant?.username || app.userId,
+      { applicationId, organizationName: app.organizationName, reviewNote: note }
+    );
+
+    return updatedApp;
+  },
+
+  async rejectOrganizerApplication(adminToken: string, applicationId: string, reviewNote: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+
+    const app = await dbRepository.getOrganizerApplication(applicationId);
+    if (!app) throw new Error("Organizer application not found");
+
+    const now = new Date().toISOString();
+    const note = reviewNote?.trim() || "Application does not meet platform organizer guidelines.";
+
+    const updatedApp = await dbRepository.updateOrganizerApplication(applicationId, {
+      status: "rejected",
+      reviewedByAdminId: adminToken,
+      reviewedAt: now,
+      reviewNote: note,
+    });
+
+    // Keep organizer_profiles table in sync
+    await dbRepository.saveOrganizerProfile({
+      userId: app.userId,
+      username: (await dbRepository.getProfile(app.userId))?.username,
+      status: "rejected",
+      requestedAt: String(app.createdAt),
+      reviewedBy: adminProfile?.username || "Admin",
+      reviewedAt: now,
+      rejectionReason: note,
+      organizationName: app.organizationName || undefined,
+    });
+
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "ORGANIZER_APPLICATION_REJECTED",
+      app.userId,
+      { applicationId, reviewNote: note }
+    );
+
+    return updatedApp;
+  },
+
+  async requestMoreInfoOrganizerApplication(adminToken: string, applicationId: string, reviewNote: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+
+    const app = await dbRepository.getOrganizerApplication(applicationId);
+    if (!app) throw new Error("Organizer application not found");
+
+    if (!reviewNote || !reviewNote.trim()) {
+      throw new Error("Please specify what additional information or documents are required from the applicant.");
+    }
+
+    const now = new Date().toISOString();
+    const note = reviewNote.trim();
+
+    const updatedApp = await dbRepository.updateOrganizerApplication(applicationId, {
+      status: "needs_info",
+      reviewedByAdminId: adminToken,
+      reviewedAt: now,
+      reviewNote: note,
+    });
+
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "ORGANIZER_APPLICATION_NEEDS_INFO",
+      app.userId,
+      { applicationId, reviewNote: note }
+    );
+
+    return updatedApp;
+  },
+
+  async revokeOrganizerStatus(
+    adminToken: string,
+    targetIdentifier: string,
+    reason: string,
+    tournamentHandling: "reassign_to_system" | "cancel_and_refund" = "reassign_to_system"
+  ) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+
+    // Resolve user ID whether passed application ID or user token
+    let targetUserId = targetIdentifier;
+    let orgApp = await dbRepository.getOrganizerApplication(targetIdentifier);
+    if (orgApp) {
+      targetUserId = orgApp.userId;
+    } else {
+      orgApp = await dbRepository.getOrganizerApplicationByUserId(targetIdentifier);
+    }
+
+    const targetProfile = await dbRepository.getProfile(targetUserId);
+    if (!targetProfile) throw new Error("Target user profile not found");
+
+    const now = new Date().toISOString();
+    const note = reason?.trim() || "Organizer privileges revoked due to policy violation or misconduct.";
+
+    // 1. Demote user role to player / user
     targetProfile.role = "user";
     await dbRepository.saveProfile(targetProfile);
 
-    const orgApp = await dbRepository.getOrganizerApplication(targetToken);
+    const userAccount = await dbRepository.getUserById(targetUserId);
+    if (userAccount && userAccount.role === "organizer") {
+      await dbRepository.updateUser(targetUserId, { role: "player" });
+    }
+
+    // 2. Update organizer application and organizer profile
     if (orgApp) {
-      await dbRepository.updateOrganizerApplication(orgApp.id, "rejected", reason || "Organizer status revoked by Admin");
+      await dbRepository.updateOrganizerApplication(orgApp.id, {
+        status: "rejected",
+        reviewedByAdminId: adminToken,
+        reviewedAt: now,
+        reviewNote: `[REVOKED]: ${note}`,
+      });
+    }
+
+    await dbRepository.saveOrganizerProfile({
+      userId: targetUserId,
+      username: targetProfile.username,
+      status: "revoked",
+      requestedAt: now,
+      reviewedBy: adminProfile?.username || "Admin",
+      reviewedAt: now,
+      rejectionReason: note,
+    });
+
+    // 3. Handle Live Tournaments Owned by Organizer
+    const allLeagues = await dbRepository.listLeagues();
+    const ownedLeagues = allLeagues.filter(
+      (l) => l.facilitatorToken === targetUserId || l.facilitatorName === targetProfile.username
+    );
+
+    const affectedTournaments: { id: string; title: string; action: string }[] = [];
+
+    for (const league of ownedLeagues) {
+      if (league.status === "completed" || league.status === "cancelled") continue;
+
+      if (tournamentHandling === "cancel_and_refund") {
+        try {
+          await leagueService.cancelTournament(
+            adminToken,
+            league.id,
+            `Tournament cancelled due to organizer revocation: ${note}`
+          );
+          affectedTournaments.push({ id: league.id, title: league.title, action: "cancelled_and_refunded" });
+        } catch (e) {
+          console.error(`Failed to auto-cancel tournament ${league.id}:`, e);
+        }
+      } else {
+        // Reassign to platform system facilitator ("DAMII Facilitator")
+        league.facilitatorToken = "admin-token-003";
+        league.facilitatorName = "DAMII Facilitator";
+        league.rulesNotes = `${league.rulesNotes ? league.rulesNotes + "\n" : ""}[ADMIN REASSIGNMENT]: Transferred from ${targetProfile.username} on ${new Date().toLocaleDateString()}.`;
+        league.updatedAt = now;
+        await dbRepository.saveLeague(league);
+        affectedTournaments.push({ id: league.id, title: league.title, action: "reassigned_to_system_facilitator" });
+      }
     }
 
     await this.logAdminAction(
       adminToken,
       adminProfile?.username || "Admin",
-      "REVOKE_ORGANIZER",
+      "ORGANIZER_STATUS_REVOKED",
       targetProfile.username,
-      { reason, targetToken }
+      {
+        targetUserId,
+        reason: note,
+        tournamentHandling,
+        affectedTournaments,
+      }
     );
-    return targetProfile;
+
+    return {
+      profile: targetProfile,
+      affectedTournaments,
+      message: `Organizer status revoked for ${targetProfile.username}. ${affectedTournaments.length} active tournament(s) were ${tournamentHandling === "cancel_and_refund" ? "cancelled and refunded" : "reassigned to DAMII Facilitator"}.`,
+    };
   },
 
   async listRoles(adminToken: string) {
@@ -535,6 +808,225 @@ export const adminService = {
       { category, key }
     );
     return entry;
+  },
+
+  async getUserDetails(adminToken: string, targetToken: string): Promise<UserDetailPayload> {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    
+    const profile = await dbRepository.getProfile(targetToken);
+    if (!profile) throw new Error("User profile not found");
+
+    // Fetch related data
+    const [ledgerEntries, transactions, allRooms, allLeagues, allLogs] = await Promise.all([
+      dbRepository.getLedgerEntries({ userId: targetToken, limit: 100 }).catch(() => []),
+      dbRepository.getUserTransactions(targetToken, 50).catch(() => []),
+      dbRepository.listRooms(100).catch(() => []),
+      dbRepository.listLeagues().catch(() => []),
+      dbRepository.listAdminLogs(200).catch(() => []),
+    ]);
+
+    // Active escrow calculation
+    let escrowPoints = 0;
+    let escrowMarbles = 0;
+    for (const room of allRooms) {
+      if ((room.hostToken === targetToken || room.guestToken === targetToken) && room.status === "playing" && room.wagerAmount) {
+        escrowPoints += room.wagerAmount;
+      }
+    }
+
+    // Matches
+    const userMatches = allRooms
+      .filter((r) => r.hostToken === targetToken || r.guestToken === targetToken)
+      .map((r) => {
+        const isHost = r.hostToken === targetToken;
+        const opponentName = isHost ? r.guestName || "Waiting..." : r.hostName || "Host";
+        let result: "win" | "loss" | "draw" | "pending" | "cancelled" = "pending";
+        if (r.status === "completed") {
+          if (r.winner === (isHost ? "white" : "black")) result = "win";
+          else if (r.winner === "draw") result = "draw";
+          else result = "loss";
+        } else if (r.status === "cancelled") {
+          result = "cancelled";
+        }
+        return {
+          id: r.code,
+          roomCode: r.code,
+          gameType: r.isCustomWager ? "Custom Wager" : "Standard 10x10",
+          opponentName,
+          isHost,
+          result,
+          wagerPoints: r.wagerAmount || 0,
+          status: r.status,
+          playedAt: r.createdAt || new Date().toISOString(),
+        };
+      });
+
+    // Tournament history (player entries)
+    const tournamentEntries: Array<{
+      leagueId: string;
+      leagueTitle: string;
+      status: string;
+      seed: number;
+      checkedIn: boolean;
+      entryFeePoints: number;
+      joinedAt: string;
+    }> = [];
+
+    for (const league of allLeagues) {
+      try {
+        const participants = await dbRepository.getLeagueParticipants(league.id);
+        const match = participants.find((p) => p.userToken === targetToken);
+        if (match) {
+          tournamentEntries.push({
+            leagueId: league.id,
+            leagueTitle: league.title,
+            status: match.status || "approved",
+            seed: match.seed || 0,
+            checkedIn: Boolean(match.checkedIn),
+            entryFeePoints: league.entryFeePoints || 0,
+            joinedAt: match.createdAt || league.createdAt,
+          });
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    // Tournaments organized
+    const organizedTournaments = allLeagues.filter((l) => l.facilitatorToken === targetToken);
+
+    // Relevant audit logs
+    const auditLogs = allLogs.filter(
+      (l) =>
+        l.targetUser === profile.username ||
+        l.metadataJson.includes(targetToken) ||
+        l.metadataJson.includes(profile.username)
+    );
+
+    return {
+      profile,
+      balances: {
+        availablePoints: profile.points || 0,
+        availableMarbles: profile.marbles || 0,
+        escrowPoints,
+        escrowMarbles,
+      },
+      ledgerEntries,
+      transactions,
+      matches: userMatches,
+      tournamentEntries,
+      organizedTournaments,
+      auditLogs,
+      activeSessionsCount: 1,
+    };
+  },
+
+  async suspendUser(adminToken: string, targetToken: string, reason: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+    const targetUser = await dbRepository.getProfile(targetToken);
+    if (!targetUser) throw new Error("User not found");
+
+    targetUser.status = "suspended";
+    targetUser.bannedReason = reason || "Suspended by Administrator";
+    targetUser.bannedAt = new Date().toISOString();
+    targetUser.updatedAt = new Date().toISOString();
+    await dbRepository.saveProfile(targetUser);
+
+    // Revoke any active sessions
+    await dbRepository.revokeAllUserSessions(targetToken);
+
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "SUSPEND_USER",
+      targetUser.username,
+      { reason, targetToken }
+    );
+    return targetUser;
+  },
+
+  async reactivateUser(adminToken: string, targetToken: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+    const targetUser = await dbRepository.getProfile(targetToken);
+    if (!targetUser) throw new Error("User not found");
+
+    targetUser.status = "active";
+    targetUser.bannedReason = undefined;
+    targetUser.bannedAt = undefined;
+    targetUser.updatedAt = new Date().toISOString();
+    await dbRepository.saveProfile(targetUser);
+
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "REACTIVATE_USER",
+      targetUser.username,
+      { targetToken }
+    );
+    return targetUser;
+  },
+
+  async forceLogoutUser(adminToken: string, targetToken: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+    const targetUser = await dbRepository.getProfile(targetToken);
+    if (!targetUser) throw new Error("User not found");
+
+    const revokedCount = await dbRepository.revokeAllUserSessions(targetToken);
+
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "FORCE_LOGOUT",
+      targetUser.username,
+      { targetToken, revokedCount }
+    );
+    return { revokedCount };
+  },
+
+  async changeUserRole(adminToken: string, targetToken: string, newRole: Role, reason: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+    const targetUser = await dbRepository.getProfile(targetToken);
+    if (!targetUser) throw new Error("User not found");
+
+    const oldRole = targetUser.role;
+    targetUser.role = newRole;
+    targetUser.updatedAt = new Date().toISOString();
+    await dbRepository.saveProfile(targetUser);
+
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "CHANGE_USER_ROLE",
+      targetUser.username,
+      { oldRole, newRole, reason, targetToken }
+    );
+    return targetUser;
+  },
+
+  async unlinkResetPhone(adminToken: string, targetToken: string, reason: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+    const targetUser = await dbRepository.getProfile(targetToken);
+    if (!targetUser) throw new Error("User not found");
+
+    const oldPhone = targetUser.phoneNumber;
+    targetUser.phoneNumber = undefined;
+    targetUser.phoneVerifiedAt = null;
+    targetUser.updatedAt = new Date().toISOString();
+    await dbRepository.saveProfile(targetUser);
+
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "RESET_USER_PHONE",
+      targetUser.username,
+      { oldPhone, reason, targetToken }
+    );
+    return targetUser;
   },
 
   async banUser(adminToken: string, targetToken: string, reason: string) {
@@ -1160,7 +1652,7 @@ export const adminService = {
     const now = Date.now();
     const expiryThresholdMs = expiryMinutes * 60 * 1000;
 
-    const allRooms = await dbRepository.getAllRooms(200);
+    const allRooms = await dbRepository.listRooms(200);
     const expiredRooms = allRooms.filter((r) => {
       if (r.status !== "waiting") return false;
       const createdTime = new Date(r.createdAt).getTime();
@@ -1262,8 +1754,8 @@ export const adminService = {
     const pingLatencyMs = Date.now() - startTime;
 
     const allProfiles = await dbRepository.getAllProfiles();
-    const allRooms = await dbRepository.getAllRooms(50);
-    const allLeagues = await dbRepository.getAllLeagues();
+    const allRooms = await dbRepository.listRooms(50);
+    const allLeagues = await dbRepository.listLeagues();
     const allTxs = await dbRepository.getAllTransactions(50);
 
     const memoryUsage = typeof process !== "undefined" && process.memoryUsage ? process.memoryUsage() : null;
@@ -1295,8 +1787,8 @@ export const adminService = {
     const adminProfile = await dbRepository.getProfile(adminToken);
 
     const metrics = await this.getSystemMetrics(adminToken);
-    const leagues = await dbRepository.getAllLeagues();
-    const logs = await dbRepository.getAdminLogs(100);
+    const leagues = await dbRepository.listLeagues();
+    const logs = await dbRepository.listAdminLogs(100);
 
     const snapshot = {
       exportedAt: new Date().toISOString(),

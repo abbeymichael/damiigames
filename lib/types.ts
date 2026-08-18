@@ -68,9 +68,27 @@ export interface OrganizerApplication {
   termsAcceptedAt: string | Date;
   status: OrganizerApplicationStatus;
   reviewedByAdminId?: string | null;
+  reviewedByAdminName?: string | null;
   reviewedAt?: string | Date | null;
   reviewNote?: string | null;
   createdAt: string | Date;
+}
+
+export interface OrganizerApplicationDetailPayload {
+  application: OrganizerApplication;
+  applicant: Profile | null;
+  userAccount?: User | null;
+  applicantContext: {
+    totalMatches: number;
+    winRate: number;
+    rating: number;
+    accountAgeDays: number;
+    pointsBalance: number;
+    marblesBalance: number;
+    activeTournamentsCount: number;
+    completedTournamentsCount: number;
+  };
+  activeTournaments: League[];
 }
 
 export type AdminPermission =
@@ -108,7 +126,13 @@ export interface OrganizerProfile {
 export type Profile = {
   token: string;
   username: string;
+  fullName?: string;
+  email?: string;
   phoneNumber?: string;
+  region?: string;
+  city?: string;
+  phoneVerifiedAt?: string | null;
+  emailVerifiedAt?: string | null;
   passcode?: string;
   passwordSalt?: string;
   rating: number;
@@ -124,12 +148,47 @@ export type Profile = {
   opponentRatingAvg?: number;
   totalOpponentsFaced?: number;
   role: Role;
-  status?: "active" | "banned";
+  status?: "active" | "suspended" | "banned";
   bannedAt?: string;
   bannedReason?: string;
   createdAt: string;
   updatedAt: string;
 };
+
+export interface UserDetailPayload {
+  profile: Profile;
+  balances: {
+    availablePoints: number;
+    availableMarbles: number;
+    escrowPoints: number;
+    escrowMarbles: number;
+  };
+  ledgerEntries: LedgerEntry[];
+  transactions: WalletTransaction[];
+  matches: Array<{
+    id: string;
+    roomCode?: string;
+    gameType?: string;
+    opponentName: string;
+    isHost: boolean;
+    result: "win" | "loss" | "draw" | "pending" | "cancelled";
+    wagerPoints: number;
+    status: string;
+    playedAt: string;
+  }>;
+  tournamentEntries: Array<{
+    leagueId: string;
+    leagueTitle: string;
+    status: string;
+    seed: number;
+    checkedIn: boolean;
+    entryFeePoints: number;
+    joinedAt: string;
+  }>;
+  organizedTournaments: League[];
+  auditLogs: AdminLog[];
+  activeSessionsCount: number;
+}
 
 export type Session = {
   id: string;

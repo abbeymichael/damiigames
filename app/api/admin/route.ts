@@ -58,6 +58,56 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, ...seedResult });
     }
 
+    if (action === "get_user_details") {
+      const { targetToken } = body;
+      if (!targetToken) return NextResponse.json({ error: "Target user token required" }, { status: 400 });
+
+      const details = await adminService.getUserDetails(token, String(targetToken));
+      return NextResponse.json({ success: true, ...details });
+    }
+
+    if (action === "suspend_user") {
+      const { targetToken, reason } = body;
+      if (!targetToken) return NextResponse.json({ error: "Target token required" }, { status: 400 });
+
+      const res = await adminService.suspendUser(token, targetToken, String(reason || ""));
+      return NextResponse.json({ success: true, profile: res });
+    }
+
+    if (action === "reactivate_user") {
+      const { targetToken } = body;
+      if (!targetToken) return NextResponse.json({ error: "Target token required" }, { status: 400 });
+
+      const res = await adminService.reactivateUser(token, targetToken);
+      return NextResponse.json({ success: true, profile: res });
+    }
+
+    if (action === "force_logout_user" || action === "revoke_user_sessions") {
+      const { targetToken } = body;
+      if (!targetToken) return NextResponse.json({ error: "Target token required" }, { status: 400 });
+
+      const res = await adminService.forceLogoutUser(token, targetToken);
+      return NextResponse.json({ success: true, ...res });
+    }
+
+    if (action === "change_user_role") {
+      const { targetToken, newRole, reason } = body;
+      if (!targetToken || !["user", "player", "organizer", "facilitator", "admin", "super_admin", "treasurer"].includes(newRole)) {
+        return NextResponse.json({ error: "Valid targetToken and newRole required" }, { status: 400 });
+      }
+
+      const res = await adminService.changeUserRole(token, targetToken, newRole, String(reason || ""));
+      return NextResponse.json({ success: true, profile: res });
+    }
+
+    if (action === "unlink_reset_phone") {
+      const { targetToken, reason } = body;
+      if (!targetToken) return NextResponse.json({ error: "Target token required" }, { status: 400 });
+
+      const res = await adminService.unlinkResetPhone(token, targetToken, String(reason || ""));
+      return NextResponse.json({ success: true, profile: res });
+    }
+
     if (action === "role") {
       const { targetToken, role } = body;
       if (!targetToken || !["user", "facilitator", "admin", "super_admin", "treasurer"].includes(role)) {
@@ -474,11 +524,58 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, adminAccounts: accounts });
     }
 
+    /* ------------------------------------------------------------------------- */
+    /* Organizer Applications & Workflow Management (Section 5)                  */
+    /* ------------------------------------------------------------------------- */
+    if (action === "list_organizer_applications") {
+      const { status } = body;
+      const apps = await adminService.listOrganizerApplications(token, status);
+      return NextResponse.json({ success: true, applications: apps });
+    }
+
+    if (action === "get_organizer_application_detail") {
+      const { applicationId } = body;
+      if (!applicationId) return NextResponse.json({ error: "applicationId required" }, { status: 400 });
+      const detail = await adminService.getOrganizerApplicationDetail(token, String(applicationId));
+      return NextResponse.json({ success: true, ...detail });
+    }
+
+    if (action === "approve_organizer_application") {
+      const { applicationId, reviewNote } = body;
+      if (!applicationId) return NextResponse.json({ error: "applicationId required" }, { status: 400 });
+      const app = await adminService.approveOrganizerApplication(token, String(applicationId), reviewNote ? String(reviewNote) : undefined);
+      return NextResponse.json({ success: true, application: app, message: "Organizer application approved successfully." });
+    }
+
+    if (action === "reject_organizer_application") {
+      const { applicationId, reviewNote } = body;
+      if (!applicationId || !reviewNote) {
+        return NextResponse.json({ error: "applicationId and reviewNote (rejection reason) required" }, { status: 400 });
+      }
+      const app = await adminService.rejectOrganizerApplication(token, String(applicationId), String(reviewNote));
+      return NextResponse.json({ success: true, application: app, message: "Organizer application rejected." });
+    }
+
+    if (action === "request_more_info_organizer_application") {
+      const { applicationId, reviewNote } = body;
+      if (!applicationId || !reviewNote) {
+        return NextResponse.json({ error: "applicationId and reviewNote (information instructions) required" }, { status: 400 });
+      }
+      const app = await adminService.requestMoreInfoOrganizerApplication(token, String(applicationId), String(reviewNote));
+      return NextResponse.json({ success: true, application: app, message: "Additional information requested from applicant." });
+    }
+
     if (action === "revoke_organizer" || action === "revoke_organizer_status") {
-      const { targetToken, reason } = body;
-      if (!targetToken) return NextResponse.json({ error: "Target token required" }, { status: 400 });
-      const profile = await adminService.revokeOrganizerStatus(token, String(targetToken), String(reason || ""));
-      return NextResponse.json({ success: true, profile });
+      const { targetToken, targetUserId, applicationId, reason, tournamentHandling } = body;
+      const target = targetToken || targetUserId || applicationId;
+      if (!target) return NextResponse.json({ error: "targetToken or applicationId required" }, { status: 400 });
+      const res = await adminService.revokeOrganizerStatus(
+        token,
+        String(target),
+        String(reason || ""),
+        tournamentHandling === "cancel_and_refund" ? "cancel_and_refund" : "reassign_to_system"
+      );
+      return NextResponse.json({ success: true, ...res });
     }
 
     /* ------------------------------------------------------------------------- */

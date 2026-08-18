@@ -35,7 +35,7 @@ import type {
   WagerEscrow,
   WalletTransaction,
 } from "../types";
-import { SYSTEM_PERMISSIONS, SEED_ROLES_CONFIG } from "../permissions";
+import { SYSTEM_PERMISSIONS, SEED_ROLES_CONFIG } from "../permissions-constants";
 import { securityService } from "../security";
 import { calculateDynamicRatingUpdate, getProfileRank } from "../rank-service";
 import { getEnv } from "../env";
@@ -703,6 +703,10 @@ export const mysqlStore: DbRepository = {
     return rows.map(rowToRoom);
   },
 
+  async getAllRooms(limit = 20) {
+    return mysqlStore.listRooms(limit);
+  },
+
   // --- Wallet ---
   async createTransaction(tx) {
     await getDb().insert(schema.walletTransactions).values(transactionToRow(tx));
@@ -761,6 +765,10 @@ export const mysqlStore: DbRepository = {
   async listLeagues() {
     const rows = await getDb().select().from(schema.leagues).orderBy(desc(schema.leagues.createdAt));
     return rows.map(rowToLeague);
+  },
+
+  async getAllLeagues() {
+    return mysqlStore.listLeagues();
   },
 
   async getLeague(id) {
@@ -957,6 +965,10 @@ export const mysqlStore: DbRepository = {
       .orderBy(desc(schema.adminLogs.createdAt))
       .limit(limit);
     return rows.map(rowToAdminLog);
+  },
+
+  async getAdminLogs(limit = 30) {
+    return mysqlStore.listAdminLogs(limit);
   },
 
   // --- Organizer profiles ---
@@ -2026,6 +2038,97 @@ export const mysqlStore: DbRepository = {
         ipAllowlist: [],
         flagDefaultCredentials: true,
       }, "system");
+
+      // Seed standard organizer applications across all statuses
+      const sampleApplications: OrganizerApplication[] = [
+        {
+          id: "app-kwame-arena",
+          userId: "player-kwame-token",
+          applicantType: "individual",
+          organizationName: "Kwame Damii Arena",
+          ghanaCardFrontUrl: "https://picsum.photos/seed/ghana-card-kwame-front/600/380",
+          ghanaCardBackUrl: "https://picsum.photos/seed/ghana-card-kwame-back/600/380",
+          selfieUrl: "https://picsum.photos/seed/avatar-kwame/400/400",
+          physicalAddress: "Plot 14, Bantama High Street, Kumasi, Ashanti Region",
+          proofOfAddressUrl: "https://picsum.photos/seed/utility-bill-kwame/600/800",
+          intendedGameTypes: "damii-10x10,damii-blitz",
+          expectedTournamentSize: 32,
+          expectedFrequency: "Bi-weekly",
+          priorExperience: "5 years running local community draughts leagues in Ashanti Region.",
+          termsAcceptedAt: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
+          status: "pending",
+          createdAt: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
+        },
+        {
+          id: "app-kofi-league",
+          userId: "player-kofi-token",
+          applicantType: "organization",
+          organizationName: "Kofi Draughts League GH",
+          organizationRegNumber: "GH-CORP-2024-8891",
+          ghanaCardFrontUrl: "https://picsum.photos/seed/ghana-card-kofi-front/600/380",
+          ghanaCardBackUrl: "https://picsum.photos/seed/ghana-card-kofi-back/600/380",
+          selfieUrl: "https://picsum.photos/seed/avatar-kofi/400/400",
+          physicalAddress: "Suite 4B, Ridge Towers, Accra, Greater Accra",
+          proofOfAddressUrl: "https://picsum.photos/seed/utility-bill-kofi/600/800",
+          intendedGameTypes: "damii-10x10",
+          expectedTournamentSize: 64,
+          expectedFrequency: "Monthly Championship",
+          priorExperience: "Co-founded the Greater Accra Draughts Federation; certified tournament arbiter.",
+          termsAcceptedAt: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
+          status: "needs_info",
+          reviewedByAdminId: "admin-token-001",
+          reviewedAt: new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString(),
+          reviewNote: "Please upload a recent utility bill (dated within last 90 days) showing business name and registered address.",
+          createdAt: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
+        },
+        {
+          id: "app-kofi-approved",
+          userId: "organizer-kofi-token",
+          applicantType: "organization",
+          organizationName: "Kofi Draughts Club",
+          organizationRegNumber: "CS-GH-55421",
+          ghanaCardFrontUrl: "https://picsum.photos/seed/ghana-card-kofi-org-front/600/380",
+          ghanaCardBackUrl: "https://picsum.photos/seed/ghana-card-kofi-org-back/600/380",
+          selfieUrl: "https://picsum.photos/seed/avatar-org-kofi/400/400",
+          physicalAddress: "22 Ring Road Central, Accra, Greater Accra",
+          proofOfAddressUrl: "https://picsum.photos/seed/utility-bill-kofi-org/600/800",
+          intendedGameTypes: "damii-10x10,damii-blitz",
+          expectedTournamentSize: 16,
+          expectedFrequency: "Weekly",
+          priorExperience: "Official circuit tournament organizer with verified track record.",
+          termsAcceptedAt: new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString(),
+          status: "approved",
+          reviewedByAdminId: "admin-token-001",
+          reviewedAt: new Date(Date.now() - 12 * 24 * 3600 * 1000).toISOString(),
+          reviewNote: "Ghana Card verified, business registration confirmed, background check clear.",
+          createdAt: new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString(),
+        },
+        {
+          id: "app-ama-rejected",
+          userId: "player-ama-token",
+          applicantType: "individual",
+          organizationName: "Ama Draughts Circuit",
+          ghanaCardFrontUrl: "https://picsum.photos/seed/ghana-card-ama-front/600/380",
+          ghanaCardBackUrl: "https://picsum.photos/seed/ghana-card-ama-back/600/380",
+          selfieUrl: "https://picsum.photos/seed/avatar-ama/400/400",
+          physicalAddress: "Market Circle, Takoradi, Western Region",
+          proofOfAddressUrl: "https://picsum.photos/seed/utility-bill-ama/600/800",
+          intendedGameTypes: "damii-10x10",
+          expectedTournamentSize: 8,
+          expectedFrequency: "Monthly",
+          priorExperience: "Organized neighborhood matches.",
+          termsAcceptedAt: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(),
+          status: "rejected",
+          reviewedByAdminId: "admin-token-001",
+          reviewedAt: new Date(Date.now() - 8 * 24 * 3600 * 1000).toISOString(),
+          reviewNote: "Ghana Card photo was blurry and expired. Please update KYC documents and reapply.",
+          createdAt: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(),
+        },
+      ];
+
+      for (const sapp of sampleApplications) {
+        await mysqlStore.createOrganizerApplication(sapp);
+      }
     });
 
     // Recompute participant counters after seeding (they mutate leagues).

@@ -86,6 +86,7 @@ export const dbRepository: DbRepository = {
   getRoom: withStore("getRoom"),
   saveRoom: withStore("saveRoom"),
   listRooms: withStore("listRooms"),
+  getAllRooms: withStore("listRooms"),
 
   createTransaction: withStore("createTransaction"),
   getUserTransactions: withStore("getUserTransactions"),
@@ -96,6 +97,7 @@ export const dbRepository: DbRepository = {
   saveEscrow: withStore("saveEscrow"),
 
   listLeagues: withStore("listLeagues"),
+  getAllLeagues: withStore("listLeagues"),
   getLeague: withStore("getLeague"),
   saveLeague: withStore("saveLeague"),
   deleteLeague: withStore("deleteLeague"),
@@ -108,6 +110,7 @@ export const dbRepository: DbRepository = {
 
   createAdminLog: withStore("createAdminLog"),
   listAdminLogs: withStore("listAdminLogs"),
+  getAdminLogs: withStore("listAdminLogs"),
 
   getOrganizerProfile: withStore("getOrganizerProfile"),
   saveOrganizerProfile: withStore("saveOrganizerProfile"),
@@ -137,6 +140,62 @@ export const dbRepository: DbRepository = {
   getOrganizerApplicationByUserId: withStore("getOrganizerApplicationByUserId"),
   listOrganizerApplications: withStore("listOrganizerApplications"),
   updateOrganizerApplication: withStore("updateOrganizerApplication"),
+
+  // Regions
+  getRegions: withStore("getRegions"),
+  saveRegion: withStore("saveRegion"),
+
+  // Matches
+  createMatch: withStore("createMatch"),
+  getMatch: withStore("getMatch"),
+  updateMatch: withStore("updateMatch"),
+  listMatches: withStore("listMatches"),
+
+  // Tournaments & Prizes
+  createTournament: withStore("createTournament"),
+  getTournament: withStore("getTournament"),
+  listTournaments: withStore("listTournaments"),
+  updateTournament: withStore("updateTournament"),
+  createTournamentEntry: withStore("createTournamentEntry"),
+  getTournamentEntries: withStore("getTournamentEntries"),
+  updateTournamentEntryPlacement: withStore("updateTournamentEntryPlacement"),
+  getTournamentPrizes: withStore("getTournamentPrizes"),
+
+  // Game Type Limits
+  getGameTypeLimit: withStore("getGameTypeLimit"),
+  getGameTypeLimits: withStore("getGameTypeLimits"),
+  saveGameTypeLimit: withStore("saveGameTypeLimit"),
+
+  // Double-Entry Ledger
+  writeLedger: withStore("writeLedger"),
+  getLedgerBalance: withStore("getLedgerBalance"),
+  getLedgerEntries: withStore("getLedgerEntries"),
+
+  // Roles & RBAC
+  listRoles: withStore("listRoles"),
+  getRole: withStore("getRole"),
+  createRole: withStore("createRole"),
+  updateRole: withStore("updateRole"),
+  deleteRole: withStore("deleteRole"),
+  listPermissions: withStore("listPermissions"),
+  getAdminUserRoleAssignments: withStore("getAdminUserRoleAssignments"),
+  setAdminUserRoleAssignments: withStore("setAdminUserRoleAssignments"),
+  listAdminAccounts: withStore("listAdminAccounts"),
+
+  // Games Catalog
+  listGames: withStore("listGames"),
+  getGame: withStore("getGame"),
+  saveGame: withStore("saveGame"),
+  toggleGameStatus: withStore("toggleGameStatus"),
+
+  // Tournament Action Requests Queue
+  listTournamentActionRequests: withStore("listTournamentActionRequests"),
+  createTournamentActionRequest: withStore("createTournamentActionRequest"),
+  reviewTournamentActionRequest: withStore("reviewTournamentActionRequest"),
+
+  // System Settings
+  getSystemSettings: withStore("getSystemSettings"),
+  saveSystemSetting: withStore("saveSystemSetting"),
 
   seedDatabase: withStore("seedDatabase"),
 };
