@@ -1,0 +1,8 @@
+{
+  "name": "DAMII",
+  "description": "Traditional strategy game played on an authentic 10x10 board with local and online multiplayer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
