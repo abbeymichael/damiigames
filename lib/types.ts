@@ -153,6 +153,18 @@ export type AdminSettings = {
   minWithdrawalGhs: number;     // Default: 10 GHS
   maxWithdrawalGhs: number;     // Default: 2000 GHS
   maxDailyWithdrawalGhs?: number; // Default: 5000 GHS
+  turnTimerSeconds?: number;    // Default: 60 seconds
+  disconnectGraceSeconds?: number; // Default: 90 seconds
+  unjoinedRoomExpiryMinutes?: number; // Default: 10 minutes
+  maintenanceMode?: boolean;    // Emergency maintenance switch
+  maintenanceNotice?: string;   // Broadcast message during maintenance
+  disableWagers?: boolean;      // Emergency lock on real-money wager escrow
+  disableWithdrawals?: boolean; // Emergency pause on cashouts
+  publicSpectatingEnabled?: boolean; // Default: true
+  defaultRating?: number;       // Default: 1200 DPI
+  ratingKFactor?: number;       // Default: 32
+  minWagerGhs?: number;         // Default: 5 GHS
+  maxWagerGhs?: number;         // Default: 1000 GHS
   updatedAt: string;
   updatedBy?: string;
 };

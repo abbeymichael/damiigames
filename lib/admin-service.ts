@@ -878,5 +878,183 @@ export const adminService = {
 
     return orgProfile;
   },
+
+  async purgeExpiredRooms(adminToken: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+    const settings = await dbRepository.getAdminSettings();
+    const expiryMinutes = settings.unjoinedRoomExpiryMinutes || 10;
+    const now = Date.now();
+    const expiryThresholdMs = expiryMinutes * 60 * 1000;
+
+    const allRooms = await dbRepository.getAllRooms(200);
+    const expiredRooms = allRooms.filter((r) => {
+      if (r.status !== "waiting") return false;
+      const createdTime = new Date(r.createdAt).getTime();
+      return now - createdTime > expiryThresholdMs;
+    });
+
+    let purgedCount = 0;
+    for (const room of expiredRooms) {
+      room.status = "cancelled";
+      room.updatedAt = new Date().toISOString();
+      await dbRepository.saveRoom(room);
+
+      // Refund host if there was a locked wager escrow
+      if (room.escrowId && room.wagerAmount && room.wagerAmount > 0) {
+        try {
+          const escrow = await dbRepository.getEscrow(room.escrowId);
+          if (escrow && escrow.status === "locked") {
+            escrow.status = "refunded";
+            await dbRepository.saveEscrow(escrow);
+            await dbRepository.updateProfileBalance(room.hostToken, escrow.amountPoints);
+          }
+        } catch {
+          /* continue */
+        }
+      }
+      purgedCount++;
+    }
+
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "PURGE_EXPIRED_ROOMS",
+      `Cleaned ${purgedCount} rooms`,
+      { purgedCount, expiryMinutes }
+    );
+
+    return { success: true, purgedCount, thresholdMinutes: expiryMinutes };
+  },
+
+  async reconcileAllUserBalances(adminToken: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+
+    const profiles = await dbRepository.getAllProfiles();
+    const { reconcileBalance } = await import("./ledger");
+
+    const results = [];
+    let matchedCount = 0;
+    let discrepancyCount = 0;
+
+    for (const p of profiles) {
+      try {
+        const res = await reconcileBalance(p.token, "available");
+        results.push({
+          userId: p.token,
+          username: p.username,
+          points: p.points,
+          marbles: p.marbles,
+          reconciliation: res,
+        });
+        if (res.matches) {
+          matchedCount++;
+        } else {
+          discrepancyCount++;
+        }
+      } catch (err) {
+        results.push({
+          userId: p.token,
+          username: p.username,
+          points: p.points,
+          marbles: p.marbles,
+          error: err instanceof Error ? err.message : "Reconciliation error",
+        });
+        discrepancyCount++;
+      }
+    }
+
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "RECONCILE_USER_BALANCES",
+      `Audited ${profiles.length} users`,
+      { totalUsers: profiles.length, matchedCount, discrepancyCount }
+    );
+
+    return {
+      success: true,
+      totalUsers: profiles.length,
+      matchedCount,
+      discrepancyCount,
+      results,
+    };
+  },
+
+  async getSystemDiagnostics(adminToken: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const startTime = Date.now();
+    const settings = await dbRepository.getAdminSettings();
+    const pingLatencyMs = Date.now() - startTime;
+
+    const allProfiles = await dbRepository.getAllProfiles();
+    const allRooms = await dbRepository.getAllRooms(50);
+    const allLeagues = await dbRepository.getAllLeagues();
+    const allTxs = await dbRepository.getAllTransactions(50);
+
+    const memoryUsage = typeof process !== "undefined" && process.memoryUsage ? process.memoryUsage() : null;
+
+    return {
+      dialect: dbRepository.dialect,
+      status: "healthy",
+      pingLatencyMs,
+      serverTime: new Date().toISOString(),
+      counts: {
+        totalProfiles: allProfiles.length,
+        activeRooms: allRooms.filter((r) => r.status === "playing" || r.status === "waiting").length,
+        totalLeagues: allLeagues.length,
+        totalTransactions: allTxs.length,
+      },
+      settings,
+      memory: memoryUsage
+        ? {
+            rssMb: Math.round(memoryUsage.rss / 1024 / 1024),
+            heapUsedMb: Math.round(memoryUsage.heapUsed / 1024 / 1024),
+            heapTotalMb: Math.round(memoryUsage.heapTotal / 1024 / 1024),
+          }
+        : null,
+    };
+  },
+
+  async exportSystemSnapshot(adminToken: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+
+    const metrics = await this.getSystemMetrics(adminToken);
+    const leagues = await dbRepository.getAllLeagues();
+    const logs = await dbRepository.getAdminLogs(100);
+
+    const snapshot = {
+      exportedAt: new Date().toISOString(),
+      exportedBy: adminProfile?.username || "Admin",
+      dialect: dbRepository.dialect,
+      metrics: {
+        userCount: metrics.userCount,
+        activeRooms: metrics.activeRooms,
+        totalWagers: metrics.totalWagers,
+        totalTransactions: metrics.totalTransactions,
+        houseMarblesBalance: metrics.houseMarblesBalance,
+        housePointsBalance: metrics.housePointsBalance,
+        totalMarblesInCirculation: metrics.totalMarblesInCirculation,
+        totalPointsInCirculation: metrics.totalPointsInCirculation,
+        totalEscrowHeldPoints: metrics.totalEscrowHeldPoints,
+      },
+      settings: metrics.settings,
+      leagues,
+      recentTransactions: metrics.recentTransactions,
+      recentAuditLogs: logs,
+    };
+
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "EXPORT_SYSTEM_SNAPSHOT",
+      "Full State Backup",
+      { snapshotTime: snapshot.exportedAt }
+    );
+
+    return snapshot;
+  },
 };
 

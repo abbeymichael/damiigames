@@ -58,6 +58,7 @@ import { DisputesTable } from "@/components/admin/DisputesTable";
 import { AuditLogsTable } from "@/components/admin/AuditLogsTable";
 import { AdminRolesTable } from "@/components/admin/AdminRolesTable";
 import { GameLimitsTable } from "@/components/admin/GameLimitsTable";
+import { PlatformSettings } from "@/components/admin/PlatformSettings";
 import {
   ResponsiveContainer,
   LineChart,
@@ -1808,154 +1809,17 @@ export default function AdminPage() {
               <AuditLogsTable logs={metrics?.logs || []} />
             )}
 
-            {/* TAB: SETTINGS & RATES */}
+            {/* TAB: SETTINGS & CONTROLS */}
             {activeTab === "settings" && (
-              <div className="space-y-6 max-w-3xl">
-                {/* Platform Fees */}
-                <section className="p-5 bg-[#081c15] border border-[#1a5e48] rounded-2xl shadow-xl space-y-4">
-                  <div className="pb-3 border-b border-[#1a5e48]">
-                    <h3 className="text-sm font-bold text-[#f5efdf] flex items-center gap-2">
-                      <Settings size={18} className="text-[#d6a735]" /> Platform House Fee Rates (%)
-                    </h3>
-                    <p className="text-xs text-slate-200">
-                      Configure house percentage fee auto-deducted from wager pots and tournament prize pools upon match or league completion.
-                    </p>
-                  </div>
-
-                  <form onSubmit={handleUpdateSettingsSubmit} className="space-y-5 text-xs">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-slate-200 mb-1 font-semibold">
-                          Wager Match House Fee (%)
-                        </label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={50}
-                          step={1}
-                          required
-                          value={wagerFeePercentInput}
-                          onChange={(e) => setWagerFeePercentInput(Number(e.target.value))}
-                          className="w-full px-3 py-2 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
-                        />
-                        <p className="text-[11px] text-slate-300 mt-1">
-                          Deducted from match wager pot when disbursing winnings to the victor (default: 5%).
-                        </p>
-                      </div>
-
-                      <div>
-                        <label className="block text-slate-200 mb-1 font-semibold">
-                          Tournament League Prize Fee (%)
-                        </label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={50}
-                          step={1}
-                          required
-                          value={tournamentFeePercentInput}
-                          onChange={(e) => setTournamentFeePercentInput(Number(e.target.value))}
-                          className="w-full px-3 py-2 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
-                        />
-                        <p className="text-[11px] text-slate-300 mt-1">
-                          Deducted from tournament prize pool when disbursing rewards to winners (default: 10%).
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Deposit & Withdrawal Financial Limits Section */}
-                    <div className="pt-4 border-t border-[#1a5e48] space-y-4">
-                      <div>
-                        <h4 className="text-sm font-bold text-[#d6a735] flex items-center gap-2">
-                          <Wallet size={16} /> Dynamic Deposit & Withdrawal Financial Limits
-                        </h4>
-                        <p className="text-xs text-slate-300 mt-0.5">
-                          Set minimum/maximum thresholds for Paystack Mobile Money top-ups and cashouts to protect treasury liquidity and prevent fraud.
-                        </p>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="p-3 bg-[#041c17] border border-[#1a5e48] rounded-xl space-y-3">
-                          <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block border-b border-[#1a5e48] pb-1">
-                            Paystack Top-Up Limits (GH₵)
-                          </span>
-                          <div>
-                            <label className="block text-slate-200 mb-1 font-medium">Minimum Deposit (GH₵)</label>
-                            <input
-                              type="number"
-                              min={1}
-                              required
-                              value={minDepositGhsInput}
-                              onChange={(e) => setMinDepositGhsInput(Number(e.target.value))}
-                              className="w-full px-3 py-1.5 bg-[#081c15] border border-[#1a5e48] rounded-lg text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-slate-200 mb-1 font-medium">Maximum Deposit per Tx (GH₵)</label>
-                            <input
-                              type="number"
-                              min={minDepositGhsInput + 1}
-                              required
-                              value={maxDepositGhsInput}
-                              onChange={(e) => setMaxDepositGhsInput(Number(e.target.value))}
-                              className="w-full px-3 py-1.5 bg-[#081c15] border border-[#1a5e48] rounded-lg text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="p-3 bg-[#041c17] border border-[#1a5e48] rounded-xl space-y-3">
-                          <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider block border-b border-[#1a5e48] pb-1">
-                            Mobile Money Cash Out Limits (GH₵)
-                          </span>
-                          <div>
-                            <label className="block text-slate-200 mb-1 font-medium">Minimum Withdrawal (GH₵)</label>
-                            <input
-                              type="number"
-                              min={1}
-                              required
-                              value={minWithdrawalGhsInput}
-                              onChange={(e) => setMinWithdrawalGhsInput(Number(e.target.value))}
-                              className="w-full px-3 py-1.5 bg-[#081c15] border border-[#1a5e48] rounded-lg text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-slate-200 mb-1 font-medium">Max Single Withdrawal (GH₵)</label>
-                            <input
-                              type="number"
-                              min={minWithdrawalGhsInput + 1}
-                              required
-                              value={maxWithdrawalGhsInput}
-                              onChange={(e) => setMaxWithdrawalGhsInput(Number(e.target.value))}
-                              className="w-full px-3 py-1.5 bg-[#081c15] border border-[#1a5e48] rounded-lg text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-slate-200 mb-1 font-medium">Max 24h Daily Withdrawal Cap (GH₵)</label>
-                            <input
-                              type="number"
-                              min={maxWithdrawalGhsInput}
-                              required
-                              value={maxDailyWithdrawalGhsInput}
-                              onChange={(e) => setMaxDailyWithdrawalGhsInput(Number(e.target.value))}
-                              className="w-full px-3 py-1.5 bg-[#081c15] border border-[#1a5e48] rounded-lg text-xs text-[#f8fafc] focus:outline-none focus:border-[#d6a735]"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="pt-3 flex justify-end">
-                      <button
-                        type="submit"
-                        disabled={busy}
-                        className="px-5 py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold text-xs rounded-xl transition-all shadow-md flex items-center gap-2"
-                      >
-                        <Settings size={14} /> Save Platform Fees & Financial Limits
-                      </button>
-                    </div>
-                  </form>
-                </section>
-              </div>
+              <PlatformSettings
+                token={token}
+                adminSecret={adminSecret}
+                initialSettings={adminSettings || undefined}
+                onSettingsUpdated={(newSettings) => {
+                  setAdminSettings(newSettings);
+                  refreshAdminData();
+                }}
+              />
             )}
           </main>
         </div>

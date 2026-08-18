@@ -144,6 +144,18 @@ export async function POST(req: NextRequest) {
         minWithdrawalGhs,
         maxWithdrawalGhs,
         maxDailyWithdrawalGhs,
+        turnTimerSeconds,
+        disconnectGraceSeconds,
+        unjoinedRoomExpiryMinutes,
+        maintenanceMode,
+        maintenanceNotice,
+        disableWagers,
+        disableWithdrawals,
+        publicSpectatingEnabled,
+        defaultRating,
+        ratingKFactor,
+        minWagerGhs,
+        maxWagerGhs,
       } = body;
       const res = await adminService.updateSettings(token, {
         wagerFeePercent: wagerFeePercent !== undefined ? Number(wagerFeePercent) : undefined,
@@ -155,6 +167,18 @@ export async function POST(req: NextRequest) {
         minWithdrawalGhs: minWithdrawalGhs !== undefined ? Number(minWithdrawalGhs) : undefined,
         maxWithdrawalGhs: maxWithdrawalGhs !== undefined ? Number(maxWithdrawalGhs) : undefined,
         maxDailyWithdrawalGhs: maxDailyWithdrawalGhs !== undefined ? Number(maxDailyWithdrawalGhs) : undefined,
+        turnTimerSeconds: turnTimerSeconds !== undefined ? Number(turnTimerSeconds) : undefined,
+        disconnectGraceSeconds: disconnectGraceSeconds !== undefined ? Number(disconnectGraceSeconds) : undefined,
+        unjoinedRoomExpiryMinutes: unjoinedRoomExpiryMinutes !== undefined ? Number(unjoinedRoomExpiryMinutes) : undefined,
+        maintenanceMode: maintenanceMode !== undefined ? Boolean(maintenanceMode) : undefined,
+        maintenanceNotice: maintenanceNotice !== undefined ? String(maintenanceNotice) : undefined,
+        disableWagers: disableWagers !== undefined ? Boolean(disableWagers) : undefined,
+        disableWithdrawals: disableWithdrawals !== undefined ? Boolean(disableWithdrawals) : undefined,
+        publicSpectatingEnabled: publicSpectatingEnabled !== undefined ? Boolean(publicSpectatingEnabled) : undefined,
+        defaultRating: defaultRating !== undefined ? Number(defaultRating) : undefined,
+        ratingKFactor: ratingKFactor !== undefined ? Number(ratingKFactor) : undefined,
+        minWagerGhs: minWagerGhs !== undefined ? Number(minWagerGhs) : undefined,
+        maxWagerGhs: maxWagerGhs !== undefined ? Number(maxWagerGhs) : undefined,
       });
       return NextResponse.json({ success: true, settings: res });
     }
@@ -379,6 +403,26 @@ export async function POST(req: NextRequest) {
 
       const res = await adminService.rejectOrganizerRequest(token, String(targetToken), String(reason || ""));
       return NextResponse.json({ success: true, organizerProfile: res });
+    }
+
+    if (action === "purge_expired_rooms" || action === "clean_stale_rooms") {
+      const res = await adminService.purgeExpiredRooms(token);
+      return NextResponse.json({ success: true, ...res });
+    }
+
+    if (action === "reconcile_all_balances" || action === "audit_ledger_balances") {
+      const res = await adminService.reconcileAllUserBalances(token);
+      return NextResponse.json(res);
+    }
+
+    if (action === "system_diagnostics" || action === "health_check") {
+      const diagnostics = await adminService.getSystemDiagnostics(token);
+      return NextResponse.json({ success: true, diagnostics });
+    }
+
+    if (action === "export_system_snapshot" || action === "backup_state") {
+      const snapshot = await adminService.exportSystemSnapshot(token);
+      return NextResponse.json({ success: true, snapshot });
     }
 
     return NextResponse.json({ error: "Invalid admin action" }, { status: 400 });

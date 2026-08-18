@@ -580,6 +580,18 @@ export const mysqlStore: DbRepository = {
       if (nonNegative(updates.minWithdrawalGhs)) next.minWithdrawalGhs = updates.minWithdrawalGhs!;
       if (positive(updates.maxWithdrawalGhs)) next.maxWithdrawalGhs = updates.maxWithdrawalGhs!;
       if (positive(updates.maxDailyWithdrawalGhs)) next.maxDailyWithdrawalGhs = updates.maxDailyWithdrawalGhs!;
+      if (positive(updates.turnTimerSeconds)) next.turnTimerSeconds = updates.turnTimerSeconds!;
+      if (positive(updates.disconnectGraceSeconds)) next.disconnectGraceSeconds = updates.disconnectGraceSeconds!;
+      if (positive(updates.unjoinedRoomExpiryMinutes)) next.unjoinedRoomExpiryMinutes = updates.unjoinedRoomExpiryMinutes!;
+      if (updates.maintenanceMode !== undefined) next.maintenanceMode = Boolean(updates.maintenanceMode);
+      if (updates.maintenanceNotice !== undefined) next.maintenanceNotice = String(updates.maintenanceNotice);
+      if (updates.disableWagers !== undefined) next.disableWagers = Boolean(updates.disableWagers);
+      if (updates.disableWithdrawals !== undefined) next.disableWithdrawals = Boolean(updates.disableWithdrawals);
+      if (updates.publicSpectatingEnabled !== undefined) next.publicSpectatingEnabled = Boolean(updates.publicSpectatingEnabled);
+      if (positive(updates.defaultRating)) next.defaultRating = updates.defaultRating!;
+      if (positive(updates.ratingKFactor)) next.ratingKFactor = updates.ratingKFactor!;
+      if (positive(updates.minWagerGhs)) next.minWagerGhs = updates.minWagerGhs!;
+      if (positive(updates.maxWagerGhs)) next.maxWagerGhs = updates.maxWagerGhs!;
       next.updatedAt = new Date().toISOString();
       if (adminName) next.updatedBy = adminName;
 
