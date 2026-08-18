@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { SharedHeader } from "@/components/SharedHeader";
 import { Footer } from "@/components/Footer";
 import { Wallet, CreditCard, ShieldCheck, Phone, CheckCircle2, AlertCircle, LogIn, Award } from "lucide-react";
-import { WalletTransaction } from "@/lib/types";
+import type { WalletTransaction } from "@/lib/types";
 
 export default function WalletPage() {
   const [token, setToken] = useState<string | null>(null);

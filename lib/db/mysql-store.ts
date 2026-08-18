@@ -1,24 +1,37 @@
-import { and, asc, desc, eq, lt, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lt, ne, or, sql } from "drizzle-orm";
 import type {
   AdminLog,
   AdminProfile,
   AdminSettings,
+  GameTypeLimit,
   League,
   LeagueMatch,
   LeagueParticipant,
+  LedgerAccountType,
+  LedgerEntry,
+  LedgerEntryInput,
+  Match,
+  OrganizerApplication,
+  OrganizerApplicationStatus,
   OrganizerProfile,
   OrganizerStatus,
+  OtpRequest,
   Profile,
+  Region,
   Role,
   Room,
   Session,
+  Tournament,
+  TournamentEntry,
+  TournamentPrize,
+  User,
   WagerEscrow,
   WalletTransaction,
 } from "../types";
 import { securityService } from "../security";
 import { calculateDynamicRatingUpdate, getProfileRank } from "../rank-service";
 import { getEnv } from "../env";
-import { buildSeedDataset, DEFAULT_ADMIN_SETTINGS } from "./seed-data";
+import { buildSeedDataset, DEFAULT_ADMIN_SETTINGS, DEFAULT_REGIONS } from "./seed-data";
 import { lockKey, type DbRepository } from "./repository";
 import { assertConnection, closePool, getDb, withTransaction } from "./mysql-connection";
 import * as schema from "../../db/schema.mysql";
@@ -26,26 +39,45 @@ import {
   adminLogToRow,
   adminProfileToRow,
   escrowToRow,
+  gameTypeLimitToRow,
   leagueMatchToRow,
   leagueToRow,
+  ledgerEntryToRow,
+  matchToRow,
+  organizerApplicationToRow,
   organizerProfileToRow,
   participantToRow,
   profileToRow,
+  regionToRow,
   roomToRow,
   rowToAdminLog,
   rowToAdminProfile,
   rowToAdminSettings,
   rowToEscrow,
+  rowToGameTypeLimit,
   rowToLeague,
   rowToLeagueMatch,
+  rowToLedgerEntry,
+  rowToMatch,
+  rowToOrganizerApplication,
   rowToOrganizerProfile,
+  rowToOtpRequest,
   rowToParticipant,
   rowToProfile,
+  rowToRegion,
   rowToRoom,
   rowToSession,
+  rowToTournament,
+  rowToTournamentEntry,
+  rowToTournamentPrize,
   rowToTransaction,
+  rowToUser,
   sessionToRow,
+  tournamentEntryToRow,
+  tournamentPrizeToRow,
+  tournamentToRow,
   transactionToRow,
+  userToRow,
 } from "./mysql-mappers";
 
 /**
@@ -976,6 +1008,510 @@ export const mysqlStore: DbRepository = {
     return rows.map(rowToAdminProfile);
   },
 
+  // --- Users & Profile Completion ---
+  async getUserById(id) {
+    const [row] = await getDb().select().from(schema.users).where(eq(schema.users.id, id));
+    return row ? rowToUser(row) : null;
+  },
+
+  async getUserByPhone(phoneNumber) {
+    const [row] = await getDb().select().from(schema.users).where(eq(schema.users.phoneNumber, phoneNumber));
+    return row ? rowToUser(row) : null;
+  },
+
+  async getUserByUsername(username) {
+    const [row] = await getDb().select().from(schema.users).where(eq(schema.users.username, username));
+    return row ? rowToUser(row) : null;
+  },
+
+  async saveUser(user) {
+    const row = userToRow(user);
+    await getDb()
+      .insert(schema.users)
+      .values(row)
+      .onDuplicateKeyUpdate({
+        set: {
+          phoneNumber: row.phoneNumber,
+          phoneVerifiedAt: row.phoneVerifiedAt,
+          fullName: row.fullName,
+          email: row.email,
+          emailVerifiedAt: row.emailVerifiedAt,
+          ghanaCardNumber: row.ghanaCardNumber,
+          dateOfBirth: row.dateOfBirth,
+          gender: row.gender,
+          avatarUrl: row.avatarUrl,
+          region: row.region,
+          city: row.city,
+          address: row.address,
+          momoNumber: row.momoNumber,
+          momoNetwork: row.momoNetwork,
+          username: row.username,
+          referralCode: row.referralCode,
+          role: row.role,
+          profileCompletedAt: row.profileCompletedAt,
+        },
+      });
+    const updated = await this.getUserById(user.id);
+    return updated || (rowToUser(row as schema.UserRow));
+  },
+
+  async updateUser(id, updates) {
+    const existing = await this.getUserById(id);
+    if (!existing) return null;
+    return this.saveUser({ ...existing, ...updates });
+  },
+
+  // --- OTP Requests ---
+  async createOtpRequest(req) {
+    const row = {
+      id: req.id,
+      phoneNumber: req.phoneNumber.slice(0, 20),
+      codeHash: req.codeHash.slice(0, 128),
+      ipAddress: req.ipAddress.slice(0, 45),
+      expiresAt: req.expiresAt,
+      consumedAt: null,
+      createdAt: new Date(),
+    };
+    await getDb().insert(schema.otpRequests).values(row);
+    return rowToOtpRequest(row as schema.OtpRequestRow);
+  },
+
+  async getOtpRequest(id) {
+    const [row] = await getDb().select().from(schema.otpRequests).where(eq(schema.otpRequests.id, id));
+    return row ? rowToOtpRequest(row) : null;
+  },
+
+  async consumeOtpRequest(id) {
+    const now = new Date();
+    await getDb()
+      .update(schema.otpRequests)
+      .set({ consumedAt: now })
+      .where(eq(schema.otpRequests.id, id));
+    return this.getOtpRequest(id);
+  },
+
+  async getRecentOtpRequestsByPhone(phoneNumber, since) {
+    const rows = await getDb()
+      .select()
+      .from(schema.otpRequests)
+      .where(
+        and(
+          eq(schema.otpRequests.phoneNumber, phoneNumber),
+          gte(schema.otpRequests.createdAt, since),
+        ),
+      )
+      .orderBy(desc(schema.otpRequests.createdAt));
+    return rows.map(rowToOtpRequest);
+  },
+
+  async getRecentOtpRequestsByIp(ipAddress, since) {
+    const rows = await getDb()
+      .select()
+      .from(schema.otpRequests)
+      .where(
+        and(
+          eq(schema.otpRequests.ipAddress, ipAddress),
+          gte(schema.otpRequests.createdAt, since),
+        ),
+      )
+      .orderBy(desc(schema.otpRequests.createdAt));
+    return rows.map(rowToOtpRequest);
+  },
+
+  // --- Organizer Applications ---
+  async createOrganizerApplication(app) {
+    const row = organizerApplicationToRow(app);
+    await getDb().insert(schema.organizerApplications).values(row);
+    return rowToOrganizerApplication(row as schema.OrganizerApplicationRow);
+  },
+
+  async getOrganizerApplication(id) {
+    const [row] = await getDb().select().from(schema.organizerApplications).where(eq(schema.organizerApplications.id, id));
+    return row ? rowToOrganizerApplication(row) : null;
+  },
+
+  async getOrganizerApplicationByUserId(userId) {
+    const [row] = await getDb()
+      .select()
+      .from(schema.organizerApplications)
+      .where(eq(schema.organizerApplications.userId, userId))
+      .orderBy(desc(schema.organizerApplications.createdAt));
+    return row ? rowToOrganizerApplication(row) : null;
+  },
+
+  async listOrganizerApplications(status) {
+    let query = getDb().select().from(schema.organizerApplications);
+    const rows = status
+      ? await query.where(eq(schema.organizerApplications.status, status)).orderBy(desc(schema.organizerApplications.createdAt))
+      : await query.orderBy(desc(schema.organizerApplications.createdAt));
+    return rows.map(rowToOrganizerApplication);
+  },
+
+  async updateOrganizerApplication(id, updates) {
+    const existing = await this.getOrganizerApplication(id);
+    if (!existing) return null;
+    const merged: OrganizerApplication = { ...existing, ...updates };
+    const row = organizerApplicationToRow(merged);
+    await getDb()
+      .update(schema.organizerApplications)
+      .set({
+        applicantType: row.applicantType,
+        organizationName: row.organizationName,
+        organizationRegNumber: row.organizationRegNumber,
+        ghanaCardFrontUrl: row.ghanaCardFrontUrl,
+        ghanaCardBackUrl: row.ghanaCardBackUrl,
+        selfieUrl: row.selfieUrl,
+        physicalAddress: row.physicalAddress,
+        proofOfAddressUrl: row.proofOfAddressUrl,
+        intendedGameTypes: row.intendedGameTypes,
+        expectedTournamentSize: row.expectedTournamentSize,
+        expectedFrequency: row.expectedFrequency,
+        priorExperience: row.priorExperience,
+        termsAcceptedAt: row.termsAcceptedAt,
+        status: row.status,
+        reviewedByAdminId: row.reviewedByAdminId,
+        reviewedAt: row.reviewedAt,
+        reviewNote: row.reviewNote,
+      })
+      .where(eq(schema.organizerApplications.id, id));
+    return this.getOrganizerApplication(id);
+  },
+
+  // --- Regions ---
+  async getRegions(): Promise<Region[]> {
+    try {
+      const rows = await getDb()
+        .select()
+        .from(schema.regions)
+        .where(eq(schema.regions.active, 1))
+        .orderBy(asc(schema.regions.sortOrder), asc(schema.regions.name));
+
+      if (rows && rows.length > 0) {
+        return rows.map(rowToRegion);
+      }
+
+      // Auto-populate default regions into DB if empty
+      for (const r of DEFAULT_REGIONS) {
+        await this.saveRegion(r).catch(() => null);
+      }
+      return [...DEFAULT_REGIONS];
+    } catch {
+      return [...DEFAULT_REGIONS];
+    }
+  },
+
+  async saveRegion(region: Region): Promise<Region> {
+    const row = regionToRow(region);
+    await getDb()
+      .insert(schema.regions)
+      .values(row)
+      .onDuplicateKeyUpdate({
+        set: {
+          name: row.name,
+          code: row.code,
+          sortOrder: row.sortOrder,
+          active: row.active,
+        },
+      });
+    return region;
+  },
+
+  // --- Matches (Section 6) ---
+  async createMatch(match: Match): Promise<Match> {
+    const row = matchToRow(match);
+    await getDb().insert(schema.matches).values(row);
+    return match;
+  },
+
+  async getMatch(id: string): Promise<Match | null> {
+    const [row] = await getDb()
+      .select()
+      .from(schema.matches)
+      .where(eq(schema.matches.id, id));
+    return row ? rowToMatch(row) : null;
+  },
+
+  async updateMatch(id: string, updates: Partial<Match>): Promise<Match | null> {
+    const existing = await mysqlStore.getMatch(id);
+    if (!existing) return null;
+
+    const merged: Match = {
+      ...existing,
+      ...updates,
+      id,
+    };
+
+    const updatePayload: Record<string, unknown> = {};
+    if (updates.status !== undefined) updatePayload.status = updates.status;
+    if (updates.playerBId !== undefined) updatePayload.playerBId = updates.playerBId;
+    if (updates.winnerId !== undefined) updatePayload.winnerId = updates.winnerId;
+    if (updates.settledAt !== undefined) {
+      updatePayload.settledAt = updates.settledAt
+        ? updates.settledAt instanceof Date
+          ? updates.settledAt
+          : new Date(updates.settledAt)
+        : null;
+    }
+
+    if (Object.keys(updatePayload).length > 0) {
+      await getDb()
+        .update(schema.matches)
+        .set(updatePayload)
+        .where(eq(schema.matches.id, id));
+    }
+
+    return merged;
+  },
+
+  async listMatches(filter: { status?: string; gameType?: string; playerId?: string; limit?: number } = {}): Promise<Match[]> {
+    const conditions = [];
+    if (filter.status) conditions.push(eq(schema.matches.status, filter.status as any));
+    if (filter.gameType) conditions.push(eq(schema.matches.gameType, filter.gameType));
+    if (filter.playerId) {
+      conditions.push(
+        or(
+          eq(schema.matches.playerAId, filter.playerId),
+          eq(schema.matches.playerBId, filter.playerId)
+        )
+      );
+    }
+
+    let query = getDb().select().from(schema.matches);
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    const rows = await query
+      .orderBy(desc(schema.matches.createdAt))
+      .limit(filter.limit ?? 50);
+
+    return rows.map(rowToMatch);
+  },
+
+  // --- Tournaments & Prizes (Section 7) ---
+  async createTournament(
+    tournament: Tournament,
+    prizes: { placement: number; amount: number | string }[] = []
+  ): Promise<Tournament> {
+    await withTransaction(async () => {
+      const row = tournamentToRow(tournament);
+      await getDb().insert(schema.tournaments).values(row);
+
+      for (const p of prizes) {
+        const prizeRow = tournamentPrizeToRow({
+          id: crypto.randomUUID(),
+          tournamentId: tournament.id,
+          placement: p.placement,
+          amount: p.amount,
+        });
+        await getDb().insert(schema.tournamentPrizes).values(prizeRow);
+      }
+    });
+
+    return tournament;
+  },
+
+  async getTournament(id: string): Promise<{ tournament: Tournament; prizes: TournamentPrize[]; entries: TournamentEntry[] } | null> {
+    const [tRow] = await getDb()
+      .select()
+      .from(schema.tournaments)
+      .where(eq(schema.tournaments.id, id));
+    if (!tRow) return null;
+
+    const prizeRows = await getDb()
+      .select()
+      .from(schema.tournamentPrizes)
+      .where(eq(schema.tournamentPrizes.tournamentId, id))
+      .orderBy(asc(schema.tournamentPrizes.placement));
+
+    const entryRows = await getDb()
+      .select()
+      .from(schema.tournamentEntries)
+      .where(eq(schema.tournamentEntries.tournamentId, id))
+      .orderBy(asc(schema.tournamentEntries.joinedAt));
+
+    return {
+      tournament: rowToTournament(tRow),
+      prizes: prizeRows.map(rowToTournamentPrize),
+      entries: entryRows.map(rowToTournamentEntry),
+    };
+  },
+
+  async listTournaments(filter: { status?: string; organizerId?: string; gameType?: string; limit?: number } = {}): Promise<Tournament[]> {
+    const conditions = [];
+    if (filter.status) conditions.push(eq(schema.tournaments.status, filter.status as any));
+    if (filter.organizerId) conditions.push(eq(schema.tournaments.organizerId, filter.organizerId));
+    if (filter.gameType) conditions.push(eq(schema.tournaments.gameType, filter.gameType));
+
+    let query = getDb().select().from(schema.tournaments);
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    const rows = await query
+      .orderBy(desc(schema.tournaments.createdAt))
+      .limit(filter.limit ?? 50);
+
+    return rows.map(rowToTournament);
+  },
+
+  async updateTournament(id: string, updates: Partial<Tournament>): Promise<Tournament | null> {
+    const existingResult = await mysqlStore.getTournament(id);
+    if (!existingResult) return null;
+
+    const merged: Tournament = {
+      ...existingResult.tournament,
+      ...updates,
+      id,
+    };
+
+    const updatePayload: Record<string, unknown> = {};
+    if (updates.status !== undefined) updatePayload.status = updates.status;
+    if (updates.completedAt !== undefined) {
+      updatePayload.completedAt = updates.completedAt
+        ? updates.completedAt instanceof Date
+          ? updates.completedAt
+          : new Date(updates.completedAt)
+        : null;
+    }
+
+    if (Object.keys(updatePayload).length > 0) {
+      await getDb()
+        .update(schema.tournaments)
+        .set(updatePayload)
+        .where(eq(schema.tournaments.id, id));
+    }
+
+    return merged;
+  },
+
+  async createTournamentEntry(entry: TournamentEntry): Promise<TournamentEntry> {
+    const row = tournamentEntryToRow(entry);
+    await getDb().insert(schema.tournamentEntries).values(row);
+    return entry;
+  },
+
+  async getTournamentEntries(tournamentId: string): Promise<TournamentEntry[]> {
+    const rows = await getDb()
+      .select()
+      .from(schema.tournamentEntries)
+      .where(eq(schema.tournamentEntries.tournamentId, tournamentId))
+      .orderBy(asc(schema.tournamentEntries.joinedAt));
+    return rows.map(rowToTournamentEntry);
+  },
+
+  async updateTournamentEntryPlacement(entryId: string, placement: number): Promise<TournamentEntry | null> {
+    await getDb()
+      .update(schema.tournamentEntries)
+      .set({ finalPlacement: placement })
+      .where(eq(schema.tournamentEntries.id, entryId));
+
+    const [row] = await getDb()
+      .select()
+      .from(schema.tournamentEntries)
+      .where(eq(schema.tournamentEntries.id, entryId));
+    return row ? rowToTournamentEntry(row) : null;
+  },
+
+  async getTournamentPrizes(tournamentId: string): Promise<TournamentPrize[]> {
+    const rows = await getDb()
+      .select()
+      .from(schema.tournamentPrizes)
+      .where(eq(schema.tournamentPrizes.tournamentId, tournamentId))
+      .orderBy(asc(schema.tournamentPrizes.placement));
+    return rows.map(rowToTournamentPrize);
+  },
+
+  // --- Game Type Limits (Section 8) ---
+  async getGameTypeLimit(gameType: string): Promise<GameTypeLimit | null> {
+    const [row] = await getDb()
+      .select()
+      .from(schema.gameTypeLimits)
+      .where(eq(schema.gameTypeLimits.gameType, gameType));
+    return row ? rowToGameTypeLimit(row) : null;
+  },
+
+  async getGameTypeLimits(): Promise<GameTypeLimit[]> {
+    const rows = await getDb()
+      .select()
+      .from(schema.gameTypeLimits)
+      .orderBy(asc(schema.gameTypeLimits.gameType));
+    return rows.map(rowToGameTypeLimit);
+  },
+
+  async saveGameTypeLimit(limit: GameTypeLimit): Promise<GameTypeLimit> {
+    const row = gameTypeLimitToRow(limit);
+    await getDb()
+      .insert(schema.gameTypeLimits)
+      .values(row)
+      .onDuplicateKeyUpdate({
+        set: {
+          minWager: row.minWager,
+          maxWager: row.maxWager,
+          minTournamentPrizePool: row.minTournamentPrizePool,
+          maxTournamentPrizePool: row.maxTournamentPrizePool,
+          platformFeePercent: row.platformFeePercent,
+          updatedAt: new Date(),
+        },
+      });
+    return limit;
+  },
+
+  // --- Double-Entry Ledger ---
+  async writeLedger(entries: LedgerEntryInput[]): Promise<LedgerEntry[]> {
+    if (entries.length === 0) return [];
+
+    const results: LedgerEntry[] = [];
+    await withTransaction(async () => {
+      for (const e of entries) {
+        const id = crypto.randomUUID();
+        const le: LedgerEntry = {
+          id,
+          userId: e.userId,
+          accountType: e.accountType,
+          entryType: e.entryType,
+          amount: String(e.amount),
+          referenceType: e.referenceType,
+          referenceId: e.referenceId,
+          createdAt: new Date(),
+        };
+        const row = ledgerEntryToRow(le);
+        await getDb().insert(schema.ledgerEntries).values(row);
+        results.push(le);
+      }
+    });
+
+    return results;
+  },
+
+  async getLedgerBalance(userId: string, accountType: LedgerAccountType): Promise<number> {
+    const [res] = await getDb()
+      .select({ total: sql<string>`COALESCE(SUM(amount), 0)` })
+      .from(schema.ledgerEntries)
+      .where(
+        and(
+          eq(schema.ledgerEntries.userId, userId),
+          eq(schema.ledgerEntries.accountType, accountType)
+        )
+      );
+    return Number(res?.total ?? 0);
+  },
+
+  async getLedgerEntries(filter: { userId?: string; referenceType?: string; referenceId?: string; limit?: number } = {}): Promise<LedgerEntry[]> {
+    const conditions = [];
+    if (filter.userId) conditions.push(eq(schema.ledgerEntries.userId, filter.userId));
+    if (filter.referenceType) conditions.push(eq(schema.ledgerEntries.referenceType, filter.referenceType));
+    if (filter.referenceId) conditions.push(eq(schema.ledgerEntries.referenceId, filter.referenceId));
+
+    let query = getDb().select().from(schema.ledgerEntries);
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    const rows = await query
+      .orderBy(desc(schema.ledgerEntries.createdAt))
+      .limit(filter.limit ?? 100);
+
+    return rows.map(rowToLedgerEntry);
+  },
+
   // --- Seeder ---
   async seedDatabase() {
     // Idempotent upsert of the canonical seed dataset.
@@ -992,6 +1528,8 @@ export const mysqlStore: DbRepository = {
       for (const o of seed.organizerProfiles) await mysqlStore.saveOrganizerProfile(o);
       for (const l of seed.leagues) await mysqlStore.saveLeague(l);
       for (const p of seed.leagueParticipants) await mysqlStore.addLeagueParticipant(p);
+      for (const r of seed.regions) await mysqlStore.saveRegion(r);
+      for (const g of seed.gameTypeLimits) await mysqlStore.saveGameTypeLimit(g);
     });
 
     // Recompute participant counters after seeding (they mutate leagues).

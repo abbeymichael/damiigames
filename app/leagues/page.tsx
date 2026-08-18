@@ -28,7 +28,7 @@ import {
   RefreshCw,
   AlertCircle
 } from "lucide-react";
-import { League, LeagueMatch, LeagueParticipant, TournamentFormat } from "@/lib/types";
+import type { League, LeagueMatch, LeagueParticipant, TournamentFormat } from "@/lib/types";
 import { BracketTreeView } from "@/components/BracketTreeView";
 
 export default function LeaguesPage() {

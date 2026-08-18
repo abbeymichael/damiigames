@@ -3,17 +3,29 @@ import type {
   AdminPermission,
   AdminProfile,
   AdminSettings,
+  GameTypeLimit,
   League,
   LeagueMatch,
   LeagueParticipant,
+  LedgerEntry,
+  Match,
+  MatchStatus,
   MoveLogEntry,
+  OrganizerApplication,
+  OrganizerApplicationStatus,
   OrganizerProfile,
   OrganizerStatus,
+  OtpRequest,
   PrizeDistribution,
   Profile,
   Role,
   Room,
   Session,
+  Tournament,
+  TournamentEntry,
+  TournamentEscrowStatus,
+  TournamentPrize,
+  User,
   WagerEscrow,
   WalletTransaction,
 } from "../types";
@@ -31,11 +43,20 @@ import type * as schema from "../../db/schema.mysql";
 type Row<T extends { $inferSelect: unknown }> = T["$inferSelect"];
 
 export type ProfileRow = Row<typeof schema.profiles>;
+export type UserRow = Row<typeof schema.users>;
+export type OtpRequestRow = Row<typeof schema.otpRequests>;
+export type OrganizerApplicationRow = Row<typeof schema.organizerApplications>;
 export type SessionRow = Row<typeof schema.sessions>;
 export type AdminProfileRow = Row<typeof schema.adminProfiles>;
 export type OrganizerProfileRow = Row<typeof schema.organizerProfiles>;
 export type RoomRow = Row<typeof schema.rooms>;
 export type WalletTransactionRow = Row<typeof schema.walletTransactions>;
+export type MatchRow = Row<typeof schema.matches>;
+export type TournamentRow = Row<typeof schema.tournaments>;
+export type TournamentPrizeRow = Row<typeof schema.tournamentPrizes>;
+export type TournamentEntryRow = Row<typeof schema.tournamentEntries>;
+export type GameTypeLimitRow = Row<typeof schema.gameTypeLimits>;
+export type LedgerEntryRow = Row<typeof schema.ledgerEntries>;
 export type EscrowRow = Row<typeof schema.escrows>;
 export type LeagueRow = Row<typeof schema.leagues>;
 export type LeagueParticipantRow = Row<typeof schema.leagueParticipants>;
@@ -540,3 +561,306 @@ export function rowToAdminSettings(row: AdminSettingsRow): AdminSettings {
     updatedBy: orUndefined(row.updatedBy),
   };
 }
+
+/* -------------------------------- users --------------------------------- */
+
+export function rowToUser(row: UserRow): User {
+  return {
+    id: row.id,
+    phoneNumber: row.phoneNumber,
+    phoneVerifiedAt: row.phoneVerifiedAt ? row.phoneVerifiedAt.toISOString() : undefined,
+    fullName: orUndefined(row.fullName),
+    email: orUndefined(row.email),
+    emailVerifiedAt: row.emailVerifiedAt ? row.emailVerifiedAt.toISOString() : undefined,
+    ghanaCardNumber: orUndefined(row.ghanaCardNumber),
+    dateOfBirth: row.dateOfBirth ? row.dateOfBirth.toISOString() : undefined,
+    gender: orUndefined(row.gender),
+    avatarUrl: orUndefined(row.avatarUrl),
+    region: orUndefined(row.region),
+    city: orUndefined(row.city),
+    address: orUndefined(row.address),
+    momoNumber: orUndefined(row.momoNumber),
+    momoNetwork: orUndefined(row.momoNetwork),
+    username: orUndefined(row.username),
+    referralCode: orUndefined(row.referralCode),
+    role: row.role as "player" | "organizer" | "admin",
+    profileCompletedAt: row.profileCompletedAt ? row.profileCompletedAt.toISOString() : undefined,
+    createdAt: row.createdAt ? row.createdAt.toISOString() : new Date().toISOString(),
+  };
+}
+
+export function userToRow(u: Partial<User> & { id: string; phoneNumber: string }): typeof schema.users.$inferInsert {
+  return {
+    id: u.id,
+    phoneNumber: u.phoneNumber.slice(0, 20),
+    phoneVerifiedAt: u.phoneVerifiedAt ? new Date(u.phoneVerifiedAt) : null,
+    fullName: u.fullName ? u.fullName.slice(0, 120) : null,
+    email: u.email ? u.email.slice(0, 160) : null,
+    emailVerifiedAt: u.emailVerifiedAt ? new Date(u.emailVerifiedAt) : null,
+    ghanaCardNumber: u.ghanaCardNumber ? u.ghanaCardNumber.slice(0, 32) : null,
+    dateOfBirth: u.dateOfBirth ? new Date(u.dateOfBirth) : null,
+    gender: u.gender ? u.gender.slice(0, 16) : null,
+    avatarUrl: u.avatarUrl ? u.avatarUrl.slice(0, 255) : null,
+    region: u.region ? u.region.slice(0, 64) : null,
+    city: u.city ? u.city.slice(0, 64) : null,
+    address: u.address ? u.address.slice(0, 255) : null,
+    momoNumber: u.momoNumber ? u.momoNumber.slice(0, 20) : null,
+    momoNetwork: u.momoNetwork ? u.momoNetwork.slice(0, 32) : null,
+    username: u.username ? u.username.slice(0, 32) : null,
+    referralCode: u.referralCode ? u.referralCode.slice(0, 32) : null,
+    role: (u.role || "player") as "player" | "organizer" | "admin",
+    profileCompletedAt: u.profileCompletedAt ? new Date(u.profileCompletedAt) : null,
+    createdAt: u.createdAt ? new Date(u.createdAt) : new Date(),
+  };
+}
+
+/* ----------------------------- otp requests ------------------------------ */
+
+export function rowToOtpRequest(row: OtpRequestRow): OtpRequest {
+  return {
+    id: row.id,
+    phoneNumber: row.phoneNumber,
+    codeHash: row.codeHash,
+    ipAddress: row.ipAddress,
+    expiresAt: row.expiresAt,
+    consumedAt: row.consumedAt || null,
+    createdAt: row.createdAt,
+  };
+}
+
+/* ------------------------- organizer applications ------------------------ */
+
+export function rowToOrganizerApplication(row: OrganizerApplicationRow): OrganizerApplication {
+  return {
+    id: row.id,
+    userId: row.userId,
+    applicantType: row.applicantType as "individual" | "organization",
+    organizationName: orUndefined(row.organizationName),
+    organizationRegNumber: orUndefined(row.organizationRegNumber),
+    ghanaCardFrontUrl: row.ghanaCardFrontUrl,
+    ghanaCardBackUrl: row.ghanaCardBackUrl,
+    selfieUrl: row.selfieUrl,
+    physicalAddress: row.physicalAddress,
+    proofOfAddressUrl: row.proofOfAddressUrl,
+    intendedGameTypes: row.intendedGameTypes,
+    expectedTournamentSize: orUndefined(row.expectedTournamentSize),
+    expectedFrequency: orUndefined(row.expectedFrequency),
+    priorExperience: orUndefined(row.priorExperience),
+    termsAcceptedAt: row.termsAcceptedAt,
+    status: row.status as OrganizerApplicationStatus,
+    reviewedByAdminId: orUndefined(row.reviewedByAdminId),
+    reviewedAt: row.reviewedAt || undefined,
+    reviewNote: orUndefined(row.reviewNote),
+    createdAt: row.createdAt,
+  };
+}
+
+export function organizerApplicationToRow(
+  a: OrganizerApplication,
+): typeof schema.organizerApplications.$inferInsert {
+  return {
+    id: a.id,
+    userId: a.userId,
+    applicantType: a.applicantType,
+    organizationName: a.organizationName ? a.organizationName.slice(0, 160) : null,
+    organizationRegNumber: a.organizationRegNumber ? a.organizationRegNumber.slice(0, 64) : null,
+    ghanaCardFrontUrl: a.ghanaCardFrontUrl.slice(0, 255),
+    ghanaCardBackUrl: a.ghanaCardBackUrl.slice(0, 255),
+    selfieUrl: a.selfieUrl.slice(0, 255),
+    physicalAddress: a.physicalAddress.slice(0, 255),
+    proofOfAddressUrl: a.proofOfAddressUrl.slice(0, 255),
+    intendedGameTypes: a.intendedGameTypes.slice(0, 255),
+    expectedTournamentSize: a.expectedTournamentSize ?? null,
+    expectedFrequency: a.expectedFrequency ? a.expectedFrequency.slice(0, 64) : null,
+    priorExperience: a.priorExperience ? a.priorExperience.slice(0, 500) : null,
+    termsAcceptedAt: new Date(a.termsAcceptedAt),
+    status: a.status,
+    reviewedByAdminId: a.reviewedByAdminId ? a.reviewedByAdminId.slice(0, 36) : null,
+    reviewedAt: a.reviewedAt ? new Date(a.reviewedAt) : null,
+    reviewNote: a.reviewNote ? a.reviewNote.slice(0, 500) : null,
+    createdAt: new Date(a.createdAt),
+  };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Region                                                                    */
+/* ------------------------------------------------------------------------- */
+export function rowToRegion(row: schema.RegionRow): import("../types").Region {
+  return {
+    id: row.id,
+    name: row.name,
+    code: orUndefined(row.code),
+    sortOrder: row.sortOrder,
+    active: Boolean(row.active),
+  };
+}
+
+export function regionToRow(r: import("../types").Region): typeof schema.regions.$inferInsert {
+  return {
+    id: r.id,
+    name: r.name.slice(0, 120),
+    code: r.code ? r.code.slice(0, 32) : null,
+    sortOrder: r.sortOrder ?? 0,
+    active: r.active !== false ? 1 : 0,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/* ------------------------------------------------------------------------- */
+/* matches (Section 6)                                                       */
+/* ------------------------------------------------------------------------- */
+export function rowToMatch(row: MatchRow): Match {
+  return {
+    id: row.id,
+    gameType: row.gameType,
+    playerAId: row.playerAId,
+    playerBId: orUndefined(row.playerBId),
+    wagerAmount: row.wagerAmount,
+    status: row.status as MatchStatus,
+    winnerId: orUndefined(row.winnerId),
+    createdAt: row.createdAt,
+    settledAt: row.settledAt || null,
+  };
+}
+
+export function matchToRow(m: Match): typeof schema.matches.$inferInsert {
+  return {
+    id: m.id,
+    gameType: m.gameType.slice(0, 32),
+    playerAId: m.playerAId.slice(0, 36),
+    playerBId: m.playerBId ? m.playerBId.slice(0, 36) : null,
+    wagerAmount: String(m.wagerAmount),
+    status: m.status,
+    winnerId: m.winnerId ? m.winnerId.slice(0, 36) : null,
+    createdAt: m.createdAt instanceof Date ? m.createdAt : new Date(m.createdAt),
+    settledAt: m.settledAt ? (m.settledAt instanceof Date ? m.settledAt : new Date(m.settledAt)) : null,
+  };
+}
+
+/* ------------------------------------------------------------------------- */
+/* tournaments (Section 7)                                                   */
+/* ------------------------------------------------------------------------- */
+export function rowToTournament(row: TournamentRow): Tournament {
+  return {
+    id: row.id,
+    organizerId: row.organizerId,
+    gameType: row.gameType,
+    entryFee: row.entryFee,
+    totalPrizePool: row.totalPrizePool,
+    status: row.status as TournamentEscrowStatus,
+    createdAt: row.createdAt,
+    completedAt: row.completedAt || null,
+  };
+}
+
+export function tournamentToRow(t: Tournament): typeof schema.tournaments.$inferInsert {
+  return {
+    id: t.id,
+    organizerId: t.organizerId.slice(0, 36),
+    gameType: t.gameType.slice(0, 32),
+    entryFee: String(t.entryFee || "0.00"),
+    totalPrizePool: String(t.totalPrizePool),
+    status: t.status,
+    createdAt: t.createdAt instanceof Date ? t.createdAt : new Date(t.createdAt),
+    completedAt: t.completedAt ? (t.completedAt instanceof Date ? t.completedAt : new Date(t.completedAt)) : null,
+  };
+}
+
+export function rowToTournamentPrize(row: TournamentPrizeRow): TournamentPrize {
+  return {
+    id: row.id,
+    tournamentId: row.tournamentId,
+    placement: row.placement,
+    amount: row.amount,
+  };
+}
+
+export function tournamentPrizeToRow(p: TournamentPrize): typeof schema.tournamentPrizes.$inferInsert {
+  return {
+    id: p.id,
+    tournamentId: p.tournamentId.slice(0, 36),
+    placement: p.placement,
+    amount: String(p.amount),
+  };
+}
+
+export function rowToTournamentEntry(row: TournamentEntryRow): TournamentEntry {
+  return {
+    id: row.id,
+    tournamentId: row.tournamentId,
+    userId: row.userId,
+    feePaid: row.feePaid,
+    finalPlacement: orUndefined(row.finalPlacement),
+    joinedAt: row.joinedAt,
+  };
+}
+
+export function tournamentEntryToRow(e: TournamentEntry): typeof schema.tournamentEntries.$inferInsert {
+  return {
+    id: e.id,
+    tournamentId: e.tournamentId.slice(0, 36),
+    userId: e.userId.slice(0, 36),
+    feePaid: String(e.feePaid || "0.00"),
+    finalPlacement: e.finalPlacement ?? null,
+    joinedAt: e.joinedAt instanceof Date ? e.joinedAt : new Date(e.joinedAt),
+  };
+}
+
+/* ------------------------------------------------------------------------- */
+/* game_type_limits (Section 8)                                              */
+/* ------------------------------------------------------------------------- */
+export function rowToGameTypeLimit(row: GameTypeLimitRow): GameTypeLimit {
+  return {
+    id: row.id,
+    gameType: row.gameType,
+    minWager: row.minWager,
+    maxWager: row.maxWager,
+    minTournamentPrizePool: row.minTournamentPrizePool,
+    maxTournamentPrizePool: row.maxTournamentPrizePool,
+    platformFeePercent: row.platformFeePercent,
+    updatedAt: row.updatedAt,
+  };
+}
+
+export function gameTypeLimitToRow(l: GameTypeLimit): typeof schema.gameTypeLimits.$inferInsert {
+  return {
+    id: l.id,
+    gameType: l.gameType.slice(0, 32),
+    minWager: String(l.minWager),
+    maxWager: String(l.maxWager),
+    minTournamentPrizePool: String(l.minTournamentPrizePool),
+    maxTournamentPrizePool: String(l.maxTournamentPrizePool),
+    platformFeePercent: String(l.platformFeePercent),
+    updatedAt: l.updatedAt instanceof Date ? l.updatedAt : new Date(l.updatedAt),
+  };
+}
+
+/* ------------------------------------------------------------------------- */
+/* ledger_entries                                                            */
+/* ------------------------------------------------------------------------- */
+export function rowToLedgerEntry(row: LedgerEntryRow): LedgerEntry {
+  return {
+    id: row.id,
+    userId: row.userId,
+    accountType: row.accountType as "available" | "escrow",
+    entryType: row.entryType,
+    amount: row.amount,
+    referenceType: row.referenceType,
+    referenceId: row.referenceId,
+    createdAt: row.createdAt,
+  };
+}
+
+export function ledgerEntryToRow(le: LedgerEntry): typeof schema.ledgerEntries.$inferInsert {
+  return {
+    id: le.id,
+    userId: le.userId.slice(0, 36),
+    accountType: le.accountType,
+    entryType: le.entryType.slice(0, 64),
+    amount: String(le.amount),
+    referenceType: le.referenceType.slice(0, 32),
+    referenceId: le.referenceId.slice(0, 64),
+    createdAt: le.createdAt instanceof Date ? le.createdAt : new Date(le.createdAt),
+  };
+}
+

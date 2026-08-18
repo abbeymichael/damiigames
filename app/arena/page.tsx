@@ -17,7 +17,7 @@ import {
   type Move,
   type Player,
 } from "@/lib/damii-rules";
-import { MoveLogEntry } from "@/lib/types";
+import type { MoveLogEntry } from "@/lib/types";
 import { soundService, type SoundSettings } from "@/lib/sound-service";
 import {
   RotateCcw,
@@ -57,6 +57,8 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
+  Handshake,
+  Scale,
 } from "lucide-react";
 
 type Mode = "local" | "online";
@@ -277,6 +279,8 @@ export default function ArenaPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [disputeNotesInput, setDisputeNotesInput] = useState("");
 
   // Audio & Event Effects Customization
   const [soundSettings, setSoundSettings] = useState<SoundSettings>(() => soundService.getSettings());
@@ -703,6 +707,38 @@ export default function ArenaPage() {
   async function forfeitOnline() {
     if (!room) return;
     await onlineAction("forfeit", { code: room.code });
+  }
+
+  async function offerDrawOnline() {
+    if (!room) return;
+    await onlineAction("offer_draw", { code: room.code });
+  }
+
+  async function acceptDrawOnline() {
+    if (!room) return;
+    await onlineAction("accept_draw", { code: room.code });
+  }
+
+  async function declineDrawOnline() {
+    if (!room) return;
+    await onlineAction("decline_draw", { code: room.code });
+  }
+
+  async function claimTimeoutOnline() {
+    if (!room) return;
+    await onlineAction("claim_timeout_win", { code: room.code });
+  }
+
+  async function cancelRoomOnline() {
+    if (!room) return;
+    await onlineAction("cancel_room", { code: room.code });
+  }
+
+  async function reportDisputeOnline(notes: string) {
+    if (!room) return;
+    await onlineAction("report_dispute", { code: room.code, notes });
+    setShowDisputeModal(false);
+    setDisputeNotesInput("");
   }
 
   async function requestRematch() {
@@ -1167,6 +1203,109 @@ export default function ArenaPage() {
           {/* Left / Central Game Stage Column */}
           <div className="w-full max-w-[580px] mx-auto space-y-2.5 sm:space-y-4">
 
+            {/* Unjoined Waiting Room Cancellation Banner */}
+            {mode === "online" && room?.status === "waiting" && room?.role === "white" && !room.guestToken && (
+              <div className="w-full p-3 bg-[#0c3b2e] border border-[#d6a735]/40 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 shadow-lg animate-in fade-in">
+                <div className="flex items-center gap-2 text-[#f5efdf]">
+                  <Clock size={16} className="text-[#d6a735] animate-pulse shrink-0" />
+                  <div>
+                    <strong className="text-[#d6a735]">Waiting for Opponent in Room {room.code}</strong>
+                    <p className="text-[11px] text-slate-300">Room automatically expires after 10 minutes if unjoined.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={cancelRoomOnline}
+                  disabled={onlineBusy}
+                  className="px-3 py-1.5 bg-red-950/80 hover:bg-red-900 text-red-200 border border-red-800 rounded-lg text-xs font-bold transition-all"
+                >
+                  Cancel Room (No Penalty)
+                </button>
+              </div>
+            )}
+
+            {/* Incoming / Active Draw Offer Banner */}
+            {mode === "online" && room?.status === "playing" && room?.drawOfferedBy && (
+              room.drawOfferedBy !== room.role ? (
+                <div className="w-full p-3 bg-[#0c3b2e] border-2 border-[#d6a735] rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 shadow-xl animate-in fade-in zoom-in-95">
+                  <div className="flex items-center gap-2 text-[#f5efdf]">
+                    <Handshake size={20} className="text-[#d6a735] animate-bounce shrink-0" />
+                    <div>
+                      <strong className="text-[#d6a735] text-sm">Draw Offered by Opponent!</strong>
+                      <p className="text-[11px] text-slate-300">
+                        Accepting records a draw, awarding equal participation marbles and fair rating.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={acceptDrawOnline}
+                      disabled={onlineBusy}
+                      className="px-3 py-1.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-lg text-xs shadow-md"
+                    >
+                      Accept Draw 🤝
+                    </button>
+                    <button
+                      type="button"
+                      onClick={declineDrawOnline}
+                      disabled={onlineBusy}
+                      className="px-3 py-1.5 bg-[#041c17] hover:bg-[#081c15] text-slate-300 border border-[#184d3c] font-bold rounded-lg text-xs"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="w-full p-2.5 bg-[#0c3b2e]/60 border border-[#d6a735]/40 rounded-xl text-xs flex items-center justify-between gap-2 text-[#f5efdf]">
+                  <div className="flex items-center gap-2">
+                    <Handshake size={16} className="text-[#d6a735]" />
+                    <span>You offered a draw. Waiting for opponent to respond...</span>
+                  </div>
+                </div>
+              )
+            )}
+
+            {/* Disconnection & 90s Grace Period Alert */}
+            {mode === "online" && room?.status === "playing" && room?.timerState && (room.timerState.remainingDisconnectSeconds !== undefined && room.timerState.remainingDisconnectSeconds !== null) && (
+              <div className="w-full p-3 bg-amber-950/80 border border-amber-600 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 shadow-lg animate-in fade-in">
+                <div className="flex items-center gap-2 text-amber-200">
+                  <AlertTriangle size={18} className="text-amber-400 animate-pulse shrink-0" />
+                  <div>
+                    <strong className="text-amber-300">Opponent Disconnected!</strong>
+                    <p className="text-[11px] text-amber-100/80">
+                      {room.timerState.remainingDisconnectSeconds > 0
+                        ? `90-second reconnection grace period active (${room.timerState.remainingDisconnectSeconds}s remaining). Turn timer paused.`
+                        : "Reconnection grace period expired (90s exceeded). Opponent forfeit eligible."}
+                    </p>
+                  </div>
+                </div>
+                {(room.timerState.remainingDisconnectSeconds <= 0 || room.timerState.timedOut) && (
+                  <button
+                    type="button"
+                    onClick={claimTimeoutOnline}
+                    disabled={onlineBusy}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-lg text-xs shadow-md animate-pulse"
+                  >
+                    Claim Timeout Win 🏆
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Under Administrative Review Banner */}
+            {mode === "online" && (room?.status === "under_review" || room?.disputeStatus === "under_review") && (
+              <div className="w-full p-3 bg-indigo-950/90 border border-indigo-500/60 rounded-xl text-xs flex items-center gap-2.5 text-indigo-200 shadow-xl">
+                <Scale size={20} className="text-indigo-400 shrink-0" />
+                <div>
+                  <strong className="text-indigo-300 text-sm">Match Under Administrative Review</strong>
+                  <p className="text-[11px] text-indigo-200/80 mt-0.5">
+                    An administrator is reviewing the move logs, timestamps, and connection records for this match.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Detached Players Panel - Isolated from Board Zoom & Layout Shifts */}
             <div className="w-full bg-[#06261f] border border-[#184d3c] rounded-2xl p-2.5 sm:p-3.5 shadow-xl">
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1 sm:gap-3 min-h-[52px] sm:min-h-[60px]">
@@ -1267,40 +1406,70 @@ export default function ArenaPage() {
             <div className="w-full bg-[#06261f] border border-[#184d3c] rounded-2xl p-2 sm:p-5 shadow-2xl space-y-2.5 sm:space-y-4">
 
             {/* Board or Game Complete View */}
-            {winner ? (
+            {(winner || (mode === "online" && (room?.status === "completed" || room?.status === "draw" || room?.status === "cancelled" || room?.status === "under_review"))) ? (
               <div className="relative overflow-hidden w-full bg-slate-950/90 border-2 border-amber-500/80 rounded-2xl p-5 sm:p-8 shadow-2xl space-y-5 text-center animate-in fade-in zoom-in-95 duration-300">
                 {/* Floating Confetti Particles Celebration */}
-                <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
-                  {Array.from({ length: 28 }).map((_, i) => (
-                    <span
-                      key={i}
-                      className="confetti-particle"
-                      style={{
-                        left: `${(i * 100) / 28}%`,
-                        backgroundColor: ["#f59e0b", "#3b82f6", "#10b981", "#ef4444", "#8b5cf6", "#ec4899"][i % 6],
-                        animationDelay: `${(i % 5) * 0.35}s`,
-                        animationDuration: `${2.2 + (i % 4) * 0.5}s`,
-                      }}
-                    />
-                  ))}
-                </div>
+                {winner && (
+                  <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
+                    {Array.from({ length: 28 }).map((_, i) => (
+                      <span
+                        key={i}
+                        className="confetti-particle"
+                        style={{
+                          left: `${(i * 100) / 28}%`,
+                          backgroundColor: ["#f59e0b", "#3b82f6", "#10b981", "#ef4444", "#8b5cf6", "#ec4899"][i % 6],
+                          animationDelay: `${(i % 5) * 0.35}s`,
+                          animationDuration: `${2.2 + (i % 4) * 0.5}s`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
 
                 <div className="relative z-20 inline-flex p-3 sm:p-4 bg-amber-500/10 border border-amber-500/30 rounded-full text-amber-400">
-                  <Trophy size={42} className="animate-bounce" />
+                  {winner ? (
+                    <Trophy size={42} className="animate-bounce" />
+                  ) : (room?.status === "draw" || (room?.status === "completed" && !winner)) ? (
+                    <Handshake size={42} className="animate-pulse text-[#d6a735]" />
+                  ) : room?.status === "under_review" ? (
+                    <Scale size={42} className="animate-pulse text-indigo-400" />
+                  ) : (
+                    <AlertTriangle size={42} className="text-amber-400" />
+                  )}
                 </div>
 
                 <div className="relative z-20">
                   <span className="px-3 py-1 bg-amber-500 text-slate-950 font-black text-xs uppercase tracking-widest rounded-full">
-                    MATCH CONCLUDED
+                    {winner
+                      ? "MATCH CONCLUDED"
+                      : (room?.status === "draw" || (room?.status === "completed" && !winner))
+                      ? "MATCH CONCLUDED — DRAW"
+                      : room?.status === "under_review"
+                      ? "UNDER ADMINISTRATIVE REVIEW"
+                      : "MATCH CANCELLED"}
                   </span>
                   <h2 className="text-2xl sm:text-3xl font-black text-slate-100 mt-2">
-                    {winner === "white" ? `${whiteDisplayName} Wins!` : `${blackDisplayName} Wins!`}
+                    {winner
+                      ? (winner === "white" ? `${whiteDisplayName} Wins!` : `${blackDisplayName} Wins!`)
+                      : (room?.status === "draw" || (room?.status === "completed" && !winner))
+                      ? "Match Drawn by Agreement"
+                      : room?.status === "under_review"
+                      ? "Match Under Review"
+                      : "Match Cancelled"}
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-400 mt-1">
-                    {room?.mode === "league" || room?.leagueId ? (
-                      <span className="text-amber-300 font-bold">🏆 Official League Tournament Match Victory!</span>
+                    {winner ? (
+                      room?.mode === "league" || room?.leagueId ? (
+                        <span className="text-amber-300 font-bold">🏆 Official League Tournament Match Victory!</span>
+                      ) : (
+                        <span>Victory achieved in {activeMoves.length} total moves!</span>
+                      )
+                    ) : (room?.status === "draw" || (room?.status === "completed" && !winner)) ? (
+                      <span className="text-[#d6a735]">🤝 Both players awarded equal participation marbles & fair draw rating calculation.</span>
+                    ) : room?.status === "under_review" ? (
+                      <span className="text-indigo-300">⚖️ Administrators are reviewing move logs and timestamps (&lt; 2hr SLA).</span>
                     ) : (
-                      <span>Victory achieved in {activeMoves.length} total moves!</span>
+                      <span>Room was cancelled without penalty. Funds returned.</span>
                     )}
                   </p>
                 </div>
@@ -1606,13 +1775,34 @@ export default function ArenaPage() {
                 )}
 
                 {mode === "online" && room?.status === "playing" && !winner && (
-                  <button
-                    type="button"
-                    onClick={() => void forfeitOnline()}
-                    className="w-full xs:w-auto px-2.5 py-1.5 bg-red-950 hover:bg-red-900 text-red-200 rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 border border-red-800 transition-colors"
-                  >
-                    <AlertTriangle size={13} /> Forfeit
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      disabled={onlineBusy || Boolean(room?.drawOfferedBy)}
+                      onClick={() => void offerDrawOnline()}
+                      className="w-full xs:w-auto px-2.5 py-1.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 border border-[#184d3c] transition-colors disabled:opacity-50"
+                      title="Offer a mutual draw to opponent"
+                    >
+                      <Handshake size={13} /> Draw
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowDisputeModal(true)}
+                      className="w-full xs:w-auto px-2.5 py-1.5 bg-[#0c3b2e] hover:bg-[#144435] text-indigo-300 rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 border border-[#184d3c] transition-colors"
+                      title="Report issue for administrative review"
+                    >
+                      <Scale size={13} /> Review
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => void forfeitOnline()}
+                      className="w-full xs:w-auto px-2.5 py-1.5 bg-red-950 hover:bg-red-900 text-red-200 rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 border border-red-800 transition-colors"
+                    >
+                      <AlertTriangle size={13} /> Forfeit
+                    </button>
+                  </>
                 )}
 
                 {winner && (
@@ -2849,6 +3039,65 @@ export default function ArenaPage() {
             >
               Done & Continue Playing
             </button>
+          </section>
+        </div>
+      )}
+
+      {/* Administrative Review / Dispute Report Modal */}
+      {showDisputeModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <section className="bg-[#06261f] border border-[#184d3c] rounded-2xl max-w-md w-full p-4 sm:p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-[#184d3c]">
+              <div className="flex items-center gap-2">
+                <Scale size={20} className="text-indigo-400" />
+                <h2 className="text-base font-bold text-[#f5efdf]">Request Administrative Review</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDisputeModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-[#0c3b2e] transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs text-[#cbd5e1]">
+              <p>
+                Placing this match under review preserves all <strong>move logs</strong>, <strong>timestamps</strong>, and <strong>connection telemetry</strong> for regulator oversight.
+              </p>
+              <div className="p-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[11px] text-indigo-200">
+                ⚡ <strong>SLA Guarantee:</strong> Disputes and match reviews are examined and resolved by administrators within 2 hours.
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-[#f5efdf]">Reason / Issue Description</label>
+              <textarea
+                value={disputeNotesInput}
+                onChange={(e) => setDisputeNotesInput(e.target.value)}
+                placeholder="Explain the rules discrepancy, timer stall, or disconnection issue..."
+                rows={3}
+                className="w-full bg-[#031c17] border border-[#184d3c] focus:border-[#d6a735] text-[#f5efdf] text-xs p-3 rounded-xl outline-none resize-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDisputeModal(false)}
+                className="px-4 py-2 bg-[#0c3b2e] hover:bg-[#144435] text-slate-300 rounded-xl text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={onlineBusy}
+                onClick={() => reportDisputeOnline(disputeNotesInput)}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50"
+              >
+                Submit for Review
+              </button>
+            </div>
           </section>
         </div>
       )}
