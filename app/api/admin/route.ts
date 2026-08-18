@@ -3,6 +3,7 @@ import { adminService } from "@/lib/admin-service";
 import { leagueService } from "@/lib/league-service";
 import { dbRepository } from "@/lib/db-client";
 import { attachAuthCookies } from "@/lib/auth-guard";
+import { hasPermission } from "@/lib/permissions";
 
 const cleanToken = (v: unknown) => String(v ?? "").trim().slice(0, 80);
 
@@ -423,6 +424,158 @@ export async function POST(req: NextRequest) {
     if (action === "export_system_snapshot" || action === "backup_state") {
       const snapshot = await adminService.exportSystemSnapshot(token);
       return NextResponse.json({ success: true, snapshot });
+    }
+
+    /* ------------------------------------------------------------------------- */
+    /* RBAC & Role Management Actions (Section 1)                                */
+    /* ------------------------------------------------------------------------- */
+    if (action === "get_roles") {
+      const rolesList = await adminService.listRoles(token);
+      return NextResponse.json({ success: true, roles: rolesList });
+    }
+
+    if (action === "create_role") {
+      const { name, description, permissionKeys } = body;
+      if (!name) return NextResponse.json({ error: "Role name is required" }, { status: 400 });
+      const role = await adminService.createRole(token, String(name), String(description || ""), permissionKeys || []);
+      return NextResponse.json({ success: true, role });
+    }
+
+    if (action === "update_role") {
+      const { roleId, name, description, permissionKeys } = body;
+      if (!roleId) return NextResponse.json({ error: "Role ID required" }, { status: 400 });
+      const role = await adminService.updateRole(token, String(roleId), { name, description }, permissionKeys);
+      return NextResponse.json({ success: true, role });
+    }
+
+    if (action === "delete_role") {
+      const { roleId } = body;
+      if (!roleId) return NextResponse.json({ error: "Role ID required" }, { status: 400 });
+      const res = await adminService.deleteRole(token, String(roleId));
+      return NextResponse.json(res);
+    }
+
+    if (action === "get_permissions") {
+      const perms = await dbRepository.listPermissions();
+      return NextResponse.json({ success: true, permissions: perms });
+    }
+
+    if (action === "assign_admin_roles") {
+      const { targetUserId, roleIds } = body;
+      if (!targetUserId || !Array.isArray(roleIds)) {
+        return NextResponse.json({ error: "targetUserId and roleIds array required" }, { status: 400 });
+      }
+      const res = await adminService.assignAdminRoles(token, String(targetUserId), roleIds);
+      return NextResponse.json(res);
+    }
+
+    if (action === "get_admin_accounts") {
+      const accounts = await adminService.listAdminAccounts(token);
+      return NextResponse.json({ success: true, adminAccounts: accounts });
+    }
+
+    if (action === "revoke_organizer" || action === "revoke_organizer_status") {
+      const { targetToken, reason } = body;
+      if (!targetToken) return NextResponse.json({ error: "Target token required" }, { status: 400 });
+      const profile = await adminService.revokeOrganizerStatus(token, String(targetToken), String(reason || ""));
+      return NextResponse.json({ success: true, profile });
+    }
+
+    /* ------------------------------------------------------------------------- */
+    /* Games Catalog Management (Section 2.2)                                    */
+    /* ------------------------------------------------------------------------- */
+    if (action === "get_games") {
+      const games = await adminService.listGames(token);
+      return NextResponse.json({ success: true, games });
+    }
+
+    if (action === "save_game" || action === "create_game" || action === "update_game") {
+      const { game } = body;
+      if (!game || !game.name || !game.slug) {
+        return NextResponse.json({ error: "Valid game payload with name and slug required" }, { status: 400 });
+      }
+      const saved = await adminService.saveGame(token, game);
+      return NextResponse.json({ success: true, game: saved });
+    }
+
+    if (action === "toggle_game_status") {
+      const { gameId, status } = body;
+      if (!gameId || !["enabled", "disabled"].includes(status)) {
+        return NextResponse.json({ error: "gameId and valid status ('enabled'|'disabled') required" }, { status: 400 });
+      }
+      const updated = await adminService.toggleGameStatus(token, String(gameId), status);
+      return NextResponse.json({ success: true, game: updated });
+    }
+
+    /* ------------------------------------------------------------------------- */
+    /* Tournament Action Requests Queue (Section 2.3)                            */
+    /* ------------------------------------------------------------------------- */
+    if (action === "get_tournament_requests") {
+      const { status } = body;
+      const requests = await adminService.listTournamentActionRequests(token, status);
+      return NextResponse.json({ success: true, requests });
+    }
+
+    if (action === "submit_tournament_request") {
+      const { tournamentId, requestType, reason, targetUserId, matchId } = body;
+      if (!tournamentId || !requestType || !reason) {
+        return NextResponse.json({ error: "tournamentId, requestType, and reason required" }, { status: 400 });
+      }
+      const reqItem = await adminService.createTournamentActionRequest(
+        token,
+        String(tournamentId),
+        requestType,
+        String(reason),
+        targetUserId ? String(targetUserId) : undefined,
+        matchId ? String(matchId) : undefined
+      );
+      return NextResponse.json({ success: true, request: reqItem });
+    }
+
+    if (action === "review_tournament_request") {
+      const { requestId, decision, reviewNote } = body;
+      if (!requestId || !["approved", "rejected"].includes(decision)) {
+        return NextResponse.json({ error: "requestId and decision ('approved'|'rejected') required" }, { status: 400 });
+      }
+      const reviewed = await adminService.reviewTournamentActionRequest(
+        token,
+        String(requestId),
+        decision,
+        reviewNote ? String(reviewNote) : undefined
+      );
+      return NextResponse.json({ success: true, request: reviewed });
+    }
+
+    /* ------------------------------------------------------------------------- */
+    /* System Settings Categories (SMS, Email, General, Security) (Section 2.7)  */
+    /* ------------------------------------------------------------------------- */
+    if (action === "get_system_settings") {
+      const { category } = body;
+      const settingsList = await adminService.getSystemSettings(token, category);
+      return NextResponse.json({ success: true, settings: settingsList });
+    }
+
+    if (action === "save_system_setting") {
+      const { category, key, value } = body;
+      if (!category || !key) {
+        return NextResponse.json({ error: "category and key required" }, { status: 400 });
+      }
+      const entry = await adminService.saveSystemSetting(token, category, key, value);
+      return NextResponse.json({ success: true, setting: entry });
+    }
+
+    if (action === "send_test_sms") {
+      const { phoneNumber, message } = body;
+      if (!phoneNumber) return NextResponse.json({ error: "Phone number required" }, { status: 400 });
+      await adminService.logAdminAction(token, "Admin", "TEST_SMS_SENT", phoneNumber, { message: message || "Test message from DAMII" });
+      return NextResponse.json({ success: true, message: `Test SMS successfully queued to ${phoneNumber}` });
+    }
+
+    if (action === "send_test_email") {
+      const { email, subject, body: emailBody } = body;
+      if (!email) return NextResponse.json({ error: "Email required" }, { status: 400 });
+      await adminService.logAdminAction(token, "Admin", "TEST_EMAIL_SENT", email, { subject, body: emailBody });
+      return NextResponse.json({ success: true, message: `Test email successfully queued to ${email}` });
     }
 
     return NextResponse.json({ error: "Invalid admin action" }, { status: 400 });

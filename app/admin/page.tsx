@@ -44,9 +44,11 @@ import {
   Play,
   ExternalLink,
   SlidersHorizontal,
+  Gamepad2,
+  Inbox,
 } from "lucide-react";
 import { getSessionToken, saveSessionToken, clearSessionToken } from "@/lib/client-auth";
-import type { AdminLog, Role } from "@/lib/types";
+import type { AdminLog, Role, AppRole, Permission, AdminAccount, GameCatalogItem, TournamentActionRequest } from "@/lib/types";
 import { ActionMenu } from "@/components/ActionMenu";
 import { AdminTable } from "@/components/AdminTable";
 import { ConfirmModal } from "@/components/admin/ConfirmModal";
@@ -59,6 +61,10 @@ import { AuditLogsTable } from "@/components/admin/AuditLogsTable";
 import { AdminRolesTable } from "@/components/admin/AdminRolesTable";
 import { GameLimitsTable } from "@/components/admin/GameLimitsTable";
 import { PlatformSettings } from "@/components/admin/PlatformSettings";
+import { RolesManagement } from "@/components/admin/RolesManagement";
+import { AdminStaffTable } from "@/components/admin/AdminStaffTable";
+import { GamesCatalogTable } from "@/components/admin/GamesCatalogTable";
+import { TournamentRequestsTable } from "@/components/admin/TournamentRequestsTable";
 import {
   ResponsiveContainer,
   LineChart,
@@ -140,14 +146,45 @@ type SystemMetrics = {
     pointsPerCediWithdrawal?: number;
   };
   logs: AdminLog[];
+  roles?: AppRole[];
+  permissions?: Permission[];
+  adminAccounts?: AdminAccount[];
+  games?: GameCatalogItem[];
+  tournamentRequests?: TournamentActionRequest[];
+  systemSettings?: any;
 };
 
-// Named permission bundles, matching lib/types.ts AdminPermission model.
+// Named permission bundles, matching lib/types.ts & lib/permissions.ts
 const ROLE_BUNDLES: Record<string, { label: string; isSuperAdmin: boolean; permissions: string[] }> = {
   super_admin: {
-    label: "Super admin",
+    label: "Super Admin",
     isSuperAdmin: true,
     permissions: [
+      "organizers.review",
+      "disputes.resolve",
+      "tournaments.requests",
+      "tournaments.manage",
+      "tournaments.cancel",
+      "games.manage",
+      "wallet.view",
+      "wallet.payout",
+      "ledger.adjust",
+      "users.view",
+      "users.suspend",
+      "limits.manage",
+      "admins.view",
+      "admins.manage",
+      "roles.view",
+      "roles.manage",
+      "system.settings.view",
+      "system.settings.edit",
+      "system.maintenance",
+      "system.sms_email",
+      "system.security",
+      "system.diagnostics_backup",
+      "system.seed",
+      "audit.view",
+      // Legacy compatibility keys
       "manage_users",
       "manage_organizers",
       "manage_tournaments",
@@ -159,20 +196,75 @@ const ROLE_BUNDLES: Record<string, { label: string; isSuperAdmin: boolean; permi
       "view_audit_log",
     ],
   },
-  treasurer: {
-    label: "Treasurer",
+  tournament_admin: {
+    label: "Tournament Admin",
     isSuperAdmin: false,
-    permissions: ["manage_wallet", "manage_payouts", "view_audit_log"],
+    permissions: [
+      "tournaments.manage",
+      "tournaments.cancel",
+      "tournaments.requests",
+      "games.manage",
+      "organizers.review",
+      "disputes.resolve",
+      "audit.view",
+      "manage_tournaments",
+      "manage_organizers",
+      "resolve_disputes",
+      "view_audit_log",
+    ],
+  },
+  treasurer: {
+    label: "Finance & Treasurer",
+    isSuperAdmin: false,
+    permissions: [
+      "wallet.view",
+      "wallet.payout",
+      "ledger.adjust",
+      "limits.manage",
+      "audit.view",
+      "manage_wallet",
+      "manage_payouts",
+      "view_audit_log",
+    ],
   },
   moderator: {
-    label: "Moderator",
+    label: "Arbiter / Moderator",
     isSuperAdmin: false,
-    permissions: ["manage_users", "resolve_disputes", "view_audit_log"],
+    permissions: [
+      "disputes.resolve",
+      "users.view",
+      "tournaments.requests",
+      "audit.view",
+      "manage_users",
+      "resolve_disputes",
+      "view_audit_log",
+    ],
   },
   organizer_reviewer: {
-    label: "Organizer reviewer",
+    label: "Organizer Reviewer",
     isSuperAdmin: false,
-    permissions: ["manage_organizers", "view_audit_log"],
+    permissions: [
+      "organizers.review",
+      "audit.view",
+      "manage_organizers",
+      "view_audit_log",
+    ],
+  },
+  system_admin: {
+    label: "System & Ops Admin",
+    isSuperAdmin: false,
+    permissions: [
+      "system.settings.view",
+      "system.settings.edit",
+      "system.maintenance",
+      "system.sms_email",
+      "system.security",
+      "system.diagnostics_backup",
+      "games.manage",
+      "audit.view",
+      "run_seeder",
+      "view_audit_log",
+    ],
   },
 };
 
@@ -198,33 +290,63 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: "Review",
     items: [
-      { key: "organizers", label: "Organizer requests", icon: UserCheck, permission: "manage_organizers", badgeKey: "pendingOrganizers" },
-      { key: "disputes", label: "Disputes & Games", icon: Gavel, permission: "resolve_disputes", badgeKey: "openDisputes" },
+      { key: "organizers", label: "Organizer Requests", icon: UserCheck, permission: "organizers.review", badgeKey: "pendingOrganizers" },
+      { key: "disputes", label: "Disputes & Matches", icon: Gavel, permission: "disputes.resolve", badgeKey: "openDisputes" },
+      { key: "tournament_requests", label: "Tournament Requests", icon: Inbox, permission: "tournaments.requests", badgeKey: "pendingTournamentRequests" },
     ],
   },
   {
     title: "Operations",
     items: [
-      { key: "tournaments", label: "Tournaments", icon: Trophy, permission: "manage_tournaments" },
-      { key: "wallet", label: "Wallet & payouts", icon: Wallet, permission: "manage_wallet" },
-      { key: "limits", label: "Game Limits & Escrow", icon: SlidersHorizontal, permission: "manage_wallet" },
-      { key: "users", label: "Users", icon: Users, permission: "manage_users" },
+      { key: "tournaments", label: "Tournaments", icon: Trophy, permission: "tournaments.manage" },
+      { key: "games", label: "Game Catalog", icon: Gamepad2, permission: "games.manage" },
+      { key: "wallet", label: "Financial Ledger", icon: Wallet, permission: "wallet.view" },
+      { key: "limits", label: "Game Limits & Escrow", icon: SlidersHorizontal, permission: "limits.manage" },
+      { key: "users", label: "Players & Users", icon: Users, permission: "users.view" },
+    ],
+  },
+  {
+    title: "Administration",
+    items: [
+      { key: "admins", label: "Admin Staff", icon: UserCheck, permission: "admins.view" },
+      { key: "roles", label: "Roles & Permissions", icon: ShieldCheck, permission: "roles.view" },
     ],
   },
   {
     title: "System",
     items: [
-      { key: "roles", label: "Admin roles", icon: ShieldCheck, permission: "manage_admins" },
-      { key: "audit", label: "Audit log", icon: ScrollText, permission: "view_audit_log" },
-      { key: "settings", label: "Exchange Rates", icon: Settings, permission: "manage_wallet" },
+      { key: "audit", label: "Audit Trail", icon: ScrollText, permission: "audit.view" },
+      { key: "settings", label: "System Settings", icon: Settings, permission: "system.settings.view" },
     ],
   },
 ];
 
-function hasAccess(role: { isSuperAdmin: boolean; permissions: string[] }, permission: string | null) {
+function hasAccess(
+  role: { isSuperAdmin: boolean; permissions: string[] },
+  permission: string | null
+) {
   if (permission === null) return true;
   if (role.isSuperAdmin) return true;
-  return role.permissions.includes(permission);
+  if (role.permissions.includes(permission)) return true;
+
+  // Legacy fallback mappings
+  const legacyMap: Record<string, string[]> = {
+    "organizers.review": ["manage_organizers"],
+    "disputes.resolve": ["resolve_disputes"],
+    "tournaments.requests": ["manage_tournaments"],
+    "tournaments.manage": ["manage_tournaments"],
+    "games.manage": ["manage_tournaments", "manage_admins"],
+    "wallet.view": ["manage_wallet", "manage_payouts"],
+    "limits.manage": ["manage_wallet"],
+    "users.view": ["manage_users"],
+    "admins.view": ["manage_admins"],
+    "roles.view": ["manage_admins"],
+    "audit.view": ["view_audit_log"],
+    "system.settings.view": ["manage_wallet", "run_seeder"],
+  };
+
+  const fallbacks = legacyMap[permission] || [];
+  return fallbacks.some((f) => role.permissions.includes(f));
 }
 
 export default function AdminPage() {
@@ -1332,6 +1454,8 @@ export default function AdminPage() {
                                   ? pendingOrganizersCount
                                   : item.badgeKey === "openDisputes"
                                   ? openDisputesCount
+                                  : item.badgeKey === "pendingTournamentRequests"
+                                  ? (metrics?.tournamentRequests?.filter((r) => r.status === "pending").length || 0)
                                   : 0;
 
                               return (
@@ -1435,6 +1559,8 @@ export default function AdminPage() {
                                 ? pendingOrganizersCount
                                 : item.badgeKey === "openDisputes"
                                 ? openDisputesCount
+                                : item.badgeKey === "pendingTournamentRequests"
+                                ? (metrics?.tournamentRequests?.filter((r) => r.status === "pending").length || 0)
                                 : 0;
 
                             return (
@@ -1623,9 +1749,19 @@ export default function AdminPage() {
               />
             )}
 
-            {/* TAB: DISPUTES & GAMES */}
-            {(activeTab === "disputes" || activeTab === "games") && (
+            {/* TAB: DISPUTES */}
+            {activeTab === "disputes" && (
               <DisputesTable rooms={filteredRooms} onInspectRoom={setInspectRoom} />
+            )}
+
+            {/* TAB: TOURNAMENT REQUESTS */}
+            {activeTab === "tournament_requests" && (
+              <TournamentRequestsTable
+                requests={metrics?.tournamentRequests || []}
+                token={token}
+                adminSecret={adminSecret}
+                onRefresh={refreshAdminData}
+              />
             )}
 
             {/* TAB: TOURNAMENTS */}
@@ -1644,6 +1780,16 @@ export default function AdminPage() {
                 onGenerateBracket={handleAdminGenerateBracket}
                 onCancelTournament={handleAdminCancelTournament}
                 onDeleteTournament={handleDeleteTournament}
+              />
+            )}
+
+            {/* TAB: GAMES CATALOG */}
+            {activeTab === "games" && (
+              <GamesCatalogTable
+                games={metrics?.games || []}
+                token={token}
+                adminSecret={adminSecret}
+                onRefresh={refreshAdminData}
               />
             )}
 
@@ -1783,19 +1929,25 @@ export default function AdminPage() {
               />
             )}
 
-            {/* TAB: ADMIN ROLES */}
+            {/* TAB: ADMIN STAFF */}
+            {activeTab === "admins" && (
+              <AdminStaffTable
+                adminAccounts={metrics?.adminAccounts || []}
+                roles={metrics?.roles || []}
+                token={token}
+                adminSecret={adminSecret}
+                onRefresh={refreshAdminData}
+              />
+            )}
+
+            {/* TAB: ROLES & RBAC PERMISSIONS */}
             {activeTab === "roles" && (
-              <AdminRolesTable
-                adminRolesList={adminRolesList}
-                busy={busy}
-                onUpdateAdminPermissions={handleUpdateAdminPermissions}
-                newAdminUsername={newAdminUsername}
-                setNewAdminUsername={setNewAdminUsername}
-                newAdminPasscode={newAdminPasscode}
-                setNewAdminPasscode={setNewAdminPasscode}
-                newAdminRole={newAdminRole}
-                setNewAdminRole={setNewAdminRole}
-                onCreateAdmin={handleCreateAdmin}
+              <RolesManagement
+                roles={metrics?.roles || []}
+                permissions={metrics?.permissions || []}
+                token={token}
+                adminSecret={adminSecret}
+                onRefresh={refreshAdminData}
               />
             )}
 
@@ -1814,9 +1966,9 @@ export default function AdminPage() {
               <PlatformSettings
                 token={token}
                 adminSecret={adminSecret}
-                initialSettings={adminSettings || undefined}
+                initialSettings={metrics?.settings || undefined}
                 onSettingsUpdated={(newSettings) => {
-                  setAdminSettings(newSettings);
+                  setMetrics((prev) => (prev ? { ...prev, settings: newSettings } : prev));
                   refreshAdminData();
                 }}
               />

@@ -243,6 +243,17 @@ export const adminService = {
       totalEscrowProcessed = rooms.reduce((sum, r) => sum + ((r.wagerAmount || 100) * 2), 0) || 2400;
     }
 
+    // Load RBAC, Games, Tournament Requests, Organizers, and System Settings
+    const [rolesList, permissionsList, adminAccountsList, gamesList, tournamentRequestsList, systemSettingsList, organizerApplications] = await Promise.all([
+      dbRepository.listRoles().catch(() => []),
+      dbRepository.listPermissions().catch(() => []),
+      dbRepository.listAdminAccounts().catch(() => []),
+      dbRepository.listGames().catch(() => []),
+      dbRepository.listTournamentActionRequests().catch(() => []),
+      dbRepository.getSystemSettings().catch(() => []),
+      dbRepository.listOrganizerApplications().catch(() => []),
+    ]);
+
     return {
       userCount: allUsers.length || leaderboard.length,
       activeRoomsCount: activeRooms.length,
@@ -261,7 +272,269 @@ export const adminService = {
       recentTransactions: transactions.slice(0, 100),
       leagues,
       logs,
+      roles: rolesList,
+      permissions: permissionsList,
+      adminAccounts: adminAccountsList,
+      games: gamesList,
+      tournamentRequests: tournamentRequestsList,
+      systemSettings: systemSettingsList,
+      organizerApplications,
     };
+  },
+
+  async revokeOrganizerStatus(adminToken: string, targetToken: string, reason: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+    const targetProfile = await dbRepository.getProfile(targetToken);
+    if (!targetProfile) throw new Error("Target profile not found");
+
+    targetProfile.role = "user";
+    await dbRepository.saveProfile(targetProfile);
+
+    const orgApp = await dbRepository.getOrganizerApplication(targetToken);
+    if (orgApp) {
+      await dbRepository.updateOrganizerApplication(orgApp.id, "rejected", reason || "Organizer status revoked by Admin");
+    }
+
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "REVOKE_ORGANIZER",
+      targetProfile.username,
+      { reason, targetToken }
+    );
+    return targetProfile;
+  },
+
+  async listRoles(adminToken: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    return dbRepository.listRoles();
+  },
+
+  async createRole(adminToken: string, name: string, description: string, permissionKeys: string[]) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+
+    if (!name || name.trim().length < 2) {
+      throw new Error("Role name must be at least 2 characters");
+    }
+
+    const id = `role-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now()}`;
+    const role = await dbRepository.createRole(
+      {
+        id,
+        name: name.trim(),
+        description: description?.trim() || "",
+        isSystemRole: false,
+        createdAt: new Date().toISOString(),
+      },
+      permissionKeys || []
+    );
+
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "CREATE_ROLE",
+      role.name,
+      { roleId: role.id, permissionKeys }
+    );
+    return role;
+  },
+
+  async updateRole(adminToken: string, roleId: string, updates: { name?: string; description?: string }, permissionKeys?: string[]) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+
+    const updated = await dbRepository.updateRole(roleId, updates, permissionKeys);
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "UPDATE_ROLE",
+      updated.name,
+      { roleId, updates, permissionKeys }
+    );
+    return updated;
+  },
+
+  async deleteRole(adminToken: string, roleId: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+    const role = await dbRepository.getRole(roleId);
+    if (!role) throw new Error("Role not found");
+
+    await dbRepository.deleteRole(roleId);
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "DELETE_ROLE",
+      role.name,
+      { roleId }
+    );
+    return { success: true, roleId };
+  },
+
+  async assignAdminRoles(adminToken: string, targetUserId: string, roleIds: string[]) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+    const targetUser = await dbRepository.getProfile(targetUserId);
+    if (!targetUser) throw new Error("Target user account not found");
+
+    await dbRepository.setAdminUserRoleAssignments(targetUserId, roleIds, adminProfile?.username || "Admin");
+
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "ASSIGN_ADMIN_ROLES",
+      targetUser.username,
+      { targetUserId, roleIds }
+    );
+    return { success: true, targetUserId, roleIds };
+  },
+
+  async listAdminAccounts(adminToken: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    return dbRepository.listAdminAccounts();
+  },
+
+  async listGames(adminToken: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    return dbRepository.listGames();
+  },
+
+  async saveGame(adminToken: string, game: any) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+
+    if (!game.name || !game.slug) {
+      throw new Error("Game name and slug are required");
+    }
+
+    const id = game.id || `game-${game.slug.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+    const saved = await dbRepository.saveGame({
+      id,
+      name: String(game.name),
+      slug: String(game.slug),
+      iconUrl: game.iconUrl || "/icon.png",
+      status: game.status === "disabled" ? "disabled" : "enabled",
+      description: String(game.description || ""),
+      createdAt: game.createdAt || new Date().toISOString(),
+    });
+
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "SAVE_GAME",
+      saved.name,
+      { gameId: saved.id, status: saved.status }
+    );
+    return saved;
+  },
+
+  async toggleGameStatus(adminToken: string, gameId: string, status: "enabled" | "disabled") {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+
+    const updated = await dbRepository.toggleGameStatus(gameId, status);
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "TOGGLE_GAME_STATUS",
+      updated.name,
+      { gameId, status }
+    );
+    return updated;
+  },
+
+  async listTournamentActionRequests(adminToken: string, status?: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    return dbRepository.listTournamentActionRequests(status);
+  },
+
+  async createTournamentActionRequest(
+    organizerToken: string,
+    tournamentId: string,
+    requestType: "cancel_tournament" | "disqualify_player" | "result_override",
+    reason: string,
+    targetUserId?: string,
+    matchId?: string
+  ) {
+    const organizer = await dbRepository.getProfile(organizerToken);
+    if (!organizer) throw new Error("Organizer profile not found");
+
+    const req = await dbRepository.createTournamentActionRequest({
+      id: `req-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      tournamentId,
+      organizerId: organizer.token,
+      organizerName: organizer.username,
+      requestType,
+      targetUserId,
+      matchId,
+      reason,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    });
+
+    return req;
+  },
+
+  async reviewTournamentActionRequest(
+    adminToken: string,
+    requestId: string,
+    status: "approved" | "rejected",
+    reviewNote?: string
+  ) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+
+    const reviewed = await dbRepository.reviewTournamentActionRequest(
+      requestId,
+      status,
+      adminProfile?.token || adminToken,
+      reviewNote
+    );
+
+    // If approved, execute the corresponding tournament operation
+    if (status === "approved") {
+      try {
+        const { leagueService } = await import("./league-service");
+        if (reviewed.requestType === "cancel_tournament") {
+          await leagueService.cancelTournament(adminToken, reviewed.tournamentId, reviewed.reason || "Approved request cancellation");
+        } else if (reviewed.requestType === "disqualify_player" && reviewed.targetUserId) {
+          await this.adminDisqualifyParticipant(adminToken, reviewed.tournamentId, reviewed.targetUserId, reviewed.reason);
+        }
+      } catch (err) {
+        console.error("[damii][admin] Error executing approved tournament action request:", err);
+      }
+    }
+
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "REVIEW_TOURNAMENT_REQUEST",
+      requestId,
+      { status, requestType: reviewed.requestType, reviewNote }
+    );
+    return reviewed;
+  },
+
+  async getSystemSettings(adminToken: string, category?: any) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    return dbRepository.getSystemSettings(category);
+  },
+
+  async saveSystemSetting(adminToken: string, category: any, key: string, value: any) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+
+    const entry = await dbRepository.saveSystemSetting(category, key, value, adminProfile?.token || adminToken);
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "SAVE_SYSTEM_SETTING",
+      `${category}.${key}`,
+      { category, key }
+    );
+    return entry;
   },
 
   async banUser(adminToken: string, targetToken: string, reason: string) {

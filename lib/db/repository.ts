@@ -1,7 +1,10 @@
 import type {
+  AdminAccount,
   AdminLog,
   AdminProfile,
   AdminSettings,
+  AppRole,
+  GameCatalogItem,
   GameTypeLimit,
   League,
   LeagueMatch,
@@ -15,12 +18,16 @@ import type {
   OrganizerProfile,
   OrganizerStatus,
   OtpRequest,
+  Permission,
   Profile,
   Region,
   Role,
   Room,
   Session,
+  SystemSettingEntry,
+  SystemSettingsCategory,
   Tournament,
+  TournamentActionRequest,
   TournamentEntry,
   TournamentPrize,
   User,
@@ -194,6 +201,32 @@ export interface DbRepository {
   writeLedger(entries: LedgerEntryInput[]): Promise<LedgerEntry[]>;
   getLedgerBalance(userId: string, accountType: LedgerAccountType): Promise<number>;
   getLedgerEntries(filter?: { userId?: string; referenceType?: string; referenceId?: string; limit?: number }): Promise<LedgerEntry[]>;
+
+  // --- Roles & RBAC (Section 1) ---
+  listRoles(): Promise<AppRole[]>;
+  getRole(id: string): Promise<AppRole | undefined>;
+  createRole(role: AppRole, permissionKeys: string[]): Promise<AppRole>;
+  updateRole(id: string, updates: Partial<AppRole>, permissionKeys?: string[]): Promise<AppRole>;
+  deleteRole(id: string): Promise<void>;
+  listPermissions(): Promise<Permission[]>;
+  getAdminUserRoleAssignments(userId: string): Promise<string[]>;
+  setAdminUserRoleAssignments(userId: string, roleIds: string[], assignedByAdminId: string): Promise<void>;
+  listAdminAccounts(): Promise<AdminAccount[]>;
+
+  // --- Games Catalog (Section 2.2) ---
+  listGames(): Promise<GameCatalogItem[]>;
+  getGame(slugOrId: string): Promise<GameCatalogItem | undefined>;
+  saveGame(game: GameCatalogItem): Promise<GameCatalogItem>;
+  toggleGameStatus(id: string, status: "enabled" | "disabled"): Promise<GameCatalogItem>;
+
+  // --- Tournament Action Requests Queue (Section 2.3) ---
+  listTournamentActionRequests(status?: string): Promise<TournamentActionRequest[]>;
+  createTournamentActionRequest(req: TournamentActionRequest): Promise<TournamentActionRequest>;
+  reviewTournamentActionRequest(id: string, status: "approved" | "rejected", adminId: string, reviewNote?: string): Promise<TournamentActionRequest>;
+
+  // --- System Settings (Section 2.7) ---
+  getSystemSettings(category?: SystemSettingsCategory): Promise<SystemSettingEntry[]>;
+  saveSystemSetting(category: SystemSettingsCategory, key: string, value: any, adminId?: string): Promise<SystemSettingEntry>;
 
   // --- Seeder ---
   seedDatabase(): Promise<Profile[]>;

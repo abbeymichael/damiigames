@@ -629,6 +629,102 @@ export const ledgerEntries = mysqlTable(
   ],
 );
 
+/* ------------------------------------------------------------------------- */
+/* roles — RBAC Role Definitions (Section 1)                                  */
+/* ------------------------------------------------------------------------- */
+export const roles = mysqlTable("roles", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  name: varchar("name", { length: 64 }).notNull().unique(), // "Super Admin", "Finance Admin", "Support Admin", "Reviewer"
+  description: varchar("description", { length: 255 }),
+  isSystemRole: tinyint("is_system_role").notNull().default(0), // true only for "Super Admin"
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/* ------------------------------------------------------------------------- */
+/* permissions — Granular system permissions (Section 1)                      */
+/* ------------------------------------------------------------------------- */
+export const permissions = mysqlTable("permissions", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  key: varchar("key", { length: 96 }).notNull().unique(), // "users.suspend", "ledger.adjust", "disputes.resolve"
+  category: varchar("category", { length: 32 }).notNull(), // "review" | "operations" | "admin" | "system"
+  description: varchar("description", { length: 255 }).notNull(),
+});
+
+/* ------------------------------------------------------------------------- */
+/* role_permissions — Junction table linking roles to permissions             */
+/* ------------------------------------------------------------------------- */
+export const rolePermissions = mysqlTable(
+  "role_permissions",
+  {
+    roleId: varchar("role_id", { length: 36 }).notNull(),
+    permissionId: varchar("permission_id", { length: 36 }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.roleId, table.permissionId] })],
+);
+
+/* ------------------------------------------------------------------------- */
+/* admin_user_roles — Multi-role assignment junction for admin accounts      */
+/* ------------------------------------------------------------------------- */
+export const adminUserRoles = mysqlTable(
+  "admin_user_roles",
+  {
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    roleId: varchar("role_id", { length: 36 }).notNull(),
+    assignedByAdminId: varchar("assigned_by_admin_id", { length: 36 }).notNull(),
+    assignedAt: timestamp("assigned_at").notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.roleId] })],
+);
+
+/* ------------------------------------------------------------------------- */
+/* games — Catalog of supported games (Section 2.2)                          */
+/* ------------------------------------------------------------------------- */
+export const games = mysqlTable("games", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  name: varchar("name", { length: 64 }).notNull(),
+  slug: varchar("slug", { length: 32 }).notNull().unique(), // "damii-10x10", "blitz-damii", etc.
+  iconUrl: varchar("icon_url", { length: 255 }),
+  status: mysqlEnum("status", ["enabled", "disabled"]).notNull().default("enabled"),
+  description: varchar("description", { length: 500 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/* ------------------------------------------------------------------------- */
+/* tournament_action_requests — Organizer requests approval queue (Section 2.3) */
+/* ------------------------------------------------------------------------- */
+export const tournamentActionRequests = mysqlTable("tournament_action_requests", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  tournamentId: varchar("tournament_id", { length: 36 }).notNull(),
+  organizerId: varchar("organizer_id", { length: 36 }).notNull(),
+  requestType: mysqlEnum("request_type", ["cancel_tournament", "disqualify_player", "result_override"]).notNull(),
+  targetUserId: varchar("target_user_id", { length: 36 }),
+  matchId: varchar("match_id", { length: 36 }),
+  reason: varchar("reason", { length: 500 }).notNull(),
+  status: mysqlEnum("status", ["pending", "approved", "rejected"]).notNull().default("pending"),
+  reviewedByAdminId: varchar("reviewed_by_admin_id", { length: 36 }),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNote: varchar("review_note", { length: 500 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/* ------------------------------------------------------------------------- */
+/* system_settings — Key-value platform settings by category (Section 2.7)   */
+/* ------------------------------------------------------------------------- */
+export const systemSettings = mysqlTable(
+  "system_settings",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    category: mysqlEnum("category", ["sms", "email", "general", "backup", "security"]).notNull(),
+    key: varchar("key", { length: 96 }).notNull(),
+    value: text("value").notNull(), // JSON string payload
+    updatedByAdminId: varchar("updated_by_admin_id", { length: 36 }),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("settings_category_key_idx").on(table.category, table.key),
+  ],
+);
+
 export type ProfileRow = typeof profiles.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
 export type OtpRequestRow = typeof otpRequests.$inferSelect;
@@ -651,3 +747,10 @@ export type TournamentPrizeRow = typeof tournamentPrizes.$inferSelect;
 export type TournamentEntryRow = typeof tournamentEntries.$inferSelect;
 export type GameTypeLimitRow = typeof gameTypeLimits.$inferSelect;
 export type LedgerEntryRow = typeof ledgerEntries.$inferSelect;
+export type RoleRow = typeof roles.$inferSelect;
+export type PermissionRow = typeof permissions.$inferSelect;
+export type RolePermissionRow = typeof rolePermissions.$inferSelect;
+export type AdminUserRoleRow = typeof adminUserRoles.$inferSelect;
+export type GameRow = typeof games.$inferSelect;
+export type TournamentActionRequestRow = typeof tournamentActionRequests.$inferSelect;
+export type SystemSettingRow = typeof systemSettings.$inferSelect;

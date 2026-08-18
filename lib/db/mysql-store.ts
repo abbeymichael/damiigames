@@ -1,8 +1,11 @@
 import { and, asc, desc, eq, gte, lt, ne, or, sql } from "drizzle-orm";
 import type {
+  AdminAccount,
   AdminLog,
   AdminProfile,
   AdminSettings,
+  AppRole,
+  GameCatalogItem,
   GameTypeLimit,
   League,
   LeagueMatch,
@@ -16,18 +19,23 @@ import type {
   OrganizerProfile,
   OrganizerStatus,
   OtpRequest,
+  Permission,
   Profile,
   Region,
   Role,
   Room,
   Session,
+  SystemSettingEntry,
+  SystemSettingsCategory,
   Tournament,
+  TournamentActionRequest,
   TournamentEntry,
   TournamentPrize,
   User,
   WagerEscrow,
   WalletTransaction,
 } from "../types";
+import { SYSTEM_PERMISSIONS, SEED_ROLES_CONFIG } from "../permissions";
 import { securityService } from "../security";
 import { calculateDynamicRatingUpdate, getProfileRank } from "../rank-service";
 import { getEnv } from "../env";
@@ -39,6 +47,7 @@ import {
   adminLogToRow,
   adminProfileToRow,
   escrowToRow,
+  gameToRow,
   gameTypeLimitToRow,
   leagueMatchToRow,
   leagueToRow,
@@ -47,13 +56,16 @@ import {
   organizerApplicationToRow,
   organizerProfileToRow,
   participantToRow,
+  permissionToRow,
   profileToRow,
   regionToRow,
+  roleToRow,
   roomToRow,
   rowToAdminLog,
   rowToAdminProfile,
   rowToAdminSettings,
   rowToEscrow,
+  rowToGame,
   rowToGameTypeLimit,
   rowToLeague,
   rowToLeagueMatch,
@@ -63,16 +75,22 @@ import {
   rowToOrganizerProfile,
   rowToOtpRequest,
   rowToParticipant,
+  rowToPermission,
   rowToProfile,
   rowToRegion,
+  rowToRole,
   rowToRoom,
   rowToSession,
+  rowToSystemSetting,
   rowToTournament,
+  rowToTournamentActionRequest,
   rowToTournamentEntry,
   rowToTournamentPrize,
   rowToTransaction,
   rowToUser,
   sessionToRow,
+  systemSettingToRow,
+  tournamentActionRequestToRow,
   tournamentEntryToRow,
   tournamentPrizeToRow,
   tournamentToRow,
@@ -1524,6 +1542,332 @@ export const mysqlStore: DbRepository = {
     return rows.map(rowToLedgerEntry);
   },
 
+  // --- Roles & RBAC (Section 1) ---
+  async listRoles(): Promise<AppRole[]> {
+    const roleRows = await getDb().select().from(schema.roles).orderBy(asc(schema.roles.name));
+    const allRolePerms = await getDb()
+      .select({
+        roleId: schema.rolePermissions.roleId,
+        permissionKey: schema.permissions.key,
+      })
+      .from(schema.rolePermissions)
+      .innerJoin(
+        schema.permissions,
+        eq(schema.permissions.id, schema.rolePermissions.permissionId)
+      );
+
+    const permMap = new Map<string, string[]>();
+    for (const rp of allRolePerms) {
+      const list = permMap.get(rp.roleId) || [];
+      list.push(rp.permissionKey);
+      permMap.set(rp.roleId, list);
+    }
+
+    const adminCounts = await getDb()
+      .select({
+        roleId: schema.adminUserRoles.roleId,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(schema.adminUserRoles)
+      .groupBy(schema.adminUserRoles.roleId);
+
+    const countMap = new Map<string, number>();
+    for (const c of adminCounts) {
+      countMap.set(c.roleId, Number(c.count));
+    }
+
+    return roleRows.map((r) => {
+      const role = rowToRole(r);
+      role.permissionKeys = permMap.get(r.id) || [];
+      role.adminCount = countMap.get(r.id) || 0;
+      return role;
+    });
+  },
+
+  async getRole(id: string): Promise<AppRole | undefined> {
+    const [row] = await getDb().select().from(schema.roles).where(eq(schema.roles.id, id)).limit(1);
+    if (!row) return undefined;
+
+    const perms = await getDb()
+      .select({ permissionKey: schema.permissions.key })
+      .from(schema.rolePermissions)
+      .innerJoin(
+        schema.permissions,
+        eq(schema.permissions.id, schema.rolePermissions.permissionId)
+      )
+      .where(eq(schema.rolePermissions.roleId, id));
+
+    const role = rowToRole(row);
+    role.permissionKeys = perms.map((p) => p.permissionKey);
+    return role;
+  },
+
+  async createRole(role: AppRole, permissionKeys: string[] = []): Promise<AppRole> {
+    const row = roleToRow(role);
+    await getDb().insert(schema.roles).values(row);
+
+    if (permissionKeys.length > 0) {
+      const perms = await getDb()
+        .select({ id: schema.permissions.id, key: schema.permissions.key })
+        .from(schema.permissions);
+
+      const keyToId = new Map(perms.map((p) => [p.key, p.id]));
+      const links = permissionKeys
+        .map((k) => keyToId.get(k))
+        .filter((id): id is string => Boolean(id))
+        .map((permId) => ({ roleId: role.id, permissionId: permId }));
+
+      if (links.length > 0) {
+        await getDb().insert(schema.rolePermissions).values(links);
+      }
+    }
+
+    role.permissionKeys = permissionKeys;
+    return role;
+  },
+
+  async updateRole(id: string, updates: Partial<AppRole>, permissionKeys?: string[]): Promise<AppRole> {
+    const existing = await mysqlStore.getRole(id);
+    if (!existing) throw new Error(`Role ${id} not found`);
+
+    if (existing.isSystemRole && updates.name && updates.name !== existing.name) {
+      throw new Error("Cannot rename the system Super Admin role");
+    }
+
+    const payload: Record<string, unknown> = {};
+    if (updates.name !== undefined) payload.name = updates.name.slice(0, 64);
+    if (updates.description !== undefined) payload.description = updates.description?.slice(0, 255);
+
+    if (Object.keys(payload).length > 0) {
+      await getDb().update(schema.roles).set(payload).where(eq(schema.roles.id, id));
+    }
+
+    if (permissionKeys !== undefined) {
+      await getDb().delete(schema.rolePermissions).where(eq(schema.rolePermissions.roleId, id));
+
+      if (permissionKeys.length > 0) {
+        const perms = await getDb().select().from(schema.permissions);
+        const keyToId = new Map(perms.map((p) => [p.key, p.id]));
+        const links = permissionKeys
+          .map((k) => keyToId.get(k))
+          .filter((pid): pid is string => Boolean(pid))
+          .map((permId) => ({ roleId: id, permissionId: permId }));
+
+        if (links.length > 0) {
+          await getDb().insert(schema.rolePermissions).values(links);
+        }
+      }
+    }
+
+    const updated = await mysqlStore.getRole(id);
+    return updated!;
+  },
+
+  async deleteRole(id: string): Promise<void> {
+    const role = await mysqlStore.getRole(id);
+    if (role?.isSystemRole) {
+      throw new Error("Cannot delete a system-level role");
+    }
+    await getDb().delete(schema.rolePermissions).where(eq(schema.rolePermissions.roleId, id));
+    await getDb().delete(schema.adminUserRoles).where(eq(schema.adminUserRoles.roleId, id));
+    await getDb().delete(schema.roles).where(eq(schema.roles.id, id));
+  },
+
+  async listPermissions(): Promise<Permission[]> {
+    const rows = await getDb().select().from(schema.permissions).orderBy(asc(schema.permissions.key));
+    return rows.map(rowToPermission);
+  },
+
+  async getAdminUserRoleAssignments(userId: string): Promise<string[]> {
+    const rows = await getDb()
+      .select({ roleId: schema.adminUserRoles.roleId })
+      .from(schema.adminUserRoles)
+      .where(eq(schema.adminUserRoles.userId, userId));
+    return rows.map((r) => r.roleId);
+  },
+
+  async setAdminUserRoleAssignments(userId: string, roleIds: string[], assignedByAdminId: string): Promise<void> {
+    await getDb().delete(schema.adminUserRoles).where(eq(schema.adminUserRoles.userId, userId));
+    if (roleIds.length > 0) {
+      const rows = roleIds.map((roleId) => ({
+        userId,
+        roleId,
+        assignedByAdminId,
+      }));
+      await getDb().insert(schema.adminUserRoles).values(rows);
+    }
+  },
+
+  async listAdminAccounts(): Promise<AdminAccount[]> {
+    const profiles = await mysqlStore.getAllProfiles();
+    const adminProfiles = profiles.filter((p) => ["admin", "super_admin", "treasurer", "facilitator"].includes(p.role));
+
+    const rolesList = await mysqlStore.listRoles();
+    const roleMap = new Map(rolesList.map((r) => [r.id, r]));
+
+    const userRoles = await getDb().select().from(schema.adminUserRoles);
+    const userRoleMap = new Map<string, string[]>();
+    for (const ur of userRoles) {
+      const list = userRoleMap.get(ur.userId) || [];
+      list.push(ur.roleId);
+      userRoleMap.set(ur.userId, list);
+    }
+
+    return adminProfiles.map((p) => {
+      const assignedRoleIds = userRoleMap.get(p.token) || [];
+      const assignedRoles = assignedRoleIds
+        .map((rid) => roleMap.get(rid))
+        .filter((r): r is AppRole => Boolean(r))
+        .map((r) => ({ id: r.id, name: r.name, isSystemRole: r.isSystemRole }));
+
+      // Detect known default seed passwords
+      const isDefaultCreds =
+        (p.username === "admin" || p.username === "superadmin" || p.username === "DAMII Facilitator") &&
+        (p.passcodeHash === undefined || p.passcodeHash === "admin123" || p.passcodeHash === "123456");
+
+      return {
+        userId: p.token,
+        username: p.username,
+        phoneNumber: p.phoneNumber,
+        role: p.role,
+        status: p.status === "banned" ? "banned" : "active",
+        roles: assignedRoles,
+        isSuperAdmin: p.role === "super_admin" || assignedRoles.some((r) => r.isSystemRole),
+        isDefaultCredentials: isDefaultCreds,
+        forcePasswordReset: isDefaultCreds,
+        createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : String(p.createdAt || new Date().toISOString()),
+      };
+    });
+  },
+
+  // --- Games Catalog (Section 2.2) ---
+  async listGames(): Promise<GameCatalogItem[]> {
+    const rows = await getDb().select().from(schema.games).orderBy(asc(schema.games.name));
+    return rows.map(rowToGame);
+  },
+
+  async getGame(slugOrId: string): Promise<GameCatalogItem | undefined> {
+    const [row] = await getDb()
+      .select()
+      .from(schema.games)
+      .where(or(eq(schema.games.id, slugOrId), eq(schema.games.slug, slugOrId)))
+      .limit(1);
+    return row ? rowToGame(row) : undefined;
+  },
+
+  async saveGame(game: GameCatalogItem): Promise<GameCatalogItem> {
+    const row = gameToRow(game);
+    await getDb()
+      .insert(schema.games)
+      .values(row)
+      .onDuplicateKeyUpdate({
+        set: {
+          name: row.name,
+          iconUrl: row.iconUrl,
+          status: row.status,
+          description: row.description,
+        },
+      });
+    return game;
+  },
+
+  async toggleGameStatus(id: string, status: "enabled" | "disabled"): Promise<GameCatalogItem> {
+    await getDb().update(schema.games).set({ status }).where(eq(schema.games.id, id));
+    const updated = await mysqlStore.getGame(id);
+    if (!updated) throw new Error(`Game ${id} not found`);
+    return updated;
+  },
+
+  // --- Tournament Action Requests Queue (Section 2.3) ---
+  async listTournamentActionRequests(status?: string): Promise<TournamentActionRequest[]> {
+    let query = getDb().select().from(schema.tournamentActionRequests);
+    if (status && status !== "all") {
+      query = query.where(eq(schema.tournamentActionRequests.status, status as any)) as any;
+    }
+    const rows = await query.orderBy(desc(schema.tournamentActionRequests.createdAt));
+    return rows.map(rowToTournamentActionRequest);
+  },
+
+  async createTournamentActionRequest(req: TournamentActionRequest): Promise<TournamentActionRequest> {
+    const row = tournamentActionRequestToRow(req);
+    await getDb().insert(schema.tournamentActionRequests).values(row);
+    return req;
+  },
+
+  async reviewTournamentActionRequest(
+    id: string,
+    status: "approved" | "rejected",
+    adminId: string,
+    reviewNote?: string
+  ): Promise<TournamentActionRequest> {
+    const now = new Date();
+    await getDb()
+      .update(schema.tournamentActionRequests)
+      .set({
+        status,
+        reviewedByAdminId: adminId,
+        reviewedAt: now,
+        reviewNote: reviewNote || null,
+      })
+      .where(eq(schema.tournamentActionRequests.id, id));
+
+    const [row] = await getDb()
+      .select()
+      .from(schema.tournamentActionRequests)
+      .where(eq(schema.tournamentActionRequests.id, id))
+      .limit(1);
+
+    if (!row) throw new Error(`TournamentActionRequest ${id} not found`);
+    return rowToTournamentActionRequest(row);
+  },
+
+  // --- System Settings (Section 2.7) ---
+  async getSystemSettings(category?: SystemSettingsCategory): Promise<SystemSettingEntry[]> {
+    let query = getDb().select().from(schema.systemSettings);
+    if (category) {
+      query = query.where(eq(schema.systemSettings.category, category)) as any;
+    }
+    const rows = await query.orderBy(asc(schema.systemSettings.key));
+    return rows.map(rowToSystemSetting);
+  },
+
+  async saveSystemSetting(
+    category: SystemSettingsCategory,
+    key: string,
+    value: any,
+    adminId?: string
+  ): Promise<SystemSettingEntry> {
+    const id = `setting-${category}-${key}`;
+    const row = systemSettingToRow({
+      id,
+      category,
+      key,
+      value,
+      updatedByAdminId: adminId,
+      updatedAt: new Date().toISOString(),
+    });
+
+    await getDb()
+      .insert(schema.systemSettings)
+      .values(row)
+      .onDuplicateKeyUpdate({
+        set: {
+          value: row.value,
+          updatedByAdminId: row.updatedByAdminId,
+          updatedAt: new Date(),
+        },
+      });
+
+    return {
+      id,
+      category,
+      key,
+      value,
+      updatedByAdminId: adminId,
+      updatedAt: new Date().toISOString(),
+    };
+  },
+
   // --- Seeder ---
   async seedDatabase() {
     // Idempotent upsert of the canonical seed dataset.
@@ -1542,6 +1886,146 @@ export const mysqlStore: DbRepository = {
       for (const p of seed.leagueParticipants) await mysqlStore.addLeagueParticipant(p);
       for (const r of seed.regions) await mysqlStore.saveRegion(r);
       for (const g of seed.gameTypeLimits) await mysqlStore.saveGameTypeLimit(g);
+
+      // Seed standard permissions
+      for (const p of SYSTEM_PERMISSIONS) {
+        const permRow = permissionToRow({
+          id: `perm-${p.key.replace(/\./g, "-")}`,
+          key: p.key,
+          category: p.category as any,
+          description: p.description,
+        });
+        await getDb()
+          .insert(schema.permissions)
+          .values(permRow)
+          .onDuplicateKeyUpdate({ set: { description: permRow.description, category: permRow.category } });
+      }
+
+      // Seed standard roles & their permissions
+      const allPermRows = await getDb().select().from(schema.permissions);
+      const permKeyToId = new Map(allPermRows.map((pr) => [pr.key, pr.id]));
+
+      for (const rc of SEED_ROLES_CONFIG) {
+        const roleId = `role-${rc.name.toLowerCase().replace(/\s+/g, "-")}`;
+        const roleRow = roleToRow({
+          id: roleId,
+          name: rc.name,
+          description: rc.description,
+          isSystemRole: rc.isSystemRole,
+          createdAt: new Date().toISOString(),
+        });
+
+        await getDb()
+          .insert(schema.roles)
+          .values(roleRow)
+          .onDuplicateKeyUpdate({ set: { description: roleRow.description } });
+
+        // Connect permissions
+        const links = rc.permissionKeys
+          .map((k) => permKeyToId.get(k))
+          .filter((pid): pid is string => Boolean(pid))
+          .map((permissionId) => ({ roleId, permissionId }));
+
+        if (links.length > 0) {
+          for (const link of links) {
+            await getDb()
+              .insert(schema.rolePermissions)
+              .values(link)
+              .onDuplicateKeyUpdate({ set: { roleId: link.roleId } });
+          }
+        }
+      }
+
+      // Assign Super Admin role to admin and superadmin user accounts
+      const superAdminRoleId = "role-super-admin";
+      for (const adminToken of ["token-admin", "token-superadmin"]) {
+        await getDb()
+          .insert(schema.adminUserRoles)
+          .values({
+            userId: adminToken,
+            roleId: superAdminRoleId,
+            assignedByAdminId: "system-bootstrap",
+          })
+          .onDuplicateKeyUpdate({ set: { assignedAt: new Date() } });
+      }
+
+      // Seed default games catalog
+      const defaultGames: GameCatalogItem[] = [
+        {
+          id: "game-damii-10x10",
+          name: "Ghanaian Damii (10x10)",
+          slug: "damii-10x10",
+          iconUrl: "/icon.png",
+          status: "enabled",
+          description: "Traditional Ghanaian 10x10 Draughts with flying kings and compulsory multi-capture chains.",
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: "game-damii-blitz",
+          name: "Damii Blitz (15s Turn)",
+          slug: "damii-blitz",
+          iconUrl: "/icon.png",
+          status: "enabled",
+          description: "High-speed Ghanaian Draughts with 15-second move clocks for adrenaline play.",
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: "game-damii-classic-8x8",
+          name: "Classic Checkers (8x8)",
+          slug: "checkers-8x8",
+          iconUrl: "/icon.png",
+          status: "disabled",
+          description: "Standard 8x8 international checkers rules (Coming soon in season 2).",
+          createdAt: new Date().toISOString(),
+        },
+      ];
+      for (const dg of defaultGames) {
+        await mysqlStore.saveGame(dg);
+      }
+
+      // Seed standard system settings defaults
+      await mysqlStore.saveSystemSetting("sms", "config", {
+        provider: "hubtel",
+        senderId: "DAMII",
+        enabled: true,
+        otpTemplate: "Your DAMII verification code is {code}. Valid for 5 minutes.",
+        matchInviteTemplate: "DAMII Alert: {opponent} has invited you to a {stake} GHS match. Join room: {roomCode}",
+        tournamentAlertTemplate: "DAMII Tournament: Round {round} has started in {tournament}. Your match is ready.",
+      }, "system");
+
+      await mysqlStore.saveSystemSetting("email", "config", {
+        provider: "smtp",
+        senderEmail: "support@damii.game",
+        senderName: "DAMII Arena Notifications",
+        enabled: true,
+        welcomeTemplate: "Welcome to DAMII Ghana! Master the 10x10 board, challenge players, and compete in tournaments.",
+        payoutAlertTemplate: "Your withdrawal of GHS {amount} via Mobile Money ({phone}) has been processed successfully.",
+      }, "system");
+
+      await mysqlStore.saveSystemSetting("general", "config", {
+        appName: "DAMII Ghanaian Draughts Platform",
+        supportPhone: "+233 24 000 0000",
+        supportEmail: "support@damii.game",
+        defaultCurrency: "GHS",
+        timezone: "GMT / UTC",
+        maintenanceMode: false,
+        maintenanceNotice: "System scheduled maintenance in progress. Match rooms will reopen shortly.",
+        featureFlags: {
+          wagerEscrowEnabled: true,
+          cashoutsEnabled: true,
+          spectatingEnabled: true,
+          referralsEnabled: true,
+        },
+      }, "system");
+
+      await mysqlStore.saveSystemSetting("security", "config", {
+        minPasscodeLength: 6,
+        adminSessionTimeoutHours: 8,
+        enforce2FAForAdmins: false,
+        maxLoginAttempts: 5,
+        ipAllowlist: [],
+        flagDefaultCredentials: true,
+      }, "system");
     });
 
     // Recompute participant counters after seeding (they mutate leagues).

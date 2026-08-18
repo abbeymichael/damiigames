@@ -3,6 +3,8 @@ import type {
   AdminPermission,
   AdminProfile,
   AdminSettings,
+  AppRole,
+  GameCatalogItem,
   GameTypeLimit,
   League,
   LeagueMatch,
@@ -16,12 +18,15 @@ import type {
   OrganizerProfile,
   OrganizerStatus,
   OtpRequest,
+  Permission,
   PrizeDistribution,
   Profile,
   Role,
   Room,
   Session,
+  SystemSettingEntry,
   Tournament,
+  TournamentActionRequest,
   TournamentEntry,
   TournamentEscrowStatus,
   TournamentPrize,
@@ -63,6 +68,11 @@ export type LeagueParticipantRow = Row<typeof schema.leagueParticipants>;
 export type LeagueMatchRow = Row<typeof schema.leagueMatches>;
 export type AdminLogRow = Row<typeof schema.adminLogs>;
 export type AdminSettingsRow = Row<typeof schema.adminSettings>;
+export type RoleRow = Row<typeof schema.roles>;
+export type PermissionRow = Row<typeof schema.permissions>;
+export type GameRow = Row<typeof schema.games>;
+export type TournamentActionRequestRow = Row<typeof schema.tournamentActionRequests>;
+export type SystemSettingRow = Row<typeof schema.systemSettings>;
 
 /* --------------------------- primitive helpers --------------------------- */
 
@@ -863,4 +873,141 @@ export function ledgerEntryToRow(le: LedgerEntry): typeof schema.ledgerEntries.$
     createdAt: le.createdAt instanceof Date ? le.createdAt : new Date(le.createdAt),
   };
 }
+
+/* ------------------------------------------------------------------------- */
+/* roles & permissions                                                       */
+/* ------------------------------------------------------------------------- */
+export function rowToRole(row: RoleRow): AppRole {
+  return {
+    id: row.id,
+    name: row.name,
+    description: orUndefined(row.description),
+    isSystemRole: toBool(row.isSystemRole),
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+  };
+}
+
+export function roleToRow(r: AppRole): typeof schema.roles.$inferInsert {
+  return {
+    id: r.id,
+    name: r.name.slice(0, 64),
+    description: clamp(r.description, 255),
+    isSystemRole: fromBool(r.isSystemRole),
+    createdAt: r.createdAt ? new Date(r.createdAt) : new Date(),
+  };
+}
+
+export function rowToPermission(row: PermissionRow): Permission {
+  return {
+    id: row.id,
+    key: row.key,
+    category: row.category as any,
+    description: row.description,
+  };
+}
+
+export function permissionToRow(p: Permission): typeof schema.permissions.$inferInsert {
+  return {
+    id: p.id,
+    key: p.key.slice(0, 96),
+    category: p.category.slice(0, 32),
+    description: p.description.slice(0, 255),
+  };
+}
+
+/* ------------------------------------------------------------------------- */
+/* games catalog                                                             */
+/* ------------------------------------------------------------------------- */
+export function rowToGame(row: GameRow): GameCatalogItem {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    iconUrl: orUndefined(row.iconUrl),
+    status: row.status as "enabled" | "disabled",
+    description: orUndefined(row.description),
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+  };
+}
+
+export function gameToRow(g: GameCatalogItem): typeof schema.games.$inferInsert {
+  return {
+    id: g.id,
+    name: g.name.slice(0, 64),
+    slug: g.slug.slice(0, 32),
+    iconUrl: clamp(g.iconUrl, 255),
+    status: g.status,
+    description: clamp(g.description, 500),
+    createdAt: g.createdAt ? new Date(g.createdAt) : new Date(),
+  };
+}
+
+/* ------------------------------------------------------------------------- */
+/* tournament_action_requests                                                */
+/* ------------------------------------------------------------------------- */
+export function rowToTournamentActionRequest(row: TournamentActionRequestRow): TournamentActionRequest {
+  return {
+    id: row.id,
+    tournamentId: row.tournamentId,
+    organizerId: row.organizerId,
+    requestType: row.requestType as any,
+    targetUserId: orUndefined(row.targetUserId),
+    matchId: orUndefined(row.matchId),
+    reason: row.reason,
+    status: row.status as any,
+    reviewedByAdminId: orUndefined(row.reviewedByAdminId),
+    reviewedAt: row.reviewedAt ? (row.reviewedAt instanceof Date ? row.reviewedAt.toISOString() : String(row.reviewedAt)) : undefined,
+    reviewNote: orUndefined(row.reviewNote),
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+  };
+}
+
+export function tournamentActionRequestToRow(r: TournamentActionRequest): typeof schema.tournamentActionRequests.$inferInsert {
+  return {
+    id: r.id,
+    tournamentId: r.tournamentId.slice(0, 36),
+    organizerId: r.organizerId.slice(0, 36),
+    requestType: r.requestType,
+    targetUserId: clamp(r.targetUserId, 36),
+    matchId: clamp(r.matchId, 36),
+    reason: r.reason.slice(0, 500),
+    status: r.status,
+    reviewedByAdminId: clamp(r.reviewedByAdminId, 36),
+    reviewedAt: r.reviewedAt ? new Date(r.reviewedAt) : null,
+    reviewNote: clamp(r.reviewNote, 500),
+    createdAt: r.createdAt ? new Date(r.createdAt) : new Date(),
+  };
+}
+
+/* ------------------------------------------------------------------------- */
+/* system_settings                                                           */
+/* ------------------------------------------------------------------------- */
+export function rowToSystemSetting(row: SystemSettingRow): SystemSettingEntry {
+  let val: any = row.value;
+  try {
+    val = JSON.parse(row.value);
+  } catch {
+    // raw string
+  }
+  return {
+    id: row.id,
+    category: row.category as any,
+    key: row.key,
+    value: val,
+    updatedByAdminId: orUndefined(row.updatedByAdminId),
+    updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
+  };
+}
+
+export function systemSettingToRow(s: SystemSettingEntry): typeof schema.systemSettings.$inferInsert {
+  return {
+    id: s.id,
+    category: s.category,
+    key: s.key.slice(0, 96),
+    value: typeof s.value === "string" ? s.value : JSON.stringify(s.value),
+    updatedByAdminId: clamp(s.updatedByAdminId, 36),
+    updatedAt: s.updatedAt ? new Date(s.updatedAt) : new Date(),
+  };
+}
+
 

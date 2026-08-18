@@ -456,3 +456,150 @@ export interface LedgerEntryInput {
   referenceType: string;
   referenceId: string;
 }
+
+/* ------------------------------------------------------------------------- */
+/* RBAC & Granular Permissions Types (Section 1)                             */
+/* ------------------------------------------------------------------------- */
+export type PermissionCategory = "review" | "operations" | "admin" | "system";
+
+export interface Permission {
+  id: string;
+  key: string;
+  category: PermissionCategory;
+  description: string;
+}
+
+export interface AppRole {
+  id: string;
+  name: string;
+  description?: string;
+  isSystemRole: boolean;
+  createdAt: string;
+  permissions?: Permission[];
+  permissionKeys?: string[];
+  adminCount?: number;
+}
+
+export interface AdminUserRoleAssignment {
+  userId: string;
+  roleId: string;
+  roleName?: string;
+  assignedByAdminId: string;
+  assignedAt: string;
+}
+
+export interface AdminAccount {
+  userId: string;
+  username: string;
+  phoneNumber?: string;
+  role: string;
+  status: "active" | "inactive" | "banned";
+  roles: { id: string; name: string; isSystemRole: boolean }[];
+  isSuperAdmin: boolean;
+  isDefaultCredentials?: boolean;
+  forcePasswordReset?: boolean;
+  createdAt: string;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Game Catalog Types (Section 2.2)                                          */
+/* ------------------------------------------------------------------------- */
+export type GameStatus = "enabled" | "disabled";
+
+export interface GameCatalogItem {
+  id: string;
+  name: string;
+  slug: string;
+  iconUrl?: string;
+  status: GameStatus;
+  description?: string;
+  createdAt: string;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Tournament Action Requests Queue (Section 2.3)                            */
+/* ------------------------------------------------------------------------- */
+export type TournamentActionRequestType = "cancel_tournament" | "disqualify_player" | "result_override";
+export type TournamentActionRequestStatus = "pending" | "approved" | "rejected";
+
+export interface TournamentActionRequest {
+  id: string;
+  tournamentId: string;
+  tournamentTitle?: string;
+  organizerId: string;
+  organizerName?: string;
+  requestType: TournamentActionRequestType;
+  targetUserId?: string;
+  targetUsername?: string;
+  matchId?: string;
+  reason: string;
+  status: TournamentActionRequestStatus;
+  reviewedByAdminId?: string;
+  reviewedByAdminName?: string;
+  reviewedAt?: string;
+  reviewNote?: string;
+  createdAt: string;
+}
+
+/* ------------------------------------------------------------------------- */
+/* System Settings Categories & Payloads (Section 2.7)                       */
+/* ------------------------------------------------------------------------- */
+export type SystemSettingsCategory = "sms" | "email" | "general" | "backup" | "security";
+
+export interface SystemSettingEntry {
+  id: string;
+  category: SystemSettingsCategory;
+  key: string;
+  value: any;
+  updatedByAdminId?: string;
+  updatedAt: string;
+}
+
+export interface SmsSettings {
+  provider: "hubtel" | "arkesel" | "twilio" | "mock";
+  senderId: string;
+  apiKeyMasked?: string;
+  otpTemplate: string;
+  matchInviteTemplate: string;
+  tournamentAlertTemplate: string;
+  enabled: boolean;
+}
+
+export interface EmailSettings {
+  provider: "smtp" | "sendgrid" | "postmark" | "ses";
+  senderEmail: string;
+  senderName: string;
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpUser?: string;
+  passwordMasked?: string;
+  welcomeTemplate: string;
+  payoutAlertTemplate: string;
+  enabled: boolean;
+}
+
+export interface GeneralConfigurations {
+  appName: string;
+  supportPhone: string;
+  supportEmail: string;
+  defaultCurrency: string;
+  timezone: string;
+  maintenanceMode: boolean;
+  maintenanceNotice: string;
+  featureFlags: {
+    wagerEscrowEnabled: boolean;
+    cashoutsEnabled: boolean;
+    spectatingEnabled: boolean;
+    referralsEnabled: boolean;
+  };
+}
+
+export interface SecurityPolicySettings {
+  minPasscodeLength: number;
+  adminSessionTimeoutHours: number;
+  enforce2FAForAdmins: boolean;
+  maxLoginAttempts: number;
+  ipAllowlist: string[];
+  flagDefaultCredentials: boolean;
+}
+
