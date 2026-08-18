@@ -3,7 +3,7 @@
 import React from "react";
 import { Trophy, RefreshCw, Plus, Eye, Play, Ban, X } from "lucide-react";
 import { ActionMenu } from "@/components/ActionMenu";
-import { TournamentLeague } from "@/lib/types";
+import type { TournamentLeague } from "@/lib/types";
 
 export interface TournamentsTableProps {
   leagues: TournamentLeague[];

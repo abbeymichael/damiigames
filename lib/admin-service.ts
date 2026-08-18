@@ -565,39 +565,141 @@ export const adminService = {
     winnerToken: string | null,
     reason: string
   ) {
+    return this.reviewDisputeMatch(adminToken, roomCode, winnerToken ? "correct" : "void", winnerToken, reason);
+  },
+
+  async reviewDisputeMatch(
+    adminToken: string,
+    roomCode: string,
+    decision: "confirm" | "correct" | "void",
+    winnerToken: string | null,
+    reviewNotes: string
+  ) {
     if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
 
     const room = await dbRepository.getRoom(roomCode);
     if (!room) throw new Error("Room not found");
 
     const adminProfile = await dbRepository.getProfile(adminToken);
+    const { walletService } = await import("./wallet-service");
+    const now = new Date().toISOString();
 
-    if (winnerToken === room.hostToken) {
-      room.winner = "white";
-    } else if (winnerToken === room.guestToken) {
-      room.winner = "black";
-    } else {
+    if (decision === "confirm") {
+      // Confirm original match result
+      room.disputeStatus = "resolved";
+      room.disputeNotes = `Confirmed by Admin (${adminProfile?.username || "Admin"}): ${reviewNotes}`;
+      room.status = "completed";
+      await dbRepository.saveRoom(room);
+
+      // Disburse escrow to original winner if exists and pending
+      if (room.escrowId) {
+        const origWinnerToken = room.winner === "white" ? room.hostToken : room.winner === "black" ? room.guestToken : null;
+        await walletService.disburseWagerEscrow(room.escrowId, origWinnerToken);
+      }
+    } else if (decision === "correct") {
+      // Correct match winner
+      if (winnerToken === room.hostToken) {
+        room.winner = "white";
+      } else if (winnerToken === room.guestToken) {
+        room.winner = "black";
+      } else {
+        room.winner = null;
+      }
+
+      room.disputeStatus = "resolved";
+      room.disputeNotes = `Corrected by Admin (${adminProfile?.username || "Admin"}): ${reviewNotes}`;
+      room.status = "completed";
+      await dbRepository.saveRoom(room);
+
+      // Settle escrow with new winner
+      if (room.escrowId) {
+        await walletService.disburseWagerEscrow(room.escrowId, winnerToken);
+      }
+    } else if (decision === "void") {
+      // Void the match, set cancelled, and refund 100%
       room.winner = null;
+      room.disputeStatus = "voided";
+      room.disputeNotes = `Voided by Admin (${adminProfile?.username || "Admin"}): ${reviewNotes}`;
+      room.status = "cancelled";
+      await dbRepository.saveRoom(room);
+
+      // Refund 100% escrow to both players
+      if (room.escrowId) {
+        await walletService.disburseWagerEscrow(room.escrowId, null);
+      }
     }
 
-    room.status = "completed";
-    await dbRepository.saveRoom(room);
-
-    // Settle escrow if wager room
-    if (room.escrowId) {
-      const { walletService } = await import("./wallet-service");
-      await walletService.disburseWagerEscrow(room.escrowId, winnerToken);
+    // Update any linked league match
+    if (room.leagueId && room.leagueMatchId) {
+      const match = await dbRepository.getLeagueMatch(room.leagueMatchId);
+      if (match) {
+        if (decision === "void") {
+          match.status = "cancelled";
+          match.winnerToken = null;
+          match.disputeStatus = "voided";
+        } else {
+          match.status = "completed";
+          match.winnerToken = room.winner === "white" ? room.hostToken : room.winner === "black" ? room.guestToken : null;
+          match.disputeStatus = "resolved";
+        }
+        match.disputeNotes = `Admin Review (${decision}): ${reviewNotes}`;
+        await dbRepository.saveLeagueMatch(match);
+      }
     }
 
     await this.logAdminAction(
       adminToken,
       adminProfile?.username || "Admin",
-      "RESOLVE_DISPUTE",
+      "REVIEW_MATCH_DISPUTE",
       roomCode,
-      { winnerToken, reason }
+      { decision, winnerToken, reviewNotes, roomCode, leagueId: room.leagueId }
     );
 
     return room;
+  },
+
+  async adminDisqualifyParticipant(
+    adminToken: string,
+    leagueId: string,
+    participantToken: string,
+    reason: string,
+    evidence?: string
+  ) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const { leagueService } = await import("./league-service");
+    const result = await leagueService.disqualifyParticipant(adminToken, leagueId, participantToken, reason, evidence, true);
+
+    const adminProfile = await dbRepository.getProfile(adminToken);
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "DISQUALIFY_PARTICIPANT",
+      participantToken,
+      { leagueId, reason, evidence }
+    );
+
+    return result;
+  },
+
+  async adminReviewTournamentCancellation(
+    adminToken: string,
+    leagueId: string,
+    reason: string
+  ) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const { leagueService } = await import("./league-service");
+    const result = await leagueService.cancelTournament(adminToken, leagueId, reason, true);
+
+    const adminProfile = await dbRepository.getProfile(adminToken);
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "ADMIN_CANCEL_TOURNAMENT",
+      leagueId,
+      { reason }
+    );
+
+    return result;
   },
 
   async deleteUser(adminToken: string, targetToken: string) {

@@ -315,12 +315,54 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, ...res });
     }
 
-    if (action === "dispute") {
+    if (action === "dispute" || action === "resolve_dispute") {
       const { roomCode, winnerToken, reason } = body;
       if (!roomCode) return NextResponse.json({ error: "Room code required" }, { status: 400 });
 
       const room = await adminService.resolveMatchDispute(token, roomCode, winnerToken || null, reason || "Admin resolution");
       return NextResponse.json({ success: true, room });
+    }
+
+    if (action === "review_dispute") {
+      const { roomCode, decision, winnerToken, reviewNotes } = body;
+      if (!roomCode || !decision || !["confirm", "correct", "void"].includes(decision)) {
+        return NextResponse.json({ error: "Room code and valid decision (confirm, correct, void) required" }, { status: 400 });
+      }
+
+      const room = await adminService.reviewDisputeMatch(
+        token,
+        String(roomCode),
+        decision,
+        winnerToken ? String(winnerToken) : null,
+        String(reviewNotes || "Administrative review completed")
+      );
+      return NextResponse.json({ success: true, room });
+    }
+
+    if (action === "disqualify_participant") {
+      const { leagueId, participantToken, reason, evidence } = body;
+      if (!leagueId || !participantToken || !reason) {
+        return NextResponse.json({ error: "League ID, participantToken, and reason required" }, { status: 400 });
+      }
+
+      const participant = await adminService.adminDisqualifyParticipant(
+        token,
+        String(leagueId),
+        String(participantToken),
+        String(reason),
+        evidence ? String(evidence) : undefined
+      );
+      return NextResponse.json({ success: true, participant });
+    }
+
+    if (action === "resize_tournament") {
+      const { leagueId, newMaxParticipants } = body;
+      if (!leagueId || !newMaxParticipants) {
+        return NextResponse.json({ error: "League ID and newMaxParticipants required" }, { status: 400 });
+      }
+
+      const league = await leagueService.resizeTournament(token, String(leagueId), Number(newMaxParticipants));
+      return NextResponse.json({ success: true, league });
     }
 
     if (action === "approve_organizer") {

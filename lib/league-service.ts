@@ -33,12 +33,37 @@ export const leagueService = {
       scheduleTime?: string;
       gameDays?: string;
       turnTimerSeconds?: number;
+      minParticipants?: number;
       prizeDistribution?: PrizeDistribution;
       rulesNotes?: string;
     }
   ): Promise<League> {
     const profile = await dbRepository.getProfile(facilitatorToken);
     if (!profile) throw new Error("Facilitator profile not found");
+
+    const validatedPrizePool = Math.max(0, prizePoolPoints);
+
+    // Facilitator fund verification: Facilitator must hold at least prizePoolPoints in balance
+    if (validatedPrizePool > 0) {
+      if ((profile.points || 0) < validatedPrizePool) {
+        throw new Error(
+          `Insufficient funds. Facilitator must hold at least ${validatedPrizePool.toLocaleString()} Points in account to seed this prize pool.`
+        );
+      }
+      // Escrow / lock facilitator's prize pool
+      await dbRepository.updateProfileBalance(facilitatorToken, -validatedPrizePool);
+      await dbRepository.createTransaction({
+        id: `tx-league-pool-lock-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+        userToken: facilitatorToken,
+        type: "league_fee",
+        currency: "points",
+        amount: -validatedPrizePool,
+        reference: `seed-${Date.now()}`,
+        status: "completed",
+        metaJson: JSON.stringify({ note: `Prize pool locked for tournament: ${title.trim()}` }),
+        createdAt: new Date().toISOString(),
+      });
+    }
 
     const now = new Date().toISOString();
     const id = `league-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -51,17 +76,20 @@ export const leagueService = {
       third: 10,
     };
 
+    const minPart = options?.minParticipants ?? (maxParticipants === 4 ? 2 : maxParticipants === 16 ? 8 : maxParticipants === 32 ? 16 : 4);
+
     const league: League = {
       id,
       title: title.trim(),
       description: description.trim(),
       entryFeeMarbles: 0,
       entryFeePoints: Math.max(0, entryFeePoints),
-      prizePoolPoints: Math.max(0, prizePoolPoints),
+      prizePoolPoints: validatedPrizePool,
       status: "registration",
       format: chosenFormat,
       facilitatorToken,
       facilitatorName: profile.username || facilitatorName,
+      minParticipants: minPart,
       maxParticipants: [4, 8, 16, 32].includes(maxParticipants) ? maxParticipants : 8,
       participantCount: 0,
       winnerToken: null,
@@ -379,31 +407,38 @@ export const leagueService = {
     return participant;
   },
 
-  async cancelTournament(organizerToken: string, leagueId: string, reason?: string) {
+  async cancelTournament(organizerToken: string, leagueId: string, reason?: string, adminApproved = false) {
     const league = await dbRepository.getLeague(leagueId);
     if (!league) throw new Error("League not found");
 
     const organizer = await dbRepository.getProfile(organizerToken);
-    if (
-      !organizer ||
-      (organizer.role !== "admin" &&
-        organizer.role !== "super_admin" &&
-        organizer.role !== "organizer" &&
-        organizer.role !== "facilitator" &&
-        league.facilitatorToken !== organizerToken)
-    ) {
+    if (!organizer) throw new Error("Organizer profile not found");
+
+    const isAdmin = organizer.role === "admin" || organizer.role === "super_admin";
+    const isFacilitator = league.facilitatorToken === organizerToken || organizer.role === "facilitator" || organizer.role === "organizer";
+
+    if (!isAdmin && !isFacilitator) {
       throw new Error("Unauthorized. Only the tournament organizer or admin can cancel this tournament.");
+    }
+
+    // Administrative review requirement: If tournament is already active, require admin approval
+    if (league.status === "active" && !isAdmin && !adminApproved) {
+      throw new Error("Administrative review required: Active tournament cancellations require platform administrator approval.");
     }
 
     league.status = "cancelled";
     if (reason) league.rulesNotes = `${league.rulesNotes || ""}\n[CANCELLED]: ${reason}`.trim();
     await dbRepository.saveLeague(league);
 
-    // Refund all participants if entry fee was paid
+    const participants = await dbRepository.getLeagueParticipants(leagueId);
+    const approvedParticipants = participants.filter((p) => p.status === "approved" || !p.status);
+    const minRequired = league.minParticipants ?? 4;
+    const metMinQuorum = approvedParticipants.length >= minRequired;
+
+    // 1. Refund all participants 100% of their entry fee
     if (league.entryFeePoints > 0) {
-      const participants = await dbRepository.getLeagueParticipants(leagueId);
       for (const p of participants) {
-        if (p.status !== "rejected") {
+        if (p.status !== "rejected" && p.status !== "disqualified") {
           await dbRepository.updateProfileBalance(p.userToken, league.entryFeePoints);
           await dbRepository.createTransaction({
             id: `tx-league-cancel-refund-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
@@ -413,14 +448,190 @@ export const leagueService = {
             amount: league.entryFeePoints,
             reference: league.id,
             status: "completed",
-            metaJson: JSON.stringify({ note: `Refund due to tournament cancellation: ${reason || "Cancelled by Organizer"}` }),
+            metaJson: JSON.stringify({ note: `100% Entry fee refund due to tournament cancellation: ${reason || "Cancelled by Organizer"}` }),
             createdAt: new Date().toISOString(),
           });
         }
       }
     }
 
+    // 2. Facilitator cancellation handling & 5% cancellation fee:
+    // If the tournament met the minimum viable quorum and was cancelled by facilitator, charge 5% cancellation fee.
+    // If it failed to meet the minimum viable quorum, refund 100% of prize pool with 0% cancellation fee.
+    if (league.prizePoolPoints > 0) {
+      const now = new Date().toISOString();
+      if (metMinQuorum && !isAdmin) {
+        const cancellationFeePercent = 5;
+        const cancellationFee = Math.round((league.prizePoolPoints * cancellationFeePercent) / 100);
+        const facilitatorRefund = league.prizePoolPoints - cancellationFee;
+
+        // Refund 95% of prize pool to facilitator
+        if (facilitatorRefund > 0) {
+          await dbRepository.updateProfileBalance(league.facilitatorToken, facilitatorRefund);
+          await dbRepository.createTransaction({
+            id: `tx-league-fac-refund-${Date.now()}`,
+            userToken: league.facilitatorToken,
+            type: "league_fee",
+            currency: "points",
+            amount: facilitatorRefund,
+            reference: league.id,
+            status: "completed",
+            metaJson: JSON.stringify({ note: `Prize pool refund (net of 5% cancellation fee): ${reason || "Facilitator cancellation"}` }),
+            createdAt: now,
+          });
+        }
+
+        // Charge 5% cancellation fee to system platform fee
+        if (cancellationFee > 0) {
+          await dbRepository.createTransaction({
+            id: `tx-league-cancel-fee-${Date.now()}`,
+            userToken: "system-house",
+            type: "platform_fee",
+            currency: "points",
+            amount: cancellationFee,
+            reference: league.id,
+            status: "completed",
+            metaJson: JSON.stringify({ note: "5% Facilitator tournament cancellation fee", cancellationFeePercent, totalPrize: league.prizePoolPoints }),
+            createdAt: now,
+          });
+        }
+      } else {
+        // Full 100% refund of prize pool (below minimum viable quorum or admin cancelled)
+        await dbRepository.updateProfileBalance(league.facilitatorToken, league.prizePoolPoints);
+        await dbRepository.createTransaction({
+          id: `tx-league-fac-full-refund-${Date.now()}`,
+          userToken: league.facilitatorToken,
+          type: "league_fee",
+          currency: "points",
+          amount: league.prizePoolPoints,
+          reference: league.id,
+          status: "completed",
+          metaJson: JSON.stringify({ note: `100% Prize pool refund (waived cancellation fee - quorum not met): ${reason || "Cancelled"}` }),
+          createdAt: now,
+        });
+      }
+    }
+
     return league;
+  },
+
+  async resizeTournament(facilitatorOrAdminToken: string, leagueId: string, newMaxParticipants: number) {
+    const league = await dbRepository.getLeague(leagueId);
+    if (!league) throw new Error("League not found");
+
+    const caller = await dbRepository.getProfile(facilitatorOrAdminToken);
+    if (!caller) throw new Error("Caller profile not found");
+
+    const isAdmin = caller.role === "admin" || caller.role === "super_admin";
+    if (!isAdmin && league.facilitatorToken !== facilitatorOrAdminToken && caller.role !== "facilitator" && caller.role !== "organizer") {
+      throw new Error("Unauthorized to resize tournament.");
+    }
+
+    const participants = await dbRepository.getLeagueParticipants(leagueId);
+    const approved = participants.filter((p) => p.status === "approved" || !p.status);
+    const minRequired = league.minParticipants ?? 4;
+
+    if (approved.length < minRequired) {
+      throw new Error(
+        `Cannot resize tournament: Minimum viable player quorum not met (Found ${approved.length}, minimum required is ${minRequired}).`
+      );
+    }
+
+    if (newMaxParticipants < approved.length) {
+      throw new Error(`Cannot resize below current number of approved players (${approved.length}).`);
+    }
+
+    league.maxParticipants = newMaxParticipants;
+    await dbRepository.saveLeague(league);
+
+    // If new max is reached, auto-generate bracket
+    if (approved.length >= newMaxParticipants) {
+      await this.generateTournamentBracket(leagueId);
+    }
+
+    return league;
+  },
+
+  async autoCheckTournamentFilling(leagueId: string) {
+    const league = await dbRepository.getLeague(leagueId);
+    if (!league || league.status !== "registration") return league;
+
+    const participants = await dbRepository.getLeagueParticipants(leagueId);
+    const approved = participants.filter((p) => p.status === "approved" || !p.status);
+    const minRequired = league.minParticipants ?? 4;
+
+    if (approved.length >= minRequired) {
+      // Allow starting with resized bracket
+      if (approved.length < league.maxParticipants) {
+        league.maxParticipants = approved.length;
+        await dbRepository.saveLeague(league);
+      }
+      return this.generateTournamentBracket(leagueId);
+    } else {
+      // Auto-cancel with 100% refunds and waived cancellation fee
+      return this.cancelTournament(
+        league.facilitatorToken,
+        leagueId,
+        `Auto-cancelled at registration deadline: minimum viable player quorum (${minRequired}) not reached.`
+      );
+    }
+  },
+
+  async disqualifyParticipant(
+    adminOrFacilitatorToken: string,
+    leagueId: string,
+    participantToken: string,
+    reason: string,
+    evidence?: string,
+    promoteNextEligible = true
+  ) {
+    const league = await dbRepository.getLeague(leagueId);
+    if (!league) throw new Error("League not found");
+
+    const caller = await dbRepository.getProfile(adminOrFacilitatorToken);
+    if (!caller) throw new Error("Caller profile not found");
+
+    const isAdmin = caller.role === "admin" || caller.role === "super_admin";
+    const isFacilitator = league.facilitatorToken === adminOrFacilitatorToken || caller.role === "facilitator" || caller.role === "organizer";
+
+    if (!isAdmin && !isFacilitator) {
+      throw new Error("Unauthorized to disqualify participants.");
+    }
+
+    // Administrative review requirement: If tournament is active, require admin review
+    if (league.status === "active" && !isAdmin) {
+      throw new Error("Administrative review required: Active tournament disqualifications require administrator authorization.");
+    }
+
+    const participants = await dbRepository.getLeagueParticipants(leagueId);
+    const target = participants.find((p) => p.userToken === participantToken);
+    if (!target) throw new Error("Participant not found in tournament");
+
+    target.status = "disqualified";
+    target.disqualificationReason = reason;
+    target.disqualificationEvidence = evidence || "Evidence recorded in audit log";
+    target.disqualifiedAt = new Date().toISOString();
+    await dbRepository.addLeagueParticipant(target);
+
+    // If matches are active in single elimination, forfeit target's current match to promote opponent
+    const matches = await dbRepository.getLeagueMatches(leagueId);
+    for (const m of matches) {
+      if (m.status === "pending" || m.status === "in_progress") {
+        if (m.player1Token === participantToken) {
+          m.winnerToken = promoteNextEligible ? m.player2Token : null;
+          m.status = "completed";
+          m.disputeNotes = `Player 1 disqualified: ${reason}`;
+          await dbRepository.saveLeagueMatch(m);
+        } else if (m.player2Token === participantToken) {
+          m.winnerToken = promoteNextEligible ? m.player1Token : null;
+          m.status = "completed";
+          m.disputeNotes = `Player 2 disqualified: ${reason}`;
+          await dbRepository.saveLeagueMatch(m);
+        }
+      }
+    }
+
+    return target;
   },
 
   async generateTournamentBracket(leagueId: string) {
@@ -430,6 +641,31 @@ export const leagueService = {
     const allParticipants = await dbRepository.getLeagueParticipants(leagueId);
     const participants = allParticipants.filter((p) => p.status === "approved" || !p.status);
     if (participants.length < 2) throw new Error("Need at least 2 approved participants to generate bracket");
+
+    // Deduct 10% platform fee upon tournament commencement if not already charged
+    if (!league.platformFeeCharged && league.prizePoolPoints > 0) {
+      const settings = await dbRepository.getAdminSettings();
+      const tournamentFeePercent = settings.tournamentFeePercent ?? 10;
+      const platformFee = Math.round((league.prizePoolPoints * tournamentFeePercent) / 100);
+
+      if (platformFee > 0) {
+        await dbRepository.createTransaction({
+          id: `tx-league-commence-fee-${Date.now()}`,
+          userToken: "system-house",
+          type: "platform_fee",
+          currency: "points",
+          amount: platformFee,
+          reference: league.id,
+          status: "completed",
+          metaJson: JSON.stringify({ note: "10% Platform fee charged upon tournament commencement", totalPrize: league.prizePoolPoints, tournamentFeePercent }),
+          createdAt: new Date().toISOString(),
+        });
+      }
+      league.platformFeeCharged = true;
+    }
+
+    league.status = "active";
+    await dbRepository.saveLeague(league);
 
     // Sort by seed if assigned, otherwise shuffle
     const sortedParticipants = [...participants].sort((a, b) => {
@@ -990,7 +1226,8 @@ export const leagueService = {
     league: League,
     winnerToken: string | null,
     runnerUpToken?: string | null,
-    thirdPlaceToken?: string | null
+    thirdPlaceToken?: string | null,
+    unawardedReason?: string
   ) {
     const winnerProfile = winnerToken ? await dbRepository.getProfile(winnerToken) : null;
     const runnerUpProfile = runnerUpToken ? await dbRepository.getProfile(runnerUpToken) : null;
@@ -998,11 +1235,15 @@ export const leagueService = {
 
     league.status = "completed";
     league.winnerToken = winnerToken;
-    league.winnerName = winnerProfile ? winnerProfile.username : "Champion";
+    league.winnerName = winnerProfile ? winnerProfile.username : (winnerToken ? "Champion" : "Unawarded");
     league.runnerUpToken = runnerUpToken || null;
-    league.runnerUpName = runnerUpProfile ? runnerUpProfile.username : "Runner-Up";
+    league.runnerUpName = runnerUpProfile ? runnerUpProfile.username : (runnerUpToken ? "Runner-Up" : "Unawarded");
     league.thirdPlaceToken = thirdPlaceToken || null;
-    league.thirdPlaceName = thirdPlaceProfile ? thirdPlaceProfile.username : "3rd Place";
+    league.thirdPlaceName = thirdPlaceProfile ? thirdPlaceProfile.username : (thirdPlaceToken ? "3rd Place" : "Unawarded");
+
+    if (unawardedReason) {
+      league.unawardedReason = unawardedReason;
+    }
 
     await dbRepository.saveLeague(league);
 
@@ -1015,7 +1256,7 @@ export const leagueService = {
       const platformFee = Math.round((totalPrize * tournamentFeePercent) / 100);
       const netPrizePool = totalPrize - platformFee;
 
-      if (platformFee > 0) {
+      if (!league.platformFeeCharged && platformFee > 0) {
         await dbRepository.createTransaction({
           id: `tx-league-fee-${Date.now()}`,
           userToken: "system-house",
@@ -1031,9 +1272,9 @@ export const leagueService = {
 
       const dist = league.prizeDistribution || { first: 60, second: 30, third: 10 };
 
-      // 1st Place Payout
+      // 1st Place Payout or Unawarded Pool Return
+      const firstAmount = Math.round((netPrizePool * dist.first) / 100);
       if (winnerToken) {
-        const firstAmount = Math.round((netPrizePool * dist.first) / 100);
         await dbRepository.updateProfileBalance(winnerToken, firstAmount);
         await dbRepository.createTransaction({
           id: `tx-league-prize-1st-${Date.now()}`,
@@ -1046,11 +1287,24 @@ export const leagueService = {
           metaJson: JSON.stringify({ rank: "1st Place (Champion)", leagueTitle: league.title, platformFee, netPrizePool }),
           createdAt: new Date().toISOString(),
         });
+      } else {
+        // Unawarded 1st place returned to platform reward pool
+        await dbRepository.createTransaction({
+          id: `tx-league-unawarded-1st-${Date.now()}`,
+          userToken: "system-house",
+          type: "platform_fee",
+          currency: "points",
+          amount: firstAmount,
+          reference: league.id,
+          status: "completed",
+          metaJson: JSON.stringify({ note: "Unawarded 1st place prize returned to platform reward pool", reason: unawardedReason || "No eligible champion" }),
+          createdAt: new Date().toISOString(),
+        });
       }
 
-      // 2nd Place Payout
+      // 2nd Place Payout or Unawarded Pool Return
+      const secondAmount = Math.round((netPrizePool * dist.second) / 100);
       if (runnerUpToken) {
-        const secondAmount = Math.round((netPrizePool * dist.second) / 100);
         await dbRepository.updateProfileBalance(runnerUpToken, secondAmount);
         await dbRepository.createTransaction({
           id: `tx-league-prize-2nd-${Date.now()}`,
@@ -1063,11 +1317,24 @@ export const leagueService = {
           metaJson: JSON.stringify({ rank: "2nd Place (Runner-Up)", leagueTitle: league.title, platformFee, netPrizePool }),
           createdAt: new Date().toISOString(),
         });
+      } else {
+        // Unawarded 2nd place returned to platform reward pool
+        await dbRepository.createTransaction({
+          id: `tx-league-unawarded-2nd-${Date.now()}`,
+          userToken: "system-house",
+          type: "platform_fee",
+          currency: "points",
+          amount: secondAmount,
+          reference: league.id,
+          status: "completed",
+          metaJson: JSON.stringify({ note: "Unawarded 2nd place prize returned to platform reward pool", reason: unawardedReason || "No eligible runner-up" }),
+          createdAt: new Date().toISOString(),
+        });
       }
 
-      // 3rd Place Payout
+      // 3rd Place Payout or Unawarded Pool Return
+      const thirdAmount = Math.round((netPrizePool * dist.third) / 100);
       if (thirdPlaceToken) {
-        const thirdAmount = Math.round((netPrizePool * dist.third) / 100);
         await dbRepository.updateProfileBalance(thirdPlaceToken, thirdAmount);
         await dbRepository.createTransaction({
           id: `tx-league-prize-3rd-${Date.now()}`,
@@ -1078,6 +1345,19 @@ export const leagueService = {
           reference: league.id,
           status: "completed",
           metaJson: JSON.stringify({ rank: "3rd Place", leagueTitle: league.title, platformFee, netPrizePool }),
+          createdAt: new Date().toISOString(),
+        });
+      } else {
+        // Unawarded 3rd place returned to platform reward pool
+        await dbRepository.createTransaction({
+          id: `tx-league-unawarded-3rd-${Date.now()}`,
+          userToken: "system-house",
+          type: "platform_fee",
+          currency: "points",
+          amount: thirdAmount,
+          reference: league.id,
+          status: "completed",
+          metaJson: JSON.stringify({ note: "Unawarded 3rd place prize returned to platform reward pool", reason: unawardedReason || "No eligible 3rd place" }),
           createdAt: new Date().toISOString(),
         });
       }

@@ -20,7 +20,7 @@ import {
   AlertCircle,
   HelpCircle,
 } from "lucide-react";
-import { LeagueMatch, LeagueParticipant, TournamentFormat } from "@/lib/types";
+import type { LeagueMatch, LeagueParticipant, TournamentFormat } from "@/lib/types";
 
 interface BracketTreeViewProps {
   matches: LeagueMatch[];

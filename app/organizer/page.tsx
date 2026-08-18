@@ -50,7 +50,7 @@ import {
   Filter,
   Search,
 } from "lucide-react";
-import {
+import type {
   League,
   LeagueMatch,
   LeagueParticipant,

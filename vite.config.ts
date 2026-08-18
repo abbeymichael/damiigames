@@ -15,7 +15,12 @@ export default defineConfig({
   ssr: {
     external: [
       "mysql2",
+      "mysql2/promise",
       "mysql2/*",
+      "drizzle-orm",
+      "drizzle-orm/mysql2",
+      "drizzle-orm/*",
+      "drizzle-kit",
       // Common DB drivers and native modules to keep external
       "mysql",
       "pg",
@@ -38,6 +43,12 @@ export default defineConfig({
     // Prevent Vite dependency pre-bundling for these server-only packages
     exclude: [
       "mysql2",
+      "mysql2/promise",
+      "mysql2/*",
+      "drizzle-orm",
+      "drizzle-orm/mysql2",
+      "drizzle-orm/*",
+      "drizzle-kit",
       "mysql",
       "pg",
       "pg-native",
