@@ -202,6 +202,6 @@ export const dbRepository: DbRepository = {
 };
 
 /** Returns the active database dialect */
-export function getDatabaseDialect(): "mysql" | "memory" {
+export function getDatabaseDialect(): "mysql" | "memory" | "file" {
   return dbRepository.dialect;
 }

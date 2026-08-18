@@ -559,10 +559,10 @@ export default function AdminProfilePage() {
                               {log.action}
                             </td>
                             <td className="py-2 px-3 text-slate-400">
-                              {log.targetUser || log.details?.targetUser || "System"}
+                              {log.targetUser || log.target || (log.details as any)?.targetUser || "System"}
                             </td>
                             <td className="py-2 px-3 text-right text-slate-400 font-mono text-[11px]">
-                              {new Date(log.timestamp).toLocaleString()}
+                              {new Date(log.createdAt || log.timestamp || Date.now()).toLocaleString()}
                             </td>
                           </tr>
                         ))}

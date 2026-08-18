@@ -922,9 +922,11 @@ export const adminService = {
     // Relevant audit logs
     const auditLogs = allLogs.filter(
       (l) =>
+        l.target === profile.username ||
+        l.target === targetToken ||
         l.targetUser === profile.username ||
-        l.metadataJson.includes(targetToken) ||
-        l.metadataJson.includes(profile.username)
+        (l.detailsJson && (l.detailsJson.includes(targetToken) || l.detailsJson.includes(profile.username))) ||
+        (l.metadataJson && (l.metadataJson.includes(targetToken) || l.metadataJson.includes(profile.username)))
     );
 
     return {
@@ -1446,8 +1448,10 @@ export const adminService = {
     }
 
     // Update any linked league match
-    if (room.leagueId && room.leagueMatchId) {
-      const match = await dbRepository.getLeagueMatch(room.leagueMatchId);
+    const linkedMatchId = room.leagueMatchId || room.matchId;
+    if (room.leagueId && linkedMatchId) {
+      const matches = await dbRepository.getLeagueMatches(room.leagueId);
+      const match = matches.find((m) => m.id === linkedMatchId);
       if (match) {
         if (decision === "void") {
           match.status = "cancelled";
@@ -1847,14 +1851,13 @@ export const adminService = {
       dialect: dbRepository.dialect,
       metrics: {
         userCount: metrics.userCount,
-        activeRooms: metrics.activeRooms,
-        totalWagers: metrics.totalWagers,
+        activeRooms: metrics.activeRoomsCount,
+        totalRooms: metrics.totalRoomsCount,
         totalTransactions: metrics.totalTransactions,
-        houseMarblesBalance: metrics.houseMarblesBalance,
-        housePointsBalance: metrics.housePointsBalance,
-        totalMarblesInCirculation: metrics.totalMarblesInCirculation,
-        totalPointsInCirculation: metrics.totalPointsInCirculation,
-        totalEscrowHeldPoints: metrics.totalEscrowHeldPoints,
+        totalVolumePoints: metrics.totalVolumePoints,
+        totalEscrowProcessed: metrics.totalEscrowProcessed,
+        resolvedDisputesCount: metrics.resolvedDisputesCount,
+        resolvedDisputesVolume: metrics.resolvedDisputesVolume,
       },
       settings: metrics.settings,
       leagues,

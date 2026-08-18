@@ -16,6 +16,7 @@ import type {
   OrganizerApplication,
   OrganizerApplicationStatus,
   OrganizerProfile,
+  OrganizerRevocation,
   OrganizerStatus,
   OtpRequest,
   Permission,
@@ -56,7 +57,7 @@ export interface DbRepository {
   /** Optional teardown hook used by tests/graceful shutdown. */
   close?(): Promise<void>;
   /** Backend identifier, surfaced in health checks. */
-  readonly dialect: "mysql" | "memory";
+  readonly dialect: "mysql" | "memory" | "file";
 
   // --- Sessions & Auth ---
   createSession(userId: string, role: Role, ipAddress?: string, userAgent?: string): Promise<Session>;
@@ -112,6 +113,7 @@ export interface DbRepository {
   getRoom(code: string): Promise<Room | null>;
   saveRoom(room: Room): Promise<Room>;
   listRooms(limit?: number): Promise<Room[]>;
+  getAllRooms?(limit?: number): Promise<Room[]>;
 
   // --- Wallet ---
   createTransaction(tx: WalletTransaction): Promise<WalletTransaction>;
@@ -125,6 +127,7 @@ export interface DbRepository {
 
   // --- Leagues ---
   listLeagues(): Promise<League[]>;
+  getAllLeagues?(): Promise<League[]>;
   getLeague(id: string): Promise<League | null>;
   saveLeague(league: League): Promise<League>;
   deleteLeague(id: string): Promise<boolean>;
@@ -141,6 +144,7 @@ export interface DbRepository {
   // --- Audit log ---
   createAdminLog(log: AdminLog): Promise<AdminLog>;
   listAdminLogs(limit?: number): Promise<AdminLog[]>;
+  getAdminLogs?(limit?: number): Promise<AdminLog[]>;
 
   // --- Organizer profiles ---
   getOrganizerProfile(userId: string): Promise<OrganizerProfile | null>;
@@ -170,12 +174,18 @@ export interface DbRepository {
   createOrganizerApplication(app: OrganizerApplication): Promise<OrganizerApplication>;
   getOrganizerApplication(id: string): Promise<OrganizerApplication | null>;
   getOrganizerApplicationByUserId(userId: string): Promise<OrganizerApplication | null>;
+  listOrganizerApplicationsByUserId(userId: string): Promise<OrganizerApplication[]>;
   listOrganizerApplications(status?: OrganizerApplicationStatus): Promise<OrganizerApplication[]>;
   updateOrganizerApplication(id: string, updates: Partial<OrganizerApplication>): Promise<OrganizerApplication | null>;
 
+  // --- Organizer Revocations ---
+  createOrganizerRevocation(revocation: OrganizerRevocation): Promise<OrganizerRevocation>;
+  getOrganizerRevocationByUserId(userId: string): Promise<OrganizerRevocation | null>;
+  listOrganizerRevocations(): Promise<OrganizerRevocation[]>;
+
   // --- Regions ---
   getRegions(): Promise<Region[]>;
-  saveRegion?(region: Region): Promise<Region>;
+  saveRegion(region: Region): Promise<Region>;
 
   // --- Matches (Section 6) ---
   createMatch(match: Match): Promise<Match>;

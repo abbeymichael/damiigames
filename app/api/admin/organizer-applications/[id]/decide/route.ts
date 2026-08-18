@@ -20,9 +20,9 @@ export async function POST(
     const decision = String(body.decision ?? "").trim().toLowerCase();
     const note = body.note ? String(body.note).trim() : undefined;
 
-    if (!["approve", "reject", "needs_info"].includes(decision)) {
+    if (!["approve", "reject", "needs_info", "revoke"].includes(decision)) {
       return NextResponse.json(
-        { error: "Decision must be one of: 'approve', 'reject', 'needs_info'" },
+        { error: "Decision must be one of: 'approve', 'reject', 'needs_info', 'revoke'" },
         { status: 400 },
       );
     }
@@ -162,6 +162,23 @@ export async function POST(
         success: true,
         message: "Organizer application marked as needs_info. The applicant can update and resubmit.",
         application: updatedApp,
+      });
+    }
+
+    if (decision === "revoke") {
+      const { adminService } = await import("@/lib/admin-service");
+      const tournamentHandling = body.tournamentHandling === "cancel_and_refund" ? "cancel_and_refund" : "reassign_to_system";
+      const res = await adminService.revokeOrganizerStatus(
+        adminUser.token,
+        id,
+        note || "Organizer status revoked by administrator",
+        tournamentHandling,
+      );
+
+      return NextResponse.json({
+        success: true,
+        message: res.message,
+        affectedTournaments: res.affectedTournaments,
       });
     }
 

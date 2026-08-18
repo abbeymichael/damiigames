@@ -2853,12 +2853,19 @@ export default function AdminPage() {
       />
 
       {/* CUSTOM CONFIRMATION MODAL */}
-      <ConfirmModal
-        confirmModal={confirmModal}
-        confirmExecuting={confirmExecuting}
-        setConfirmModal={setConfirmModal}
-        setConfirmExecuting={setConfirmExecuting}
-      />
+      {confirmModal && (
+        <ConfirmModal
+          isOpen={confirmModal.isOpen}
+          title={confirmModal.title}
+          description={confirmModal.description}
+          warningNote={confirmModal.warningNote}
+          details={confirmModal.details}
+          confirmText={confirmModal.confirmText}
+          confirmStyle={confirmModal.confirmStyle}
+          onConfirm={confirmModal.onConfirm}
+          onClose={() => setConfirmModal(null)}
+        />
+      )}
     </main>
   );
 }

@@ -6,7 +6,7 @@ export type BaseRole = "player" | "organizer" | "admin";
 
 export type OrganizerStatus = "none" | "pending" | "approved" | "rejected" | "revoked";
 
-export type OrganizerApplicationStatus = "pending" | "approved" | "rejected" | "needs_info";
+export type OrganizerApplicationStatus = "draft" | "pending" | "approved" | "rejected" | "needs_info" | "revoked";
 export type OrganizerApplicantType = "individual" | "organization";
 
 export interface User {
@@ -53,20 +53,24 @@ export interface Region {
 export interface OrganizerApplication {
   id: string;
   userId: string;
-  applicantType: OrganizerApplicantType;
+  applicantType?: OrganizerApplicantType | null;
   organizationName?: string | null;
   organizationRegNumber?: string | null;
-  ghanaCardFrontUrl: string;
-  ghanaCardBackUrl: string;
-  selfieUrl: string;
-  physicalAddress: string;
-  proofOfAddressUrl: string;
-  intendedGameTypes: string;
+  ghanaCardFrontUrl?: string | null;
+  ghanaCardBackUrl?: string | null;
+  selfieUrl?: string | null;
+  physicalAddress?: string | null;
+  proofOfAddressUrl?: string | null;
+  intendedGameTypes?: string | null;
   expectedTournamentSize?: number | null;
   expectedFrequency?: string | null;
   priorExperience?: string | null;
-  termsAcceptedAt: string | Date;
+  termsAcceptedAt?: string | Date | null;
   status: OrganizerApplicationStatus;
+  previousApplicationId?: string | null;
+  submittedAt?: string | Date | null;
+  needsInfoRequestedAt?: string | Date | null;
+  needsInfoNote?: string | null;
   reviewedByAdminId?: string | null;
   reviewedByAdminName?: string | null;
   reviewedAt?: string | Date | null;
@@ -74,10 +78,22 @@ export interface OrganizerApplication {
   createdAt: string | Date;
 }
 
+export interface OrganizerRevocation {
+  id: string;
+  userId: string;
+  revokedByAdminId: string;
+  reason: string;
+  evidenceUrl?: string | null;
+  reapplyEligibleAt?: string | Date | null;
+  createdAt: string | Date;
+}
+
 export interface OrganizerApplicationDetailPayload {
   application: OrganizerApplication;
   applicant: Profile | null;
   userAccount?: User | null;
+  previousApplication?: OrganizerApplication | null;
+  revocationHistory?: OrganizerRevocation[];
   applicantContext: {
     totalMatches: number;
     winRate: number;
@@ -260,16 +276,18 @@ export type Room = {
   status: RoomStatus;
   mode: GameMode;
   wagerAmount: number;
+  isCustomWager?: boolean;
   escrowId: string | null;
   leagueId: string | null;
   matchId: string | null;
+  leagueMatchId?: string | null;
   moveCount: number;
   resultApplied: number;
   lastMoveTime: number;
   disconnectTime: number | null;
   disconnectedPlayer: Player | null;
   drawOfferedBy?: Player | null;
-  disputeStatus?: "none" | "under_review" | "resolved" | "voided";
+  disputeStatus?: "none" | "under_review" | "resolved" | "voided" | string;
   disputeNotes?: string;
   movesJson?: string;
   moves?: MoveLogEntry[];
@@ -366,6 +384,7 @@ export type LeagueParticipant = {
   lossesCount?: number;
   drawsCount?: number;
   joinedAt: string;
+  createdAt?: string | Date;
 };
 
 export type LeagueMatch = {
@@ -410,6 +429,10 @@ export type AdminLog = {
   action: string;
   target: string;
   detailsJson: string;
+  details?: string;
+  timestamp?: string | Date;
+  targetUser?: string;
+  metadataJson?: string;
   createdAt: string;
 };
 
@@ -458,6 +481,7 @@ export interface TournamentEntry {
   tournamentId: string;
   userId: string;
   feePaid: number | string;
+  placement?: number | null;
   finalPlacement?: number | null;
   joinedAt: string | Date;
 }
@@ -543,7 +567,14 @@ export interface LedgerEntry {
   amount: number | string;
   referenceType: string;
   referenceId: string;
+  transactionGroupId?: string;
+  currency?: string;
+  direction?: "credit" | "debit";
+  balanceBefore?: string;
+  balanceAfter?: string;
+  metadataJson?: string;
   fundType?: SystemFundType;
+  recordedAt?: string;
   createdAt: string | Date;
 }
 
@@ -554,6 +585,9 @@ export interface LedgerEntryInput {
   amount: string | number;
   referenceType: string;
   referenceId: string;
+  currency?: string;
+  direction?: "credit" | "debit";
+  metadataJson?: string;
   fundType?: SystemFundType;
 }
 
@@ -567,6 +601,8 @@ export interface Permission {
   key: string;
   category: PermissionCategory;
   description: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface AppRole {
@@ -575,6 +611,7 @@ export interface AppRole {
   description?: string;
   isSystemRole: boolean;
   createdAt: string;
+  updatedAt?: string;
   permissions?: Permission[];
   permissionKeys?: string[];
   adminCount?: number;
@@ -589,16 +626,18 @@ export interface AdminUserRoleAssignment {
 }
 
 export interface AdminAccount {
+  id?: string;
   userId: string;
   username: string;
   phoneNumber?: string;
   role: string;
-  status: "active" | "inactive" | "banned";
+  status: "active" | "inactive" | "banned" | "suspended";
   roles: { id: string; name: string; isSystemRole: boolean }[];
   isSuperAdmin: boolean;
   isDefaultCredentials?: boolean;
   forcePasswordReset?: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -610,10 +649,13 @@ export interface GameCatalogItem {
   id: string;
   name: string;
   slug: string;
+  boardSize?: number;
+  minTimerSeconds?: number;
   iconUrl?: string;
   status: GameStatus;
   description?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -639,6 +681,7 @@ export interface TournamentActionRequest {
   reviewedAt?: string;
   reviewNote?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -651,6 +694,7 @@ export interface SystemSettingEntry {
   category: SystemSettingsCategory;
   key: string;
   value: any;
+  valueJson?: string;
   updatedByAdminId?: string;
   updatedAt: string;
 }

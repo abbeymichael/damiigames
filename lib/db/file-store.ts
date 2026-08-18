@@ -138,7 +138,7 @@ function sessionTtlMs(): number {
   }
 }
 
-export const fileStore: DbRepository = {
+export const fileStore: any = {
   dialect: "file",
   lockKey,
 

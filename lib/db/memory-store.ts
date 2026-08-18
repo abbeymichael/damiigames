@@ -929,7 +929,7 @@ export const memoryStore: DbRepository = {
     if (filter?.status) list = list.filter((m) => m.status === filter.status);
     if (filter?.gameType) list = list.filter((m) => m.gameType === filter.gameType);
     if (filter?.playerId) {
-      list = list.filter((m) => m.player1Id === filter.playerId || m.player2Id === filter.playerId);
+      list = list.filter((m) => m.playerAId === filter.playerId || m.playerBId === filter.playerId);
     }
     if (filter?.limit) list = list.slice(0, filter.limit);
     return list.map((m) => ({ ...m }));
@@ -1004,6 +1004,7 @@ export const memoryStore: DbRepository = {
       const idx = entries.findIndex((e) => e.id === entryId);
       if (idx !== -1) {
         entries[idx].placement = placement;
+        entries[idx].finalPlacement = placement;
         data.tournamentEntries.set(tId, entries);
         return { ...entries[idx] };
       }
@@ -1044,6 +1045,7 @@ export const memoryStore: DbRepository = {
         id: `ledger-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         userId: item.userId,
         accountType: item.accountType,
+        entryType: item.entryType || "deposit",
         currency: item.currency || "GHS",
         amount: String(item.amount),
         direction: item.direction,
@@ -1053,6 +1055,7 @@ export const memoryStore: DbRepository = {
         referenceId: item.referenceId,
         metadataJson: item.metadataJson || "{}",
         recordedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
       };
       data.ledgerEntries.push(entry);
       created.push(entry);
@@ -1065,7 +1068,7 @@ export const memoryStore: DbRepository = {
     let balance = 0;
     for (const e of data.ledgerEntries) {
       if (e.userId === userId && e.accountType === accountType) {
-        const amt = parseFloat(e.amount) || 0;
+        const amt = parseFloat(String(e.amount)) || 0;
         if (e.direction === "credit") balance += amt;
         else if (e.direction === "debit") balance -= amt;
       }
@@ -1176,6 +1179,8 @@ export const memoryStore: DbRepository = {
       lastActivityAt: allEntries[0]?.recordedAt ? new Date(allEntries[0].recordedAt).toISOString() : now,
     };
 
+    const escrowEntry = allEntries.find((e) => e.accountType === "escrow");
+    const escrowActivityDate = escrowEntry?.recordedAt || escrowEntry?.createdAt;
     const escrowSummary: SystemFundSummary = {
       fundType: "escrow",
       name: "Escrow Fund",
@@ -1185,11 +1190,11 @@ export const memoryStore: DbRepository = {
       totalInflow: Number(escrowInflow.toFixed(2)),
       totalOutflow: Number(escrowOutflow.toFixed(2)),
       netFlow: Number((escrowInflow - escrowOutflow).toFixed(2)),
-      lastActivityAt: allEntries.find((e) => e.accountType === "escrow")?.recordedAt
-        ? new Date(allEntries.find((e) => e.accountType === "escrow")!.recordedAt).toISOString()
-        : now,
+      lastActivityAt: escrowActivityDate ? new Date(escrowActivityDate).toISOString() : now,
     };
 
+    const feeEntry = allEntries.find((e) => e.userId === "platform-treasury" || (e as any).entryType === "platform_fee");
+    const feeActivityDate = feeEntry?.recordedAt || feeEntry?.createdAt;
     const platformFeeSummary: SystemFundSummary = {
       fundType: "platform_fee",
       name: "Platform Fee Fund",
@@ -1199,9 +1204,7 @@ export const memoryStore: DbRepository = {
       totalInflow: Number(platformFeeInflow.toFixed(2)),
       totalOutflow: Number(platformFeeOutflow.toFixed(2)),
       netFlow: Number((platformFeeInflow - platformFeeOutflow).toFixed(2)),
-      lastActivityAt: allEntries.find((e) => e.userId === "platform-treasury" || (e as any).entryType === "platform_fee")?.recordedAt
-        ? new Date(allEntries.find((e) => e.userId === "platform-treasury" || (e as any).entryType === "platform_fee")!.recordedAt).toISOString()
-        : now,
+      lastActivityAt: feeActivityDate ? new Date(feeActivityDate).toISOString() : now,
     };
 
     return {
@@ -1329,11 +1332,13 @@ export const memoryStore: DbRepository = {
       const userRoles = allRoles.filter((r) => roleIds.includes(r.id));
       result.push({
         id: a.token,
+        userId: a.token,
         username: a.username,
         phoneNumber: a.phoneNumber || "",
+        role: a.role || "admin",
         status: a.status || "active",
         createdAt: a.createdAt || new Date().toISOString(),
-        lastActive: a.updatedAt || new Date().toISOString(),
+        updatedAt: a.updatedAt || new Date().toISOString(),
         roles: userRoles,
         isSuperAdmin: a.role === "super_admin" || userRoles.some((r) => r.isSystemRole),
       });
@@ -1451,6 +1456,7 @@ export const memoryStore: DbRepository = {
       id,
       category,
       key,
+      value,
       valueJson: JSON.stringify(value),
       updatedByAdminId: adminId,
       updatedAt: new Date().toISOString(),

@@ -13,6 +13,11 @@ import {
   Scale,
   ShieldCheck,
   X,
+  History,
+  Eye,
+  ArrowRight,
+  Clock,
+  UserCheck,
 } from "lucide-react";
 import type { GameTypeLimit, Match, Tournament, LedgerEntry } from "@/lib/types";
 
@@ -30,7 +35,21 @@ export function GameLimitsTable({ token, adminSecret }: GameLimitsTableProps) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [editingLimit, setEditingLimit] = useState<GameTypeLimit | null>(null);
+  const [inspectingLimit, setInspectingLimit] = useState<GameTypeLimit | null>(null);
+  const [historyLimit, setHistoryLimit] = useState<{ limit: GameTypeLimit; logs: any[] } | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<"limits" | "matches" | "tournaments" | "ledger">("limits");
+
+  // Create form state
+  const [createFormData, setCreateFormData] = useState({
+    gameType: "",
+    minWager: "1.00",
+    maxWager: "1000.00",
+    minTournamentPrizePool: "10.00",
+    maxTournamentPrizePool: "10000.00",
+    platformFeePercent: "0.0500",
+  });
 
   // Edit form state
   const [formData, setFormData] = useState({
@@ -85,6 +104,61 @@ export function GameLimitsTable({ token, adminSecret }: GameLimitsTableProps) {
     });
   };
 
+  const handleViewHistory = async (limit: GameTypeLimit) => {
+    setLoadingHistory(true);
+    setHistoryLimit({ limit, logs: [] });
+    try {
+      const res = await fetch(`/api/admin/game-type-limits/${limit.gameType}?history=true`);
+      const data = await res.json();
+      if (data.success) {
+        setHistoryLimit({ limit, logs: data.history || [] });
+      }
+    } catch (e: any) {
+      console.error("Failed to load history:", e);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const handleCreateLimit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createFormData.gameType.trim()) return;
+    setError("");
+    setSuccess("");
+
+    try {
+      const res = await fetch("/api/admin/game-type-limits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gameType: createFormData.gameType.trim(),
+          minWager: Number(createFormData.minWager),
+          maxWager: Number(createFormData.maxWager),
+          minTournamentPrizePool: Number(createFormData.minTournamentPrizePool),
+          maxTournamentPrizePool: Number(createFormData.maxTournamentPrizePool),
+          platformFeePercent: Number(createFormData.platformFeePercent),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Failed to create game type limit");
+
+      setSuccess(`Game type limit for '${createFormData.gameType}' successfully created and logged.`);
+      setShowCreateModal(false);
+      setCreateFormData({
+        gameType: "",
+        minWager: "1.00",
+        maxWager: "1000.00",
+        minTournamentPrizePool: "10.00",
+        maxTournamentPrizePool: "10000.00",
+        platformFeePercent: "0.0500",
+      });
+      fetchData();
+    } catch (err: any) {
+      setError(err.message || "Failed to create game limit");
+    }
+  };
+
   const handleSaveLimit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingLimit) return;
@@ -107,7 +181,7 @@ export function GameLimitsTable({ token, adminSecret }: GameLimitsTableProps) {
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Failed to update limit");
 
-      setSuccess(`Limits for '${editingLimit.gameType}' successfully updated.`);
+      setSuccess(`Limits for '${editingLimit.gameType}' successfully updated and audit logged.`);
       setEditingLimit(null);
       fetchData();
     } catch (err: any) {
@@ -122,19 +196,26 @@ export function GameLimitsTable({ token, adminSecret }: GameLimitsTableProps) {
         <div>
           <h3 className="text-base font-bold text-[#f5efdf] flex items-center gap-2">
             <SlidersHorizontal size={18} className="text-[#d6a735]" />
-            Game Type Limits & Double-Entry Escrow
+            Game Type Limits & Double-Entry Escrow (Section 8)
           </h3>
           <p className="text-xs text-slate-200 mt-0.5">
-            Admin configuration for game-type constraints, real-time match escrow, and ledger audits.
+            Admin configuration for game-type constraints, real-time match escrow, onboarding new game limits, and change history audit trail.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={() => setShowCreateModal(true)}
+            className="px-3 py-1.5 bg-[#d6a735] hover:bg-[#b88c24] text-xs font-bold text-[#06261f] rounded-xl flex items-center gap-1.5 shadow-sm transition-colors"
+          >
+            <Plus size={14} /> Onboard Game Limit
+          </button>
+          <button
+            type="button"
             onClick={fetchData}
             disabled={loading}
-            className="px-3 py-1.5 bg-[#0c3b2e] hover:bg-[#114232] text-xs font-bold text-[#f5efdf] rounded-xl border border-[#1a5e48] flex items-center gap-1.5"
+            className="px-3 py-1.5 bg-[#0c3b2e] hover:bg-[#114232] text-xs font-bold text-[#f5efdf] rounded-xl border border-[#1a5e48] flex items-center gap-1.5 transition-colors"
           >
             <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
             Refresh
@@ -224,13 +305,14 @@ export function GameLimitsTable({ token, adminSecret }: GameLimitsTableProps) {
                   <th className="py-3 px-4">Min Prize Pool</th>
                   <th className="py-3 px-4">Max Prize Pool</th>
                   <th className="py-3 px-4">Platform Fee %</th>
+                  <th className="py-3 px-4">Updated</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#114232]">
                 {limits.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-slate-300 italic">
+                    <td colSpan={8} className="py-8 text-center text-slate-300 italic">
                       {loading ? "Loading game limits..." : "No game type limits found."}
                     </td>
                   </tr>
@@ -255,14 +337,36 @@ export function GameLimitsTable({ token, adminSecret }: GameLimitsTableProps) {
                       <td className="py-3 px-4 font-bold text-cyan-300">
                         {(Number(l.platformFeePercent) * 100).toFixed(2)}%
                       </td>
+                      <td className="py-3 px-4 text-slate-300 font-mono text-[11px]">
+                        {l.updatedAt ? new Date(l.updatedAt).toLocaleDateString() : "—"}
+                      </td>
                       <td className="py-3 px-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleEditClick(l)}
-                          className="px-2.5 py-1 bg-[#0c3b2e] hover:bg-[#d6a735] hover:text-[#06261f] text-[#f5efdf] rounded-lg text-xs font-bold border border-[#1a5e48] transition-colors inline-flex items-center gap-1"
-                        >
-                          <Edit2 size={12} /> Edit
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setInspectingLimit(l)}
+                            className="px-2.5 py-1 bg-[#041d17] hover:bg-[#0c3b2e] text-slate-200 rounded-lg text-xs font-bold border border-[#1a5e48] transition-colors inline-flex items-center gap-1"
+                            title="Inspect Details"
+                          >
+                            <Eye size={12} /> Detail
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEditClick(l)}
+                            className="px-2.5 py-1 bg-[#0c3b2e] hover:bg-[#d6a735] hover:text-[#06261f] text-[#f5efdf] rounded-lg text-xs font-bold border border-[#1a5e48] transition-colors inline-flex items-center gap-1"
+                            title="Edit Limits"
+                          >
+                            <Edit2 size={12} /> Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleViewHistory(l)}
+                            className="px-2.5 py-1 bg-[#041d17] hover:bg-cyan-950 text-cyan-300 rounded-lg text-xs font-bold border border-cyan-800/50 transition-colors inline-flex items-center gap-1"
+                            title="View Change History"
+                          >
+                            <History size={12} /> History
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -486,9 +590,314 @@ export function GameLimitsTable({ token, adminSecret }: GameLimitsTableProps) {
         </div>
       )}
 
+      {/* CREATE NEW GAME TYPE LIMIT MODAL */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-[#081c15] border border-[#1a5e48] text-[#f5efdf] max-w-md w-full rounded-2xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#1a5e48] pb-3">
+              <h3 className="font-bold text-sm text-[#d6a735] flex items-center gap-2">
+                <Plus size={16} /> Onboard New Game Type Limit
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                className="text-slate-200 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateLimit} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-200 font-semibold mb-1">Game Type Slug / Identifier</label>
+                <input
+                  type="text"
+                  placeholder="e.g. damii-10x10, standard-draughts"
+                  required
+                  value={createFormData.gameType}
+                  onChange={(e) => setCreateFormData({ ...createFormData, gameType: e.target.value })}
+                  className="w-full px-3 py-2 bg-[#06261f] border border-[#1a5e48] rounded-xl text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-200 font-semibold mb-1">Min Wager (GHS)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.10"
+                    required
+                    value={createFormData.minWager}
+                    onChange={(e) => setCreateFormData({ ...createFormData, minWager: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#06261f] border border-[#1a5e48] rounded-xl text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-200 font-semibold mb-1">Max Wager (GHS)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="1.00"
+                    required
+                    value={createFormData.maxWager}
+                    onChange={(e) => setCreateFormData({ ...createFormData, maxWager: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#06261f] border border-[#1a5e48] rounded-xl text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-200 font-semibold mb-1">Min Prize Pool (GHS)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="1.00"
+                    required
+                    value={createFormData.minTournamentPrizePool}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, minTournamentPrizePool: e.target.value })
+                    }
+                    className="w-full px-3 py-2 bg-[#06261f] border border-[#1a5e48] rounded-xl text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-200 font-semibold mb-1">Max Prize Pool (GHS)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="10.00"
+                    required
+                    value={createFormData.maxTournamentPrizePool}
+                    onChange={(e) =>
+                      setCreateFormData({ ...createFormData, maxTournamentPrizePool: e.target.value })
+                    }
+                    className="w-full px-3 py-2 bg-[#06261f] border border-[#1a5e48] rounded-xl text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-200 font-semibold mb-1">
+                  Platform Fee Percent (Decimal e.g. 0.0500 for 5%)
+                </label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  max="0.5"
+                  required
+                  value={createFormData.platformFeePercent}
+                  onChange={(e) =>
+                    setCreateFormData({ ...createFormData, platformFeePercent: e.target.value })
+                  }
+                  className="w-full px-3 py-2 bg-[#06261f] border border-[#1a5e48] rounded-xl text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-[#1a5e48] flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-3.5 py-2 bg-[#0c3b2e] text-slate-200 rounded-xl font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold rounded-xl"
+                >
+                  Create & Enforce Limit
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* INSPECT DETAIL MODAL (Single Game Type Detail) */}
+      {inspectingLimit && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-[#081c15] border border-[#1a5e48] text-[#f5efdf] max-w-lg w-full rounded-2xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#1a5e48] pb-3">
+              <h3 className="font-bold text-sm text-[#d6a735] flex items-center gap-2">
+                <Eye size={16} /> Game Type Limit Detail: {inspectingLimit.gameType}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setInspectingLimit(null)}
+                className="text-slate-200 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 bg-[#041d17] border border-[#1a5e48] rounded-xl space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-300">Identifier / Slug:</span>
+                  <span className="font-mono font-bold text-[#d6a735]">{inspectingLimit.gameType}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-300">Database Record ID:</span>
+                  <span className="font-mono text-slate-200">{inspectingLimit.id}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-300">Last Modified:</span>
+                  <span className="font-mono text-slate-200">{inspectingLimit.updatedAt ? new Date(inspectingLimit.updatedAt).toLocaleString() : "Initial"}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 bg-[#06261f] border border-[#1a5e48] rounded-xl space-y-1">
+                  <span className="text-slate-300 block">Wager Match Limits</span>
+                  <div className="text-sm font-bold text-white">
+                    GHS {Number(inspectingLimit.minWager).toFixed(2)} — GHS {Number(inspectingLimit.maxWager).toFixed(2)}
+                  </div>
+                  <span className="text-[10px] text-slate-400">Min to Max wager per player</span>
+                </div>
+                <div className="p-3 bg-[#06261f] border border-[#1a5e48] rounded-xl space-y-1">
+                  <span className="text-slate-300 block">Tournament Prize Limits</span>
+                  <div className="text-sm font-bold text-white">
+                    GHS {Number(inspectingLimit.minTournamentPrizePool).toFixed(2)} — GHS {Number(inspectingLimit.maxTournamentPrizePool).toFixed(2)}
+                  </div>
+                  <span className="text-[10px] text-slate-400">Min to Max tournament pool</span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-[#06261f] border border-[#1a5e48] rounded-xl flex items-center justify-between">
+                <div>
+                  <span className="text-slate-300 block">Platform Fee Cut</span>
+                  <span className="text-[10px] text-slate-400">Withheld upon settlement to platform fee fund</span>
+                </div>
+                <div className="text-base font-bold text-cyan-300">
+                  {(Number(inspectingLimit.platformFeePercent) * 100).toFixed(2)}%
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-[#1a5e48] flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const target = inspectingLimit;
+                  setInspectingLimit(null);
+                  handleViewHistory(target);
+                }}
+                className="px-3.5 py-2 bg-[#041d17] hover:bg-cyan-950 border border-cyan-800/60 text-cyan-200 rounded-xl font-bold flex items-center gap-1.5"
+              >
+                <History size={13} /> View Change History
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const target = inspectingLimit;
+                  setInspectingLimit(null);
+                  handleEditClick(target);
+                }}
+                className="px-4 py-2 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold rounded-xl flex items-center gap-1.5"
+              >
+                <Edit2 size={13} /> Edit Limits
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CHANGE HISTORY MODAL (Audit Log Viewer) */}
+      {historyLimit && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-[#081c15] border border-[#1a5e48] text-[#f5efdf] max-w-2xl w-full rounded-2xl p-6 space-y-4 shadow-2xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-[#1a5e48] pb-3">
+              <div>
+                <h3 className="font-bold text-sm text-[#d6a735] flex items-center gap-2">
+                  <History size={16} /> Limit Change History: {historyLimit.limit.gameType}
+                </h3>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Immutable audit records tracking who updated these limits, when, and previous vs new states.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHistoryLimit(null)}
+                className="text-slate-200 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto space-y-3 flex-1 pr-1 text-xs">
+              {loadingHistory ? (
+                <div className="py-12 text-center text-slate-300 flex items-center justify-center gap-2">
+                  <RefreshCw size={16} className="animate-spin text-[#d6a735]" /> Loading change audit trail...
+                </div>
+              ) : historyLimit.logs.length === 0 ? (
+                <div className="p-8 text-center bg-[#041d17] border border-[#1a5e48] rounded-xl text-slate-300 italic">
+                  No prior manual update logs recorded for '{historyLimit.limit.gameType}'. Any subsequent changes will generate detailed before/after diffs here.
+                </div>
+              ) : (
+                historyLimit.logs.map((log) => (
+                  <div key={log.id} className="p-3.5 bg-[#041d17] border border-[#1a5e48] rounded-xl space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-[#114232]">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 bg-[#06261f] border border-[#1a5e48] rounded text-[10px] font-bold text-[#d6a735] uppercase">
+                          {log.actionType || log.action}
+                        </span>
+                        <span className="font-bold text-[#f5efdf]">
+                          Changed by: <strong className="text-cyan-300">{log.adminName || log.adminToken}</strong>
+                        </span>
+                      </div>
+                      <span className="text-slate-300 font-mono text-[11px] flex items-center gap-1">
+                        <Clock size={12} /> {new Date(log.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+
+                    {log.beforeState && log.afterState ? (
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <div className="p-2.5 bg-[#081c15] border border-red-900/40 rounded-lg space-y-1">
+                          <span className="text-[11px] font-bold text-red-300 block">Previous Limits</span>
+                          <div className="text-[11px] text-slate-300 font-mono space-y-0.5">
+                            <div>Wagers: GHS {Number(log.beforeState.minWager || 0).toFixed(2)} – {Number(log.beforeState.maxWager || 0).toFixed(2)}</div>
+                            <div>Tourneys: GHS {Number(log.beforeState.minTournamentPrizePool || 0).toFixed(2)} – {Number(log.beforeState.maxTournamentPrizePool || 0).toFixed(2)}</div>
+                            <div>Fee: {(Number(log.beforeState.platformFeePercent || 0) * 100).toFixed(2)}%</div>
+                          </div>
+                        </div>
+                        <div className="p-2.5 bg-[#081c15] border border-emerald-900/40 rounded-lg space-y-1">
+                          <span className="text-[11px] font-bold text-emerald-300 block">New Limits Applied</span>
+                          <div className="text-[11px] text-slate-300 font-mono space-y-0.5">
+                            <div>Wagers: GHS {Number(log.afterState.minWager || 0).toFixed(2)} – {Number(log.afterState.maxWager || 0).toFixed(2)}</div>
+                            <div>Tourneys: GHS {Number(log.afterState.minTournamentPrizePool || 0).toFixed(2)} – {Number(log.afterState.maxTournamentPrizePool || 0).toFixed(2)}</div>
+                            <div>Fee: {(Number(log.afterState.platformFeePercent || 0) * 100).toFixed(2)}%</div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 bg-[#081c15] border border-[#1a5e48] rounded-lg text-slate-300 font-mono text-[11px]">
+                        Initial configuration created by {log.adminName}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-[#1a5e48] flex justify-end">
+              <button
+                type="button"
+                onClick={() => setHistoryLimit(null)}
+                className="px-4 py-2 bg-[#0c3b2e] hover:bg-[#114232] text-slate-200 rounded-xl font-bold"
+              >
+                Close History
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* EDIT LIMIT MODAL */}
       {editingLimit && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-[#081c15] border border-[#1a5e48] text-[#f5efdf] max-w-md w-full rounded-2xl p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-[#1a5e48] pb-3">
               <h3 className="font-bold text-sm text-[#d6a735] flex items-center gap-2">
@@ -592,7 +1001,7 @@ export function GameLimitsTable({ token, adminSecret }: GameLimitsTableProps) {
                   type="submit"
                   className="px-4 py-2 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold rounded-xl"
                 >
-                  Save Changes
+                  Save & Audit Log Changes
                 </button>
               </div>
             </form>
@@ -602,3 +1011,4 @@ export function GameLimitsTable({ token, adminSecret }: GameLimitsTableProps) {
     </div>
   );
 }
+

@@ -51,6 +51,7 @@ export type ProfileRow = Row<typeof schema.profiles>;
 export type UserRow = Row<typeof schema.users>;
 export type OtpRequestRow = Row<typeof schema.otpRequests>;
 export type OrganizerApplicationRow = Row<typeof schema.organizerApplications>;
+export type OrganizerRevocationRow = Row<typeof schema.organizerRevocations>;
 export type SessionRow = Row<typeof schema.sessions>;
 export type AdminProfileRow = Row<typeof schema.adminProfiles>;
 export type OrganizerProfileRow = Row<typeof schema.organizerProfiles>;
@@ -644,20 +645,24 @@ export function rowToOrganizerApplication(row: OrganizerApplicationRow): Organiz
   return {
     id: row.id,
     userId: row.userId,
-    applicantType: row.applicantType as "individual" | "organization",
+    applicantType: (row.applicantType as "individual" | "organization") || undefined,
     organizationName: orUndefined(row.organizationName),
     organizationRegNumber: orUndefined(row.organizationRegNumber),
-    ghanaCardFrontUrl: row.ghanaCardFrontUrl,
-    ghanaCardBackUrl: row.ghanaCardBackUrl,
-    selfieUrl: row.selfieUrl,
-    physicalAddress: row.physicalAddress,
-    proofOfAddressUrl: row.proofOfAddressUrl,
-    intendedGameTypes: row.intendedGameTypes,
+    ghanaCardFrontUrl: orUndefined(row.ghanaCardFrontUrl),
+    ghanaCardBackUrl: orUndefined(row.ghanaCardBackUrl),
+    selfieUrl: orUndefined(row.selfieUrl),
+    physicalAddress: orUndefined(row.physicalAddress),
+    proofOfAddressUrl: orUndefined(row.proofOfAddressUrl),
+    intendedGameTypes: orUndefined(row.intendedGameTypes),
     expectedTournamentSize: orUndefined(row.expectedTournamentSize),
     expectedFrequency: orUndefined(row.expectedFrequency),
     priorExperience: orUndefined(row.priorExperience),
-    termsAcceptedAt: row.termsAcceptedAt,
-    status: row.status as OrganizerApplicationStatus,
+    termsAcceptedAt: row.termsAcceptedAt || undefined,
+    status: (row.status || "draft") as OrganizerApplicationStatus,
+    previousApplicationId: orUndefined(row.previousApplicationId),
+    submittedAt: row.submittedAt || undefined,
+    needsInfoRequestedAt: row.needsInfoRequestedAt || undefined,
+    needsInfoNote: orUndefined(row.needsInfoNote),
     reviewedByAdminId: orUndefined(row.reviewedByAdminId),
     reviewedAt: row.reviewedAt || undefined,
     reviewNote: orUndefined(row.reviewNote),
@@ -671,24 +676,56 @@ export function organizerApplicationToRow(
   return {
     id: a.id,
     userId: a.userId,
-    applicantType: a.applicantType,
+    applicantType: a.applicantType || null,
     organizationName: a.organizationName ? a.organizationName.slice(0, 160) : null,
     organizationRegNumber: a.organizationRegNumber ? a.organizationRegNumber.slice(0, 64) : null,
-    ghanaCardFrontUrl: a.ghanaCardFrontUrl.slice(0, 255),
-    ghanaCardBackUrl: a.ghanaCardBackUrl.slice(0, 255),
-    selfieUrl: a.selfieUrl.slice(0, 255),
-    physicalAddress: a.physicalAddress.slice(0, 255),
-    proofOfAddressUrl: a.proofOfAddressUrl.slice(0, 255),
-    intendedGameTypes: a.intendedGameTypes.slice(0, 255),
+    ghanaCardFrontUrl: a.ghanaCardFrontUrl ? a.ghanaCardFrontUrl.slice(0, 255) : null,
+    ghanaCardBackUrl: a.ghanaCardBackUrl ? a.ghanaCardBackUrl.slice(0, 255) : null,
+    selfieUrl: a.selfieUrl ? a.selfieUrl.slice(0, 255) : null,
+    physicalAddress: a.physicalAddress ? a.physicalAddress.slice(0, 255) : null,
+    proofOfAddressUrl: a.proofOfAddressUrl ? a.proofOfAddressUrl.slice(0, 255) : null,
+    intendedGameTypes: a.intendedGameTypes ? a.intendedGameTypes.slice(0, 255) : null,
     expectedTournamentSize: a.expectedTournamentSize ?? null,
     expectedFrequency: a.expectedFrequency ? a.expectedFrequency.slice(0, 64) : null,
     priorExperience: a.priorExperience ? a.priorExperience.slice(0, 500) : null,
-    termsAcceptedAt: new Date(a.termsAcceptedAt),
-    status: a.status,
+    termsAcceptedAt: a.termsAcceptedAt ? new Date(a.termsAcceptedAt) : null,
+    status: a.status || "draft",
+    previousApplicationId: a.previousApplicationId ? a.previousApplicationId.slice(0, 36) : null,
+    submittedAt: a.submittedAt ? new Date(a.submittedAt) : null,
+    needsInfoRequestedAt: a.needsInfoRequestedAt ? new Date(a.needsInfoRequestedAt) : null,
+    needsInfoNote: a.needsInfoNote ? a.needsInfoNote.slice(0, 500) : null,
     reviewedByAdminId: a.reviewedByAdminId ? a.reviewedByAdminId.slice(0, 36) : null,
     reviewedAt: a.reviewedAt ? new Date(a.reviewedAt) : null,
     reviewNote: a.reviewNote ? a.reviewNote.slice(0, 500) : null,
-    createdAt: new Date(a.createdAt),
+    createdAt: a.createdAt ? new Date(a.createdAt) : new Date(),
+  };
+}
+
+/* ------------------------- organizer revocations ------------------------- */
+
+export function rowToOrganizerRevocation(row: OrganizerRevocationRow): import("../types").OrganizerRevocation {
+  return {
+    id: row.id,
+    userId: row.userId,
+    revokedByAdminId: row.revokedByAdminId,
+    reason: row.reason,
+    evidenceUrl: orUndefined(row.evidenceUrl),
+    reapplyEligibleAt: row.reapplyEligibleAt || undefined,
+    createdAt: row.createdAt,
+  };
+}
+
+export function organizerRevocationToRow(
+  r: import("../types").OrganizerRevocation,
+): typeof schema.organizerRevocations.$inferInsert {
+  return {
+    id: r.id,
+    userId: r.userId,
+    revokedByAdminId: r.revokedByAdminId.slice(0, 36),
+    reason: r.reason.slice(0, 500),
+    evidenceUrl: r.evidenceUrl ? r.evidenceUrl.slice(0, 255) : null,
+    reapplyEligibleAt: r.reapplyEligibleAt ? new Date(r.reapplyEligibleAt) : null,
+    createdAt: r.createdAt ? new Date(r.createdAt) : new Date(),
   };
 }
 
@@ -866,10 +903,12 @@ export function ledgerEntryToRow(le: LedgerEntry): typeof schema.ledgerEntries.$
     id: le.id,
     userId: le.userId.slice(0, 36),
     accountType: le.accountType,
-    entryType: le.entryType.slice(0, 64),
+    entryType: le.entryType.slice(0, 64) as any,
     amount: String(le.amount),
     referenceType: le.referenceType.slice(0, 32),
-    referenceId: le.referenceId.slice(0, 64),
+    referenceId: le.referenceId.slice(0, 36),
+    transactionGroupId: (le.transactionGroupId || le.referenceId || "tx-group-default").slice(0, 36),
+    balanceAfter: String(le.balanceAfter || "0.00"),
     createdAt: le.createdAt instanceof Date ? le.createdAt : new Date(le.createdAt),
   };
 }

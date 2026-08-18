@@ -453,28 +453,61 @@ export const otpRequests = mysqlTable(
 /* ------------------------------------------------------------------------- */
 /* organizer_applications — detailed applications for organizer role         */
 /* ------------------------------------------------------------------------- */
-export const organizerApplications = mysqlTable("organizer_applications", {
-  id: varchar("id", { length: 36 }).primaryKey(),
-  userId: varchar("user_id", { length: 36 }).notNull(),
-  applicantType: mysqlEnum("applicant_type", ["individual", "organization"]).notNull(),
-  organizationName: varchar("organization_name", { length: 160 }),
-  organizationRegNumber: varchar("organization_reg_number", { length: 64 }),
-  ghanaCardFrontUrl: varchar("ghana_card_front_url", { length: 255 }).notNull(),
-  ghanaCardBackUrl: varchar("ghana_card_back_url", { length: 255 }).notNull(),
-  selfieUrl: varchar("selfie_url", { length: 255 }).notNull(),
-  physicalAddress: varchar("physical_address", { length: 255 }).notNull(),
-  proofOfAddressUrl: varchar("proof_of_address_url", { length: 255 }).notNull(),
-  intendedGameTypes: varchar("intended_game_types", { length: 255 }).notNull(), // comma separated or JSON
-  expectedTournamentSize: int("expected_tournament_size"),
-  expectedFrequency: varchar("expected_frequency", { length: 64 }),
-  priorExperience: varchar("prior_experience", { length: 500 }),
-  termsAcceptedAt: timestamp("terms_accepted_at").notNull(),
-  status: mysqlEnum("status", ["pending", "approved", "rejected", "needs_info"]).notNull().default("pending"),
-  reviewedByAdminId: varchar("reviewed_by_admin_id", { length: 36 }),
-  reviewedAt: timestamp("reviewed_at"),
-  reviewNote: varchar("review_note", { length: 500 }),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const organizerApplications = mysqlTable(
+  "organizer_applications",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    applicantType: mysqlEnum("applicant_type", ["individual", "organization"]),
+    organizationName: varchar("organization_name", { length: 160 }),
+    organizationRegNumber: varchar("organization_reg_number", { length: 64 }),
+    ghanaCardFrontUrl: varchar("ghana_card_front_url", { length: 255 }),
+    ghanaCardBackUrl: varchar("ghana_card_back_url", { length: 255 }),
+    selfieUrl: varchar("selfie_url", { length: 255 }),
+    physicalAddress: varchar("physical_address", { length: 255 }),
+    proofOfAddressUrl: varchar("proof_of_address_url", { length: 255 }),
+    intendedGameTypes: varchar("intended_game_types", { length: 255 }), // comma separated or JSON
+    expectedTournamentSize: int("expected_tournament_size"),
+    expectedFrequency: varchar("expected_frequency", { length: 64 }),
+    priorExperience: varchar("prior_experience", { length: 500 }),
+    termsAcceptedAt: timestamp("terms_accepted_at"),
+    status: mysqlEnum("status", ["draft", "pending", "approved", "rejected", "needs_info"]).notNull().default("draft"),
+    previousApplicationId: varchar("previous_application_id", { length: 36 }),
+    submittedAt: timestamp("submitted_at"),
+    needsInfoRequestedAt: timestamp("needs_info_requested_at"),
+    needsInfoNote: varchar("needs_info_note", { length: 500 }),
+    reviewedByAdminId: varchar("reviewed_by_admin_id", { length: 36 }),
+    reviewedAt: timestamp("reviewed_at"),
+    reviewNote: varchar("review_note", { length: 500 }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("organizer_apps_user_id_idx").on(t.userId),
+    index("organizer_apps_status_idx").on(t.status),
+    index("organizer_apps_created_at_idx").on(t.createdAt),
+    index("organizer_apps_prev_app_idx").on(t.previousApplicationId),
+  ],
+);
+
+/* ------------------------------------------------------------------------- */
+/* organizer_revocations — revocation records for revoked organizers          */
+/* ------------------------------------------------------------------------- */
+export const organizerRevocations = mysqlTable(
+  "organizer_revocations",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    revokedByAdminId: varchar("revoked_by_admin_id", { length: 36 }).notNull(),
+    reason: varchar("reason", { length: 500 }).notNull(),
+    evidenceUrl: varchar("evidence_url", { length: 255 }),
+    reapplyEligibleAt: timestamp("reapply_eligible_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("organizer_revocations_user_id_idx").on(t.userId),
+    index("organizer_revocations_created_at_idx").on(t.createdAt),
+  ],
+);
 
 /* ------------------------------------------------------------------------- */
 /* regions — administrative / geographical regions for tournament & profiles  */

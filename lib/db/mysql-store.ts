@@ -17,6 +17,7 @@ import type {
   OrganizerApplication,
   OrganizerApplicationStatus,
   OrganizerProfile,
+  OrganizerRevocation,
   OrganizerStatus,
   OtpRequest,
   Permission,
@@ -58,6 +59,7 @@ import {
   matchToRow,
   organizerApplicationToRow,
   organizerProfileToRow,
+  organizerRevocationToRow,
   participantToRow,
   permissionToRow,
   profileToRow,
@@ -1274,7 +1276,7 @@ export const mysqlStore: DbRepository = {
 
       // Auto-populate default regions into DB if empty
       for (const r of DEFAULT_REGIONS) {
-        await this.saveRegion(r).catch(() => null);
+        await mysqlStore.saveRegion(r).catch(() => null);
       }
       return [...DEFAULT_REGIONS];
     } catch {
@@ -1915,7 +1917,7 @@ export const mysqlStore: DbRepository = {
       // Detect known default seed passwords
       const isDefaultCreds =
         (p.username === "admin" || p.username === "superadmin" || p.username === "DAMII Facilitator") &&
-        (p.passcodeHash === undefined || p.passcodeHash === "admin123" || p.passcodeHash === "123456");
+        (p.passcode === undefined || p.passcode === "admin123" || p.passcode === "123456");
 
       return {
         userId: p.token,
@@ -1927,7 +1929,7 @@ export const mysqlStore: DbRepository = {
         isSuperAdmin: p.role === "super_admin" || assignedRoles.some((r) => r.isSystemRole),
         isDefaultCredentials: isDefaultCreds,
         forcePasswordReset: isDefaultCreds,
-        createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : String(p.createdAt || new Date().toISOString()),
+        createdAt: typeof p.createdAt === "string" ? p.createdAt : new Date(p.createdAt).toISOString(),
       };
     });
   },
@@ -2076,7 +2078,7 @@ export const mysqlStore: DbRepository = {
       for (const o of seed.organizerProfiles) await mysqlStore.saveOrganizerProfile(o);
       for (const l of seed.leagues) await mysqlStore.saveLeague(l);
       for (const p of seed.leagueParticipants) await mysqlStore.addLeagueParticipant(p);
-      for (const r of seed.regions) await mysqlStore.saveRegion(r);
+      for (const r of seed.regions || []) await mysqlStore.saveRegion(r);
       for (const g of seed.gameTypeLimits) await mysqlStore.saveGameTypeLimit(g);
 
       // Seed standard permissions

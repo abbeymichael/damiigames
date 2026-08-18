@@ -1,3 +1,5 @@
+"use client";
+
 // Client-side authentication & header helper for DAMII
 
 export function getSessionToken(): string | null {
