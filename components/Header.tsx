@@ -402,10 +402,6 @@ export function Header() {
 
   const unreadCount = notifications.filter((n) => !readIds.includes(n.id)).length;
 
-  const isOrganizerOrApplied =
-    ["organizer", "facilitator", "admin", "super_admin"].includes(role) ||
-    ["pending", "approved", "rejected"].includes(organizerStatus);
-
   const markAllNotificationsRead = () => {
     const allIds = notifications.map((n) => n.id);
     setReadIds(allIds);
@@ -888,11 +884,10 @@ export function Header() {
                             return (
                               <div
                                 key={n.id}
-                                className={`p-2.5 rounded-xl border transition-all relative ${
-                                  isUnread
+                                className={`p-2.5 rounded-xl border transition-all relative ${isUnread
                                     ? "bg-[#0c3b2e] border-[#d6a735]/50"
                                     : "bg-[#0c3b2e]/40 border-[#184d3c] opacity-80"
-                                }`}
+                                  }`}
                               >
                                 <div className="flex items-start justify-between gap-2">
                                   <NavLink
@@ -1004,9 +999,8 @@ export function Header() {
                           </div>
                           <ChevronDown
                             size={14}
-                            className={`transition-transform duration-200 ${
-                              isAdmin ? "text-red-400" : isOrganizer ? "text-amber-400" : isFacilitator ? "text-cyan-400" : "text-[#d6a735]"
-                            } ${isProfileDropdownOpen ? "rotate-180" : ""}`}
+                            className={`transition-transform duration-200 ${isAdmin ? "text-red-400" : isOrganizer ? "text-amber-400" : isFacilitator ? "text-cyan-400" : "text-[#d6a735]"
+                              } ${isProfileDropdownOpen ? "rotate-180" : ""}`}
                           />
                         </button>
 
@@ -1767,11 +1761,10 @@ export function Header() {
                       handleNavClick(e, "/arena");
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${
-                      pathname === "/arena"
+                    className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${pathname === "/arena"
                         ? "bg-[#d6a735] text-[#06261f] shadow-lg shadow-[#d6a735]/20"
                         : "bg-[#0c3b2e]/80 text-[#f5efdf] hover:bg-[#144435] border border-[#184d3c]"
-                    }`}
+                      }`}
                   >
                     <Swords size={18} className={pathname === "/arena" ? "text-[#06261f]" : "text-[#d6a735]"} />
                     <span>Strategy Game Arena</span>
@@ -1783,11 +1776,10 @@ export function Header() {
                       handleNavClick(e, "/leagues");
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${
-                      pathname === "/leagues"
+                    className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${pathname === "/leagues"
                         ? "bg-[#d6a735] text-[#06261f] shadow-lg shadow-[#d6a735]/20"
                         : "bg-[#0c3b2e]/80 text-[#f5efdf] hover:bg-[#144435] border border-[#184d3c]"
-                    }`}
+                      }`}
                   >
                     <Trophy size={18} className={pathname === "/leagues" ? "text-[#06261f]" : "text-[#d6a735]"} />
                     <span>Tournaments & Leagues</span>
@@ -1799,11 +1791,10 @@ export function Header() {
                       handleNavClick(e, "/wallet");
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${
-                      pathname === "/wallet"
+                    className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${pathname === "/wallet"
                         ? "bg-[#d6a735] text-[#06261f] shadow-lg shadow-[#d6a735]/20"
                         : "bg-[#0c3b2e]/80 text-[#f5efdf] hover:bg-[#144435] border border-[#184d3c]"
-                    }`}
+                      }`}
                   >
                     <Wallet size={18} className={pathname === "/wallet" ? "text-[#06261f]" : "text-[#d6a735]"} />
                     <span>Wallet & Ledger</span>
@@ -1816,11 +1807,10 @@ export function Header() {
                         handleNavClick(e, "/organizer");
                         setIsMobileMenuOpen(false);
                       }}
-                      className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${
-                        pathname === "/organizer"
+                      className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${pathname === "/organizer"
                           ? "bg-amber-500 text-[#06261f] shadow-lg shadow-amber-500/20"
                           : "bg-amber-950/40 text-amber-100 hover:bg-amber-900/50 border border-amber-600/50"
-                      }`}
+                        }`}
                     >
                       <Crown size={18} className={pathname === "/organizer" ? "text-[#06261f]" : "text-amber-400"} />
                       <span>Organizer Studio & Hub</span>
@@ -1834,11 +1824,10 @@ export function Header() {
                         handleNavClick(e, "/organizer/apply");
                         setIsMobileMenuOpen(false);
                       }}
-                      className={`p-3 rounded-2xl text-xs font-bold flex items-center gap-3 transition-all ${
-                        pathname === "/organizer/apply"
+                      className={`p-3 rounded-2xl text-xs font-bold flex items-center gap-3 transition-all ${pathname === "/organizer/apply"
                           ? "bg-amber-500 text-[#06261f] shadow-lg shadow-amber-500/20"
                           : "bg-[#0c3b2e]/80 text-[#f5efdf] hover:bg-[#144435] border border-[#184d3c]"
-                      }`}
+                        }`}
                     >
                       <Crown size={18} className={pathname === "/organizer/apply" ? "text-[#06261f]" : "text-amber-400"} />
                       <span>{isOrganizerPending ? "Organizer Application: Under Review" : "Apply for Organizer License"}</span>
@@ -1852,11 +1841,10 @@ export function Header() {
                         handleNavClick(e, "/admin");
                         setIsMobileMenuOpen(false);
                       }}
-                      className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${
-                        pathname === "/admin"
+                      className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${pathname === "/admin"
                           ? "bg-red-600 text-white shadow-lg shadow-red-600/30"
                           : "bg-red-950/40 text-red-100 hover:bg-red-900/50 border border-red-700/50"
-                      }`}
+                        }`}
                     >
                       <ShieldAlert size={18} className={pathname === "/admin" ? "text-white" : "text-red-400"} />
                       <span>Admin Control Center</span>
@@ -1870,11 +1858,10 @@ export function Header() {
                         handleNavClick(e, "/admin");
                         setIsMobileMenuOpen(false);
                       }}
-                      className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${
-                        pathname === "/admin"
+                      className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${pathname === "/admin"
                           ? "bg-cyan-600 text-white shadow-lg shadow-cyan-600/30"
                           : "bg-cyan-950/40 text-cyan-100 hover:bg-cyan-900/50 border border-cyan-700/50"
-                      }`}
+                        }`}
                     >
                       <Scale size={18} className={pathname === "/admin" ? "text-white" : "text-cyan-400"} />
                       <span>Arbiter Hub & Disputes</span>
@@ -1931,103 +1918,98 @@ export function Header() {
           aria-label="Mobile Navigation Bar"
           className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-[#06261f]/95 border-t border-[#d6a735]/30 backdrop-blur-md px-3 py-2 shadow-2xl flex items-center justify-around"
         >
-        {isFocusMode && pathname === "/arena" ? (
-          <div className="w-full flex items-center justify-between px-2 py-1 bg-amber-500 text-slate-950 font-black rounded-xl text-xs shadow-lg animate-in fade-in duration-200">
-            <div className="flex items-center gap-1.5">
-              <Eye size={16} />
-              <span className="uppercase tracking-wide text-[11px]">Arena Focus Mode Active</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                if (typeof window !== "undefined") {
-                  sessionStorage.setItem("damii-focus-mode", "false");
-                  window.dispatchEvent(new CustomEvent("damii-focus-mode-change", { detail: false }));
-                }
-              }}
-              className="px-2.5 py-1 bg-slate-950 text-amber-300 rounded-lg text-[10px] font-bold border border-amber-400/40 hover:bg-slate-900 transition-colors"
-            >
-              Exit Focus
-            </button>
-          </div>
-        ) : (
-          <>
-            <NavLink
-              href="/arena"
-              onClick={(e) => handleNavClick(e, "/arena")}
-              className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${
-                pathname === "/arena"
-                  ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black shadow-md"
-                  : "text-[#cbd5e1] hover:text-[#f5efdf]"
-              }`}
-            >
-              <Swords size={18} className={pathname === "/arena" ? "text-[#d6a735]" : "text-[#94a3b8]"} />
-              <span className="text-[10px] font-extrabold tracking-tight">Arena</span>
-            </NavLink>
-
-            <NavLink
-              href="/leagues"
-              onClick={(e) => handleNavClick(e, "/leagues")}
-              className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${
-                pathname === "/leagues"
-                  ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black shadow-md"
-                  : "text-[#cbd5e1] hover:text-[#f5efdf]"
-              }`}
-            >
-              <Trophy size={18} className={pathname === "/leagues" ? "text-[#d6a735]" : "text-[#94a3b8]"} />
-              <span className="text-[10px] font-extrabold tracking-tight">Leagues</span>
-            </NavLink>
-
-            <NavLink
-              href="/wallet"
-              onClick={(e) => handleNavClick(e, "/wallet")}
-              className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${
-                pathname === "/wallet"
-                  ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black shadow-md"
-                  : "text-[#cbd5e1] hover:text-[#f5efdf]"
-              }`}
-            >
-              <Wallet size={18} className={pathname === "/wallet" ? "text-[#d6a735]" : "text-[#94a3b8]"} />
-              <span className="text-[10px] font-extrabold tracking-tight">Wallet</span>
-            </NavLink>
-
-            {userToken && (
+          {isFocusMode && pathname === "/arena" ? (
+            <div className="w-full flex items-center justify-between px-2 py-1 bg-amber-500 text-slate-950 font-black rounded-xl text-xs shadow-lg animate-in fade-in duration-200">
+              <div className="flex items-center gap-1.5">
+                <Eye size={16} />
+                <span className="uppercase tracking-wide text-[11px]">Arena Focus Mode Active</span>
+              </div>
               <button
                 type="button"
-                onClick={() => setIsNotificationsOpen((prev) => !prev)}
-                className={`relative flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${
-                  isNotificationsOpen
-                    ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black"
-                    : "text-[#cbd5e1] hover:text-[#f5efdf]"
-                }`}
+                onClick={() => {
+                  if (typeof window !== "undefined") {
+                    sessionStorage.setItem("damii-focus-mode", "false");
+                    window.dispatchEvent(new CustomEvent("damii-focus-mode-change", { detail: false }));
+                  }
+                }}
+                className="px-2.5 py-1 bg-slate-950 text-amber-300 rounded-lg text-[10px] font-bold border border-amber-400/40 hover:bg-slate-900 transition-colors"
               >
-                <div className="relative">
-                  <Bell size={18} className={unreadCount > 0 ? "text-[#d6a735]" : "text-[#94a3b8]"} />
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 bg-[#d6a735] text-[#06261f] font-black text-[9px] rounded-full flex items-center justify-center animate-pulse shadow-sm">
-                      {unreadCount}
-                    </span>
-                  )}
-                </div>
-                <span className="text-[10px] font-extrabold tracking-tight">Updates</span>
+                Exit Focus
               </button>
-            )}
+            </div>
+          ) : (
+            <>
+              <NavLink
+                href="/arena"
+                onClick={(e) => handleNavClick(e, "/arena")}
+                className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${pathname === "/arena"
+                    ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black shadow-md"
+                    : "text-[#cbd5e1] hover:text-[#f5efdf]"
+                  }`}
+              >
+                <Swords size={18} className={pathname === "/arena" ? "text-[#d6a735]" : "text-[#94a3b8]"} />
+                <span className="text-[10px] font-extrabold tracking-tight">Arena</span>
+              </NavLink>
 
-            <button
-              type="button"
-              onClick={() => setIsMobileMenuOpen((prev) => !prev)}
-              className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${
-                isMobileMenuOpen
-                  ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black shadow-md"
-                  : "text-[#cbd5e1] hover:text-[#f5efdf]"
-              }`}
-            >
-              <Menu size={18} className={isMobileMenuOpen ? "text-[#d6a735]" : "text-[#94a3b8]"} />
-              <span className="text-[10px] font-extrabold tracking-tight">Menu</span>
-            </button>
-          </>
-        )}
-      </nav>
+              <NavLink
+                href="/leagues"
+                onClick={(e) => handleNavClick(e, "/leagues")}
+                className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${pathname === "/leagues"
+                    ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black shadow-md"
+                    : "text-[#cbd5e1] hover:text-[#f5efdf]"
+                  }`}
+              >
+                <Trophy size={18} className={pathname === "/leagues" ? "text-[#d6a735]" : "text-[#94a3b8]"} />
+                <span className="text-[10px] font-extrabold tracking-tight">Leagues</span>
+              </NavLink>
+
+              <NavLink
+                href="/wallet"
+                onClick={(e) => handleNavClick(e, "/wallet")}
+                className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${pathname === "/wallet"
+                    ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black shadow-md"
+                    : "text-[#cbd5e1] hover:text-[#f5efdf]"
+                  }`}
+              >
+                <Wallet size={18} className={pathname === "/wallet" ? "text-[#d6a735]" : "text-[#94a3b8]"} />
+                <span className="text-[10px] font-extrabold tracking-tight">Wallet</span>
+              </NavLink>
+
+              {userToken && (
+                <button
+                  type="button"
+                  onClick={() => setIsNotificationsOpen((prev) => !prev)}
+                  className={`relative flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${isNotificationsOpen
+                      ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black"
+                      : "text-[#cbd5e1] hover:text-[#f5efdf]"
+                    }`}
+                >
+                  <div className="relative">
+                    <Bell size={18} className={unreadCount > 0 ? "text-[#d6a735]" : "text-[#94a3b8]"} />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 bg-[#d6a735] text-[#06261f] font-black text-[9px] rounded-full flex items-center justify-center animate-pulse shadow-sm">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] font-extrabold tracking-tight">Updates</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setIsMobileMenuOpen((prev) => !prev)}
+                className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${isMobileMenuOpen
+                    ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black shadow-md"
+                    : "text-[#cbd5e1] hover:text-[#f5efdf]"
+                  }`}
+              >
+                <Menu size={18} className={isMobileMenuOpen ? "text-[#d6a735]" : "text-[#94a3b8]"} />
+                <span className="text-[10px] font-extrabold tracking-tight">Menu</span>
+              </button>
+            </>
+          )}
+        </nav>
       )}
 
       {/* Auth Modal Overlay */}
@@ -2043,21 +2025,21 @@ export function Header() {
                     {authMode === "login"
                       ? "Player Account Sign In"
                       : authMode === "complete_profile"
-                      ? "Complete Player Profile"
-                      : regStep === 1
-                      ? "Register with Phone & OTP"
-                      : regStep === 2
-                      ? "Verify 6-Digit OTP Code"
-                      : "Complete Player Profile"}
+                        ? "Complete Player Profile"
+                        : regStep === 1
+                          ? "Register with Phone & OTP"
+                          : regStep === 2
+                            ? "Verify 6-Digit OTP Code"
+                            : "Complete Player Profile"}
                   </h3>
                   <p className="text-[11px] text-[#d6a735]">
                     {authMode === "login"
                       ? "Sign in with your username and passcode"
                       : authMode === "complete_profile" || regStep === 3
-                      ? "Step 3 of 3: Identity & Payout Account"
-                      : regStep === 2
-                      ? "Step 2 of 3: SMS Verification"
-                      : "Step 1 of 3: Instant Phone Verification"}
+                        ? "Step 3 of 3: Identity & Payout Account"
+                        : regStep === 2
+                          ? "Step 2 of 3: SMS Verification"
+                          : "Step 1 of 3: Instant Phone Verification"}
                   </p>
                 </div>
               </div>
@@ -2083,11 +2065,10 @@ export function Header() {
                     setAuthError("");
                     setAuthSuccess("");
                   }}
-                  className={`py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                    authMode === "register"
+                  className={`py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${authMode === "register"
                       ? "bg-[#d6a735] text-[#06261f] font-black shadow-md"
                       : "text-slate-300 hover:text-white hover:bg-[#0c3b2e]"
-                  }`}
+                    }`}
                 >
                   <Smartphone size={14} /> Register (Phone OTP)
                 </button>
@@ -2098,11 +2079,10 @@ export function Header() {
                     setAuthError("");
                     setAuthSuccess("");
                   }}
-                  className={`py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                    authMode === "login"
+                  className={`py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${authMode === "login"
                       ? "bg-[#d6a735] text-[#06261f] font-black shadow-md"
                       : "text-slate-300 hover:text-white hover:bg-[#0c3b2e]"
-                  }`}
+                    }`}
                 >
                   <LogIn size={14} /> Sign In (Passcode)
                 </button>
