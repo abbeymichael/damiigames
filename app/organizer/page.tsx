@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { SharedHeader } from "@/components/SharedHeader";
 import { Footer } from "@/components/Footer";
+import { OrganizerApplicationForm } from "@/components/organizer/OrganizerApplicationForm";
 import {
   Trophy,
   Plus,
@@ -67,9 +68,13 @@ export default function OrganizerPage() {
   const [role, setRole] = useState("user");
   const [organizerProfile, setOrganizerProfile] = useState<OrganizerProfile | null>(null);
 
-  // Login form state for unauthenticated users
+  // Auth form state for unauthenticated users
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPasscode, setLoginPasscode] = useState("");
+  const [regUsername, setRegUsername] = useState("");
+  const [regPasscode, setRegPasscode] = useState("");
+  const [regPhone, setRegPhone] = useState("");
 
   // Organizer License Application Form state
   const [appOrgName, setAppOrgName] = useState("");
@@ -271,6 +276,70 @@ export default function OrganizerPage() {
       loadLeagues();
     } catch {
       setError("Server connection failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    setSuccess("");
+
+    if (!regUsername.trim() || !regPasscode.trim()) {
+      setError("Username and passcode are required.");
+      setBusy(false);
+      return;
+    }
+
+    if (regPasscode.length < 3) {
+      setError("Password must be at least 3 characters.");
+      setBusy(false);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "register",
+          username: regUsername.trim(),
+          passcode: regPasscode.trim(),
+          phoneNumber: regPhone.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setError(data.error || "Registration failed. Please try a different username.");
+        setBusy(false);
+        return;
+      }
+
+      saveSessionToken(data.token, data.csrfToken);
+      localStorage.setItem("damii-player-token", data.token);
+      localStorage.setItem("damii-player-name", data.profile.username);
+      localStorage.setItem(
+        "damii-auth-user",
+        JSON.stringify({
+          token: data.token,
+          username: data.profile.username,
+          points: data.profile.points || 500,
+          role: data.profile.role || "user",
+        })
+      );
+
+      setToken(data.token);
+      setUsername(data.profile.username);
+      setRole(data.profile.role || "user");
+      setSuccess(`Account registered successfully! Welcome, ${data.profile.username}. You can now complete your Organizer application.`);
+      window.dispatchEvent(new Event("damii-auth-changed"));
+      fetchOrganizerRequestStatus(data.token);
+      loadLeagues();
+    } catch {
+      setError("Server connection failed during registration.");
     } finally {
       setBusy(false);
     }
@@ -664,265 +733,194 @@ export default function OrganizerPage() {
 
               <div>
                 <h2 className="text-2xl font-black text-[#f5efdf]">
-                  DAMII Organizer Hub Login
+                  {authMode === "login" ? "DAMII Organizer Hub Login" : "Register as New Organizer"}
                 </h2>
                 <p className="text-sm text-[#a3b8b0] mt-1.5 leading-relaxed">
-                  Sign in with your official account credentials to access the Tournament Organizer Command Studio or apply for an official License.
+                  {authMode === "login"
+                    ? "Sign in with your official account credentials to access the Tournament Organizer Command Studio or check your license status."
+                    : "Create a new DAMII account to start your official Certified Tournament Organizer license application."}
                 </p>
               </div>
 
-              <form onSubmit={handleLogin} className="space-y-4 text-left">
-                <div>
-                  <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
-                    Username / Account Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={loginUsername}
-                    onChange={(e) => setLoginUsername(e.target.value)}
-                    placeholder="Enter your username"
-                    className="w-full px-4 py-3 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/50 text-sm focus:outline-none focus:border-[#d6a735]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
-                    Password / Passcode
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    value={loginPasscode}
-                    onChange={(e) => setLoginPasscode(e.target.value)}
-                    placeholder="Enter password"
-                    className="w-full px-4 py-3 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/50 text-sm focus:outline-none focus:border-[#d6a735]"
-                  />
-                </div>
-
+              {/* Mode Toggle Pills */}
+              <div className="grid grid-cols-2 p-1 bg-[#081c15] border border-[#114232] rounded-2xl text-xs font-bold">
                 <button
-                  type="submit"
-                  disabled={busy}
-                  className="w-full py-3.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2"
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("login");
+                    setError("");
+                    setSuccess("");
+                  }}
+                  className={`py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 ${
+                    authMode === "login"
+                      ? "bg-[#d6a735] text-[#06261f] shadow-md font-black"
+                      : "text-[#a3b8b0] hover:text-[#f5efdf]"
+                  }`}
                 >
-                  <LogIn size={18} />
-                  {busy ? "Authenticating..." : "Sign In to Organizer Studio"}
+                  <LogIn size={15} /> Sign In
                 </button>
-              </form>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("register");
+                    setError("");
+                    setSuccess("");
+                  }}
+                  className={`py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 ${
+                    authMode === "register"
+                      ? "bg-[#d6a735] text-[#06261f] shadow-md font-black"
+                      : "text-[#a3b8b0] hover:text-[#f5efdf]"
+                  }`}
+                >
+                  <UserPlus size={15} /> Register / Apply
+                </button>
+              </div>
+
+              {authMode === "login" ? (
+                <form onSubmit={handleLogin} className="space-y-4 text-left">
+                  <div>
+                    <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
+                      Username / Account Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={loginUsername}
+                      onChange={(e) => setLoginUsername(e.target.value)}
+                      placeholder="Enter your username"
+                      className="w-full px-4 py-3 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/50 text-sm focus:outline-none focus:border-[#d6a735]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
+                      Password / Passcode
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={loginPasscode}
+                      onChange={(e) => setLoginPasscode(e.target.value)}
+                      placeholder="Enter password"
+                      className="w-full px-4 py-3 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/50 text-sm focus:outline-none focus:border-[#d6a735]"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    className="w-full py-3.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2"
+                  >
+                    <LogIn size={18} />
+                    {busy ? "Authenticating..." : "Sign In to Organizer Studio"}
+                  </button>
+
+                  <div className="pt-2 text-center">
+                    <p className="text-xs text-[#a3b8b0]">
+                      Don&apos;t have an account yet?{" "}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthMode("register");
+                          setError("");
+                          setSuccess("");
+                        }}
+                        className="text-[#d6a735] font-bold hover:underline inline-flex items-center gap-1"
+                      >
+                        Register to apply for Organizer License →
+                      </button>
+                    </p>
+                  </div>
+                </form>
+              ) : (
+                <form onSubmit={handleRegister} className="space-y-4 text-left">
+                  <div>
+                    <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
+                      Desired Username / Organizer Handle *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={regUsername}
+                      onChange={(e) => setRegUsername(e.target.value)}
+                      placeholder="e.g. Accra_Draughts_Club"
+                      className="w-full px-4 py-3 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/50 text-sm focus:outline-none focus:border-[#d6a735]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
+                      Password / Passcode *
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={regPasscode}
+                      onChange={(e) => setRegPasscode(e.target.value)}
+                      placeholder="Create a strong password (min 3 chars)"
+                      className="w-full px-4 py-3 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/50 text-sm focus:outline-none focus:border-[#d6a735]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
+                      Mobile / MoMo Phone (Optional)
+                    </label>
+                    <input
+                      type="tel"
+                      value={regPhone}
+                      onChange={(e) => setRegPhone(e.target.value)}
+                      placeholder="e.g. 0244123456"
+                      className="w-full px-4 py-3 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/50 text-sm focus:outline-none focus:border-[#d6a735]"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    className="w-full py-3.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2"
+                  >
+                    <UserPlus size={18} />
+                    {busy ? "Creating Account..." : "Create Account & Apply for License"}
+                  </button>
+
+                  <div className="pt-2 text-center">
+                    <p className="text-xs text-[#a3b8b0]">
+                      Already registered?{" "}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthMode("login");
+                          setError("");
+                          setSuccess("");
+                        }}
+                        className="text-[#d6a735] font-bold hover:underline inline-flex items-center gap-1"
+                      >
+                        Sign in to your account →
+                      </button>
+                    </p>
+                  </div>
+                </form>
+              )}
             </div>
           </section>
         )}
 
         {/* --- CASE 2: LOGGED IN BUT UNAPPROVED ORGANIZER APPLICANT --- */}
         {token && !isApprovedOrganizer && (
-          <section className="max-w-3xl mx-auto space-y-6">
-            {/* Header Banner */}
-            <div className="p-6 bg-gradient-to-br from-[#0c3b2e] to-[#06261f] border border-[#184d3c] rounded-3xl shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-6">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-[#081c15] border border-[#d6a735]/40 rounded-2xl flex items-center justify-center text-[#d6a735] shrink-0">
-                  <Building2 size={28} />
-                </div>
-                <div>
-                  <h2 className="text-xl font-black text-[#f5efdf]">
-                    Official Organizer License Portal
-                  </h2>
-                  <p className="text-xs text-[#a3b8b0] mt-0.5">
-                    Account: <strong className="text-[#f5efdf]">{username}</strong> • Status:{" "}
-                    <span className="capitalize font-bold text-[#d6a735]">
-                      {organizerProfile?.status || "unsubmitted"}
-                    </span>
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => fetchOrganizerRequestStatus(token)}
-                className="px-4 py-2 bg-[#081c15] hover:bg-[#0c3b2e] text-[#d6a735] border border-[#d6a735]/40 font-bold rounded-xl text-xs flex items-center gap-2 transition-all shrink-0"
-              >
-                <RefreshCw size={14} /> Refresh Application Status
-              </button>
-            </div>
-
-            {/* Stepper Bar */}
-            <div className="grid grid-cols-3 gap-2 p-3 bg-[#06261f] border border-[#114232] rounded-2xl text-xs font-semibold text-center">
-              <div className="p-2.5 bg-emerald-950/80 border border-emerald-500/50 rounded-xl text-emerald-300 flex items-center justify-center gap-1.5">
-                <CheckCircle size={14} /> 1. Account Auth
-              </div>
-              <div
-                className={`p-2.5 rounded-xl border flex items-center justify-center gap-1.5 ${
-                  organizerProfile?.status === "pending"
-                    ? "bg-amber-950/80 border-amber-500/80 text-amber-300"
-                    : organizerProfile?.status === "rejected"
-                    ? "bg-red-950/80 border-red-500/80 text-red-300"
-                    : "bg-[#081c15] border-[#114232] text-[#a3b8b0]"
-                }`}
-              >
-                <FileText size={14} /> 2. Commission Review
-              </div>
-              <div className="p-2.5 bg-[#081c15] border border-[#114232] text-[#a3b8b0] rounded-xl flex items-center justify-center gap-1.5 opacity-60">
-                <BadgeCheck size={14} /> 3. Certified Studio
-              </div>
-            </div>
-
-            {/* Status Feedback Card if Pending */}
-            {organizerProfile?.status === "pending" && (
-              <div className="p-6 bg-amber-950/70 border border-amber-500/80 rounded-3xl text-[#f5efdf] space-y-4 shadow-xl">
-                <div className="flex items-start gap-3">
-                  <Clock size={24} className="text-[#d6a735] shrink-0 mt-1" />
-                  <div>
-                    <h3 className="font-bold text-base text-[#d6a735]">
-                      Application Under Commission Review
-                    </h3>
-                    <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                      Your application for <strong>{organizerProfile.organizationName}</strong> was submitted on{" "}
-                      {new Date(organizerProfile.requestedAt).toLocaleDateString()}. System administrators review organizer applications within 24 hours. You will receive an automated notification once your license is approved.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-[#06261f]/80 border border-[#114232] rounded-2xl text-xs space-y-2 text-[#a3b8b0]">
-                  <p><strong className="text-[#f5efdf]">Organization Name:</strong> {organizerProfile.organizationName}</p>
-                  <p><strong className="text-[#f5efdf]">Contact Phone:</strong> {organizerProfile.contactPhone || "Provided"}</p>
-                  <p><strong className="text-[#f5efdf]">Details:</strong> {organizerProfile.bio || "In review"}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Status Feedback Card if Rejected */}
-            {organizerProfile?.status === "rejected" && (
-              <div className="p-6 bg-red-950/80 border border-red-500/80 rounded-3xl text-red-100 space-y-3 shadow-xl">
-                <div className="flex items-start gap-3">
-                  <ShieldAlert size={24} className="text-red-400 shrink-0 mt-1" />
-                  <div>
-                    <h3 className="font-bold text-base text-red-200">
-                      Application Declined
-                    </h3>
-                    <p className="text-xs text-red-300 mt-1">
-                      Reason: {organizerProfile.rejectionReason || "Credentials require further verification."}
-                    </p>
-                  </div>
-                </div>
-                <p className="text-xs text-slate-300">
-                  You may re-submit your organizer application below with updated verification information.
-                </p>
-              </div>
-            )}
-
-            {/* License Application Form */}
-            {(organizerProfile?.status === "none" ||
-              organizerProfile?.status === "rejected" ||
-              !organizerProfile) && (
-              <form
-                onSubmit={handleSubmitApplication}
-                className="p-6 sm:p-8 bg-[#06261f] border border-[#114232] rounded-3xl shadow-2xl space-y-6"
-              >
-                <div>
-                  <h3 className="text-lg font-black text-[#f5efdf] flex items-center gap-2">
-                    <Briefcase size={20} className="text-[#d6a735]" /> Application for Certified Organizer License
-                  </h3>
-                  <p className="text-xs text-[#a3b8b0] mt-1">
-                    Certified Organizers can create public or private tournaments, set guaranteed prize pools, enforce turn clocks, and manage brackets with official Damii rules.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
-                      Organization / Brand Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={appOrgName}
-                      onChange={(e) => setAppOrgName(e.target.value)}
-                      placeholder="e.g. Capital Draughts Club"
-                      className="w-full px-4 py-2.5 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/50 text-sm focus:outline-none focus:border-[#d6a735]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
-                      National ID / Business Reg ID
-                    </label>
-                    <input
-                      type="text"
-                      value={appGhanaCardPin}
-                      onChange={(e) => setAppGhanaCardPin(e.target.value)}
-                      placeholder="e.g. ID-123456789-0"
-                      className="w-full px-4 py-2.5 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/50 text-sm focus:outline-none focus:border-[#d6a735]"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
-                      Contact Mobile Number *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={appContactPhone}
-                      onChange={(e) => setAppContactPhone(e.target.value)}
-                      placeholder="e.g. 0244123456"
-                      className="w-full px-4 py-2.5 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/50 text-sm focus:outline-none focus:border-[#d6a735]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
-                      Target Tournament Frequency
-                    </label>
-                    <select
-                      value={appFrequency}
-                      onChange={(e) => setAppFrequency(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-sm focus:outline-none focus:border-[#d6a735]"
-                    >
-                      <option value="Weekly">Weekly Leagues</option>
-                      <option value="Bi-Weekly">Bi-Weekly Tournaments</option>
-                      <option value="Monthly">Monthly Championship</option>
-                      <option value="Special Events">Special Invitational Events</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
-                    Organizer Bio & Past Event Experience
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={appBio}
-                    onChange={(e) => setAppBio(e.target.value)}
-                    placeholder="Briefly describe your event organizing background, venue location, or draughts community..."
-                    className="w-full px-4 py-2.5 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/50 text-sm focus:outline-none focus:border-[#d6a735]"
-                  />
-                </div>
-
-                <div className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    id="terms-check"
-                    checked={appAgreedTerms}
-                    onChange={(e) => setAppAgreedTerms(e.target.checked)}
-                    className="mt-1 accent-[#d6a735]"
-                  />
-                  <label htmlFor="terms-check" className="text-xs text-[#a3b8b0] leading-relaxed cursor-pointer">
-                    I acknowledge that as a Certified DAMII Organizer, I am bound by the official 10×10 Ghanaian Draughts rules, compulsory capture sequences, turn clocks, and platform financial escrow regulations. All prize pool disbursements pass through automated server ledgers.
-                  </label>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={busy}
-                  className="w-full py-3.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2"
-                >
-                  <Send size={18} />
-                  {busy ? "Submitting Application..." : "Submit Organizer Application"}
-                </button>
-              </form>
-            )}
+          <section className="max-w-4xl mx-auto space-y-6">
+            <OrganizerApplicationForm
+              token={token}
+              userRole={role}
+              onApplicationUpdated={(app) => {
+                if (app.status === "approved") {
+                  setRole("organizer");
+                }
+              }}
+              onSuccessNavigate={() => {
+                fetchOrganizerRequestStatus(token);
+              }}
+            />
           </section>
         )}
 

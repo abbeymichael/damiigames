@@ -60,6 +60,7 @@ interface MemoryData {
   users: Map<string, User>;
   otpRequests: Map<string, OtpRequest>;
   organizerApplications: Map<string, OrganizerApplication>;
+  organizerRevocations: Map<string, OrganizerRevocation>;
   adminProfiles: Map<string, AdminProfile>;
   organizerProfiles: Map<string, OrganizerProfile>;
   adminSettings: AdminSettings;
@@ -98,6 +99,7 @@ function getMemoryData(): MemoryData {
       users: new Map(),
       otpRequests: new Map(),
       organizerApplications: new Map(),
+      organizerRevocations: new Map(),
       adminProfiles: new Map(),
       organizerProfiles: new Map(),
       adminSettings: { ...DEFAULT_ADMIN_SETTINGS },
@@ -861,6 +863,14 @@ export const memoryStore: DbRepository = {
     return null;
   },
 
+  async listOrganizerApplicationsByUserId(userId) {
+    const data = getMemoryData();
+    return Array.from(data.organizerApplications.values())
+      .filter((a) => a.userId === userId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map((a) => ({ ...a }));
+  },
+
   async listOrganizerApplications(status) {
     const data = getMemoryData();
     let list = Array.from(data.organizerApplications.values());
@@ -882,6 +892,28 @@ export const memoryStore: DbRepository = {
     };
     data.organizerApplications.set(id, updated);
     return { ...updated };
+  },
+
+  // --- Organizer Revocations ---
+  async createOrganizerRevocation(revocation) {
+    const data = getMemoryData();
+    data.organizerRevocations.set(revocation.id, { ...revocation });
+    return { ...revocation };
+  },
+
+  async getOrganizerRevocationByUserId(userId) {
+    const data = getMemoryData();
+    const list = Array.from(data.organizerRevocations.values())
+      .filter((r) => r.userId === userId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return list[0] ? { ...list[0] } : null;
+  },
+
+  async listOrganizerRevocations() {
+    const data = getMemoryData();
+    return Array.from(data.organizerRevocations.values())
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map((r) => ({ ...r }));
   },
 
   // --- Regions ---

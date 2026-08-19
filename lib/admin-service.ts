@@ -332,6 +332,23 @@ export const adminService = {
     const applicant = await dbRepository.getProfile(app.userId);
     const userAccount = await dbRepository.getUserById(app.userId);
 
+    // Look up previous application if linked
+    let previousApplication: OrganizerApplication | null = null;
+    if (app.previousApplicationId) {
+      previousApplication = await dbRepository.getOrganizerApplication(app.previousApplicationId);
+    }
+
+    // Look up revocation history
+    let revocationHistory: OrganizerRevocation[] = [];
+    try {
+      const userRevocations = await dbRepository.getOrganizerRevocationByUserId(app.userId);
+      if (userRevocations) {
+        revocationHistory = [userRevocations];
+      }
+    } catch {
+      /* ignore */
+    }
+
     // Get organizer's created tournaments
     const allLeagues = await dbRepository.listLeagues();
     const activeTournaments = allLeagues.filter(
@@ -359,6 +376,8 @@ export const adminService = {
       },
       applicant: applicant || null,
       userAccount: userAccount || null,
+      previousApplication: previousApplication || null,
+      revocationHistory,
       applicantContext: {
         totalMatches,
         winRate,
@@ -549,6 +568,19 @@ export const adminService = {
       reviewedAt: now,
       rejectionReason: note,
     });
+
+    // Record revocation record in organizer_revocations table
+    try {
+      await dbRepository.createOrganizerRevocation({
+        id: crypto.randomUUID(),
+        userId: targetUserId,
+        revokedByAdminId: adminToken,
+        reason: note,
+        createdAt: now,
+      });
+    } catch {
+      /* ignore if table not ready */
+    }
 
     // 3. Handle Live Tournaments Owned by Organizer
     const allLeagues = await dbRepository.listLeagues();

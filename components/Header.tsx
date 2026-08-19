@@ -29,6 +29,14 @@ import {
   CreditCard,
   ArrowRight,
   ShieldCheck,
+  ShieldAlert,
+  Crown,
+  Scale,
+  Building2,
+  Users,
+  Award,
+  Activity,
+  FileText,
   Mail,
   MapPin,
   Calendar,
@@ -120,6 +128,7 @@ export function Header() {
   const [matchesLast7Days, setMatchesLast7Days] = useState(0);
   const [opponentRatingAvg, setOpponentRatingAvg] = useState(1000);
   const [organizerStatus, setOrganizerStatus] = useState<string>("none");
+  const [organizationName, setOrganizationName] = useState<string>("");
 
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -273,7 +282,20 @@ export function Header() {
 
     if (token) {
       setUserToken(token);
-      setUsername(name || "Player");
+      setUsername(name || "User");
+
+      // Load cached user data immediately to eliminate UI flicker
+      const cachedAuth = localStorage.getItem("damii-auth-user");
+      if (cachedAuth) {
+        try {
+          const parsed = JSON.parse(cachedAuth);
+          if (parsed.role) setRole(parsed.role);
+          if (parsed.username) setUsername(parsed.username);
+          if (parsed.points !== undefined) setPoints(parsed.points);
+        } catch {
+          // ignore parsing error
+        }
+      }
 
       fetch(`/api/wallet?token=${encodeURIComponent(token)}`)
         .then((res) => res.json())
@@ -302,8 +324,14 @@ export function Header() {
         .then((data) => {
           if (data.organizerProfile?.status) {
             setOrganizerStatus(data.organizerProfile.status);
+            if (data.organizerProfile.organizationName) {
+              setOrganizationName(data.organizerProfile.organizationName);
+            }
           } else {
             setOrganizerStatus("none");
+          }
+          if (data.profile?.role) {
+            setRole(data.profile.role);
           }
         })
         .catch(() => setOrganizerStatus("none"));
@@ -321,6 +349,7 @@ export function Header() {
       setDraws(0);
       setNotifications([]);
       setOrganizerStatus("none");
+      setOrganizationName("");
     }
   }, [fetchNotifications]);
 
@@ -735,6 +764,12 @@ export function Header() {
     clearAuth();
   };
 
+  const isAdmin = role === "admin" || role === "super_admin";
+  const isOrganizer = role === "organizer" || organizerStatus === "approved";
+  const isFacilitator = role === "facilitator" || role === "treasurer";
+  const isOrganizerPending = organizerStatus === "pending";
+  const isOrganizerOrApplied = isOrganizer || isOrganizerPending;
+
   return (
     <>
       <header className="topbar relative">
@@ -768,7 +803,7 @@ export function Header() {
               href="/organizer"
               onClick={(e) => handleNavClick(e, "/organizer")}
             >
-              <UserCog size={16} className="text-[#d6a735]" /> Organizer Hub
+              <Crown size={16} className="text-amber-400" /> Organizer Hub
             </NavLink>
           )}
           <NavLink
@@ -778,13 +813,22 @@ export function Header() {
           >
             <Wallet size={16} /> Wallet
           </NavLink>
-          {role === "admin" && (
+          {isAdmin && (
             <NavLink
               className={`nav-link ${pathname === "/admin" ? "active" : ""}`}
               href="/admin"
               onClick={(e) => handleNavClick(e, "/admin")}
             >
-              <Shield size={16} className="text-[#d6a735]" /> Admin
+              <ShieldAlert size={16} className="text-red-400" /> Admin
+            </NavLink>
+          )}
+          {isFacilitator && !isAdmin && (
+            <NavLink
+              className={`nav-link ${pathname === "/admin" ? "active" : ""}`}
+              href="/admin"
+              onClick={(e) => handleNavClick(e, "/admin")}
+            >
+              <Scale size={16} className="text-cyan-400" /> Arbiter Hub
             </NavLink>
           )}
 
@@ -909,6 +953,30 @@ export function Header() {
                 <div className="relative">
                   {(() => {
                     const userRank = getProfileRank({ rating, wins, losses, draws, winStreak, bestStreak, matchesLast7Days, opponentRatingAvg });
+
+                    // Distinct button pill styling per role
+                    let pillBorder = "border-[#d6a735]/40 hover:bg-[#0c3b2e]";
+                    let avatarBg = "bg-[#d6a735]/20 text-[#d6a735] border-[#d6a735]/50";
+                    let roleSubtitle = `${userRank.badgeEmoji} ${userRank.title}`;
+                    let roleIcon = null;
+
+                    if (isAdmin) {
+                      pillBorder = "border-red-500/50 hover:bg-red-950/40";
+                      avatarBg = "bg-red-500/20 text-red-400 border-red-500/50";
+                      roleSubtitle = role === "super_admin" ? "Super Admin" : "Admin";
+                      roleIcon = <ShieldAlert size={10} className="text-red-400" />;
+                    } else if (isOrganizer) {
+                      pillBorder = "border-amber-500/50 hover:bg-amber-950/40";
+                      avatarBg = "bg-amber-500/20 text-amber-400 border-amber-500/50";
+                      roleSubtitle = "Organizer";
+                      roleIcon = <Crown size={10} className="text-amber-400" />;
+                    } else if (isFacilitator) {
+                      pillBorder = "border-cyan-500/50 hover:bg-cyan-950/40";
+                      avatarBg = "bg-cyan-500/20 text-cyan-400 border-cyan-500/50";
+                      roleSubtitle = "Arbiter";
+                      roleIcon = <Scale size={10} className="text-cyan-400" />;
+                    }
+
                     return (
                       <>
                         <button
@@ -917,195 +985,543 @@ export function Header() {
                             setIsProfileDropdownOpen((prev) => !prev);
                             setIsNotificationsOpen(false);
                           }}
-                          className="user-pill shrink-0 flex items-center gap-2 hover:bg-[#0c3b2e] border border-[#d6a735]/40 py-1.5 px-3 rounded-xl transition-all cursor-pointer shadow-sm"
+                          className={`user-pill shrink-0 flex items-center gap-2 border py-1.5 px-3 rounded-xl transition-all cursor-pointer shadow-sm ${pillBorder}`}
                           title="User Account & Settings Menu"
                         >
-                          <span className="w-6 h-6 rounded-full bg-[#d6a735]/20 text-[#d6a735] font-black flex items-center justify-center text-xs border border-[#d6a735]/50">
-                            {username ? username[0].toUpperCase() : "P"}
+                          <span className={`w-6 h-6 rounded-full font-black flex items-center justify-center text-xs border ${avatarBg}`}>
+                            {isAdmin ? "A" : isOrganizer ? "O" : isFacilitator ? "F" : (username ? username[0].toUpperCase() : "P")}
                           </span>
                           <div className="text-left hidden sm:block">
-                            <strong className="block text-xs font-black text-[#f5efdf] leading-tight truncate max-w-[100px]">
+                            <strong className="block text-xs font-black text-[#f5efdf] leading-tight truncate max-w-[110px]">
                               {username}
                             </strong>
-                            <span className="block text-[9px] text-[#d6a735] font-bold uppercase truncate max-w-[100px]">
-                              {role === "admin" ? "Admin" : `${userRank.badgeEmoji} ${userRank.title}`}
+                            <span className="flex items-center gap-1 text-[9px] font-bold uppercase truncate max-w-[110px]">
+                              {roleIcon}
+                              <span className={isAdmin ? "text-red-400" : isOrganizer ? "text-amber-400" : isFacilitator ? "text-cyan-400" : "text-[#d6a735]"}>
+                                {roleSubtitle}
+                              </span>
                             </span>
                           </div>
                           <ChevronDown
                             size={14}
-                            className={`text-[#d6a735] transition-transform duration-200 ${
-                              isProfileDropdownOpen ? "rotate-180" : ""
-                            }`}
+                            className={`transition-transform duration-200 ${
+                              isAdmin ? "text-red-400" : isOrganizer ? "text-amber-400" : isFacilitator ? "text-cyan-400" : "text-[#d6a735]"
+                            } ${isProfileDropdownOpen ? "rotate-180" : ""}`}
                           />
                         </button>
 
                         {/* Profile Dropdown Popover */}
                         {isProfileDropdownOpen && (
-                          <div className="absolute right-0 top-full mt-2 w-72 bg-[#06261f] border border-[#d6a735]/40 rounded-2xl shadow-2xl z-50 p-3 space-y-2.5 text-left text-[#f5efdf] animate-in fade-in slide-in-from-top-2 duration-150">
-                            {/* Profile Card Header */}
-                            <div className="p-3 bg-[#0c3b2e] rounded-xl border border-[#d6a735]/30 flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-[#d6a735] text-[#06261f] font-black flex items-center justify-center text-base shadow-md shrink-0">
-                                {username ? username[0].toUpperCase() : "U"}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <strong className="block text-sm font-black text-[#f5efdf] truncate">
-                                  {username}
-                                </strong>
-                                <div className="flex items-center gap-1.5 mt-0.5">
-                                  <span className="px-1.5 py-0.5 bg-[#d6a735]/20 text-[#d6a735] text-[9px] font-black rounded uppercase">
-                                    {role === "admin" ? "Admin" : `${userRank.badgeEmoji} ${userRank.title}`}
-                                  </span>
-                                  <span className="text-[10px] text-slate-300 font-bold">{userRank.dpi} DPI ({rating} ELO)</span>
+                          <div className="absolute right-0 top-full mt-2 w-80 bg-[#06261f] border border-[#d6a735]/40 rounded-2xl shadow-2xl z-50 p-3 space-y-2.5 text-left text-[#f5efdf] animate-in fade-in slide-in-from-top-2 duration-150">
+
+                            {/* 1. ADMIN PROFILE VIEW */}
+                            {isAdmin && (
+                              <>
+                                <div className="p-3 bg-gradient-to-br from-red-950/90 to-[#081c15] rounded-xl border border-red-600/50 flex items-center gap-3 shadow-md">
+                                  <div className="w-11 h-11 rounded-xl bg-red-600 text-white font-black flex items-center justify-center text-lg shadow-lg shrink-0">
+                                    <ShieldAlert size={22} />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <strong className="block text-sm font-black text-[#f5efdf] truncate">
+                                      {username}
+                                    </strong>
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      <span className="px-2 py-0.5 bg-red-500/30 text-red-200 border border-red-500/50 text-[9px] font-black rounded uppercase tracking-wider flex items-center gap-1">
+                                        <ShieldCheck size={10} /> {role === "super_admin" ? "Super Admin" : "Administrator"}
+                                      </span>
+                                      <span className="text-[10px] text-red-300/80 font-bold">Level 5 Authority</span>
+                                    </div>
+                                    {phoneNumber && (
+                                      <span className="block text-[10px] text-red-200/80 mt-1 font-semibold truncate flex items-center gap-1">
+                                        <Phone size={10} className="text-red-400" /> {phoneNumber}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                                {phoneNumber ? (
-                                  <span className="block text-[10px] text-[#cbd5e1] mt-1 font-semibold truncate flex items-center gap-1">
-                                    <Phone size={10} className="text-[#d6a735]" /> {phoneNumber}
-                                  </span>
-                                ) : (
-                                  <span className="block text-[10px] text-amber-400/90 mt-1 font-semibold italic flex items-center gap-1">
-                                    <Phone size={10} /> Add phone number
-                                  </span>
+
+                                <div className="p-2.5 bg-red-950/40 border border-red-800/40 rounded-xl text-[10px] text-red-200/90 leading-relaxed space-y-1">
+                                  <div className="flex items-center gap-1 text-red-300 font-extrabold uppercase tracking-wider text-[9px]">
+                                    <ShieldAlert size={11} className="text-red-400" /> System Regulator Clearance
+                                  </div>
+                                  <p>Full administrative oversight across tournament brackets, referee disputes, financial ledgers, and platform settings.</p>
+                                </div>
+
+                                <div className="space-y-1.5 pt-1">
+                                  <NavLink
+                                    href="/admin"
+                                    onClick={(e) => {
+                                      handleNavClick(e, "/admin");
+                                      setIsProfileDropdownOpen(false);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-red-950/50 hover:bg-red-900/60 text-red-100 border border-red-800/60 flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <Shield size={15} className="text-red-400" /> Admin Control Dashboard
+                                    </span>
+                                    <ChevronRight size={14} className="text-red-300" />
+                                  </NavLink>
+
+                                  <NavLink
+                                    href="/admin?tab=tournaments"
+                                    onClick={(e) => {
+                                      handleNavClick(e, "/admin?tab=tournaments");
+                                      setIsProfileDropdownOpen(false);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <Trophy size={15} className="text-[#d6a735]" /> Tournament & Dispute Resolver
+                                    </span>
+                                    <ChevronRight size={14} className="text-[#cbd5e1]" />
+                                  </NavLink>
+
+                                  <NavLink
+                                    href="/admin?tab=ledger"
+                                    onClick={(e) => {
+                                      handleNavClick(e, "/admin?tab=ledger");
+                                      setIsProfileDropdownOpen(false);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <Wallet size={15} className="text-emerald-400" /> Financial Reserves & Ledger
+                                    </span>
+                                    <ChevronRight size={14} className="text-[#cbd5e1]" />
+                                  </NavLink>
+
+                                  <NavLink
+                                    href="/admin?tab=users"
+                                    onClick={(e) => {
+                                      handleNavClick(e, "/admin?tab=users");
+                                      setIsProfileDropdownOpen(false);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <Users size={15} className="text-sky-400" /> User & Organizer Accounts
+                                    </span>
+                                    <ChevronRight size={14} className="text-[#cbd5e1]" />
+                                  </NavLink>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditUsername(username);
+                                      setEditPhone(phoneNumber || "");
+                                      setEditPasscode("");
+                                      setEditError("");
+                                      setEditSuccess("");
+                                      setIsProfileDropdownOpen(false);
+                                      setIsEditProfileOpen(true);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <UserCog size={15} className="text-red-400" /> Edit Admin Profile & Credentials
+                                    </span>
+                                    <ChevronRight size={14} className="text-[#cbd5e1]" />
+                                  </button>
+                                </div>
+                              </>
+                            )}
+
+                            {/* 2. ORGANIZER PROFILE VIEW */}
+                            {!isAdmin && isOrganizer && (
+                              <>
+                                <div className="p-3 bg-gradient-to-br from-amber-950/90 to-[#081c15] rounded-xl border border-amber-500/50 flex items-center gap-3 shadow-md">
+                                  <div className="w-11 h-11 rounded-xl bg-[#d6a735] text-[#06261f] font-black flex items-center justify-center text-lg shadow-lg shrink-0">
+                                    <Crown size={22} />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <strong className="block text-sm font-black text-[#f5efdf] truncate">
+                                      {username}
+                                    </strong>
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-black rounded uppercase tracking-wider flex items-center gap-1">
+                                        <Crown size={10} /> Certified Organizer
+                                      </span>
+                                    </div>
+                                    {organizationName ? (
+                                      <span className="block text-[10px] text-amber-200 mt-1 font-bold truncate flex items-center gap-1">
+                                        <Building2 size={10} className="text-amber-400" /> {organizationName}
+                                      </span>
+                                    ) : (
+                                      <span className="block text-[10px] text-amber-200/80 mt-1 font-semibold">
+                                        Official League Host
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="p-2.5 bg-amber-950/40 border border-amber-700/40 rounded-xl text-[10px] text-amber-100/90 leading-relaxed space-y-1">
+                                  <div className="flex items-center gap-1 text-amber-300 font-extrabold uppercase tracking-wider text-[9px]">
+                                    <Crown size={11} className="text-amber-400" /> Accredited Tournament Host
+                                  </div>
+                                  <p>Authorized to host tournament leagues, manage check-in rosters, launch round brackets, and coordinate prize payouts.</p>
+                                </div>
+
+                                <div className="space-y-1.5 pt-1">
+                                  <NavLink
+                                    href="/organizer"
+                                    onClick={(e) => {
+                                      handleNavClick(e, "/organizer");
+                                      setIsProfileDropdownOpen(false);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-amber-950/50 hover:bg-amber-900/60 text-amber-100 border border-amber-600/60 flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <Crown size={15} className="text-amber-400" /> Organizer Studio & Command Hub
+                                    </span>
+                                    <ChevronRight size={14} className="text-amber-300" />
+                                  </NavLink>
+
+                                  <NavLink
+                                    href="/organizer?action=create"
+                                    onClick={(e) => {
+                                      handleNavClick(e, "/organizer?action=create");
+                                      setIsProfileDropdownOpen(false);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <Trophy size={15} className="text-[#d6a735]" /> Create Tournament League
+                                    </span>
+                                    <ChevronRight size={14} className="text-[#cbd5e1]" />
+                                  </NavLink>
+
+                                  <NavLink
+                                    href="/leagues"
+                                    onClick={(e) => {
+                                      handleNavClick(e, "/leagues");
+                                      setIsProfileDropdownOpen(false);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <FileText size={15} className="text-[#d6a735]" /> View Public Brackets
+                                    </span>
+                                    <ChevronRight size={14} className="text-[#cbd5e1]" />
+                                  </NavLink>
+
+                                  <NavLink
+                                    href="/wallet"
+                                    onClick={(e) => {
+                                      handleNavClick(e, "/wallet");
+                                      setIsProfileDropdownOpen(false);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <Wallet size={15} className="text-emerald-400" /> Organizer Wallet & Escrow
+                                    </span>
+                                    <span className="text-[10px] font-black text-[#d6a735]">GH₵ {typeof points === "number" ? points.toFixed(2) : points}</span>
+                                  </NavLink>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditUsername(username);
+                                      setEditPhone(phoneNumber || "");
+                                      setEditPasscode("");
+                                      setEditError("");
+                                      setEditSuccess("");
+                                      setIsProfileDropdownOpen(false);
+                                      setIsEditProfileOpen(true);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <UserCog size={15} className="text-amber-400" /> Edit Organizer Profile & MoMo
+                                    </span>
+                                    <ChevronRight size={14} className="text-[#cbd5e1]" />
+                                  </button>
+                                </div>
+                              </>
+                            )}
+
+                            {/* 3. FACILITATOR / ARBITER PROFILE VIEW */}
+                            {!isAdmin && !isOrganizer && isFacilitator && (
+                              <>
+                                <div className="p-3 bg-gradient-to-br from-cyan-950/90 to-[#081c15] rounded-xl border border-cyan-500/50 flex items-center gap-3 shadow-md">
+                                  <div className="w-11 h-11 rounded-xl bg-cyan-600 text-white font-black flex items-center justify-center text-lg shadow-lg shrink-0">
+                                    <Scale size={22} />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <strong className="block text-sm font-black text-[#f5efdf] truncate">
+                                      {username}
+                                    </strong>
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      <span className="px-2 py-0.5 bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[9px] font-black rounded uppercase tracking-wider flex items-center gap-1">
+                                        <Scale size={10} /> Match Facilitator
+                                      </span>
+                                      <span className="text-[10px] text-cyan-200/80 font-bold">Official Arbiter</span>
+                                    </div>
+                                    {phoneNumber && (
+                                      <span className="block text-[10px] text-cyan-200/80 mt-1 font-semibold truncate flex items-center gap-1">
+                                        <Phone size={10} className="text-cyan-400" /> {phoneNumber}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="p-2.5 bg-cyan-950/40 border border-cyan-800/40 rounded-xl text-[10px] text-cyan-100/90 leading-relaxed space-y-1">
+                                  <div className="flex items-center gap-1 text-cyan-300 font-extrabold uppercase tracking-wider text-[9px]">
+                                    <Scale size={11} className="text-cyan-400" /> Match Arbiter Clearance
+                                  </div>
+                                  <p>Authorized to supervise official tournament matches, validate player check-ins, and record approved match scores.</p>
+                                </div>
+
+                                <div className="space-y-1.5 pt-1">
+                                  <NavLink
+                                    href="/admin"
+                                    onClick={(e) => {
+                                      handleNavClick(e, "/admin");
+                                      setIsProfileDropdownOpen(false);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-cyan-950/50 hover:bg-cyan-900/60 text-cyan-100 border border-cyan-600/60 flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <Scale size={15} className="text-cyan-400" /> Arbiter Hub & Oversight
+                                    </span>
+                                    <ChevronRight size={14} className="text-cyan-300" />
+                                  </NavLink>
+
+                                  <NavLink
+                                    href="/arena"
+                                    onClick={(e) => {
+                                      handleNavClick(e, "/arena");
+                                      setIsProfileDropdownOpen(false);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <Swords size={15} className="text-[#d6a735]" /> Match Spectator Arena
+                                    </span>
+                                    <ChevronRight size={14} className="text-[#cbd5e1]" />
+                                  </NavLink>
+
+                                  <NavLink
+                                    href="/leagues"
+                                    onClick={(e) => {
+                                      handleNavClick(e, "/leagues");
+                                      setIsProfileDropdownOpen(false);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <Trophy size={15} className="text-[#d6a735]" /> Tournament & League Brackets
+                                    </span>
+                                    <ChevronRight size={14} className="text-[#cbd5e1]" />
+                                  </NavLink>
+
+                                  <NavLink
+                                    href="/wallet"
+                                    onClick={(e) => {
+                                      handleNavClick(e, "/wallet");
+                                      setIsProfileDropdownOpen(false);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <Wallet size={15} className="text-emerald-400" /> Facilitator Wallet
+                                    </span>
+                                    <span className="text-[10px] font-black text-[#d6a735]">GH₵ {typeof points === "number" ? points.toFixed(2) : points}</span>
+                                  </NavLink>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditUsername(username);
+                                      setEditPhone(phoneNumber || "");
+                                      setEditPasscode("");
+                                      setEditError("");
+                                      setEditSuccess("");
+                                      setIsProfileDropdownOpen(false);
+                                      setIsEditProfileOpen(true);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <UserCog size={15} className="text-cyan-400" /> Edit Profile & Phone
+                                    </span>
+                                    <ChevronRight size={14} className="text-[#cbd5e1]" />
+                                  </button>
+                                </div>
+                              </>
+                            )}
+
+                            {/* 4. COMPETITIVE PLAYER PROFILE VIEW */}
+                            {!isAdmin && !isOrganizer && !isFacilitator && (
+                              <>
+                                {/* Profile Card Header */}
+                                <div className="p-3 bg-[#0c3b2e] rounded-xl border border-[#d6a735]/30 flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-full bg-[#d6a735] text-[#06261f] font-black flex items-center justify-center text-base shadow-md shrink-0">
+                                    {username ? username[0].toUpperCase() : "U"}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <strong className="block text-sm font-black text-[#f5efdf] truncate">
+                                      {username}
+                                    </strong>
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      <span className="px-1.5 py-0.5 bg-[#d6a735]/20 text-[#d6a735] text-[9px] font-black rounded uppercase">
+                                        {userRank.badgeEmoji} {userRank.title}
+                                      </span>
+                                      <span className="text-[10px] text-slate-300 font-bold">{userRank.dpi} DPI ({rating} ELO)</span>
+                                    </div>
+                                    {phoneNumber ? (
+                                      <span className="block text-[10px] text-[#cbd5e1] mt-1 font-semibold truncate flex items-center gap-1">
+                                        <Phone size={10} className="text-[#d6a735]" /> {phoneNumber}
+                                      </span>
+                                    ) : (
+                                      <span className="block text-[10px] text-amber-400/90 mt-1 font-semibold italic flex items-center gap-1">
+                                        <Phone size={10} /> Add phone number
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {isOrganizerPending && (
+                                  <div className="p-2 bg-amber-950/50 border border-amber-500/40 rounded-xl text-[10px] text-amber-200 flex items-center gap-2 shadow-sm">
+                                    <Clock size={13} className="text-amber-400 shrink-0" />
+                                    <span>Organizer License: <strong>Under Review</strong></span>
+                                  </div>
                                 )}
-                              </div>
-                            </div>
 
-                            {/* Rank Progress Bar & Dynamic Formula Breakdown */}
-                            <div className="p-2.5 bg-[#0c3b2e]/90 rounded-xl border border-[#d6a735]/30 space-y-1.5">
-                              <div className="flex items-center justify-between text-[10px] font-bold">
-                                <span className="text-[#d6a735] uppercase tracking-wider">{userRank.aka}</span>
-                                <span className="text-slate-300">{userRank.progressPercent}% to Next Rank</span>
-                              </div>
-                              <div className="w-full bg-[#06261f] h-2 rounded-full overflow-hidden border border-[#184d3c]">
-                                <div
-                                  className="bg-gradient-to-r from-amber-500 to-[#d6a735] h-full rounded-full transition-all duration-300"
-                                  style={{ width: `${userRank.progressPercent}%` }}
-                                />
-                              </div>
-                              <span className="block text-[9px] text-slate-400 italic">
-                                {userRank.description}
-                              </span>
-
-                              {/* Dynamic Factors Breakdown */}
-                              <div className="pt-1.5 border-t border-[#184d3c]/80 grid grid-cols-2 gap-1 text-[9px] font-semibold text-slate-300">
-                                <div className="bg-[#06261f]/70 p-1 rounded border border-[#184d3c] flex items-center justify-between">
-                                  <span>🔥 Win Streak:</span>
-                                  <span className="text-amber-400 font-bold">+{userRank.streakBonus} DPI</span>
-                                </div>
-                                <div className="bg-[#06261f]/70 p-1 rounded border border-[#184d3c] flex items-center justify-between">
-                                  <span>⚡ Activity:</span>
-                                  <span className="text-emerald-400 font-bold">+{userRank.frequencyBonus} DPI</span>
-                                </div>
-                                <div className="bg-[#06261f]/70 p-1 rounded border border-[#184d3c] flex items-center justify-between col-span-2">
-                                  <span>🎯 Opponent Gap Bonus:</span>
-                                  <span className="text-[#d6a735] font-bold">+{userRank.gapBonus} DPI ({opponentRatingAvg} Avg ELO)</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Quick Stats Grid */}
-                            <div className="grid grid-cols-3 gap-1 text-center p-2 bg-[#0c3b2e]/60 rounded-xl border border-[#184d3c] text-[10px]">
-                              <div>
-                                <span className="block text-emerald-400 font-black text-xs">{wins}</span>
-                                <span className="text-slate-400 font-bold uppercase">Wins</span>
-                              </div>
-                              <div>
-                                <span className="block text-red-400 font-black text-xs">{losses}</span>
-                                <span className="text-slate-400 font-bold uppercase">Losses</span>
-                              </div>
-                              <div>
-                                <span className="block text-amber-400 font-black text-xs">{draws}</span>
-                                <span className="text-slate-400 font-bold uppercase">Draws</span>
-                              </div>
-                            </div>
-
-                            {/* Actions List */}
-                            <div className="space-y-1.5 pt-1">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditUsername(username);
-                                  setEditPhone(phoneNumber || "");
-                                  setEditPasscode("");
-                                  setEditError("");
-                                  setEditSuccess("");
-                                  setIsProfileDropdownOpen(false);
-                                  setIsEditProfileOpen(true);
-                                }}
-                                className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
-                              >
-                                <span className="flex items-center gap-2">
-                                  <UserCog size={15} className="text-[#d6a735]" /> Edit Profile & Phone
-                                </span>
-                                <ChevronRight size={14} className="text-[#cbd5e1]" />
-                              </button>
-
-                              <NavLink
-                                href="/wallet"
-                                onClick={(e) => {
-                                  handleNavClick(e, "/wallet");
-                                  setIsProfileDropdownOpen(false);
-                                }}
-                                className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
-                              >
-                                <span className="flex items-center gap-2">
-                                  <Wallet size={15} className="text-[#d6a735]" /> Wallet & Ledger
-                                </span>
-                                <span className="text-[10px] font-black text-[#d6a735]">GH₵ {typeof points === "number" ? points.toFixed(2) : points}</span>
-                              </NavLink>
-
-                              <NavLink
-                                href="/leagues"
-                                onClick={(e) => {
-                                  handleNavClick(e, "/leagues");
-                                  setIsProfileDropdownOpen(false);
-                                }}
-                                className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
-                              >
-                                <span className="flex items-center gap-2">
-                                  <Trophy size={15} className="text-[#d6a735]" /> Tournaments & Leagues
-                                </span>
-                                <ChevronRight size={14} className="text-[#cbd5e1]" />
-                              </NavLink>
-
-                              {isOrganizerOrApplied && (
-                                <NavLink
-                                  href="/organizer"
-                                  onClick={(e) => {
-                                    handleNavClick(e, "/organizer");
-                                    setIsProfileDropdownOpen(false);
-                                  }}
-                                  className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
-                                >
-                                  <span className="flex items-center gap-2">
-                                    <UserCog size={15} className="text-[#d6a735]" /> Organizer Portal & Studio
+                                {/* Rank Progress Bar & Dynamic Formula Breakdown */}
+                                <div className="p-2.5 bg-[#0c3b2e]/90 rounded-xl border border-[#d6a735]/30 space-y-1.5">
+                                  <div className="flex items-center justify-between text-[10px] font-bold">
+                                    <span className="text-[#d6a735] uppercase tracking-wider">{userRank.aka}</span>
+                                    <span className="text-slate-300">{userRank.progressPercent}% to Next Rank</span>
+                                  </div>
+                                  <div className="w-full bg-[#06261f] h-2 rounded-full overflow-hidden border border-[#184d3c]">
+                                    <div
+                                      className="bg-gradient-to-r from-amber-500 to-[#d6a735] h-full rounded-full transition-all duration-300"
+                                      style={{ width: `${userRank.progressPercent}%` }}
+                                    />
+                                  </div>
+                                  <span className="block text-[9px] text-slate-400 italic">
+                                    {userRank.description}
                                   </span>
-                                  <ChevronRight size={14} className="text-[#cbd5e1]" />
-                                </NavLink>
-                              )}
 
-                              {role === "admin" && (
-                                <NavLink
-                                  href="/admin"
-                                  onClick={(e) => {
-                                    handleNavClick(e, "/admin");
-                                    setIsProfileDropdownOpen(false);
-                                  }}
-                                  className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
-                                >
-                                  <span className="flex items-center gap-2">
-                                    <Shield size={15} className="text-[#d6a735]" /> Admin Control Center
-                                  </span>
-                                  <ChevronRight size={14} className="text-[#cbd5e1]" />
-                                </NavLink>
-                              )}
-                            </div>
+                                  {/* Dynamic Factors Breakdown */}
+                                  <div className="pt-1.5 border-t border-[#184d3c]/80 grid grid-cols-2 gap-1 text-[9px] font-semibold text-slate-300">
+                                    <div className="bg-[#06261f]/70 p-1 rounded border border-[#184d3c] flex items-center justify-between">
+                                      <span>🔥 Win Streak:</span>
+                                      <span className="text-amber-400 font-bold">+{userRank.streakBonus} DPI</span>
+                                    </div>
+                                    <div className="bg-[#06261f]/70 p-1 rounded border border-[#184d3c] flex items-center justify-between">
+                                      <span>⚡ Activity:</span>
+                                      <span className="text-emerald-400 font-bold">+{userRank.frequencyBonus} DPI</span>
+                                    </div>
+                                    <div className="bg-[#06261f]/70 p-1 rounded border border-[#184d3c] flex items-center justify-between col-span-2">
+                                      <span>🎯 Opponent Gap Bonus:</span>
+                                      <span className="text-[#d6a735] font-bold">+{userRank.gapBonus} DPI ({opponentRatingAvg} Avg ELO)</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Quick Stats Grid */}
+                                <div className="grid grid-cols-3 gap-1 text-center p-2 bg-[#0c3b2e]/60 rounded-xl border border-[#184d3c] text-[10px]">
+                                  <div>
+                                    <span className="block text-emerald-400 font-black text-xs">{wins}</span>
+                                    <span className="text-slate-400 font-bold uppercase">Wins</span>
+                                  </div>
+                                  <div>
+                                    <span className="block text-red-400 font-black text-xs">{losses}</span>
+                                    <span className="text-slate-400 font-bold uppercase">Losses</span>
+                                  </div>
+                                  <div>
+                                    <span className="block text-amber-400 font-black text-xs">{draws}</span>
+                                    <span className="text-slate-400 font-bold uppercase">Draws</span>
+                                  </div>
+                                </div>
+
+                                {/* Actions List */}
+                                <div className="space-y-1.5 pt-1">
+                                  <NavLink
+                                    href="/arena"
+                                    onClick={(e) => {
+                                      handleNavClick(e, "/arena");
+                                      setIsProfileDropdownOpen(false);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <Swords size={15} className="text-[#d6a735]" /> Strategy Game Arena
+                                    </span>
+                                    <ChevronRight size={14} className="text-[#cbd5e1]" />
+                                  </NavLink>
+
+                                  <NavLink
+                                    href="/wallet"
+                                    onClick={(e) => {
+                                      handleNavClick(e, "/wallet");
+                                      setIsProfileDropdownOpen(false);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <Wallet size={15} className="text-[#d6a735]" /> Wallet & Ledger
+                                    </span>
+                                    <span className="text-[10px] font-black text-[#d6a735]">GH₵ {typeof points === "number" ? points.toFixed(2) : points}</span>
+                                  </NavLink>
+
+                                  <NavLink
+                                    href="/leagues"
+                                    onClick={(e) => {
+                                      handleNavClick(e, "/leagues");
+                                      setIsProfileDropdownOpen(false);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <Trophy size={15} className="text-[#d6a735]" /> Tournaments & Leagues
+                                    </span>
+                                    <ChevronRight size={14} className="text-[#cbd5e1]" />
+                                  </NavLink>
+
+                                  <NavLink
+                                    href="/organizer/apply"
+                                    onClick={(e) => {
+                                      handleNavClick(e, "/organizer/apply");
+                                      setIsProfileDropdownOpen(false);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <Crown size={15} className="text-amber-400" /> {isOrganizerPending ? "Organizer Application Status" : "Apply for Organizer License"}
+                                    </span>
+                                    <ChevronRight size={14} className="text-[#cbd5e1]" />
+                                  </NavLink>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditUsername(username);
+                                      setEditPhone(phoneNumber || "");
+                                      setEditPasscode("");
+                                      setEditError("");
+                                      setEditSuccess("");
+                                      setIsProfileDropdownOpen(false);
+                                      setIsEditProfileOpen(true);
+                                    }}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <UserCog size={15} className="text-[#d6a735]" /> Edit Profile & Phone
+                                    </span>
+                                    <ChevronRight size={14} className="text-[#cbd5e1]" />
+                                  </button>
+                                </div>
+                              </>
+                            )}
 
                             {/* Logout Button */}
                             <div className="pt-2 border-t border-[#0c3b2e]">
                               <button
                                 type="button"
                                 onClick={handleLogout}
-                                className="w-full py-2.5 bg-red-950/80 hover:bg-red-900 border border-red-800/80 text-red-200 text-xs font-black rounded-xl flex items-center justify-center gap-2 transition-all shadow-md"
+                                className="w-full py-2.5 bg-red-950/80 hover:bg-red-900 border border-red-800/80 text-red-200 text-xs font-black rounded-xl flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
                               >
                                 <LogOut size={15} /> Logout Account
                               </button>
@@ -1233,47 +1649,93 @@ export function Header() {
 
                 {/* User Profile Card inside Sidebar */}
                 {userToken ? (
-                  <div className="p-3.5 bg-[#0c3b2e] rounded-2xl border border-[#d6a735]/30 shadow-inner space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="w-9 h-9 rounded-full bg-[#d6a735]/20 text-[#d6a735] font-black flex items-center justify-center text-xs border border-[#d6a735]/40 shrink-0 shadow-sm">
-                          {username ? username[0].toUpperCase() : "P"}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <strong className="block text-xs font-black text-[#f5efdf] truncate">
-                            {username}
-                          </strong>
-                          <span className="block text-[10px] text-[#d6a735] font-bold uppercase tracking-wider">
-                            {role === "admin" ? "Admin" : `${getProfileRank({ rating, wins, losses, draws }).badgeEmoji} ${getProfileRank({ rating, wins, losses, draws }).title}`}
+                  (() => {
+                    const userRank = getProfileRank({ rating, wins, losses, draws, winStreak, bestStreak, matchesLast7Days, opponentRatingAvg });
+
+                    let cardBg = "bg-[#0c3b2e] border-[#d6a735]/30";
+                    let avatarStyle = "bg-[#d6a735]/20 text-[#d6a735] border-[#d6a735]/40";
+                    let roleTag = `${userRank.badgeEmoji} ${userRank.title}`;
+                    let roleIcon = null;
+
+                    if (isAdmin) {
+                      cardBg = "bg-gradient-to-br from-red-950 to-[#081c15] border-red-600/50";
+                      avatarStyle = "bg-red-600 text-white border-red-400";
+                      roleTag = role === "super_admin" ? "Super Admin" : "Administrator";
+                      roleIcon = <ShieldAlert size={10} className="text-red-300" />;
+                    } else if (isOrganizer) {
+                      cardBg = "bg-gradient-to-br from-amber-950 to-[#081c15] border-amber-500/50";
+                      avatarStyle = "bg-[#d6a735] text-[#06261f] border-amber-400";
+                      roleTag = "Organizer";
+                      roleIcon = <Crown size={10} className="text-amber-300" />;
+                    } else if (isFacilitator) {
+                      cardBg = "bg-gradient-to-br from-cyan-950 to-[#081c15] border-cyan-500/50";
+                      avatarStyle = "bg-cyan-600 text-white border-cyan-400";
+                      roleTag = "Match Arbiter";
+                      roleIcon = <Scale size={10} className="text-cyan-300" />;
+                    }
+
+                    return (
+                      <div className={`p-3.5 rounded-2xl border shadow-md space-y-2.5 ${cardBg}`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className={`w-10 h-10 rounded-xl font-black flex items-center justify-center text-sm border shrink-0 shadow-sm ${avatarStyle}`}>
+                              {isAdmin ? <ShieldAlert size={18} /> : isOrganizer ? <Crown size={18} /> : isFacilitator ? <Scale size={18} /> : (username ? username[0].toUpperCase() : "P")}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <strong className="block text-sm font-black text-[#f5efdf] truncate">
+                                {username}
+                              </strong>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider mt-0.5">
+                                {roleIcon}
+                                <span className={isAdmin ? "text-red-300" : isOrganizer ? "text-amber-300" : isFacilitator ? "text-cyan-300" : "text-[#d6a735]"}>
+                                  {roleTag}
+                                </span>
+                              </span>
+                            </div>
+                          </div>
+                          <span className="px-2.5 py-1 rounded-full bg-[#d6a735] text-[#06261f] font-black text-xs shrink-0 shadow-md">
+                            GH₵ {typeof points === "number" ? points.toFixed(2) : points}
                           </span>
                         </div>
-                      </div>
-                      <span className="px-2.5 py-1 rounded-full bg-[#d6a735] text-[#06261f] font-black text-xs shrink-0 shadow-md">
-                        GH₵ {typeof points === "number" ? points.toFixed(2) : points}
-                      </span>
-                    </div>
 
-                    <div className="pt-2 border-t border-[#184d3c] flex items-center justify-between text-[11px]">
-                      <span className="text-[#cbd5e1] font-medium truncate flex items-center gap-1">
-                        <Phone size={12} className="text-[#d6a735]" /> {phoneNumber || "No phone added"}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditUsername(username);
-                          setEditPhone(phoneNumber || "");
-                          setEditPasscode("");
-                          setEditError("");
-                          setEditSuccess("");
-                          setIsMobileMenuOpen(false);
-                          setIsEditProfileOpen(true);
-                        }}
-                        className="text-[#d6a735] hover:underline font-bold text-[10px] uppercase"
-                      >
-                        Edit Profile
-                      </button>
-                    </div>
-                  </div>
+                        {/* Extra Context info per role */}
+                        {isOrganizer && organizationName && (
+                          <div className="text-[10px] text-amber-200 font-bold flex items-center gap-1 bg-amber-950/60 px-2 py-1 rounded-lg border border-amber-500/30">
+                            <Building2 size={11} className="text-amber-400 shrink-0" />
+                            <span className="truncate">{organizationName}</span>
+                          </div>
+                        )}
+
+                        {!isAdmin && !isOrganizer && !isFacilitator && (
+                          <div className="flex items-center justify-between text-[10px] bg-[#06261f]/60 px-2 py-1 rounded-lg border border-[#184d3c]">
+                            <span className="text-slate-300">{userRank.dpi} DPI ({rating} ELO)</span>
+                            <span className="text-emerald-400 font-bold">{wins}W - {losses}L</span>
+                          </div>
+                        )}
+
+                        <div className="pt-2 border-t border-white/10 flex items-center justify-between text-[11px]">
+                          <span className="text-[#cbd5e1] font-medium truncate flex items-center gap-1">
+                            <Phone size={12} className={isAdmin ? "text-red-400" : isOrganizer ? "text-amber-400" : isFacilitator ? "text-cyan-400" : "text-[#d6a735]"} /> {phoneNumber || "No phone added"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditUsername(username);
+                              setEditPhone(phoneNumber || "");
+                              setEditPasscode("");
+                              setEditError("");
+                              setEditSuccess("");
+                              setIsMobileMenuOpen(false);
+                              setIsEditProfileOpen(true);
+                            }}
+                            className={`hover:underline font-bold text-[10px] uppercase ${isAdmin ? "text-red-300" : isOrganizer ? "text-amber-300" : isFacilitator ? "text-cyan-300" : "text-[#d6a735]"}`}
+                          >
+                            Edit Profile
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()
                 ) : (
                   <div className="p-3.5 bg-[#0c3b2e]/90 rounded-2xl border border-[#d6a735]/20 text-center space-y-2">
                     <p className="text-xs text-[#cbd5e1] font-medium">
@@ -1287,7 +1749,7 @@ export function Header() {
                         setIsAuthOpen(true);
                         setIsMobileMenuOpen(false);
                       }}
-                      className="w-full py-2 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+                      className="w-full py-2 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <LogIn size={14} /> Sign In / Register
                     </button>
@@ -1344,7 +1806,7 @@ export function Header() {
                     }`}
                   >
                     <Wallet size={18} className={pathname === "/wallet" ? "text-[#06261f]" : "text-[#d6a735]"} />
-                    <span>Wallet & Marbles Ledger</span>
+                    <span>Wallet & Ledger</span>
                   </NavLink>
 
                   {isOrganizerOrApplied && (
@@ -1356,16 +1818,34 @@ export function Header() {
                       }}
                       className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${
                         pathname === "/organizer"
-                          ? "bg-[#d6a735] text-[#06261f] shadow-lg shadow-[#d6a735]/20"
-                          : "bg-[#0c3b2e]/80 text-[#f5efdf] hover:bg-[#144435] border border-[#184d3c]"
+                          ? "bg-amber-500 text-[#06261f] shadow-lg shadow-amber-500/20"
+                          : "bg-amber-950/40 text-amber-100 hover:bg-amber-900/50 border border-amber-600/50"
                       }`}
                     >
-                      <UserCog size={18} className={pathname === "/organizer" ? "text-[#06261f]" : "text-[#d6a735]"} />
-                      <span>Organizer Studio</span>
+                      <Crown size={18} className={pathname === "/organizer" ? "text-[#06261f]" : "text-amber-400"} />
+                      <span>Organizer Studio & Hub</span>
                     </NavLink>
                   )}
 
-                  {role === "admin" && (
+                  {!isAdmin && !isOrganizer && (
+                    <NavLink
+                      href="/organizer/apply"
+                      onClick={(e) => {
+                        handleNavClick(e, "/organizer/apply");
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`p-3 rounded-2xl text-xs font-bold flex items-center gap-3 transition-all ${
+                        pathname === "/organizer/apply"
+                          ? "bg-amber-500 text-[#06261f] shadow-lg shadow-amber-500/20"
+                          : "bg-[#0c3b2e]/80 text-[#f5efdf] hover:bg-[#144435] border border-[#184d3c]"
+                      }`}
+                    >
+                      <Crown size={18} className={pathname === "/organizer/apply" ? "text-[#06261f]" : "text-amber-400"} />
+                      <span>{isOrganizerPending ? "Organizer Application: Under Review" : "Apply for Organizer License"}</span>
+                    </NavLink>
+                  )}
+
+                  {isAdmin && (
                     <NavLink
                       href="/admin"
                       onClick={(e) => {
@@ -1374,12 +1854,30 @@ export function Header() {
                       }}
                       className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${
                         pathname === "/admin"
-                          ? "bg-[#d6a735] text-[#06261f] shadow-lg shadow-[#d6a735]/20"
-                          : "bg-[#0c3b2e]/80 text-[#f5efdf] hover:bg-[#144435] border border-[#184d3c]"
+                          ? "bg-red-600 text-white shadow-lg shadow-red-600/30"
+                          : "bg-red-950/40 text-red-100 hover:bg-red-900/50 border border-red-700/50"
                       }`}
                     >
-                      <Shield size={18} className={pathname === "/admin" ? "text-[#06261f]" : "text-[#d6a735]"} />
+                      <ShieldAlert size={18} className={pathname === "/admin" ? "text-white" : "text-red-400"} />
                       <span>Admin Control Center</span>
+                    </NavLink>
+                  )}
+
+                  {isFacilitator && !isAdmin && (
+                    <NavLink
+                      href="/admin"
+                      onClick={(e) => {
+                        handleNavClick(e, "/admin");
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${
+                        pathname === "/admin"
+                          ? "bg-cyan-600 text-white shadow-lg shadow-cyan-600/30"
+                          : "bg-cyan-950/40 text-cyan-100 hover:bg-cyan-900/50 border border-cyan-700/50"
+                      }`}
+                    >
+                      <Scale size={18} className={pathname === "/admin" ? "text-white" : "text-cyan-400"} />
+                      <span>Arbiter Hub & Disputes</span>
                     </NavLink>
                   )}
                 </nav>

@@ -128,6 +128,8 @@ export async function POST(
     if (decision === "needs_info") {
       const updatedApp = await dbRepository.updateOrganizerApplication(id, {
         status: "needs_info",
+        needsInfoRequestedAt: now,
+        needsInfoNote: note || "Additional information or documentation requested.",
         reviewedByAdminId: adminUser.token,
         reviewedAt: now,
         reviewNote: note || "Additional information or documentation requested.",

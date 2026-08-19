@@ -1192,6 +1192,10 @@ export const mysqlStore: DbRepository = {
           organizationRegNumber: row.organizationRegNumber,
           applicantType: row.applicantType,
           status: row.status,
+          previousApplicationId: row.previousApplicationId,
+          submittedAt: row.submittedAt,
+          needsInfoRequestedAt: row.needsInfoRequestedAt,
+          needsInfoNote: row.needsInfoNote,
           ghanaCardFrontUrl: row.ghanaCardFrontUrl,
           ghanaCardBackUrl: row.ghanaCardBackUrl,
           selfieUrl: row.selfieUrl,
@@ -1201,6 +1205,7 @@ export const mysqlStore: DbRepository = {
           expectedTournamentSize: row.expectedTournamentSize,
           expectedFrequency: row.expectedFrequency,
           priorExperience: row.priorExperience,
+          termsAcceptedAt: row.termsAcceptedAt,
           reviewNote: row.reviewNote,
           reviewedAt: row.reviewedAt,
           reviewedByAdminId: row.reviewedByAdminId,
@@ -1219,8 +1224,18 @@ export const mysqlStore: DbRepository = {
       .select()
       .from(schema.organizerApplications)
       .where(eq(schema.organizerApplications.userId, userId))
-      .orderBy(desc(schema.organizerApplications.createdAt));
+      .orderBy(desc(schema.organizerApplications.createdAt))
+      .limit(1);
     return row ? rowToOrganizerApplication(row) : null;
+  },
+
+  async listOrganizerApplicationsByUserId(userId: string): Promise<OrganizerApplication[]> {
+    const rows = await getDb()
+      .select()
+      .from(schema.organizerApplications)
+      .where(eq(schema.organizerApplications.userId, userId))
+      .orderBy(desc(schema.organizerApplications.createdAt));
+    return rows.map(rowToOrganizerApplication);
   },
 
   async listOrganizerApplications(status) {
@@ -1253,12 +1268,41 @@ export const mysqlStore: DbRepository = {
         priorExperience: row.priorExperience,
         termsAcceptedAt: row.termsAcceptedAt,
         status: row.status,
+        previousApplicationId: row.previousApplicationId,
+        submittedAt: row.submittedAt,
+        needsInfoRequestedAt: row.needsInfoRequestedAt,
+        needsInfoNote: row.needsInfoNote,
         reviewedByAdminId: row.reviewedByAdminId,
         reviewedAt: row.reviewedAt,
         reviewNote: row.reviewNote,
       })
       .where(eq(schema.organizerApplications.id, id));
     return this.getOrganizerApplication(id);
+  },
+
+  // --- Organizer Revocations ---
+  async createOrganizerRevocation(revocation: OrganizerRevocation): Promise<OrganizerRevocation> {
+    const row = organizerRevocationToRow(revocation);
+    await getDb().insert(schema.organizerRevocations).values(row);
+    return rowToOrganizerRevocation(row as schema.OrganizerRevocationRow);
+  },
+
+  async getOrganizerRevocationByUserId(userId: string): Promise<OrganizerRevocation | null> {
+    const [row] = await getDb()
+      .select()
+      .from(schema.organizerRevocations)
+      .where(eq(schema.organizerRevocations.userId, userId))
+      .orderBy(desc(schema.organizerRevocations.createdAt))
+      .limit(1);
+    return row ? rowToOrganizerRevocation(row) : null;
+  },
+
+  async listOrganizerRevocations(): Promise<OrganizerRevocation[]> {
+    const rows = await getDb()
+      .select()
+      .from(schema.organizerRevocations)
+      .orderBy(desc(schema.organizerRevocations.createdAt));
+    return rows.map(rowToOrganizerRevocation);
   },
 
   // --- Regions ---
