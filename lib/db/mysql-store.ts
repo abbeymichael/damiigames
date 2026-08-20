@@ -429,36 +429,57 @@ export const mysqlStore: DbRepository = {
   },
 
   async upsertProfile(token, username, explicitRole) {
+    const cleanUsername = username.trim();
     const existing = await mysqlStore.getProfile(token);
     const now = new Date().toISOString();
 
-    if (!existing) {
-      const p: Profile = {
-        token,
-        username: username.trim(),
-        rating: 1000,
-        marbles: 0,
-        points: 0,
-        wins: 0,
-        losses: 0,
-        draws: 0,
-        role: explicitRole && VALID_ROLES.includes(explicitRole) ? explicitRole : "user",
-        status: "active",
-        createdAt: now,
-        updatedAt: now,
-      };
-      await getDb().insert(schema.profiles).values(profileToRow(p));
-      return { ...p };
+    if (existing) {
+      existing.username = cleanUsername;
+      if (explicitRole && VALID_ROLES.includes(explicitRole)) existing.role = explicitRole;
+      existing.updatedAt = now;
+      await getDb()
+        .update(schema.profiles)
+        .set(profileUpdateSet(existing))
+        .where(eq(schema.profiles.token, existing.token));
+      return existing;
     }
 
-    existing.username = username.trim();
-    if (explicitRole && VALID_ROLES.includes(explicitRole)) existing.role = explicitRole;
-    existing.updatedAt = now;
+    // Check if profile exists by username (case-insensitive) to prevent duplicate key constraint failure
+    const existingByUsername = await mysqlStore.findProfileByUsername(cleanUsername);
+    if (existingByUsername) {
+      if (explicitRole && VALID_ROLES.includes(explicitRole)) existingByUsername.role = explicitRole;
+      existingByUsername.updatedAt = now;
+      await getDb()
+        .update(schema.profiles)
+        .set(profileUpdateSet(existingByUsername))
+        .where(eq(schema.profiles.token, existingByUsername.token));
+      return existingByUsername;
+    }
+
+    const p: Profile = {
+      token,
+      username: cleanUsername,
+      rating: 1000,
+      marbles: 0,
+      points: 0,
+      wins: 0,
+      losses: 0,
+      draws: 0,
+      winStreak: 0,
+      bestStreak: 0,
+      matchesLast7Days: 0,
+      opponentRatingAvg: 0,
+      totalOpponentsFaced: 0,
+      role: explicitRole && VALID_ROLES.includes(explicitRole) ? explicitRole : "user",
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+    };
     await getDb()
-      .update(schema.profiles)
-      .set(profileUpdateSet(existing))
-      .where(eq(schema.profiles.token, token));
-    return existing;
+      .insert(schema.profiles)
+      .values(profileToRow(p))
+      .onDuplicateKeyUpdate({ set: profileUpdateSet(p) });
+    return { ...p };
   },
 
   async banUser(token, reason) {
@@ -548,6 +569,7 @@ export const mysqlStore: DbRepository = {
       const update = calculateDynamicRatingUpdate(p, opponent, isWin, isDraw);
 
       const pointsReward = isWin ? 100 : isDraw ? 20 : 10;
+      const marblesReward = isWin ? 25 : isDraw ? 10 : 5;
 
       await getDb()
         .update(schema.profiles)
@@ -563,7 +585,7 @@ export const mysqlStore: DbRepository = {
           totalOpponentsFaced: update.newTotalOpponentsFaced ?? 0,
           lastMatchAt: update.lastMatchAt ?? null,
           points: sql`${schema.profiles.points} + ${pointsReward}`,
-          marbles: sql`${schema.profiles.points} + ${pointsReward}`,
+          marbles: sql`${schema.profiles.marbles} + ${marblesReward}`,
           updatedAt: new Date().toISOString(),
         })
         .where(eq(schema.profiles.token, token));

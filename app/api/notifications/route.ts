@@ -5,7 +5,12 @@ const cleanToken = (v: unknown) => String(v ?? "").trim().slice(0, 80);
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const token = cleanToken(searchParams.get("token"));
+  const rawToken = cleanToken(searchParams.get("token"));
+  let token = rawToken;
+  if (rawToken) {
+    const session = await dbRepository.getSession(rawToken);
+    if (session) token = session.userId;
+  }
 
   if (!token) {
     return NextResponse.json({ notifications: [], unreadCount: 0 });

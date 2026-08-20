@@ -19,6 +19,7 @@ export const timerService = {
         remainingTurnSeconds: 0,
         remainingDisconnectSeconds: null,
         warning: null,
+        bothDisconnected: room.status === "abandoned",
       };
     }
 

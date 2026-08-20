@@ -1,0 +1,39 @@
+# ==============================================================================
+# DAMII - Apache / cPanel / Shared Hosting .htaccess Configuration
+# ==============================================================================
+#
+# OPTION A: Using Phusion Passenger (cPanel "Setup Node.js App")
+# ------------------------------------------------------------------------------
+# If your shared host uses CloudLinux / Phusion Passenger Node.js selector,
+# cPanel manages the routing automatically. Ensure `server.js` or `app.js`
+# is configured as the Application Startup File in your cPanel dashboard.
+#
+#
+# OPTION B: Apache Reverse Proxy to Local Node.js Port
+# ------------------------------------------------------------------------------
+# If your shared host runs Node.js as a background daemon listening on a local
+# port (e.g., 3000), uncomment the following rules to proxy web traffic:
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Force HTTPS (optional if handled by Cloudflare / host)
+    # RewriteCond %{HTTPS} off
+    # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+    # WebSocket & Real-time Upgrades
+    RewriteCond %{HTTP:Upgrade} websocket [NC]
+    RewriteCond %{HTTP:Connection} upgrade [NC]
+    RewriteRule ^/?(.*) ws://127.0.0.1:3000/$1 [P,L]
+
+    # Proxy all HTTP traffic to the Node.js server
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
+</IfModule>
+
+<IfModule mod_proxy.c>
+    ProxyPreserveHost On
+    ProxyRequests Off
+    ProxyTimeout 86400
+</IfModule>

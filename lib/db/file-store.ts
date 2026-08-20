@@ -340,30 +340,45 @@ export const fileStore: any = {
   async upsertProfile(token, username, explicitRole) {
     return lockKey(`profile:${token}`, async () => {
       const now = new Date().toISOString();
+      const cleanUsername = username.trim();
       let p = data().profiles.get(token);
+      if (!p) {
+        const lower = cleanUsername.toLowerCase();
+        for (const prof of data().profiles.values()) {
+          if (prof.username.trim().toLowerCase() === lower) {
+            p = prof;
+            break;
+          }
+        }
+      }
 
       if (!p) {
         p = {
           token,
-          username: username.trim(),
+          username: cleanUsername,
           rating: 1000,
           marbles: 0,
           points: 0,
           wins: 0,
           losses: 0,
           draws: 0,
+          winStreak: 0,
+          bestStreak: 0,
+          matchesLast7Days: 0,
+          opponentRatingAvg: 0,
+          totalOpponentsFaced: 0,
           role: explicitRole && VALID_ROLES.includes(explicitRole) ? explicitRole : "user",
           status: "active",
           createdAt: now,
           updatedAt: now,
         };
       } else {
-        p.username = username.trim();
+        p.username = cleanUsername;
         if (explicitRole && VALID_ROLES.includes(explicitRole)) p.role = explicitRole;
         p.updatedAt = now;
       }
 
-      data().profiles.set(token, p);
+      data().profiles.set(p.token, p);
       data().saveToDisk();
       return { ...p };
     });

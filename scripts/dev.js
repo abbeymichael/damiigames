@@ -1,10 +1,28 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
+const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
-const vinextCli = path.join(projectRoot, "node_modules", "vinext", "dist", "cli.js");
+
+let vinextCli = path.join(projectRoot, "node_modules", "vinext", "dist", "cli.js");
+
+if (!fs.existsSync(vinextCli)) {
+  try {
+    vinextCli = require.resolve("vinext/dist/cli.js", { paths: [projectRoot] });
+  } catch {
+    console.log("[damii] vinext CLI not found, installing dependencies...");
+    spawnSync("npm", ["install"], { cwd: projectRoot, stdio: "inherit" });
+    try {
+      vinextCli = require.resolve("vinext/dist/cli.js", { paths: [projectRoot] });
+    } catch {
+      vinextCli = path.join(projectRoot, "node_modules", "vinext", "dist", "cli.js");
+    }
+  }
+}
 
 const args = process.argv.slice(2);
 const nextArgs = ["dev"];

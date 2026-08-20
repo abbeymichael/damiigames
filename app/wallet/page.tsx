@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { SharedHeader } from "@/components/SharedHeader";
 import { Footer } from "@/components/Footer";
-import { Wallet, CreditCard, ShieldCheck, Phone, CheckCircle2, AlertCircle, LogIn, Award } from "lucide-react";
+import { Wallet, Coins, ShieldCheck, Phone, CheckCircle2, AlertCircle, LogIn, Award, Sparkles, ArrowRight, RefreshCw } from "lucide-react";
 import type { WalletTransaction } from "@/lib/types";
 
 export default function WalletPage() {
@@ -59,7 +59,7 @@ export default function WalletPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Verification failed");
-      setMessage(data.message || "Paystack transaction verified!");
+      setMessage(data.message || "Paystack transaction verified! Marbles added to your balance.");
       loadWalletData(userToken);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Verification error");
@@ -98,15 +98,15 @@ export default function WalletPage() {
         body: JSON.stringify({ action: "deposit", token, amountGhs: topupAmountGhs, email }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to initialize Paystack deposit");
+      if (!res.ok) throw new Error(data.error || "Failed to initialize Paystack purchase");
 
-      setMessage(`Paystack invoice created for GH₵ ${topupAmountGhs}. Redirecting...`);
+      setMessage(`Paystack invoice created for ${topupAmountGhs} Marbles (GH₵ ${topupAmountGhs}.00). Redirecting to secure gateway...`);
       if (data.authorizationUrl) {
         window.open(data.authorizationUrl, "_blank");
       }
       setTimeout(() => verifyPaystackRef(token, data.reference), 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Top-up error");
+      setError(err instanceof Error ? err.message : "Purchase error");
     } finally {
       setBusy(false);
     }
@@ -129,11 +129,11 @@ export default function WalletPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Withdrawal failed");
-      setMessage(`Withdrawal request of GH₵ ${data.ghsValue} submitted to ${momoProvider} ${momoNumber}. Ref: ${data.reference}`);
+      if (!res.ok) throw new Error(data.error || "Redemption request failed");
+      setMessage(`Redemption request of ${data.ghsValue} Marbles (GH₵ ${data.ghsValue}.00) submitted to ${momoProvider} ${momoNumber}. Reference: ${data.reference}`);
       loadWalletData(token);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Withdrawal error");
+      setError(err instanceof Error ? err.message : "Redemption error");
     } finally {
       setBusy(false);
     }
@@ -145,24 +145,24 @@ export default function WalletPage() {
         <SharedHeader />
         <section className="wallet-header">
           <span className="eyebrow"><Wallet size={16} /> USER AUTHENTICATION REQUIRED</span>
-          <h1>Wallet Balance & Financial Ledger</h1>
-          <p>Please sign in or create an account to view your balance, top up via Paystack, or cash out to Mobile Money.</p>
+          <h1>Marbles Treasury & Virtual Balance</h1>
+          <p>Please sign in or create an account to view your Marbles balance, buy Marbles via Paystack, or redeem to Mobile Money.</p>
         </section>
 
         <div className="max-w-md mx-auto my-12 p-8 bg-slate-900 border border-slate-800 rounded-2xl text-center space-y-4 shadow-xl">
           <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto">
             <LogIn size={28} />
           </div>
-          <h2 className="text-xl font-bold text-slate-100">Sign In to Access Your Wallet</h2>
+          <h2 className="text-xl font-bold text-slate-100">Sign In to Access Your Treasury</h2>
           <p className="text-sm text-slate-400 leading-relaxed">
-            All wagers, tournament fees, escrow vaults, and Mobile Money payouts require an active DAMII user login.
+            All 1-on-1 wagers, tournament prize pools, match stakes, and Mobile Money redemptions use DAMII Marbles (1 Marble = 1 Cedi).
           </p>
           <button
             type="button"
             onClick={() => window.dispatchEvent(new CustomEvent("damii-open-auth"))}
             className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-sm transition-all shadow-lg shadow-amber-500/10 flex items-center justify-center gap-2"
           >
-            <LogIn size={16} /> Click Login / Register in Top Navigation
+            <LogIn size={16} /> Click Sign In / Register in Top Navigation
           </button>
         </div>
         <Footer />
@@ -175,9 +175,9 @@ export default function WalletPage() {
       <SharedHeader />
 
       <section className="wallet-header">
-        <span className="eyebrow"><Wallet size={16} /> WALLET LEDGER & PAYSTACK GATEWAY</span>
-        <h1>Wallet Balance & MoMo Cash Out</h1>
-        <p>Top-up funds via Paystack Mobile Money, wager in matches, enter tournaments, and cash out to Mobile Money (1 Cedi = GH₵ 1.00).</p>
+        <span className="eyebrow"><Coins size={16} /> DAMII MARBLES TREASURY (1 MARBLE = 1 CEDI)</span>
+        <h1>Marbles Balance & MoMo Redemption</h1>
+        <p>Buy Marbles to enter 1-on-1 wager matches and tournament prize pools. Redeem your winnings directly to Mobile Money at a 1:1 rate.</p>
       </section>
 
       {message && <p className="alert-banner success"><CheckCircle2 size={16} /> {message}</p>}
@@ -185,46 +185,74 @@ export default function WalletPage() {
 
       <section className="balance-grid">
         <div className="balance-card points-card">
-          <small>AVAILABLE BALANCE</small>
-          <h2>GH₵ {typeof balance.points === "number" ? balance.points.toFixed(2) : balance.points}</h2>
-          <p>Used for Wager Matches, Tournament Entries, and direct MoMo Cash Out (1 Cedi = GH₵ 1.00).</p>
+          <small className="flex items-center gap-1.5 font-bold tracking-wider">
+            <Coins size={14} className="text-[#d6a735]" /> AVAILABLE MARBLES
+          </small>
+          <h2>{typeof balance.points === "number" ? balance.points.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : balance.points} <span className="text-lg font-bold text-[#d6a735]">Marbles</span></h2>
+          <p>Equivalent to <strong>GH₵ {typeof balance.points === "number" ? balance.points.toFixed(2) : balance.points}</strong> (1 Marble = 1 Cedi). Used for 1-on-1 wagers & tournament prize pools.</p>
         </div>
 
         <div className="balance-card marbles-card">
-          <small>RATING & RANK</small>
-          <h2><Award className="inline text-amber-400 mr-1" size={28} /> {balance.rating} ELO</h2>
-          <p>Skill ranking based on match victories, draws, and tournament brackets.</p>
+          <small className="flex items-center gap-1.5 font-bold tracking-wider">
+            <Award size={14} className="text-amber-400" /> RATING & RANK
+          </small>
+          <h2><Award className="inline text-amber-400 mr-1" size={28} /> {balance.rating} DPI</h2>
+          <p>National skill ranking based on match victories, draws, and competitive tournament brackets.</p>
         </div>
       </section>
 
+      {/* 1:1 Marble Conversion Banner */}
+      <div className="my-6 p-4 bg-[#081c15] border border-[#184d3c] rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 text-[#f5efdf]">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#d6a735]/20 border border-[#d6a735]/40 text-[#d6a735] flex items-center justify-center shrink-0">
+            <Sparkles size={20} />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-[#d6a735] flex items-center gap-1.5">
+              1:1 Virtual Token Model
+            </h4>
+            <p className="text-xs text-[#cbd5e1] mt-0.5">
+              1 Marble = 1 Ghana Cedi (GH₵ 1.00). All match wagers and tournament entry fees are transacted exclusively in Marbles.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-xs font-mono font-bold bg-[#06261f] px-3 py-1.5 rounded-xl border border-[#184d3c] text-emerald-400 shrink-0">
+          <span>1 Cedi (GH₵ 1.00)</span>
+          <ArrowRight size={14} className="text-[#d6a735]" />
+          <span>1 Marble</span>
+        </div>
+      </div>
+
       <section className="wallet-actions-grid">
         <div className="action-box">
-          <h3><CreditCard size={18} /> Top-Up Wallet (Paystack)</h3>
-          <p>Instant deposit via Mobile Money (MTN / Telecel / AT) or Bank Card.</p>
+          <h3><Coins size={18} className="text-[#d6a735]" /> Buy Marbles (Paystack)</h3>
+          <p>Instant purchase via Mobile Money (MTN / Telecel / AT) or Bank Card at 1 Cedi per Marble.</p>
           <form onSubmit={handleTopup}>
-            <label>Amount in GHS (GH₵)
+            <label>Amount of Marbles (1 Marble = GH₵ 1.00)
               <input type="number" min={limits.minDepositGhs} max={limits.maxDepositGhs} step={5} value={topupAmountGhs} onChange={(e) => setTopupAmountGhs(Number(e.target.value))} />
             </label>
             <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1 mb-2">
-              <span>Limit: <strong>GH₵ {limits.minDepositGhs}</strong> min – <strong>GH₵ {limits.maxDepositGhs.toLocaleString()}</strong> max</span>
-              <span className="rate-hint">Will credit: <strong className="text-emerald-400">GH₵ {topupAmountGhs.toFixed(2)}</strong></span>
+              <span>Limit: <strong>{limits.minDepositGhs} Marbles</strong> min – <strong>{limits.maxDepositGhs.toLocaleString()} Marbles</strong> max</span>
+              <span className="rate-hint">Cost: <strong className="text-emerald-400">GH₵ {topupAmountGhs.toFixed(2)}</strong></span>
             </div>
-            <label>Email (Receipt)
+            <label>Email (Receipt Confirmation)
               <input type="email" placeholder="player@damii.gh" value={email} onChange={(e) => setEmail(e.target.value)} />
             </label>
-            <button type="submit" disabled={busy} className="btn-primary">Pay with Paystack</button>
+            <button type="submit" disabled={busy} className="btn-primary flex items-center justify-center gap-1.5">
+              <Coins size={16} /> Buy {topupAmountGhs} Marbles (GH₵ {topupAmountGhs}.00)
+            </button>
           </form>
         </div>
 
         <div className="action-box">
-          <h3><Phone size={18} /> Mobile Money Cash Out</h3>
-          <p>Withdraw funds directly to Mobile Money (1 Cedi = GH₵ 1.00).</p>
+          <h3><Phone size={18} className="text-emerald-400" /> Redeem Marbles to Mobile Money</h3>
+          <p>Redeem your won Marbles directly to Mobile Money (1 Marble = GH₵ 1.00).</p>
           <form onSubmit={handleWithdraw}>
             <div className="form-row">
-              <label>Amount to Withdraw (GH₵)
+              <label>Marbles to Redeem
                 <input type="number" min={limits.minWithdrawalGhs} max={limits.maxWithdrawalGhs} step={5} value={withdrawAmount} onChange={(e) => setWithdrawAmount(Number(e.target.value))} />
               </label>
-              <label>Provider
+              <label>Network Provider
                 <select value={momoProvider} onChange={(e) => setMomoProvider(e.target.value)}>
                   <option value="MTN">MTN MoMo</option>
                   <option value="Telecel">Telecel Cash</option>
@@ -233,27 +261,34 @@ export default function WalletPage() {
               </label>
             </div>
             <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1 mb-2">
-              <span>Per-Tx: <strong>GH₵ {limits.minWithdrawalGhs}–{limits.maxWithdrawalGhs.toLocaleString()}</strong> (24h Cap: <strong>GH₵ {limits.maxDailyWithdrawalGhs.toLocaleString()}</strong>)</span>
+              <span>Per-Tx: <strong>{limits.minWithdrawalGhs}–{limits.maxWithdrawalGhs.toLocaleString()} Marbles</strong> (24h Cap: <strong>{limits.maxDailyWithdrawalGhs.toLocaleString()}</strong>)</span>
               <span className="rate-hint">Payout value: <strong className="text-amber-400">GH₵ {withdrawAmount.toFixed(2)}</strong></span>
             </div>
             <label>MoMo Phone Number
               <input type="tel" placeholder="024XXXXXXX" value={momoNumber} onChange={(e) => setMomoNumber(e.target.value)} required />
             </label>
-            <button type="submit" disabled={busy || balance.points < withdrawAmount} className="btn-outline">Request Cash Out</button>
+            <button type="submit" disabled={busy || balance.points < withdrawAmount} className="btn-outline flex items-center justify-center gap-1.5">
+              <Phone size={16} /> Redeem {withdrawAmount} Marbles for GH₵ {withdrawAmount}.00
+            </button>
           </form>
         </div>
       </section>
 
       <section className="transaction-history">
-        <h3>Transaction History & Audit Ledger</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-bold text-[#f5efdf] flex items-center gap-2">
+            <RefreshCw size={16} className="text-[#d6a735]" /> Marbles Transaction History & Audit Ledger
+          </h3>
+          <span className="text-xs text-[#cbd5e1] font-mono">1 Marble = 1 Cedi</span>
+        </div>
         <div className="table-responsive">
           <table>
             <thead>
               <tr>
                 <th>Date</th>
                 <th>Type</th>
-                <th>Currency</th>
-                <th>Amount</th>
+                <th>Token</th>
+                <th>Marbles</th>
                 <th>Reference</th>
                 <th>Status</th>
               </tr>
@@ -265,10 +300,10 @@ export default function WalletPage() {
                 transactions.map((tx) => (
                   <tr key={tx.id}>
                     <td>{new Date(tx.createdAt).toLocaleDateString()}</td>
-                    <td><span className={`tx-type ${tx.type}`}>{tx.type}</span></td>
-                    <td>{tx.currency}</td>
+                    <td><span className={`tx-type ${tx.type}`}>{tx.type.replace("_", " ")}</span></td>
+                    <td><span className="px-1.5 py-0.5 bg-[#0c3b2e] text-[#d6a735] font-bold rounded text-[10px]">MARBLE</span></td>
                     <td className={tx.amount >= 0 ? "positive" : "negative"}>
-                      {tx.amount >= 0 ? `+${tx.amount}` : tx.amount}
+                      {tx.amount >= 0 ? `+${tx.amount} ⚪` : `${tx.amount} ⚪`}
                     </td>
                     <td><code>{tx.reference}</code></td>
                     <td><span className={`tx-status ${tx.status}`}>{tx.status}</span></td>
@@ -283,7 +318,7 @@ export default function WalletPage() {
       <div className="compliance-note">
         <ShieldCheck size={16} />
         <p>
-          <strong>Compliance & Safe Play Notice:</strong> DAMII operates on skill-based tournament rules and verified Paystack escrow safeguards. All game actions are logged in immutable ledger records.
+          <strong>Virtual Token & Skill Gaming Safeguards:</strong> DAMII operates on skill-based Draughts competition rules and secured Paystack escrow safeguards. Games and tournaments use virtual Marbles (1:1 conversion rate) with immutable ledger records.
         </p>
       </div>
       <Footer />

@@ -6,6 +6,7 @@ import {
   Wallet,
   Swords,
   User,
+  UserPlus,
   LogIn,
   LogOut,
   KeyRound,
@@ -42,6 +43,7 @@ import {
   Calendar,
   UserCheck,
   Lock,
+  Coins,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { getProfileRank } from "@/lib/rank-service";
@@ -189,7 +191,7 @@ export function Header() {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
   // Auth modal state
-  const [authMode, setAuthMode] = useState<"login" | "register" | "complete_profile">("register");
+  const [authMode, setAuthMode] = useState<"login" | "register" | "complete_profile">("login");
   const [regStep, setRegStep] = useState<1 | 2 | 3>(1);
   const [regPhone, setRegPhone] = useState("");
   const [regRequestId, setRegRequestId] = useState("");
@@ -764,7 +766,9 @@ export function Header() {
   const isOrganizer = role === "organizer" || organizerStatus === "approved";
   const isFacilitator = role === "facilitator" || role === "treasurer";
   const isOrganizerPending = organizerStatus === "pending";
-  const isOrganizerOrApplied = isOrganizer || isOrganizerPending;
+  const isOrganizerOrApplied =
+    ["organizer", "facilitator", "admin", "super_admin"].includes(role) ||
+    ["pending", "approved", "rejected"].includes(organizerStatus);
 
   return (
     <>
@@ -779,13 +783,15 @@ export function Header() {
 
         {/* Desktop Navigation Menu */}
         <nav className="hidden md:flex topbar-desktop-nav items-center gap-5">
-          <NavLink
-            className={`nav-link ${pathname === "/arena" ? "active" : ""}`}
-            href="/arena"
-            onClick={(e) => handleNavClick(e, "/arena")}
-          >
-            <Swords size={16} /> Arena
-          </NavLink>
+          {!isAdmin && (
+            <NavLink
+              className={`nav-link ${pathname === "/arena" ? "active" : ""}`}
+              href="/arena"
+              onClick={(e) => handleNavClick(e, "/arena")}
+            >
+              <Swords size={16} /> Arena
+            </NavLink>
+          )}
           <NavLink
             className={`nav-link ${pathname === "/leagues" ? "active" : ""}`}
             href="/leagues"
@@ -802,13 +808,15 @@ export function Header() {
               <Crown size={16} className="text-amber-400" /> Organizer Hub
             </NavLink>
           )}
-          <NavLink
-            className={`nav-link ${pathname === "/wallet" ? "active" : ""}`}
-            href="/wallet"
-            onClick={(e) => handleNavClick(e, "/wallet")}
-          >
-            <Wallet size={16} /> Wallet
-          </NavLink>
+          {!isAdmin && (
+            <NavLink
+              className={`nav-link ${pathname === "/wallet" ? "active" : ""}`}
+              href="/wallet"
+              onClick={(e) => handleNavClick(e, "/wallet")}
+            >
+              <Wallet size={16} /> Wallet
+            </NavLink>
+          )}
           {isAdmin && (
             <NavLink
               className={`nav-link ${pathname === "/admin" ? "active" : ""}`}
@@ -884,10 +892,11 @@ export function Header() {
                             return (
                               <div
                                 key={n.id}
-                                className={`p-2.5 rounded-xl border transition-all relative ${isUnread
+                                className={`p-2.5 rounded-xl border transition-all relative ${
+                                  isUnread
                                     ? "bg-[#0c3b2e] border-[#d6a735]/50"
                                     : "bg-[#0c3b2e]/40 border-[#184d3c] opacity-80"
-                                  }`}
+                                }`}
                               >
                                 <div className="flex items-start justify-between gap-2">
                                   <NavLink
@@ -934,15 +943,19 @@ export function Header() {
                   )}
                 </div>
 
-                {/* Points Balance Tag */}
-                <NavLink
-                  href="/wallet"
-                  onClick={(e) => handleNavClick(e, "/wallet")}
-                  className="points-badge shrink-0 hover:scale-105 transition-transform flex items-center gap-1 font-black cursor-pointer shadow-sm"
-                  title="Click to Open Wallet"
-                >
-                  GH₵ {typeof points === "number" ? points.toFixed(2) : points}
-                </NavLink>
+                {/* Marbles Balance Tag - Hidden for Admin (Admins cannot own or wager marbles) */}
+                {!isAdmin && (
+                  <NavLink
+                    href="/wallet"
+                    onClick={(e) => handleNavClick(e, "/wallet")}
+                    className="points-badge shrink-0 hover:scale-105 transition-transform flex items-center gap-1.5 font-black cursor-pointer shadow-sm"
+                    title="Click to Open Marbles Treasury (1 Marble = 1 Cedi)"
+                  >
+                    <Coins size={14} className="text-[#d6a735]" />
+                    <span>{typeof points === "number" ? points.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : points}</span>
+                    <span className="text-[10px] text-[#d6a735] uppercase font-bold">Marbles</span>
+                  </NavLink>
+                )}
 
                 {/* Desktop User Profile Button & Dropdown */}
                 <div className="relative">
@@ -952,25 +965,19 @@ export function Header() {
                     // Distinct button pill styling per role
                     let pillBorder = "border-[#d6a735]/40 hover:bg-[#0c3b2e]";
                     let avatarBg = "bg-[#d6a735]/20 text-[#d6a735] border-[#d6a735]/50";
-                    let roleSubtitle = `${userRank.badgeEmoji} ${userRank.title}`;
-                    let roleIcon = null;
 
                     if (isAdmin) {
                       pillBorder = "border-red-500/50 hover:bg-red-950/40";
                       avatarBg = "bg-red-500/20 text-red-400 border-red-500/50";
-                      roleSubtitle = role === "super_admin" ? "Super Admin" : "Admin";
-                      roleIcon = <ShieldAlert size={10} className="text-red-400" />;
                     } else if (isOrganizer) {
                       pillBorder = "border-amber-500/50 hover:bg-amber-950/40";
                       avatarBg = "bg-amber-500/20 text-amber-400 border-amber-500/50";
-                      roleSubtitle = "Organizer";
-                      roleIcon = <Crown size={10} className="text-amber-400" />;
                     } else if (isFacilitator) {
                       pillBorder = "border-cyan-500/50 hover:bg-cyan-950/40";
                       avatarBg = "bg-cyan-500/20 text-cyan-400 border-cyan-500/50";
-                      roleSubtitle = "Arbiter";
-                      roleIcon = <Scale size={10} className="text-cyan-400" />;
                     }
+
+                    const initialLetter = (username || "U")[0].toUpperCase();
 
                     return (
                       <>
@@ -980,27 +987,17 @@ export function Header() {
                             setIsProfileDropdownOpen((prev) => !prev);
                             setIsNotificationsOpen(false);
                           }}
-                          className={`user-pill shrink-0 flex items-center gap-2 border py-1.5 px-3 rounded-xl transition-all cursor-pointer shadow-sm ${pillBorder}`}
-                          title="User Account & Settings Menu"
+                          className={`shrink-0 flex items-center gap-1.5 border p-1 rounded-full hover:scale-105 transition-all cursor-pointer shadow-sm ${pillBorder}`}
+                          title={username || "User Account & Settings Menu"}
                         >
-                          <span className={`w-6 h-6 rounded-full font-black flex items-center justify-center text-xs border ${avatarBg}`}>
-                            {isAdmin ? "A" : isOrganizer ? "O" : isFacilitator ? "F" : (username ? username[0].toUpperCase() : "P")}
+                          <span className={`w-7 h-7 rounded-full font-black flex items-center justify-center text-xs border shadow-inner ${avatarBg}`}>
+                            {initialLetter}
                           </span>
-                          <div className="text-left hidden sm:block">
-                            <strong className="block text-xs font-black text-[#f5efdf] leading-tight truncate max-w-[110px]">
-                              {username}
-                            </strong>
-                            <span className="flex items-center gap-1 text-[9px] font-bold uppercase truncate max-w-[110px]">
-                              {roleIcon}
-                              <span className={isAdmin ? "text-red-400" : isOrganizer ? "text-amber-400" : isFacilitator ? "text-cyan-400" : "text-[#d6a735]"}>
-                                {roleSubtitle}
-                              </span>
-                            </span>
-                          </div>
                           <ChevronDown
                             size={14}
-                            className={`transition-transform duration-200 ${isAdmin ? "text-red-400" : isOrganizer ? "text-amber-400" : isFacilitator ? "text-cyan-400" : "text-[#d6a735]"
-                              } ${isProfileDropdownOpen ? "rotate-180" : ""}`}
+                            className={`transition-transform duration-200 pr-1 ${
+                              isAdmin ? "text-red-400" : isOrganizer ? "text-amber-400" : isFacilitator ? "text-cyan-400" : "text-[#d6a735]"
+                            } ${isProfileDropdownOpen ? "rotate-180" : ""}`}
                           />
                         </button>
 
@@ -1528,26 +1525,19 @@ export function Header() {
                 </div>
               </>
             ) : (
-              <div className="flex items-center gap-2">
-                <div
-                  className="shrink-0 flex items-center gap-1.5 bg-[#0c3b2e]/90 border border-[#d6a735]/40 py-1 px-2.5 rounded-xl text-xs font-bold text-[#f5efdf]"
-                  title="Recognized as Guest Player"
-                >
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                  <span className="text-[#d6a735] font-black uppercase text-[10px]">Guest Player</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthError("");
-                    setAuthSuccess("");
-                    setIsAuthOpen(true);
-                  }}
-                  className="px-3.5 py-1.5 text-xs bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl flex items-center gap-1.5 shadow-md transition-all"
-                >
-                  <LogIn size={14} /> Login / Register
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("login");
+                  setAuthError("");
+                  setAuthSuccess("");
+                  setIsAuthOpen(true);
+                }}
+                className="px-4 py-1.5 text-xs font-black text-[#06261f] bg-[#d6a735] hover:bg-[#e2b542] active:scale-95 rounded-full flex items-center gap-1.5 shadow-sm hover:shadow-md transition-all cursor-pointer tracking-wide"
+              >
+                <LogIn size={13} />
+                <span>Login</span>
+              </button>
             )}
           </div>
         </nav>
@@ -1566,32 +1556,39 @@ export function Header() {
                   setEditSuccess("");
                   setIsEditProfileOpen(true);
                 }}
-                className="user-pill shrink-0 max-w-[100px] text-[11px] py-1 px-2 flex items-center gap-1 font-bold bg-[#0c3b2e] border border-[#d6a735]/40 text-[#f5efdf]"
-                title="Click to Edit Profile"
+                className={`w-7 h-7 rounded-full font-black flex items-center justify-center text-xs border shadow-sm shrink-0 transition-transform active:scale-95 cursor-pointer ${
+                  isAdmin 
+                    ? "bg-red-500/20 text-red-400 border-red-500/50" 
+                    : isOrganizer
+                    ? "bg-amber-500/20 text-amber-400 border-amber-500/50"
+                    : isFacilitator
+                    ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/50"
+                    : "bg-[#d6a735]/20 text-[#d6a735] border-[#d6a735]/50"
+                }`}
+                title={username || "Click to Edit Profile"}
               >
-                <User size={12} className="shrink-0 text-[#d6a735]" /> <span className="truncate">{username}</span>
+                {(username || "U")[0].toUpperCase()}
               </button>
-              <span className="points-badge text-[11px] py-1 px-2 font-black shrink-0">
-                GH₵ {typeof points === "number" ? points.toFixed(2) : points}
-              </span>
+              {!isAdmin && (
+                <span className="points-badge text-[11px] py-1 px-2 font-black shrink-0 flex items-center gap-1">
+                  <Coins size={11} className="text-[#d6a735]" /> {typeof points === "number" ? points.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : points} ⚪
+                </span>
+              )}
             </div>
           ) : (
-            <div className="flex items-center gap-1.5">
-              <span className="px-2 py-0.5 text-[10px] font-black uppercase text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 rounded-lg">
-                Guest
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthError("");
-                  setAuthSuccess("");
-                  setIsAuthOpen(true);
-                }}
-                className="px-2.5 py-1 text-xs bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-lg flex items-center gap-1 shadow-sm transition-all"
-              >
-                <LogIn size={13} /> Login
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode("login");
+                setAuthError("");
+                setAuthSuccess("");
+                setIsAuthOpen(true);
+              }}
+              className="px-3 py-1 text-xs font-bold text-[#06261f] bg-[#d6a735] hover:bg-[#e2b542] rounded-full flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+            >
+              <LogIn size={12} />
+              <span>Login</span>
+            </button>
           )}
 
           <button
@@ -1687,9 +1684,15 @@ export function Header() {
                               </span>
                             </div>
                           </div>
-                          <span className="px-2.5 py-1 rounded-full bg-[#d6a735] text-[#06261f] font-black text-xs shrink-0 shadow-md">
-                            GH₵ {typeof points === "number" ? points.toFixed(2) : points}
-                          </span>
+                          {!isAdmin ? (
+                            <span className="px-2.5 py-1 rounded-full bg-[#d6a735] text-[#06261f] font-black text-xs shrink-0 shadow-md">
+                              GH₵ {typeof points === "number" ? points.toFixed(2) : points}
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-lg bg-red-500/20 text-red-300 border border-red-500/50 font-black text-[10px] uppercase tracking-wider shrink-0">
+                              Admin Access
+                            </span>
+                          )}
                         </div>
 
                         {/* Extra Context info per role */}
@@ -1731,21 +1734,22 @@ export function Header() {
                     );
                   })()
                 ) : (
-                  <div className="p-3.5 bg-[#0c3b2e]/90 rounded-2xl border border-[#d6a735]/20 text-center space-y-2">
+                  <div className="p-3 bg-[#081c15] rounded-xl border border-[#114232] text-center space-y-2">
                     <p className="text-xs text-[#cbd5e1] font-medium">
-                      Welcome to DAMII Strategy Arena
+                      Welcome to DAMII Ghanaian Draughts
                     </p>
                     <button
                       type="button"
                       onClick={() => {
+                        setAuthMode("login");
                         setAuthError("");
                         setAuthSuccess("");
                         setIsAuthOpen(true);
                         setIsMobileMenuOpen(false);
                       }}
-                      className="w-full py-2 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="w-full py-2.5 bg-[#d6a735] hover:bg-[#e2b542] text-[#06261f] font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer tracking-wide"
                     >
-                      <LogIn size={14} /> Sign In / Register
+                      <LogIn size={14} /> Login
                     </button>
                   </div>
                 )}
@@ -1753,22 +1757,25 @@ export function Header() {
                 {/* Navigation Links */}
                 <nav className="flex flex-col gap-2 pt-1">
                   <small className="block text-[10px] font-extrabold text-[#d6a735]/80 uppercase tracking-widest px-1 mb-0.5">
-                    Arena Navigation
+                    {isAdmin ? "Admin Navigation" : "Arena Navigation"}
                   </small>
-                  <NavLink
-                    href="/arena"
-                    onClick={(e) => {
-                      handleNavClick(e, "/arena");
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${pathname === "/arena"
-                        ? "bg-[#d6a735] text-[#06261f] shadow-lg shadow-[#d6a735]/20"
-                        : "bg-[#0c3b2e]/80 text-[#f5efdf] hover:bg-[#144435] border border-[#184d3c]"
+                  {!isAdmin && (
+                    <NavLink
+                      href="/arena"
+                      onClick={(e) => {
+                        handleNavClick(e, "/arena");
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${
+                        pathname === "/arena"
+                          ? "bg-[#d6a735] text-[#06261f] shadow-lg shadow-[#d6a735]/20"
+                          : "bg-[#0c3b2e]/80 text-[#f5efdf] hover:bg-[#144435] border border-[#184d3c]"
                       }`}
-                  >
-                    <Swords size={18} className={pathname === "/arena" ? "text-[#06261f]" : "text-[#d6a735]"} />
-                    <span>Strategy Game Arena</span>
-                  </NavLink>
+                    >
+                      <Swords size={18} className={pathname === "/arena" ? "text-[#06261f]" : "text-[#d6a735]"} />
+                      <span>Strategy Game Arena</span>
+                    </NavLink>
+                  )}
 
                   <NavLink
                     href="/leagues"
@@ -1776,29 +1783,33 @@ export function Header() {
                       handleNavClick(e, "/leagues");
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${pathname === "/leagues"
+                    className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${
+                      pathname === "/leagues"
                         ? "bg-[#d6a735] text-[#06261f] shadow-lg shadow-[#d6a735]/20"
                         : "bg-[#0c3b2e]/80 text-[#f5efdf] hover:bg-[#144435] border border-[#184d3c]"
-                      }`}
+                    }`}
                   >
                     <Trophy size={18} className={pathname === "/leagues" ? "text-[#06261f]" : "text-[#d6a735]"} />
                     <span>Tournaments & Leagues</span>
                   </NavLink>
 
-                  <NavLink
-                    href="/wallet"
-                    onClick={(e) => {
-                      handleNavClick(e, "/wallet");
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${pathname === "/wallet"
-                        ? "bg-[#d6a735] text-[#06261f] shadow-lg shadow-[#d6a735]/20"
-                        : "bg-[#0c3b2e]/80 text-[#f5efdf] hover:bg-[#144435] border border-[#184d3c]"
+                  {!isAdmin && (
+                    <NavLink
+                      href="/wallet"
+                      onClick={(e) => {
+                        handleNavClick(e, "/wallet");
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${
+                        pathname === "/wallet"
+                          ? "bg-[#d6a735] text-[#06261f] shadow-lg shadow-[#d6a735]/20"
+                          : "bg-[#0c3b2e]/80 text-[#f5efdf] hover:bg-[#144435] border border-[#184d3c]"
                       }`}
-                  >
-                    <Wallet size={18} className={pathname === "/wallet" ? "text-[#06261f]" : "text-[#d6a735]"} />
-                    <span>Wallet & Ledger</span>
-                  </NavLink>
+                    >
+                      <Wallet size={18} className={pathname === "/wallet" ? "text-[#06261f]" : "text-[#d6a735]"} />
+                      <span>Wallet & Ledger</span>
+                    </NavLink>
+                  )}
 
                   {isOrganizerOrApplied && (
                     <NavLink
@@ -1807,10 +1818,11 @@ export function Header() {
                         handleNavClick(e, "/organizer");
                         setIsMobileMenuOpen(false);
                       }}
-                      className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${pathname === "/organizer"
+                      className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${
+                        pathname === "/organizer"
                           ? "bg-amber-500 text-[#06261f] shadow-lg shadow-amber-500/20"
                           : "bg-amber-950/40 text-amber-100 hover:bg-amber-900/50 border border-amber-600/50"
-                        }`}
+                      }`}
                     >
                       <Crown size={18} className={pathname === "/organizer" ? "text-[#06261f]" : "text-amber-400"} />
                       <span>Organizer Studio & Hub</span>
@@ -1824,10 +1836,11 @@ export function Header() {
                         handleNavClick(e, "/organizer/apply");
                         setIsMobileMenuOpen(false);
                       }}
-                      className={`p-3 rounded-2xl text-xs font-bold flex items-center gap-3 transition-all ${pathname === "/organizer/apply"
+                      className={`p-3 rounded-2xl text-xs font-bold flex items-center gap-3 transition-all ${
+                        pathname === "/organizer/apply"
                           ? "bg-amber-500 text-[#06261f] shadow-lg shadow-amber-500/20"
                           : "bg-[#0c3b2e]/80 text-[#f5efdf] hover:bg-[#144435] border border-[#184d3c]"
-                        }`}
+                      }`}
                     >
                       <Crown size={18} className={pathname === "/organizer/apply" ? "text-[#06261f]" : "text-amber-400"} />
                       <span>{isOrganizerPending ? "Organizer Application: Under Review" : "Apply for Organizer License"}</span>
@@ -1841,10 +1854,11 @@ export function Header() {
                         handleNavClick(e, "/admin");
                         setIsMobileMenuOpen(false);
                       }}
-                      className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${pathname === "/admin"
+                      className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${
+                        pathname === "/admin"
                           ? "bg-red-600 text-white shadow-lg shadow-red-600/30"
                           : "bg-red-950/40 text-red-100 hover:bg-red-900/50 border border-red-700/50"
-                        }`}
+                      }`}
                     >
                       <ShieldAlert size={18} className={pathname === "/admin" ? "text-white" : "text-red-400"} />
                       <span>Admin Control Center</span>
@@ -1858,10 +1872,11 @@ export function Header() {
                         handleNavClick(e, "/admin");
                         setIsMobileMenuOpen(false);
                       }}
-                      className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${pathname === "/admin"
+                      className={`p-3 rounded-2xl text-xs font-black flex items-center gap-3 transition-all ${
+                        pathname === "/admin"
                           ? "bg-cyan-600 text-white shadow-lg shadow-cyan-600/30"
                           : "bg-cyan-950/40 text-cyan-100 hover:bg-cyan-900/50 border border-cyan-700/50"
-                        }`}
+                      }`}
                     >
                       <Scale size={18} className={pathname === "/admin" ? "text-white" : "text-cyan-400"} />
                       <span>Arbiter Hub & Disputes</span>
@@ -1896,6 +1911,7 @@ export function Header() {
                   <button
                     type="button"
                     onClick={() => {
+                      setAuthMode("login");
                       setAuthError("");
                       setAuthSuccess("");
                       setIsAuthOpen(true);
@@ -1918,98 +1934,120 @@ export function Header() {
           aria-label="Mobile Navigation Bar"
           className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-[#06261f]/95 border-t border-[#d6a735]/30 backdrop-blur-md px-3 py-2 shadow-2xl flex items-center justify-around"
         >
-          {isFocusMode && pathname === "/arena" ? (
-            <div className="w-full flex items-center justify-between px-2 py-1 bg-amber-500 text-slate-950 font-black rounded-xl text-xs shadow-lg animate-in fade-in duration-200">
-              <div className="flex items-center gap-1.5">
-                <Eye size={16} />
-                <span className="uppercase tracking-wide text-[11px]">Arena Focus Mode Active</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (typeof window !== "undefined") {
-                    sessionStorage.setItem("damii-focus-mode", "false");
-                    window.dispatchEvent(new CustomEvent("damii-focus-mode-change", { detail: false }));
-                  }
-                }}
-                className="px-2.5 py-1 bg-slate-950 text-amber-300 rounded-lg text-[10px] font-bold border border-amber-400/40 hover:bg-slate-900 transition-colors"
-              >
-                Exit Focus
-              </button>
+        {isFocusMode && pathname === "/arena" ? (
+          <div className="w-full flex items-center justify-between px-2 py-1 bg-amber-500 text-slate-950 font-black rounded-xl text-xs shadow-lg animate-in fade-in duration-200">
+            <div className="flex items-center gap-1.5">
+              <Eye size={16} />
+              <span className="uppercase tracking-wide text-[11px]">Arena Focus Mode Active</span>
             </div>
-          ) : (
-            <>
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  sessionStorage.setItem("damii-focus-mode", "false");
+                  window.dispatchEvent(new CustomEvent("damii-focus-mode-change", { detail: false }));
+                }
+              }}
+              className="px-2.5 py-1 bg-slate-950 text-amber-300 rounded-lg text-[10px] font-bold border border-amber-400/40 hover:bg-slate-900 transition-colors"
+            >
+              Exit Focus
+            </button>
+          </div>
+        ) : (
+          <>
+            {!isAdmin ? (
               <NavLink
                 href="/arena"
                 onClick={(e) => handleNavClick(e, "/arena")}
-                className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${pathname === "/arena"
+                className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${
+                  pathname === "/arena"
                     ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black shadow-md"
                     : "text-[#cbd5e1] hover:text-[#f5efdf]"
-                  }`}
+                }`}
               >
                 <Swords size={18} className={pathname === "/arena" ? "text-[#d6a735]" : "text-[#94a3b8]"} />
                 <span className="text-[10px] font-extrabold tracking-tight">Arena</span>
               </NavLink>
-
+            ) : (
               <NavLink
-                href="/leagues"
-                onClick={(e) => handleNavClick(e, "/leagues")}
-                className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${pathname === "/leagues"
-                    ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black shadow-md"
+                href="/admin"
+                onClick={(e) => handleNavClick(e, "/admin")}
+                className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${
+                  pathname === "/admin"
+                    ? "text-red-300 bg-red-950/60 border border-red-500/50 font-black shadow-md"
                     : "text-[#cbd5e1] hover:text-[#f5efdf]"
-                  }`}
+                }`}
               >
-                <Trophy size={18} className={pathname === "/leagues" ? "text-[#d6a735]" : "text-[#94a3b8]"} />
-                <span className="text-[10px] font-extrabold tracking-tight">Leagues</span>
+                <ShieldAlert size={18} className={pathname === "/admin" ? "text-red-300" : "text-[#94a3b8]"} />
+                <span className="text-[10px] font-extrabold tracking-tight">Admin</span>
               </NavLink>
+            )}
 
+            <NavLink
+              href="/leagues"
+              onClick={(e) => handleNavClick(e, "/leagues")}
+              className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${
+                pathname === "/leagues"
+                  ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black shadow-md"
+                  : "text-[#cbd5e1] hover:text-[#f5efdf]"
+              }`}
+            >
+              <Trophy size={18} className={pathname === "/leagues" ? "text-[#d6a735]" : "text-[#94a3b8]"} />
+              <span className="text-[10px] font-extrabold tracking-tight">Leagues</span>
+            </NavLink>
+
+            {!isAdmin && (
               <NavLink
                 href="/wallet"
                 onClick={(e) => handleNavClick(e, "/wallet")}
-                className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${pathname === "/wallet"
+                className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${
+                  pathname === "/wallet"
                     ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black shadow-md"
                     : "text-[#cbd5e1] hover:text-[#f5efdf]"
-                  }`}
+                }`}
               >
                 <Wallet size={18} className={pathname === "/wallet" ? "text-[#d6a735]" : "text-[#94a3b8]"} />
                 <span className="text-[10px] font-extrabold tracking-tight">Wallet</span>
               </NavLink>
+            )}
 
-              {userToken && (
-                <button
-                  type="button"
-                  onClick={() => setIsNotificationsOpen((prev) => !prev)}
-                  className={`relative flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${isNotificationsOpen
-                      ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black"
-                      : "text-[#cbd5e1] hover:text-[#f5efdf]"
-                    }`}
-                >
-                  <div className="relative">
-                    <Bell size={18} className={unreadCount > 0 ? "text-[#d6a735]" : "text-[#94a3b8]"} />
-                    {unreadCount > 0 && (
-                      <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 bg-[#d6a735] text-[#06261f] font-black text-[9px] rounded-full flex items-center justify-center animate-pulse shadow-sm">
-                        {unreadCount}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-[10px] font-extrabold tracking-tight">Updates</span>
-                </button>
-              )}
-
+            {userToken && (
               <button
                 type="button"
-                onClick={() => setIsMobileMenuOpen((prev) => !prev)}
-                className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${isMobileMenuOpen
-                    ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black shadow-md"
+                onClick={() => setIsNotificationsOpen((prev) => !prev)}
+                className={`relative flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${
+                  isNotificationsOpen
+                    ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black"
                     : "text-[#cbd5e1] hover:text-[#f5efdf]"
-                  }`}
+                }`}
               >
-                <Menu size={18} className={isMobileMenuOpen ? "text-[#d6a735]" : "text-[#94a3b8]"} />
-                <span className="text-[10px] font-extrabold tracking-tight">Menu</span>
+                <div className="relative">
+                  <Bell size={18} className={unreadCount > 0 ? "text-[#d6a735]" : "text-[#94a3b8]"} />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 bg-[#d6a735] text-[#06261f] font-black text-[9px] rounded-full flex items-center justify-center animate-pulse shadow-sm">
+                      {unreadCount}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] font-extrabold tracking-tight">Updates</span>
               </button>
-            </>
-          )}
-        </nav>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen((prev) => !prev)}
+              className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${
+                isMobileMenuOpen
+                  ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black shadow-md"
+                  : "text-[#cbd5e1] hover:text-[#f5efdf]"
+              }`}
+            >
+              <Menu size={18} className={isMobileMenuOpen ? "text-[#d6a735]" : "text-[#94a3b8]"} />
+              <span className="text-[10px] font-extrabold tracking-tight">Menu</span>
+            </button>
+          </>
+        )}
+      </nav>
       )}
 
       {/* Auth Modal Overlay */}
@@ -2025,21 +2063,21 @@ export function Header() {
                     {authMode === "login"
                       ? "Player Account Sign In"
                       : authMode === "complete_profile"
-                        ? "Complete Player Profile"
-                        : regStep === 1
-                          ? "Register with Phone & OTP"
-                          : regStep === 2
-                            ? "Verify 6-Digit OTP Code"
-                            : "Complete Player Profile"}
+                      ? "Complete Player Profile"
+                      : regStep === 1
+                      ? "Register with Phone & OTP"
+                      : regStep === 2
+                      ? "Verify 6-Digit OTP Code"
+                      : "Complete Player Profile"}
                   </h3>
                   <p className="text-[11px] text-[#d6a735]">
                     {authMode === "login"
                       ? "Sign in with your username and passcode"
                       : authMode === "complete_profile" || regStep === 3
-                        ? "Step 3 of 3: Identity & Payout Account"
-                        : regStep === 2
-                          ? "Step 2 of 3: SMS Verification"
-                          : "Step 1 of 3: Instant Phone Verification"}
+                      ? "Step 3 of 3: Identity & Payout Account"
+                      : regStep === 2
+                      ? "Step 2 of 3: SMS Verification"
+                      : "Step 1 of 3: Instant Phone Verification"}
                   </p>
                 </div>
               </div>
@@ -2061,30 +2099,32 @@ export function Header() {
                 <button
                   type="button"
                   onClick={() => {
-                    setAuthMode("register");
-                    setAuthError("");
-                    setAuthSuccess("");
-                  }}
-                  className={`py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${authMode === "register"
-                      ? "bg-[#d6a735] text-[#06261f] font-black shadow-md"
-                      : "text-slate-300 hover:text-white hover:bg-[#0c3b2e]"
-                    }`}
-                >
-                  <Smartphone size={14} /> Register (Phone OTP)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
                     setAuthMode("login");
                     setAuthError("");
                     setAuthSuccess("");
                   }}
-                  className={`py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${authMode === "login"
+                  className={`py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                    authMode === "login"
                       ? "bg-[#d6a735] text-[#06261f] font-black shadow-md"
                       : "text-slate-300 hover:text-white hover:bg-[#0c3b2e]"
-                    }`}
+                  }`}
                 >
                   <LogIn size={14} /> Sign In (Passcode)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("register");
+                    setAuthError("");
+                    setAuthSuccess("");
+                  }}
+                  className={`py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                    authMode === "register"
+                      ? "bg-[#d6a735] text-[#06261f] font-black shadow-md"
+                      : "text-slate-300 hover:text-white hover:bg-[#0c3b2e]"
+                  }`}
+                >
+                  <Smartphone size={14} /> Register (Phone OTP)
                 </button>
               </div>
             )}
@@ -2133,10 +2173,6 @@ export function Header() {
                     <small className="block text-[10px] text-slate-400 mt-1">
                       Supports MTN, Telecel, and AT networks. This number will be your permanently verified payout destination.
                     </small>
-                  </div>
-
-                  <div className="p-3 bg-[#0c3b2e] border border-[#d6a735]/30 rounded-xl text-[#d6a735] text-xs">
-                    🎁 <strong>Welcome Bonus:</strong> Verified accounts receive <strong>GH₵ 500.00 balance</strong> for online matches &amp; tournament play.
                   </div>
 
                   <button

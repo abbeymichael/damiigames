@@ -51,6 +51,20 @@ function formatRoomResponse(room: Room, token: string) {
   };
 }
 
+async function resolvePlayerToken(rawToken: string, username?: string): Promise<{ token: string; profile: Profile | null }> {
+  if (!rawToken) return { token: "", profile: null };
+  const session = await dbRepository.getSession(rawToken);
+  let resolvedToken = session ? session.userId : rawToken;
+  let profile = await dbRepository.getProfile(resolvedToken);
+  if (!profile && username) {
+    profile = await dbRepository.findProfileByUsername(username);
+    if (profile) {
+      resolvedToken = profile.token;
+    }
+  }
+  return { token: resolvedToken, profile };
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
 
@@ -60,7 +74,12 @@ export async function GET(req: NextRequest) {
   }
 
   const code = cleanCode(searchParams.get("code"));
-  const token = cleanToken(searchParams.get("token"));
+  const rawToken = cleanToken(searchParams.get("token"));
+  let token = rawToken;
+  if (rawToken) {
+    const session = await dbRepository.getSession(rawToken);
+    if (session) token = session.userId;
+  }
 
   if (!code) {
     const activeRooms = await dbRepository.listRooms(20);
@@ -128,12 +147,15 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const action = String(body.action ?? "").trim().toLowerCase();
-    const token = cleanToken(body.token);
+    const rawToken = cleanToken(body.token);
     const username = cleanName(body.username);
 
-    if (!token) return NextResponse.json({ error: "Player token required" }, { status: 400 });
+    if (!rawToken) return NextResponse.json({ error: "Player token required" }, { status: 400 });
 
-    const existingProfile = await dbRepository.getProfile(token);
+    const { token: resolvedToken, profile: resolvedProfile } = await resolvePlayerToken(rawToken, username);
+    const token = resolvedToken || rawToken;
+    const existingProfile = resolvedProfile || (await dbRepository.getProfile(token));
+
     if (existingProfile && existingProfile.status === "banned") {
       return NextResponse.json({ error: "Account is banned. Please contact admin support." }, { status: 403 });
     }
@@ -142,10 +164,10 @@ export async function POST(req: NextRequest) {
     if (
       existingProfile &&
       (existingProfile.role === "admin" || existingProfile.role === "super_admin") &&
-      ["create", "join", "move", "resign", "offer_draw"].includes(action)
+      ["create", "join", "move", "resign", "offer_draw", "accept_draw", "decline_draw", "forfeit", "cancel"].includes(action)
     ) {
       return NextResponse.json(
-        { error: "Administrator accounts serve as league facilitators and regulators. Admin accounts cannot participate in player matches." },
+        { error: "Administrator accounts serve strictly as neutral regulators and dispute arbiters. Admin accounts cannot create, join, or play matches in the Arena." },
         { status: 403 }
       );
     }
@@ -368,9 +390,21 @@ export async function POST(req: NextRequest) {
 
       if ((isHost || isGuest) && room.status === "playing") {
         const playerRole: Player = isHost ? "white" : "black";
-        room.disconnectTime = Date.now();
-        room.disconnectedPlayer = playerRole;
-        await dbRepository.saveRoom(room);
+        if (room.disconnectedPlayer && room.disconnectedPlayer !== playerRole) {
+          // Both players disconnected -> mark match abandoned without penalty
+          room.status = "abandoned";
+          room.winner = null;
+          room.disconnectTime = null;
+          room.disconnectedPlayer = null;
+          await dbRepository.saveRoom(room);
+          if (room.escrowId) {
+            await walletService.disburseWagerEscrow(room.escrowId, null);
+          }
+        } else {
+          room.disconnectTime = Date.now();
+          room.disconnectedPlayer = playerRole;
+          await dbRepository.saveRoom(room);
+        }
       }
 
       const profile = await dbRepository.getProfile(token);

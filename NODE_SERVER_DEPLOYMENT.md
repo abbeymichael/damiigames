@@ -270,6 +270,57 @@ sudo certbot --nginx -d damii.app -d www.damii.app
 4. Set Start Command: `npm run db:migrate && npm start`
 5. Add environment variables in dashboard (`PAYSTACK_SECRET_KEY`, `ADMIN_SECRET_KEY`, `DATABASE_DIALECT=mysql`, `DATABASE_URL` or the `MYSQL_*` set).
 
+### C. Shared Hosting (cPanel / CloudLinux Node.js App / Phusion Passenger)
+Shared hosts (Namecheap, Hostinger, SiteGround, cPanel-based providers) run Node.js using Phusion Passenger or Apache reverse proxy.
+
+1. **Create MySQL Database in cPanel**:
+   - Go to **cPanel > MySQL Databases Wizard**.
+   - Create a database (e.g. `yourcpaneluser_damii`).
+   - Create a user with a strong password and assign **ALL PRIVILEGES** to the database.
+
+2. **Upload & Extract Application Files**:
+   - Upload project files to a folder outside `public_html` (e.g. `/home/username/damii_app`) or in your target application root.
+   - Ensure `server.js` (or `app.js`) is present at the root directory.
+
+3. **Configure Environment Variables (`.env`)**:
+   - Create `.env` or `.env.production` in your application root:
+     ```env
+     NODE_ENV=production
+     DATABASE_DIALECT=mysql
+     MYSQL_HOST=localhost
+     MYSQL_PORT=3306
+     MYSQL_USER=yourcpaneluser_damiiuser
+     MYSQL_PASSWORD=your_mysql_password
+     MYSQL_DATABASE=yourcpaneluser_damii
+     ADMIN_SECRET_KEY=your_secure_24_char_secret_key_here
+     PAYSTACK_SECRET_KEY=sk_live_your_paystack_secret
+     NEXT_PUBLIC_APP_URL=https://yourdomain.com
+     ```
+
+4. **Setup Node.js App in cPanel**:
+   - Open **cPanel > Setup Node.js App** (or **Node.js Selector**).
+   - Click **Create Application**.
+   - **Node.js version**: Choose `22.x` (or `20.x+`).
+   - **Application mode**: `Production`.
+   - **Application root**: `damii_app` (or your folder path).
+   - **Application URL**: `yourdomain.com` (or subdomain).
+   - **Application startup file**: `server.js` (or `app.js`).
+   - Click **Create**.
+
+5. **Install Dependencies & Run Migrations**:
+   - In cPanel, copy the virtual environment command (e.g., `source /home/username/nodevenv/.../bin/activate`).
+   - Open **cPanel Terminal** (or connect via SSH), paste the virtualenv command, and run:
+     ```bash
+     npm ci --only=production
+     npm run build
+     npm run db:migrate
+     npm run env:check
+     ```
+
+6. **Start / Restart Application**:
+   - Click **Restart** in the cPanel Node.js App manager.
+   - Your DAMII Arena is now live on shared hosting!
+
 ---
 
 ## 8. Database Migration & Maintenance

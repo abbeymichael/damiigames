@@ -1,8 +1,17 @@
 import { defineConfig } from "vite";
 import vinext from "vinext";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [vinext()],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "."),
+    },
+  },
   // The dev server should NOT attempt to transform or inline Node-native or CJS-only
   // packages into Vite's ESM evaluation/runtime. Those packages (database drivers,
   // native bindings, or other Node-only modules) often declare Node-specific globals

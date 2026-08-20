@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef } from "react";
 import { SharedHeader } from "@/components/SharedHeader";
+import { NavLink } from "@/components/NavLink";
 import {
   applyMove,
   createBoard,
@@ -35,6 +36,7 @@ import {
   Monitor,
   Plus,
   ArrowRight,
+  Shield,
   ShieldCheck,
   ListOrdered,
   FileText,
@@ -59,6 +61,7 @@ import {
   Maximize2,
   Handshake,
   Scale,
+  ShieldAlert,
 } from "lucide-react";
 
 type Mode = "local" | "online";
@@ -239,6 +242,7 @@ type Profile = {
   wins: number;
   losses: number;
   draws: number;
+  role?: string;
 };
 
 export default function ArenaPage() {
@@ -410,12 +414,31 @@ export default function ArenaPage() {
       const savedToken = localStorage.getItem("damii-player-token");
       setToken(savedToken || "");
 
+      const rawAuth = localStorage.getItem("damii-auth-user");
+      let storedRole: string | undefined;
+      if (rawAuth) {
+        try {
+          const parsed = JSON.parse(rawAuth);
+          if (parsed?.role) {
+            storedRole = parsed.role;
+          }
+        } catch {}
+      }
+
       const savedName = localStorage.getItem("damii-player-name") ?? "";
       if (savedName) {
         setUsername(savedName);
         setLocalWhiteName(savedName);
       } else {
         setUsername("");
+      }
+
+      if (storedRole) {
+        setProfile((prev) =>
+          prev
+            ? { ...prev, role: storedRole }
+            : { username: savedName, rating: 1000, points: 0, wins: 0, losses: 0, draws: 0, role: storedRole }
+        );
       }
 
       if (savedToken) {
@@ -1020,6 +1043,58 @@ export default function ArenaPage() {
     });
     return pairs;
   }, [activeMoves]);
+
+  const isAdmin = profile?.role === "admin" || profile?.role === "super_admin";
+
+  if (isAdmin) {
+    return (
+      <main className="app-shell flex flex-col min-h-screen">
+        <SharedHeader />
+        <div className="flex-1 flex items-center justify-center p-4 sm:p-6">
+          <div className="max-w-lg w-full bg-[#06261f] border border-red-500/40 rounded-3xl p-6 sm:p-8 text-center shadow-2xl space-y-5">
+            <div className="w-16 h-16 rounded-2xl bg-red-950/80 border border-red-500/50 flex items-center justify-center mx-auto text-red-400 shadow-inner">
+              <ShieldAlert size={34} />
+            </div>
+            <div>
+              <span className="text-[11px] font-black uppercase tracking-widest text-red-400 bg-red-950/60 px-3 py-1 rounded-full border border-red-500/30">
+                Fair-Play & Governance Policy
+              </span>
+              <h1 className="text-xl sm:text-2xl font-black text-[#f5efdf] mt-3 font-serif">
+                Arena Off-Limits to Administrators
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+                Administrator accounts operate strictly as platform regulators, tournament bracket managers, and dispute arbitrators.
+              </p>
+              <div className="text-xs text-amber-300/90 mt-3 font-medium bg-[#081c15] p-3.5 rounded-xl border border-[#114232] text-left space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-amber-400">
+                  <Lock size={13} className="shrink-0" />
+                  <span>Zero Conflict of Interest Mandate:</span>
+                </div>
+                <p className="text-[11px] text-slate-300">
+                  To ensure complete competitive fairness, administrators cannot create games, join rooms, place wagers, or make moves in the Arena.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row gap-2.5 justify-center">
+              <NavLink
+                href="/admin"
+                className="px-5 py-2.5 rounded-xl bg-red-900/80 hover:bg-red-800 text-red-100 border border-red-500/50 text-xs font-black flex items-center justify-center gap-2 transition-all shadow-md"
+              >
+                <Shield size={16} /> Admin Control Center
+              </NavLink>
+              <NavLink
+                href="/leagues"
+                className="px-5 py-2.5 rounded-xl bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] text-xs font-bold flex items-center justify-center gap-2 transition-all"
+              >
+                <Trophy size={16} className="text-[#d6a735]" /> View Tournaments
+              </NavLink>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="app-shell flex flex-col min-h-screen">

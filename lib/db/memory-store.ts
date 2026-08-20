@@ -355,19 +355,34 @@ export const memoryStore: DbRepository = {
 
   async upsertProfile(token, username, explicitRole) {
     const data = getMemoryData();
-    const existing = data.profiles.get(token);
+    const cleanUsername = username.trim();
+    let existing = data.profiles.get(token);
+    if (!existing) {
+      const lower = cleanUsername.toLowerCase();
+      for (const p of data.profiles.values()) {
+        if (p.username.trim().toLowerCase() === lower) {
+          existing = p;
+          break;
+        }
+      }
+    }
     const now = new Date().toISOString();
 
     if (!existing) {
       const p: Profile = {
         token,
-        username: username.trim(),
+        username: cleanUsername,
         rating: 1000,
         marbles: 0,
         points: 0,
         wins: 0,
         losses: 0,
         draws: 0,
+        winStreak: 0,
+        bestStreak: 0,
+        matchesLast7Days: 0,
+        opponentRatingAvg: 0,
+        totalOpponentsFaced: 0,
         role: explicitRole && VALID_ROLES.includes(explicitRole) ? explicitRole : "user",
         status: "active",
         createdAt: now,
@@ -377,10 +392,10 @@ export const memoryStore: DbRepository = {
       return { ...p };
     }
 
-    existing.username = username.trim();
+    existing.username = cleanUsername;
     if (explicitRole && VALID_ROLES.includes(explicitRole)) existing.role = explicitRole;
     existing.updatedAt = now;
-    data.profiles.set(token, { ...existing });
+    data.profiles.set(existing.token, { ...existing });
     return { ...existing };
   },
 

@@ -86,20 +86,27 @@ export default function LandingPage() {
 
         <div className="hero-ctas">
           {isAdmin ? (
-            <NavLink href="/admin" className="btn-primary">
-              <ShieldCheck size={18} /> Admin Control Center <ArrowRight size={16} />
-            </NavLink>
+            <>
+              <NavLink href="/admin" className="btn-primary">
+                <ShieldCheck size={18} /> Admin Control Center <ArrowRight size={16} />
+              </NavLink>
+              <NavLink href="/leagues" className="btn-secondary">
+                <Trophy size={18} /> Tournament Hub
+              </NavLink>
+            </>
           ) : (
-            <NavLink href="/arena" onClick={handleArenaClick} className="btn-primary">
-              <Swords size={18} /> Enter Game Arena <ArrowRight size={16} />
-            </NavLink>
+            <>
+              <NavLink href="/arena" onClick={handleArenaClick} className="btn-primary">
+                <Swords size={18} /> Enter Game Arena <ArrowRight size={16} />
+              </NavLink>
+              <NavLink href="/leagues" className="btn-secondary">
+                <Trophy size={18} /> Tournament Hub
+              </NavLink>
+              <NavLink href="/wallet" className="btn-outline">
+                <Wallet size={18} /> Wallet & Rewards
+              </NavLink>
+            </>
           )}
-          <NavLink href="/leagues" className="btn-secondary">
-            <Trophy size={18} /> Tournament Hub
-          </NavLink>
-          <NavLink href="/wallet" className="btn-outline">
-            <Wallet size={18} /> Wallet & Rewards
-          </NavLink>
         </div>
 
         <div className="hero-stats">
