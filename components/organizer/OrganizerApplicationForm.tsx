@@ -702,7 +702,7 @@ export function OrganizerApplicationForm({
                 2. National ID & Verification KYC
               </h3>
               <p className="text-xs text-[#a3b8b0]">
-                All certified organizers must be verified against their official Ghana National Identity Card (Ghana Card) to guarantee player prize pool security.
+                All certified organizers must be verified against their official Government / National Identity Card to guarantee player prize pool security.
               </p>
             </div>
 
@@ -710,7 +710,7 @@ export function OrganizerApplicationForm({
               {/* Front Card */}
               <div className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-[#d6a735] uppercase">Ghana Card Front *</label>
+                  <label className="text-xs font-bold text-[#d6a735] uppercase">National ID Front *</label>
                   <button
                     type="button"
                     onClick={() => handleQuickPopulateDoc("ghana_front")}
@@ -728,7 +728,7 @@ export function OrganizerApplicationForm({
                 />
                 {ghanaCardFrontUrl && (
                   <div className="relative aspect-video rounded-xl overflow-hidden border border-[#114232] bg-black">
-                    <img src={ghanaCardFrontUrl} alt="Ghana Card Front" className="w-full h-full object-cover" />
+                    <img src={ghanaCardFrontUrl} alt="National ID Front" className="w-full h-full object-cover" />
                   </div>
                 )}
               </div>
@@ -736,7 +736,7 @@ export function OrganizerApplicationForm({
               {/* Back Card */}
               <div className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-[#d6a735] uppercase">Ghana Card Back *</label>
+                  <label className="text-xs font-bold text-[#d6a735] uppercase">National ID Back *</label>
                   <button
                     type="button"
                     onClick={() => handleQuickPopulateDoc("ghana_back")}
@@ -754,7 +754,7 @@ export function OrganizerApplicationForm({
                 />
                 {ghanaCardBackUrl && (
                   <div className="relative aspect-video rounded-xl overflow-hidden border border-[#114232] bg-black">
-                    <img src={ghanaCardBackUrl} alt="Ghana Card Back" className="w-full h-full object-cover" />
+                    <img src={ghanaCardBackUrl} alt="National ID Back" className="w-full h-full object-cover" />
                   </div>
                 )}
               </div>
@@ -929,9 +929,9 @@ export function OrganizerApplicationForm({
                 />
                 <div className="text-xs leading-relaxed text-[#a3b8b0]">
                   <strong className="text-[#f5efdf] block font-bold mb-0.5">
-                    10×10 Ghanaian Draughts Rule Enforcement
+                    10×10 Draughts Rule Enforcement
                   </strong>
-                  I agree that all tournaments created under my license strictly enforce standard Ghanaian Damii rules, compulsory multi-hop jump completions, 60-second turn clocks, and flying king moves.
+                  I agree that all tournaments created under my license strictly enforce standard Damii rules, compulsory multi-hop jump completions, 60-second turn clocks, and flying king moves.
                 </div>
               </label>
 
@@ -1003,10 +1003,10 @@ export function OrganizerApplicationForm({
               <span className="text-[10px] uppercase font-bold text-[#d6a735]">KYC Documents Attached</span>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center pt-1">
                 <div className={`p-2 rounded-xl border ${ghanaCardFrontUrl ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300" : "bg-red-950/60 border-red-500/40 text-red-300"}`}>
-                  Ghana Card Front: {ghanaCardFrontUrl ? "✓" : "✗"}
+                  National ID Front: {ghanaCardFrontUrl ? "✓" : "✗"}
                 </div>
                 <div className={`p-2 rounded-xl border ${ghanaCardBackUrl ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300" : "bg-red-950/60 border-red-500/40 text-red-300"}`}>
-                  Ghana Card Back: {ghanaCardBackUrl ? "✓" : "✗"}
+                  National ID Back: {ghanaCardBackUrl ? "✓" : "✗"}
                 </div>
                 <div className={`p-2 rounded-xl border ${selfieUrl ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300" : "bg-red-950/60 border-red-500/40 text-red-300"}`}>
                   Selfie: {selfieUrl ? "✓" : "✗"}

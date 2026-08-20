@@ -68,8 +68,31 @@ async function resolvePlayerToken(rawToken: string, username?: string): Promise<
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
 
+  if (searchParams.get("lobby") === "1") {
+    const [rawRooms, leaderboard, leagues] = await Promise.all([
+      dbRepository.listRooms(30),
+      dbRepository.getLeaderboard(20),
+      leagueService.listLeagues(),
+    ]);
+
+    const now = Date.now();
+    const validRooms = rawRooms.filter((r) => {
+      if (r.status === "waiting" && !r.guestToken) {
+        const createdMs = new Date(r.createdAt).getTime();
+        return now - createdMs < 10 * 60 * 1000;
+      }
+      return r.status !== "cancelled";
+    });
+
+    return NextResponse.json({
+      activeRooms: validRooms,
+      leaderboard,
+      leagues,
+    });
+  }
+
   if (searchParams.get("leaderboard") === "1") {
-    const leaderboard = await dbRepository.getLeaderboard(10);
+    const leaderboard = await dbRepository.getLeaderboard(20);
     return NextResponse.json({ leaderboard });
   }
 
@@ -180,6 +203,12 @@ export async function POST(req: NextRequest) {
 
     if (action === "create") {
       if (!username) return NextResponse.json({ error: "Username required" }, { status: 400 });
+      if (!existingProfile) {
+        return NextResponse.json(
+          { error: "Authentication Required: You must be signed in with a registered player account to create online matches." },
+          { status: 401 }
+        );
+      }
       await dbRepository.upsertProfile(token, username);
 
       const mode: GameMode = (["casual", "wager", "league"].includes(body.mode) ? body.mode : "casual") as GameMode;
@@ -239,6 +268,12 @@ export async function POST(req: NextRequest) {
       const code = cleanCode(body.code);
       if (!code) return NextResponse.json({ error: "Room code required" }, { status: 400 });
       if (!username) return NextResponse.json({ error: "Username required" }, { status: 400 });
+      if (!existingProfile) {
+        return NextResponse.json(
+          { error: "Authentication Required: You must be signed in with a registered player account to join online matches." },
+          { status: 401 }
+        );
+      }
 
       await dbRepository.upsertProfile(token, username);
       const room = await dbRepository.getRoom(code);

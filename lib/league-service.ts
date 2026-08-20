@@ -107,7 +107,7 @@ export const leagueService = {
       turnTimerSeconds: options?.turnTimerSeconds || 60,
       roundsCount: 0,
       prizeDistribution: defaultDistribution,
-      rulesNotes: options?.rulesNotes || "Standard 10x10 Ghanaian Damii rules apply. Turn clock strictly enforced.",
+      rulesNotes: options?.rulesNotes || "Standard 10x10 Damii rules apply. Turn clock strictly enforced.",
       createdAt: now,
       updatedAt: now,
     };

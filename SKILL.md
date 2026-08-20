@@ -1,12 +1,12 @@
 # SKILL.md — DAMII Project Capabilities & Developer Skill Sheet
 
-This document outlines the core capabilities, architectural workflows, and specialized skills required for maintaining and extending the **DAMII Ghanaian Draughts Arena & Tournament Platform**.
+This document outlines the core capabilities, architectural workflows, and specialized skills required for maintaining and extending the **DAMII Draughts Arena & Tournament Platform**.
 
 ---
 
 ## 🛠️ Core Project Skills
 
-### 1. Ghanaian 10x10 Draughts (Damii) Engine
+### 1. 10x10 Draughts (Damii) Engine
 - **Rules Implementation**: Located in `lib/damii-rules.ts`. Handles 10x10 board layout (50 dark playable squares), piece movement, mandatory maximum capture enforcement, multi-jump sequences, and flying kings.
 - **Clock & Disconnection Management**: Enforces 60-second turn clocks and a 45-second reconnection grace period before declaring automatic forfeits.
 
@@ -17,7 +17,7 @@ This document outlines the core capabilities, architectural workflows, and speci
 - **Database Seeding**: Automatic on first boot against an empty database (idempotent), or explicitly via `dbRepository.seedDatabase()` / `POST /api/admin` (`action: "seed"`).
 
 ### 3. Paystack Mobile Money & Wager Escrow Engine
-- **Mobile Money Top-Up**: Integrates Paystack API for Ghanaian Mobile Money (MTN MoMo, Telecel Cash, AT Money).
+- **Mobile Money Top-Up**: Integrates Paystack API for Mobile Money (MTN MoMo, Telecel Cash, AT Money).
 - **Automated Escrow**: Locks Marble wagers in `/lib/wallet-service.ts` upon game initialization and transfers payouts upon match conclusion.
 - **Paystack Webhook Listener**: Endpoint `/app/api/wallet/paystack-webhook/route.ts` verifies HMAC signature (`x-paystack-signature`) before crediting wallets.
 

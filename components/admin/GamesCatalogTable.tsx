@@ -254,7 +254,7 @@ export function GamesCatalogTable({
                       setGameSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-"));
                     }
                   }}
-                  placeholder="e.g. Ghanaian Damii (10x10)"
+                  placeholder="e.g. Damii (10x10)"
                   className="w-full px-3 py-2 bg-[#041d17] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-emerald-500"
                   required
                 />

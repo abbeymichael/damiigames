@@ -342,7 +342,7 @@ export async function POST(req: NextRequest) {
           scheduleTime: String(scheduleTime || "18:00 GMT"),
           gameDays: String(gameDays || "Weekends"),
           turnTimerSeconds: Number(turnTimerSeconds || 60),
-          rulesNotes: String(rulesNotes || "Standard 10x10 Ghanaian Damii rules"),
+          rulesNotes: String(rulesNotes || "Standard 10x10 Damii rules"),
         }
       );
 

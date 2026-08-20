@@ -49,6 +49,7 @@ export default defineConfig({
     ],
   },
   optimizeDeps: {
+    include: ["lucide-react", "recharts", "d3"],
     // Prevent Vite dependency pre-bundling for these server-only packages
     exclude: [
       "mysql2",

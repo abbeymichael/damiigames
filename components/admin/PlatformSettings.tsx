@@ -523,9 +523,9 @@ export function PlatformSettings({
             <div className="p-4 bg-[#041c17] border border-[#1a5e48] rounded-xl flex items-start gap-3">
               <ShieldAlert size={18} className="text-[#d6a735] shrink-0 mt-0.5" />
               <div className="text-xs space-y-1">
-                <span className="font-bold text-[#f5efdf]">Ghanaian Damii 10x10 Flying King Engine:</span>
+                <span className="font-bold text-[#f5efdf]">DAMII 10x10 Flying King Engine:</span>
                 <p className="text-slate-300">
-                  Active ruleset enforces Ghanaian standard draughts regulations: 10x10 board, 20 pieces per side, compulsory capture with mandatory selection of longest jumping sequence, and flying king moves across open diagonals.
+                  Active ruleset enforces standard draughts regulations: 10x10 board, 20 pieces per side, compulsory capture with mandatory selection of longest jumping sequence, and flying king moves across open diagonals.
                 </p>
               </div>
             </div>
@@ -540,7 +540,7 @@ export function PlatformSettings({
                 <Scale size={18} className="text-[#d6a735]" /> Paystack Deposit & Mobile Money Cashout Limits
               </h3>
               <p className="text-xs text-slate-200 mt-1">
-                Protect treasury liquidity and enforce AML transaction thresholds for Ghanaian Mobile Money (MTN, Telecel, AT).
+                Protect treasury liquidity and enforce AML transaction thresholds for Mobile Money (MTN, Telecel, AT).
               </p>
             </div>
 

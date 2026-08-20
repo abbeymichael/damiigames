@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Phone number is required" }, { status: 400 });
     }
 
-    // Phone format validation (Ghanaian / International E.164 or local format)
+    // Phone format validation (E.164 or local format)
     const sanitizedPhone = phoneNumber.replace(/[\s\-()]/g, "");
     if (sanitizedPhone.length < 9 || sanitizedPhone.length > 16) {
       return NextResponse.json({ error: "Invalid phone number format" }, { status: 400 });

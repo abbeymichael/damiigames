@@ -1754,7 +1754,7 @@ export function Header() {
                 ) : (
                   <div className="p-3 bg-[#081c15] rounded-xl border border-[#114232] text-center space-y-2">
                     <p className="text-xs text-[#cbd5e1] font-medium">
-                      Welcome to DAMII Ghanaian Draughts
+                      Welcome to DAMII Draughts
                     </p>
                     <button
                       type="button"
@@ -2509,7 +2509,7 @@ export function Header() {
 
               <div>
                 <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center gap-1">
-                  <Phone size={13} className="text-[#d6a735]" /> Phone Number (Ghana Mobile Money)
+                  <Phone size={13} className="text-[#d6a735]" /> Phone Number (Mobile Money)
                 </label>
                 <input
                   type="tel"
@@ -2519,7 +2519,7 @@ export function Header() {
                   className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-sm focus:outline-none focus:border-[#d6a735] transition-colors"
                 />
                 <small className="block text-[10px] text-slate-400 mt-1">
-                  Used for Ghana Mobile Money payouts &amp; wager victory settlements.
+                  Used for Mobile Money payouts &amp; wager victory settlements.
                 </small>
               </div>
 

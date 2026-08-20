@@ -18,8 +18,9 @@ import {
   type Move,
   type Player,
 } from "@/lib/damii-rules";
-import type { MoveLogEntry } from "@/lib/types";
+import type { MoveLogEntry, Room, League } from "@/lib/types";
 import { soundService, type SoundSettings } from "@/lib/sound-service";
+import { getProfileRank, type RankInfo } from "@/lib/rank-service";
 import {
   RotateCcw,
   HelpCircle,
@@ -62,6 +63,12 @@ import {
   Handshake,
   Scale,
   ShieldAlert,
+  Flame,
+  Search,
+  Radio,
+  Gamepad2,
+  Users,
+  TrendingUp,
 } from "lucide-react";
 
 type Mode = "local" | "online";
@@ -278,13 +285,21 @@ export default function ArenaPage() {
   const [secondsLeft, setSecondsLeft] = useState(60);
 
   // UI Modals & Drawers
-  const [showPregameModal, setShowPregameModal] = useState(true);
+  const [showPregameModal, setShowPregameModal] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeNotesInput, setDisputeNotesInput] = useState("");
+
+  // Arena Lobby & Hub State
+  const [lobbyRooms, setLobbyRooms] = useState<Room[]>([]);
+  const [lobbyPlayers, setLobbyPlayers] = useState<Array<Profile & { rank?: RankInfo }>>([]);
+  const [lobbyLeagues, setLobbyLeagues] = useState<League[]>([]);
+  const [lobbyLoading, setLobbyLoading] = useState(true);
+  const [lobbyTab, setLobbyTab] = useState<"live" | "players" | "tournaments">("live");
+  const [playerSearchQuery, setPlayerSearchQuery] = useState("");
 
   // Audio & Event Effects Customization
   const [soundSettings, setSoundSettings] = useState<SoundSettings>(() => soundService.getSettings());
@@ -332,6 +347,8 @@ export default function ArenaPage() {
   }
 
   const historyScrollRef = useRef<HTMLDivElement>(null);
+  const lastProcessedRoomCodeRef = useRef<string>("");
+  const lastProcessedMoveCountRef = useRef<number>(-1);
 
   const [focusMode, setFocusMode] = useState(false);
 
@@ -380,6 +397,12 @@ export default function ArenaPage() {
     }
     return localMoves.length > 0;
   }, [winner, mode, room?.status, room?.moves, localMoves.length]);
+
+  const hasActiveGame = useMemo(() => {
+    if (mode === "online" && room) return true;
+    if (mode === "local" && (localMoves.length > 0 || winner)) return true;
+    return false;
+  }, [mode, room, localMoves.length, winner]);
 
   const toggleFocusMode = () => {
     const next = !focusMode;
@@ -504,6 +527,49 @@ export default function ArenaPage() {
     };
   }, []);
 
+  // Poll lobby data when in Lobby view (no active game/room)
+  useEffect(() => {
+    const fetchLobbyData = async () => {
+      try {
+        const res = await fetch("/api/damii?lobby=1");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.activeRooms) setLobbyRooms(data.activeRooms);
+        if (data.leaderboard) {
+          const mapped = (data.leaderboard as Profile[]).map((p) => ({
+            ...p,
+            rank: getProfileRank(p.rating),
+          }));
+          setLobbyPlayers(mapped);
+        }
+        if (data.leagues) setLobbyLeagues(data.leagues);
+      } catch {
+        /* Ignore transient lobby fetch failures */
+      } finally {
+        setLobbyLoading(false);
+      }
+    };
+
+    fetchLobbyData();
+    const interval = window.setInterval(fetchLobbyData, 4000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  function handleDirectChallenge(targetUsername: string, challengeType: "casual" | "wager" = "casual") {
+    if (!token) {
+      window.dispatchEvent(new CustomEvent("damii-open-auth"));
+      setOnlineError("Please sign in or register to challenge " + targetUsername);
+      return;
+    }
+    if (profile?.role === "admin" || profile?.role === "super_admin") {
+      setOnlineError("Admin accounts cannot participate in player matches.");
+      return;
+    }
+    setMode("online");
+    setRoomMode(challengeType);
+    setShowPregameModal(true);
+  }
+
   // Poll online room state when in online mode
   useEffect(() => {
     if (mode !== "online" || !room || !token) return;
@@ -607,11 +673,15 @@ export default function ArenaPage() {
 
   function loadRoom(next: Room) {
     // Sound & Event Animation Triggers for Online Room Updates
-    const prevMoveCount = room?.moveCount ?? 0;
+    const isNewRoom = lastProcessedRoomCodeRef.current !== next.code;
+    const prevMoveCount = isNewRoom ? -1 : lastProcessedMoveCountRef.current;
     const newMoveCount = next.moveCount;
 
-    if (newMoveCount > prevMoveCount && room) {
-      if (next.winner && !room.winner) {
+    lastProcessedRoomCodeRef.current = next.code;
+    lastProcessedMoveCountRef.current = newMoveCount;
+
+    if (!isNewRoom && prevMoveCount >= 0 && newMoveCount > prevMoveCount) {
+      if (next.winner) {
         soundService.playVictory();
       } else if (next.forcedFrom !== null) {
         soundService.playMultiJump();
@@ -631,7 +701,7 @@ export default function ArenaPage() {
           soundService.playMove();
         }
       }
-    } else if (next.winner && (!room || !room.winner)) {
+    } else if (isNewRoom && next.winner) {
       soundService.playVictory();
     }
 
@@ -671,17 +741,7 @@ export default function ArenaPage() {
     localStorage.setItem("damii-player-name", nameToSave.trim());
     setUsername(nameToSave.trim());
     setLocalWhiteName(nameToSave.trim());
-    try {
-      const res = await fetch("/api/auth", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "login", username: nameToSave.trim(), passcode: "123456" }),
-      });
-      const data = await res.json();
-      if (data.profile) setProfile(data.profile);
-    } catch {
-      /* fallback locally */
-    }
+    window.dispatchEvent(new CustomEvent("damii-open-auth"));
   }
 
   async function onlineAction(action: string, extra: Record<string, unknown> = {}) {
@@ -997,7 +1057,7 @@ export default function ArenaPage() {
       `   • Player 2 Captures: ${captures.black}`,
       `   • Total Moves: ${activeMoves.length}`,
       `----------------------------------------`,
-      origin ? `Play Ghanaian 10x10 DAMII Draughts: ${origin}` : `Play Ghanaian 10x10 DAMII Draughts!`,
+      origin ? `Play 10x10 DAMII Draughts: ${origin}` : `Play 10x10 DAMII Draughts!`,
     ].join("\n");
 
     try {
@@ -1162,30 +1222,50 @@ export default function ArenaPage() {
 
           {/* Action Toolbar Buttons */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 justify-between sm:justify-end">
-            <button
-              onClick={() => setShowPregameModal(true)}
-              className="flex-1 sm:flex-none px-2.5 sm:px-3 py-1.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 transition-all shadow-md shadow-[#d6a735]/10"
-            >
-              <Swords size={13} />
-              <span>Match Setup</span>
-            </button>
+            {profile?.role !== "admin" && profile?.role !== "super_admin" && (
+              <button
+                onClick={() => setShowPregameModal(true)}
+                className="flex-1 sm:flex-none px-2.5 sm:px-3 py-1.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 transition-all shadow-md shadow-[#d6a735]/10"
+              >
+                <Swords size={13} />
+                <span>{hasActiveGame ? "Match Setup" : "Create Match"}</span>
+              </button>
+            )}
 
-            <button
-              onClick={() => setShowHistory((prev) => !prev)}
-              className={`flex-1 sm:flex-none px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 sm:gap-1.5 transition-all border ${
-                showHistory
-                  ? "bg-[#d6a735] text-[#06261f] border-[#d6a735] font-bold"
-                  : "bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] border-[#184d3c]"
-              }`}
-            >
-              <ListOrdered size={13} />
-              <span>Move Log</span>
-              {activeMoves.length > 0 && (
-                <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${showHistory ? "bg-[#06261f] text-[#d6a735]" : "bg-[#d6a735]/20 text-[#d6a735]"}`}>
-                  {activeMoves.length}
-                </span>
-              )}
-            </button>
+            {hasActiveGame && (
+              <button
+                onClick={() => {
+                  setRoom(null);
+                  setMode("local");
+                  setWinner(null);
+                  setLocalMoves([]);
+                }}
+                className="px-2.5 sm:px-3 py-1.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] border border-[#184d3c] rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 transition-all"
+                title="Return to Arena Lobby"
+              >
+                <Gamepad2 size={13} />
+                <span>Lobby</span>
+              </button>
+            )}
+
+            {hasActiveGame && (
+              <button
+                onClick={() => setShowHistory((prev) => !prev)}
+                className={`flex-1 sm:flex-none px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 sm:gap-1.5 transition-all border ${
+                  showHistory
+                    ? "bg-[#d6a735] text-[#06261f] border-[#d6a735] font-bold"
+                    : "bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] border-[#184d3c]"
+                }`}
+              >
+                <ListOrdered size={13} />
+                <span>Move Log</span>
+                {activeMoves.length > 0 && (
+                  <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${showHistory ? "bg-[#06261f] text-[#d6a735]" : "bg-[#d6a735]/20 text-[#d6a735]"}`}>
+                    {activeMoves.length}
+                  </span>
+                )}
+              </button>
+            )}
 
             <button
               onClick={() => setShowSettings((prev) => !prev)}
@@ -1266,17 +1346,449 @@ export default function ArenaPage() {
         </div>
       )}
 
-      {/* Main Arena Game Layout Container */}
-      <section className="flex-1 max-w-6xl w-full mx-auto p-1.5 sm:p-4 flex flex-col items-center justify-center">
-        <div
-          className={`w-full grid gap-3 sm:gap-6 transition-all duration-300 ${
-            showHistory
-              ? "lg:grid-cols-[1fr_340px] items-start"
-              : "max-w-[580px] mx-auto"
-          }`}
-        >
-          {/* Left / Central Game Stage Column */}
-          <div className="w-full max-w-[580px] mx-auto space-y-2.5 sm:space-y-4">
+      {/* LOBBY VIEW vs GAME BOARD VIEW */}
+      {!hasActiveGame ? (
+        /* ARENA LOBBY HUB */
+        <section className="flex-1 max-w-6xl w-full mx-auto p-2 sm:p-4 space-y-4 sm:space-y-6">
+          {/* Lobby Hero & Quick Actions Banner */}
+          <div className="p-4 sm:p-6 bg-gradient-to-br from-[#06261f] via-[#0c3b2e] to-[#081c15] border-2 border-[#184d3c] rounded-2xl shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 bg-[#d6a735]/20 border border-[#d6a735]/40 text-[#d6a735] text-[10px] font-extrabold uppercase tracking-widest rounded-full flex items-center gap-1">
+                  <Radio size={12} className="animate-pulse text-emerald-400" />
+                  Live DAMII Arena
+                </span>
+                <span className="text-xs text-slate-400">10x10 Flying Kings & Compulsory Captures</span>
+              </div>
+              <h1 className="text-xl sm:text-2xl font-black text-[#f5efdf] font-serif">
+                Arena Matchmaking & Live Hub
+              </h1>
+              <p className="text-xs text-slate-300 max-w-xl leading-relaxed">
+                Watch active games in real time, challenge online grandmasters to free or wagered matches, or enter sanctioned tournaments.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
+              {profile?.role !== "admin" && profile?.role !== "super_admin" && (
+                <button
+                  type="button"
+                  onClick={() => setShowPregameModal(true)}
+                  className="flex-1 sm:flex-none px-4 py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#d6a735]/20 transition-all hover:scale-[1.02]"
+                >
+                  <Swords size={16} />
+                  <span>Create / Join Match</span>
+                </button>
+              )}
+              <a
+                href="/leagues"
+                className="flex-1 sm:flex-none px-4 py-2.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all"
+              >
+                <Trophy size={15} className="text-[#d6a735]" />
+                <span>Tournaments</span>
+              </a>
+            </div>
+          </div>
+
+          {/* Lobby Navigation Tabs */}
+          <div className="flex items-center gap-2 border-b border-[#184d3c] pb-2 overflow-x-auto scrollbar-none">
+            <button
+              type="button"
+              onClick={() => setLobbyTab("live")}
+              className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all shrink-0 ${
+                lobbyTab === "live"
+                  ? "bg-[#d6a735] text-[#06261f] shadow-md shadow-[#d6a735]/20"
+                  : "bg-[#06261f] text-[#cbd5e1] hover:text-white border border-[#184d3c]"
+              }`}
+            >
+              <Gamepad2 size={14} />
+              <span>Live & Ongoing Games</span>
+              <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-black ${lobbyTab === "live" ? "bg-[#06261f] text-[#d6a735]" : "bg-[#144435] text-slate-300"}`}>
+                {lobbyRooms.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setLobbyTab("players")}
+              className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all shrink-0 ${
+                lobbyTab === "players"
+                  ? "bg-[#d6a735] text-[#06261f] shadow-md shadow-[#d6a735]/20"
+                  : "bg-[#06261f] text-[#cbd5e1] hover:text-white border border-[#184d3c]"
+              }`}
+            >
+              <Users size={14} />
+              <span>Online Players & Ranks</span>
+              <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-black ${lobbyTab === "players" ? "bg-[#06261f] text-[#d6a735]" : "bg-[#144435] text-slate-300"}`}>
+                {lobbyPlayers.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setLobbyTab("tournaments")}
+              className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all shrink-0 ${
+                lobbyTab === "tournaments"
+                  ? "bg-[#d6a735] text-[#06261f] shadow-md shadow-[#d6a735]/20"
+                  : "bg-[#06261f] text-[#cbd5e1] hover:text-white border border-[#184d3c]"
+              }`}
+            >
+              <Trophy size={14} />
+              <span>Active Leagues & Brackets</span>
+              <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-black ${lobbyTab === "tournaments" ? "bg-[#06261f] text-[#d6a735]" : "bg-[#144435] text-slate-300"}`}>
+                {lobbyLeagues.length}
+              </span>
+            </button>
+          </div>
+
+          {/* TAB 1: LIVE ONGOING GAMES */}
+          {lobbyTab === "live" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm sm:text-base font-bold text-[#f5efdf]">Active Game Rooms</h2>
+                  <p className="text-xs text-slate-400">Spectate games in real time or jump into open rooms waiting for an opponent.</p>
+                </div>
+                {profile?.role !== "admin" && profile?.role !== "super_admin" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode("online");
+                      setShowPregameModal(true);
+                    }}
+                    className="px-3 py-1.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] border border-[#184d3c] rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all"
+                  >
+                    <Plus size={14} />
+                    <span>Host New Room</span>
+                  </button>
+                )}
+              </div>
+
+              {lobbyLoading ? (
+                <div className="p-12 text-center text-slate-400 bg-[#06261f] border border-[#184d3c] rounded-2xl flex flex-col items-center gap-3">
+                  <RefreshCw size={24} className="animate-spin text-[#d6a735]" />
+                  <span className="text-xs">Loading live matches across the arena...</span>
+                </div>
+              ) : lobbyRooms.length === 0 ? (
+                <div className="p-12 text-center bg-[#06261f] border border-[#184d3c] rounded-2xl space-y-3">
+                  <Gamepad2 size={36} className="mx-auto text-slate-500" />
+                  <h3 className="text-base font-bold text-[#f5efdf]">No Live Matches Right Now</h3>
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                    Be the first to open a game room or challenge another player to kick off an arena match!
+                  </p>
+                  {profile?.role !== "admin" && profile?.role !== "super_admin" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode("online");
+                        setShowPregameModal(true);
+                      }}
+                      className="px-4 py-2 bg-[#d6a735] text-[#06261f] font-black rounded-xl text-xs inline-flex items-center gap-2"
+                    >
+                      <Plus size={14} /> Create a Match Room
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                  {lobbyRooms.map((r) => {
+                    const isPlaying = r.status === "playing";
+                    const isWaiting = r.status === "waiting";
+                    const isWager = r.mode === "wager";
+                    const isLeague = r.mode === "league" || !!r.leagueId;
+
+                    return (
+                      <div
+                        key={r.code}
+                        className="p-4 bg-[#06261f] border border-[#184d3c] hover:border-[#d6a735]/60 rounded-2xl space-y-3 shadow-lg transition-all flex flex-col justify-between"
+                      >
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="px-2 py-0.5 bg-[#0c3b2e] border border-[#184d3c] text-[#d6a735] font-mono font-bold text-xs rounded-md">
+                              ROOM {r.code}
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              {isPlaying && (
+                                <span className="px-2 py-0.5 bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-extrabold text-[10px] rounded-md flex items-center gap-1">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
+                                  Live Match
+                                </span>
+                              )}
+                              {isWaiting && (
+                                <span className="px-2 py-0.5 bg-amber-950/80 border border-amber-500/40 text-amber-300 font-extrabold text-[10px] rounded-md flex items-center gap-1">
+                                  <Clock size={10} />
+                                  Open / Waiting
+                                </span>
+                              )}
+                              {isWager && (
+                                <span className="px-2 py-0.5 bg-[#d6a735]/20 border border-[#d6a735]/50 text-[#d6a735] font-bold text-[10px] rounded-md flex items-center gap-1">
+                                  <Zap size={10} /> GH₵ {(r.wagerAmount * 2).toFixed(2)}
+                                </span>
+                              )}
+                              {isLeague && (
+                                <span className="px-2 py-0.5 bg-purple-950/80 border border-purple-500/40 text-purple-300 font-bold text-[10px] rounded-md flex items-center gap-1">
+                                  <Trophy size={10} /> Tournament
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Players Roster */}
+                          <div className="p-3 bg-[#081c15] border border-[#184d3c] rounded-xl space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-400 flex items-center gap-1.5">
+                                <span className="h-3 w-3 rounded-full bg-[#f5efdf] border border-slate-400 inline-block" />
+                                <strong className="text-[#f5efdf] truncate max-w-[130px]">{r.hostName}</strong>
+                              </span>
+                              <span className="text-[10px] font-bold text-[#d6a735]">White (Host)</span>
+                            </div>
+                            <div className="border-t border-[#184d3c]/60 my-1" />
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-400 flex items-center gap-1.5">
+                                <span className="h-3 w-3 rounded-full bg-[#114232] border border-emerald-400 inline-block" />
+                                <strong className="text-[#f5efdf] truncate max-w-[130px]">
+                                  {r.guestName || "Waiting for opponent..."}
+                                </strong>
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-400">Black</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
+                            <span>Moves: <strong className="text-[#f5efdf]">{r.moveCount || 0}</strong></span>
+                            <span>Turn: <strong className="text-[#d6a735]">{r.turn === "white" ? "White" : "Black"}</strong></span>
+                          </div>
+                        </div>
+
+                        {/* Action CTA */}
+                        <div className="pt-2 flex items-center gap-2">
+                          {isWaiting && !r.guestName && profile?.role !== "admin" && profile?.role !== "super_admin" ? (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!token) {
+                                  window.dispatchEvent(new CustomEvent("damii-open-auth"));
+                                  return;
+                                }
+                                setMode("online");
+                                await onlineAction("join", { code: r.code });
+                              }}
+                              className="w-full py-2 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all"
+                            >
+                              <Swords size={14} /> Join & Play as Black
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!token) {
+                                  window.dispatchEvent(new CustomEvent("damii-open-auth"));
+                                  return;
+                                }
+                                setMode("online");
+                                await onlineAction("join", { code: r.code });
+                              }}
+                              className="w-full py-2 bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all"
+                            >
+                              <Eye size={14} className="text-[#d6a735]" /> Spectate Live Game
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: PLAYERS & RANKINGS */}
+          {lobbyTab === "players" && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-sm sm:text-base font-bold text-[#f5efdf]">Arena Roster & Online Ranks</h2>
+                  <p className="text-xs text-slate-400">Request free or wagered matches directly against any registered player.</p>
+                </div>
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search player username..."
+                    value={playerSearchQuery}
+                    onChange={(e) => setPlayerSearchQuery(e.target.value)}
+                    className="pl-8 pr-3 py-1.5 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] placeholder-slate-500 focus:outline-none focus:border-[#d6a735] w-full sm:w-64"
+                  />
+                </div>
+              </div>
+
+              {lobbyPlayers.length === 0 ? (
+                <div className="p-8 text-center bg-[#06261f] border border-[#184d3c] rounded-2xl text-slate-400 text-xs">
+                  No ranked players registered yet.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {lobbyPlayers
+                    .filter((p) =>
+                      playerSearchQuery
+                        ? p.username.toLowerCase().includes(playerSearchQuery.toLowerCase())
+                        : true
+                    )
+                    .map((p, idx) => {
+                      const isSelf = p.username === username;
+                      const isAdmin = p.role === "admin" || p.role === "super_admin";
+
+                      return (
+                        <div
+                          key={p.username}
+                          className="p-4 bg-[#06261f] border border-[#184d3c] hover:border-[#1f5e4a] rounded-2xl space-y-3 shadow-md flex flex-col justify-between"
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="h-7 w-7 rounded-full bg-[#0c3b2e] border border-[#184d3c] text-[#d6a735] font-black text-xs flex items-center justify-center">
+                                  {idx + 1}
+                                </span>
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <strong className="text-xs sm:text-sm text-[#f5efdf] truncate">{p.username}</strong>
+                                    {isSelf && (
+                                      <span className="text-[10px] px-1.5 py-0.2 bg-[#d6a735]/20 text-[#d6a735] font-bold rounded-full">
+                                        You
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                                    <Award size={11} className="text-[#d6a735]" />
+                                    <span>{p.rank?.title || "Novice"} ({p.rating} ELO)</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="text-[10px] px-2 py-0.5 bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-bold rounded-full flex items-center gap-1">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                Active
+                              </span>
+                            </div>
+
+                            {/* Performance Stats */}
+                            <div className="grid grid-cols-3 gap-1.5 p-2 bg-[#081c15] border border-[#184d3c] rounded-xl text-center text-[10px]">
+                              <div>
+                                <span className="text-slate-400 block">Wins</span>
+                                <strong className="text-emerald-400 font-mono text-xs">{p.wins}</strong>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block">Losses</span>
+                                <strong className="text-red-400 font-mono text-xs">{p.losses}</strong>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block">Points</span>
+                                <strong className="text-[#d6a735] font-mono text-xs">{p.points}</strong>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons: Free vs Wager Challenge */}
+                          {!isSelf && !isAdmin && profile?.role !== "admin" && profile?.role !== "super_admin" && (
+                            <div className="grid grid-cols-2 gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={() => handleDirectChallenge(p.username, "casual")}
+                                className="py-1.5 px-2 bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition-all"
+                              >
+                                <Swords size={12} className="text-[#d6a735]" />
+                                <span>Free Match</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDirectChallenge(p.username, "wager")}
+                                className="py-1.5 px-2 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] rounded-lg text-[11px] font-black flex items-center justify-center gap-1 shadow-sm transition-all"
+                              >
+                                <Zap size={12} />
+                                <span>Wager Match</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: TOURNAMENTS & LEAGUES */}
+          {lobbyTab === "tournaments" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm sm:text-base font-bold text-[#f5efdf]">Tournaments & Leagues</h2>
+                  <p className="text-xs text-slate-400">Sanctioned 10x10 tournament brackets and prize pools.</p>
+                </div>
+                <a
+                  href="/leagues"
+                  className="px-3 py-1.5 bg-[#d6a735] text-[#06261f] font-black rounded-lg text-xs flex items-center gap-1.5"
+                >
+                  <Trophy size={14} />
+                  <span>View All Leagues</span>
+                </a>
+              </div>
+
+              {lobbyLeagues.length === 0 ? (
+                <div className="p-8 text-center bg-[#06261f] border border-[#184d3c] rounded-2xl text-slate-400 text-xs">
+                  No active tournament leagues right now.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {lobbyLeagues.map((l) => (
+                    <div
+                      key={l.id}
+                      className="p-5 bg-[#06261f] border border-[#184d3c] hover:border-[#d6a735]/50 rounded-2xl space-y-3 shadow-lg"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="px-2 py-0.5 bg-[#d6a735]/20 text-[#d6a735] border border-[#d6a735]/40 text-[10px] font-extrabold uppercase rounded-md inline-block mb-1">
+                            {l.status}
+                          </span>
+                          <h3 className="text-sm sm:text-base font-bold text-[#f5efdf]">{l.title}</h3>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] text-slate-400 block">Prize Pool</span>
+                          <strong className="text-sm font-black text-[#d6a735]">GH₵ {l.prizePool}</strong>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-slate-300 line-clamp-2">{l.description}</p>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-[#184d3c] text-xs">
+                        <span className="text-slate-400">
+                          Players: <strong className="text-[#f5efdf]">{l.participants?.length || 0} / {l.maxPlayers}</strong>
+                        </span>
+                        <a
+                          href={`/leagues?id=${l.id}`}
+                          className="text-[#d6a735] hover:underline font-bold flex items-center gap-1"
+                        >
+                          <span>Open Tournament</span>
+                          <ChevronRight size={13} />
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      ) : (
+        /* Main Arena Game Layout Container */
+        <section className="flex-1 max-w-6xl w-full mx-auto p-1.5 sm:p-4 flex flex-col items-center justify-center">
+          <div
+            className={`w-full grid gap-3 sm:gap-6 transition-all duration-300 ${
+              showHistory
+                ? "lg:grid-cols-[1fr_340px] items-start"
+                : "max-w-[580px] mx-auto"
+            }`}
+          >
+            {/* Left / Central Game Stage Column */}
+            <div className="w-full max-w-[580px] mx-auto space-y-2.5 sm:space-y-4">
 
             {/* Unjoined Waiting Room Cancellation Banner */}
             {mode === "online" && room?.status === "waiting" && room?.role === "white" && !room.guestToken && (
@@ -2042,6 +2554,7 @@ export default function ArenaPage() {
           )}
         </div>
       </section>
+      )}
 
       {/* Mandatory / Interactive Pregame Match Setup Modal */}
       {showPregameModal && (
@@ -2054,7 +2567,7 @@ export default function ArenaPage() {
                 <Swords size={20} />
                 <div>
                   <h2 className="text-base font-black text-[#f5efdf] font-serif">DAMII Pregame Match Configuration</h2>
-                  <p className="text-[11px] text-[#cbd5e1]">Set player names, select game mode, and log in before starting.</p>
+                  <p className="text-[11px] text-[#cbd5e1]">Configure match mode and settings before launching the board.</p>
                 </div>
               </div>
               <button
@@ -2085,47 +2598,6 @@ export default function ArenaPage() {
                   </a>
                 </div>
               )}
-
-              {/* Account Profile Bar */}
-              <div className="p-4 bg-[#0c3b2e]/80 border border-[#184d3c] rounded-xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#f5efdf] flex items-center gap-1.5">
-                    <User size={15} className="text-[#d6a735]" />
-                    Player Account Profile
-                  </span>
-                  {profile && (
-                    <span className="text-[11px] text-emerald-400 font-bold flex items-center gap-1">
-                      <UserCheck size={13} /> Logged In
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    maxLength={24}
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="Enter your player display name..."
-                    className="flex-1 px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] placeholder-[#63716b] focus:outline-none focus:border-[#d6a735] font-medium"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleSaveLoginProfile(username)}
-                    className="px-4 py-2 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] text-xs font-bold rounded-xl transition-all shadow-md shadow-[#d6a735]/10"
-                  >
-                    Save & Login
-                  </button>
-                </div>
-
-                {profile && (
-                  <div className="flex items-center justify-between text-[11px] text-[#cbd5e1] pt-1 border-t border-[#184d3c]/60">
-                    <span>Rating: <strong className="text-[#d6a735]">{profile.rating} ELO</strong></span>
-                    <span>Points: <strong className="text-sky-300">{profile.points} Pts</strong></span>
-                    <span>Record: <strong className="text-emerald-400">{profile.wins}W - {profile.losses}L</strong></span>
-                  </div>
-                )}
-              </div>
 
               {/* Mode Selection Tabs */}
               <div className="space-y-2">
@@ -2310,10 +2782,17 @@ export default function ArenaPage() {
 
               {mode === "online" && (
                 <div className="space-y-4 p-4 bg-[#0c3b2e]/60 border border-[#184d3c] rounded-xl">
-                  <h4 className="text-xs font-bold text-[#f5efdf] flex items-center gap-2">
-                    <Globe size={15} className="text-[#d6a735]" />
-                    Online 1-on-1 Challenge & Room Creation
-                  </h4>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-[#f5efdf] flex items-center gap-2">
+                      <Globe size={15} className="text-[#d6a735]" />
+                      Online 1-on-1 Challenge & Room Creation
+                    </h4>
+                    {token && profile && (
+                      <span className="text-[10px] text-emerald-400 font-bold px-2 py-0.5 bg-emerald-950/80 border border-emerald-500/30 rounded-full">
+                        ● Signed In: {profile.username || username}
+                      </span>
+                    )}
+                  </div>
 
                   {onlineError && (
                     <div className="p-3 bg-red-950/80 border border-red-800 rounded-xl text-xs text-red-300 flex items-center gap-2">
@@ -2322,91 +2801,110 @@ export default function ArenaPage() {
                     </div>
                   )}
 
-                  <div className="space-y-3">
-                    <div className="flex gap-2">
-                      <select
-                        value={roomMode}
-                        onChange={(e) => setRoomMode(e.target.value as RoomMode)}
-                        className="flex-1 px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
+                  {!token ? (
+                    <div className="p-4 bg-[#06261f] border border-[#d6a735]/40 rounded-xl text-center space-y-3">
+                      <div className="flex items-center justify-center gap-2 text-amber-300 font-bold text-xs">
+                        <Lock size={15} className="text-[#d6a735]" />
+                        <span>Authentication Required for Online Matches</span>
+                      </div>
+                      <p className="text-[11px] text-[#cbd5e1] leading-relaxed max-w-sm mx-auto">
+                        Online 1-on-1 multiplayer, real-time sync, and wager matches require an authenticated player account. Please sign in or register to create or join matches.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => window.dispatchEvent(new CustomEvent("damii-open-auth"))}
+                        className="w-full py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black text-xs rounded-xl transition-all shadow-md shadow-[#d6a735]/20 flex items-center justify-center gap-2"
                       >
-                        <option value="casual">Casual Match (Free)</option>
-                        <option value="wager">Wager Match (GH₵ Escrow Pot)</option>
-                      </select>
+                        <User size={14} /> Sign In / Register Account
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex gap-2">
+                        <select
+                          value={roomMode}
+                          onChange={(e) => setRoomMode(e.target.value as RoomMode)}
+                          className="flex-1 px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
+                        >
+                          <option value="casual">Casual Match (Free)</option>
+                          <option value="wager">Wager Match (GH₵ Escrow Pot)</option>
+                        </select>
 
-                      {roomMode === "wager" && (
-                        <input
-                          type="number"
-                          min={10}
-                          step={10}
-                          value={wagerInput}
-                          onChange={(e) => setWagerInput(Number(e.target.value))}
-                          placeholder="Stake GH₵"
-                          className="w-28 px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
-                        />
+                        {roomMode === "wager" && (
+                          <input
+                            type="number"
+                            min={10}
+                            step={10}
+                            value={wagerInput}
+                            onChange={(e) => setWagerInput(Number(e.target.value))}
+                            placeholder="Stake GH₵"
+                            className="w-28 px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
+                          />
+                        )}
+
+                        <button
+                          type="button"
+                          disabled={onlineBusy}
+                          onClick={() =>
+                            void onlineAction("create", {
+                              mode: roomMode,
+                              wagerAmount: roomMode === "wager" ? wagerInput : 0,
+                            })
+                          }
+                          className="px-4 py-2 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold rounded-xl text-xs transition-all shadow-md shadow-[#d6a735]/10 flex items-center gap-1 shrink-0"
+                        >
+                          <Plus size={14} /> Create Room
+                        </button>
+                      </div>
+
+                      {/* Transparent Player-Facing Escrow Audit Trail Breakdown */}
+                      {(roomMode === "wager" || room?.mode === "wager") && (
+                        <div className="p-3 bg-[#06261f] border border-[#d6a735]/50 rounded-xl space-y-2 text-xs">
+                          <div className="flex items-center justify-between text-[#d6a735] font-extrabold uppercase tracking-wider text-[11px]">
+                            <span className="flex items-center gap-1.5">
+                              <ShieldCheck size={14} /> Guaranteed Escrow Vault Audit Trail
+                            </span>
+                            <span className="px-1.5 py-0.5 bg-emerald-950 text-emerald-300 rounded border border-emerald-500/30 text-[9px]">
+                              Disputes &lt; 2h SLA
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-[11px] text-[#cbd5e1] pt-1 border-t border-[#184d3c]">
+                            <div>
+                              • Your Wager Stake: <strong className="text-[#f5efdf]">GH₵ {Number(wagerInput).toFixed(2)}</strong> (Locked)
+                            </div>
+                            <div>
+                              • Opponent Stake: <strong className="text-[#f5efdf]">GH₵ {Number(wagerInput).toFixed(2)}</strong> (Locked)
+                            </div>
+                            <div>
+                              • Total Wager Pot: <strong className="text-amber-300">GH₵ {(Number(wagerInput) * 2).toFixed(2)}</strong>
+                            </div>
+                            <div>
+                              • Winner Takes: <strong className="text-emerald-400">GH₵ {(Number(wagerInput) * 2 * 0.95).toFixed(2)}</strong> (5% platform fee)
+                            </div>
+                          </div>
+                        </div>
                       )}
 
-                      <button
-                        type="button"
-                        disabled={onlineBusy}
-                        onClick={() =>
-                          void onlineAction("create", {
-                            mode: roomMode,
-                            wagerAmount: roomMode === "wager" ? wagerInput : 0,
-                          })
-                        }
-                        className="px-4 py-2 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold rounded-xl text-xs transition-all shadow-md shadow-[#d6a735]/10 flex items-center gap-1 shrink-0"
-                      >
-                        <Plus size={14} /> Create Room
-                      </button>
-                    </div>
-
-                    {/* Transparent Player-Facing Escrow Audit Trail Breakdown */}
-                    {(roomMode === "wager" || room?.mode === "wager") && (
-                      <div className="p-3 bg-[#06261f] border border-[#d6a735]/50 rounded-xl space-y-2 text-xs">
-                        <div className="flex items-center justify-between text-[#d6a735] font-extrabold uppercase tracking-wider text-[11px]">
-                          <span className="flex items-center gap-1.5">
-                            <ShieldCheck size={14} /> Guaranteed Escrow Vault Audit Trail
-                          </span>
-                          <span className="px-1.5 py-0.5 bg-emerald-950 text-emerald-300 rounded border border-emerald-500/30 text-[9px]">
-                            Disputes &lt; 2h SLA
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-[11px] text-[#cbd5e1] pt-1 border-t border-[#184d3c]">
-                          <div>
-                            • Your Wager Stake: <strong className="text-[#f5efdf]">GH₵ {Number(wagerInput).toFixed(2)}</strong> (Locked)
-                          </div>
-                          <div>
-                            • Opponent Stake: <strong className="text-[#f5efdf]">GH₵ {Number(wagerInput).toFixed(2)}</strong> (Locked)
-                          </div>
-                          <div>
-                            • Total Wager Pot: <strong className="text-amber-300">GH₵ {(Number(wagerInput) * 2).toFixed(2)}</strong>
-                          </div>
-                          <div>
-                            • Winner Takes: <strong className="text-emerald-400">GH₵ {(Number(wagerInput) * 2 * 0.95).toFixed(2)}</strong> (5% platform fee)
-                          </div>
-                        </div>
+                      <div className="flex gap-2 pt-2 border-t border-[#184d3c]">
+                        <input
+                          type="text"
+                          maxLength={8}
+                          value={joinCode}
+                          onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                          placeholder="ENTER ROOM CODE"
+                          className="flex-1 px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs font-mono font-bold tracking-widest text-[#f5efdf] placeholder-[#63716b] uppercase focus:outline-none focus:border-[#d6a735]"
+                        />
+                        <button
+                          type="button"
+                          disabled={onlineBusy || !joinCode}
+                          onClick={() => void onlineAction("join", { code: joinCode })}
+                          className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition-all shrink-0"
+                        >
+                          Join Room
+                        </button>
                       </div>
-                    )}
-
-                    <div className="flex gap-2 pt-2 border-t border-[#184d3c]">
-                      <input
-                        type="text"
-                        maxLength={8}
-                        value={joinCode}
-                        onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                        placeholder="ENTER ROOM CODE"
-                        className="flex-1 px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs font-mono font-bold tracking-widest text-[#f5efdf] placeholder-[#63716b] uppercase focus:outline-none focus:border-[#d6a735]"
-                      />
-                      <button
-                        type="button"
-                        disabled={onlineBusy || !joinCode}
-                        onClick={() => void onlineAction("join", { code: joinCode })}
-                        className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition-all shrink-0"
-                      >
-                        Join Room
-                      </button>
                     </div>
-                  </div>
+                  )}
 
                   {room && (
                     <div className="p-3 bg-[#06261f]/80 border border-[#184d3c] rounded-xl space-y-2">
@@ -2437,6 +2935,19 @@ export default function ArenaPage() {
               <button
                 type="button"
                 onClick={() => {
+                  if (mode === "online") {
+                    if (!token) {
+                      window.dispatchEvent(new CustomEvent("damii-open-auth"));
+                      setOnlineError("Authentication Required: Please sign in or register an account to play online.");
+                      return;
+                    }
+                    if (!room) {
+                      setOnlineError("Please create a room or enter a valid room code to join before launching.");
+                      return;
+                    }
+                    setShowPregameModal(false);
+                    return;
+                  }
                   if (mode === "local" && subMode === "vs_cpu" && !token) {
                     window.dispatchEvent(new CustomEvent("damii-open-auth"));
                     setOnlineError("Authentication Required: Please sign in or register to play against the Bot AI.");
@@ -2514,103 +3025,124 @@ export default function ArenaPage() {
                       </div>
                     )}
 
-                    <div>
-                      <label className="block text-xs font-bold text-[#cbd5e1] uppercase tracking-wider mb-1.5">
-                        Public Player Name
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          maxLength={20}
-                          value={username}
-                          onChange={(e) => setUsername(e.target.value)}
-                          placeholder="Enter display name"
-                          className="flex-1 px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] placeholder-[#63716b] focus:outline-none focus:border-[#d6a735]"
-                        />
-                        <button
-                          type="button"
-                          disabled={onlineBusy}
-                          onClick={() => void onlineAction("profile")}
-                          className="px-3 py-2 bg-[#144435] hover:bg-[#1f5e4a] text-[#f5efdf] text-xs font-bold rounded-xl border border-[#184d3c] transition-colors"
-                        >
-                          Save
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3 p-4 bg-[#0c3b2e]/60 border border-[#184d3c] rounded-2xl">
-                      <h4 className="text-xs font-bold text-[#f5efdf] flex items-center gap-1.5">
-                        <Plus size={14} className="text-[#d6a735]" /> Create Online Room
-                      </h4>
-
-                      <div>
-                        <label className="block text-[11px] font-medium text-[#cbd5e1] mb-1">
-                          Match Type
-                        </label>
-                        <select
-                          value={roomMode}
-                          onChange={(e) => setRoomMode(e.target.value as RoomMode)}
-                          className="w-full px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
-                        >
-                          <option value="casual">Casual Match (Free)</option>
-                          <option value="wager">Wager Match (GH₵ Escrow Pot)</option>
-                        </select>
-                      </div>
-
-                      {roomMode === "wager" && (
-                        <div>
-                          <label className="block text-[11px] font-medium text-[#cbd5e1] mb-1">
-                            Wager Stake (GH₵ per player)
-                          </label>
-                          <input
-                            type="number"
-                            min={10}
-                            step={10}
-                            value={wagerInput}
-                            onChange={(e) => setWagerInput(Number(e.target.value))}
-                            className="w-full px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
-                          />
+                    {!token ? (
+                      <div className="p-4 bg-[#0c3b2e] border border-[#d6a735]/40 rounded-2xl text-center space-y-3">
+                        <div className="flex items-center justify-center gap-2 text-amber-300 font-bold text-xs">
+                          <Lock size={15} className="text-[#d6a735]" />
+                          <span>Authentication Required</span>
                         </div>
-                      )}
-
-                      <button
-                        type="button"
-                        disabled={onlineBusy}
-                        onClick={() =>
-                          void onlineAction("create", {
-                            mode: roomMode,
-                            wagerAmount: roomMode === "wager" ? wagerInput : 0,
-                          })
-                        }
-                        className="w-full py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold rounded-xl text-xs transition-all shadow-md shadow-[#d6a735]/10 flex items-center justify-center gap-1.5"
-                      >
-                        ＋ Create {roomMode === "wager" ? `GH₵ ${wagerInput} Wager` : "Casual"} Room
-                      </button>
-                    </div>
-
-                    <div className="space-y-2 p-4 bg-[#0c3b2e]/60 border border-[#184d3c] rounded-2xl">
-                      <h4 className="text-xs font-bold text-[#f5efdf] flex items-center gap-1.5">
-                        <ArrowRight size={14} className="text-[#d6a735]" /> Join Private Room
-                      </h4>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          maxLength={8}
-                          value={joinCode}
-                          onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                          placeholder="ROOM CODE"
-                          className="flex-1 px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs font-mono font-bold tracking-widest text-[#f5efdf] placeholder-[#63716b] uppercase focus:outline-none focus:border-[#d6a735]"
-                        />
+                        <p className="text-xs text-[#cbd5e1] leading-relaxed">
+                          You must be signed in with a registered player account to create or join online matches.
+                        </p>
                         <button
                           type="button"
-                          disabled={onlineBusy || !joinCode}
-                          onClick={() => void onlineAction("join", { code: joinCode })}
-                          className="px-4 py-2 bg-[#d6a735] hover:bg-[#b88c24] disabled:opacity-50 text-[#06261f] font-bold text-xs rounded-xl transition-all"
+                          onClick={() => window.dispatchEvent(new CustomEvent("damii-open-auth"))}
+                          className="w-full py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black text-xs rounded-xl transition-all shadow-md shadow-[#d6a735]/20 flex items-center justify-center gap-2"
                         >
-                          Join
+                          <User size={14} /> Sign In / Register Account
                         </button>
                       </div>
-                    </div>
+                    ) : (
+                      <>
+                        <div>
+                          <label className="block text-xs font-bold text-[#cbd5e1] uppercase tracking-wider mb-1.5">
+                            Public Player Name
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              maxLength={20}
+                              value={username}
+                              onChange={(e) => setUsername(e.target.value)}
+                              placeholder="Enter display name"
+                              className="flex-1 px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] placeholder-[#63716b] focus:outline-none focus:border-[#d6a735]"
+                            />
+                            <button
+                              type="button"
+                              disabled={onlineBusy}
+                              onClick={() => void onlineAction("profile")}
+                              className="px-3 py-2 bg-[#144435] hover:bg-[#1f5e4a] text-[#f5efdf] text-xs font-bold rounded-xl border border-[#184d3c] transition-colors"
+                            >
+                              Save
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3 p-4 bg-[#0c3b2e]/60 border border-[#184d3c] rounded-2xl">
+                          <h4 className="text-xs font-bold text-[#f5efdf] flex items-center gap-1.5">
+                            <Plus size={14} className="text-[#d6a735]" /> Create Online Room
+                          </h4>
+
+                          <div>
+                            <label className="block text-[11px] font-medium text-[#cbd5e1] mb-1">
+                              Match Type
+                            </label>
+                            <select
+                              value={roomMode}
+                              onChange={(e) => setRoomMode(e.target.value as RoomMode)}
+                              className="w-full px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
+                            >
+                              <option value="casual">Casual Match (Free)</option>
+                              <option value="wager">Wager Match (GH₵ Escrow Pot)</option>
+                            </select>
+                          </div>
+
+                          {roomMode === "wager" && (
+                            <div>
+                              <label className="block text-[11px] font-medium text-[#cbd5e1] mb-1">
+                                Wager Stake (GH₵ per player)
+                              </label>
+                              <input
+                                type="number"
+                                min={10}
+                                step={10}
+                                value={wagerInput}
+                                onChange={(e) => setWagerInput(Number(e.target.value))}
+                                className="w-full px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
+                              />
+                            </div>
+                          )}
+
+                          <button
+                            type="button"
+                            disabled={onlineBusy}
+                            onClick={() =>
+                              void onlineAction("create", {
+                                mode: roomMode,
+                                wagerAmount: roomMode === "wager" ? wagerInput : 0,
+                              })
+                            }
+                            className="w-full py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold rounded-xl text-xs transition-all shadow-md shadow-[#d6a735]/10 flex items-center justify-center gap-1.5"
+                          >
+                            ＋ Create {roomMode === "wager" ? `GH₵ ${wagerInput} Wager` : "Casual"} Room
+                          </button>
+                        </div>
+
+                        <div className="space-y-2 p-4 bg-[#0c3b2e]/60 border border-[#184d3c] rounded-2xl">
+                          <h4 className="text-xs font-bold text-[#f5efdf] flex items-center gap-1.5">
+                            <ArrowRight size={14} className="text-[#d6a735]" /> Join Private Room
+                          </h4>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              maxLength={8}
+                              value={joinCode}
+                              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                              placeholder="ROOM CODE"
+                              className="flex-1 px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs font-mono font-bold tracking-widest text-[#f5efdf] placeholder-[#63716b] uppercase focus:outline-none focus:border-[#d6a735]"
+                            />
+                            <button
+                              type="button"
+                              disabled={onlineBusy || !joinCode}
+                              onClick={() => void onlineAction("join", { code: joinCode })}
+                              className="px-4 py-2 bg-[#d6a735] hover:bg-[#b88c24] disabled:opacity-50 text-[#06261f] font-bold text-xs rounded-xl transition-all"
+                            >
+                              Join
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
 
                     {room && (
                       <div className="p-4 bg-[#06261f]/80 border border-[#184d3c] rounded-2xl space-y-2">

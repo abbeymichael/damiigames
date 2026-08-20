@@ -1,6 +1,6 @@
-# DAMII — Ghanaian Draughts Platform (MySQL)
+# DAMII — Draughts Platform (MySQL)
 
-DAMII is a modern web application for traditional Ghanaian 10x10 draughts, backed by a MySQL database (MySQL 8 / MariaDB 10.4+) via Drizzle ORM, featuring Paystack wallet top-ups, automated wager escrow, tournament leagues, turn timers, and role-guarded admin controls.
+DAMII is a modern web application for traditional 10x10 draughts, backed by a MySQL database (MySQL 8 / MariaDB 10.4+) via Drizzle ORM, featuring Paystack wallet top-ups, automated wager escrow, tournament leagues, turn timers, and role-guarded admin controls.
 
 ## Features Overview
 

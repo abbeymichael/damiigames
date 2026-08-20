@@ -19,7 +19,7 @@ export interface RankInfo {
   gapBonus: number;        // Bonus from defeating higher-rated opponents
 }
 
-export const GHANAIAN_RANKS: Omit<RankInfo, "progressPercent" | "dpi" | "baseRating" | "streakBonus" | "frequencyBonus" | "gapBonus">[] = [
+export const DAMII_RANKS: Omit<RankInfo, "progressPercent" | "dpi" | "baseRating" | "streakBonus" | "frequencyBonus" | "gapBonus">[] = [
   {
     tier: 1,
     title: "Draft Learner",
@@ -111,7 +111,7 @@ export const GHANAIAN_RANKS: Omit<RankInfo, "progressPercent" | "dpi" | "baseRat
  */
 export function getProfileRank(profile: Partial<Profile> | null | undefined): RankInfo {
   if (!profile) {
-    const baseTier = GHANAIAN_RANKS[0];
+    const baseTier = DAMII_RANKS[0];
     return {
       ...baseTier,
       progressPercent: 0,
@@ -150,20 +150,20 @@ export function getProfileRank(profile: Partial<Profile> | null | undefined): Ra
 
   // Find highest rank tier qualified for by DPI & total games played
   let currentRankIndex = 0;
-  for (let i = GHANAIAN_RANKS.length - 1; i >= 0; i--) {
-    const tier = GHANAIAN_RANKS[i];
+  for (let i = DAMII_RANKS.length - 1; i >= 0; i--) {
+    const tier = DAMII_RANKS[i];
     if (dpi >= tier.minRating && totalGames >= tier.minGamesRequired) {
       currentRankIndex = i;
       break;
     }
   }
 
-  const currentRank = GHANAIAN_RANKS[currentRankIndex];
-  const nextRank = GHANAIAN_RANKS[Math.min(currentRankIndex + 1, GHANAIAN_RANKS.length - 1)];
+  const currentRank = DAMII_RANKS[currentRankIndex];
+  const nextRank = DAMII_RANKS[Math.min(currentRankIndex + 1, DAMII_RANKS.length - 1)];
 
   // Calculate progress percentage towards next rank tier
   let progressPercent = 100;
-  if (currentRankIndex < GHANAIAN_RANKS.length - 1) {
+  if (currentRankIndex < DAMII_RANKS.length - 1) {
     const ratingRange = Math.max(1, nextRank.minRating - currentRank.minRating);
     const ratingProgress = Math.max(0, dpi - currentRank.minRating);
     progressPercent = Math.min(100, Math.round((ratingProgress / ratingRange) * 100));

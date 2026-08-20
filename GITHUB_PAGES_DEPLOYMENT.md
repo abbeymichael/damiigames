@@ -1,6 +1,6 @@
 # Deploying DAMII to GitHub Pages
 
-This guide outlines step-by-step instructions for deploying the **DAMII Ghanaian Draughts Arena** frontend to **GitHub Pages**.
+This guide outlines step-by-step instructions for deploying the **DAMII Draughts Arena** frontend to **GitHub Pages**.
 
 ---
 

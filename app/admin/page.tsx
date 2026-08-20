@@ -1904,7 +1904,7 @@ export default function AdminPage() {
                 onInspectApplication={handleInspectOrganizerApplication}
                 onQuickApprove={(id) => handleApproveOrganizerApplication(id)}
                 onQuickReject={(id) => handleRejectOrganizerApplication(id, "Requirements not met upon administrative review")}
-                onQuickRequestInfo={(id) => handleRequestInfoOrganizerApplication(id, "Please provide updated Ghana Card and proof of location documents")}
+                onQuickRequestInfo={(id) => handleRequestInfoOrganizerApplication(id, "Please provide updated National ID Card and proof of location documents")}
                 onQuickRevoke={(id) => handleRevokeOrganizerStatus(id, "Administrative revocation", "reassign_to_system")}
               />
             )}
@@ -2349,7 +2349,7 @@ export default function AdminPage() {
           <div className="bg-[#081c15] border border-[#1a5e48] text-[#f5efdf] max-w-lg w-full rounded-2xl p-5 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-[#1a5e48] pb-3">
               <h3 className="font-bold text-sm text-[#d6a735] flex items-center gap-2">
-                <Trophy size={18} /> Launch New Ghanaian Damii Tournament
+                <Trophy size={18} /> Launch New DAMII Tournament
               </h3>
               <button type="button" onClick={() => setCreateTournamentModalOpen(false)} className="text-slate-200 hover:text-white">
                 <X size={18} />
@@ -2362,7 +2362,7 @@ export default function AdminPage() {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Ghana Damii Grandmasters Cup 2026"
+                  placeholder="e.g. Damii Grandmasters Cup 2026"
                   value={newTournTitle}
                   onChange={(e) => setNewTournTitle(e.target.value)}
                   className="w-full px-3 py-2 bg-[#041c17] border border-[#1a5e48] rounded-xl text-xs text-[#f8fafc] placeholder-slate-400 focus:outline-none focus:border-[#d6a735]"
@@ -2548,7 +2548,7 @@ export default function AdminPage() {
                   <div className="p-3.5 bg-[#041c17] border border-[#1a5e48] rounded-xl space-y-1">
                     <span className="text-[10px] text-slate-200 uppercase font-bold">Tournament Description</span>
                     <p className="text-[#f8fafc] leading-relaxed">
-                      {selectedLeagueForInspect.description || "Official Ghanaian Damii Tournament League under standard 10x10 compulsory jump rules."}
+                      {selectedLeagueForInspect.description || "Official DAMII Tournament League under standard 10x10 compulsory jump rules."}
                     </p>
                   </div>
 

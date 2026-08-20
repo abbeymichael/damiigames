@@ -376,8 +376,8 @@ export default function OrganizerPage() {
           organizationName: appOrgName.trim(),
           contactPhone: appContactPhone.trim(),
           bio: appBio.trim()
-            ? `[Ghana Card / Reg ID: ${appGhanaCardPin || "Provided"}] ${appBio.trim()} (Expected Frequency: ${appFrequency})`
-            : `[Ghana Card / Reg ID: ${appGhanaCardPin || "Provided"}] Expected Frequency: ${appFrequency}`,
+            ? `[National ID / Reg ID: ${appGhanaCardPin || "Provided"}] ${appBio.trim()} (Expected Frequency: ${appFrequency})`
+            : `[National ID / Reg ID: ${appGhanaCardPin || "Provided"}] Expected Frequency: ${appFrequency}`,
         }),
       });
 
@@ -1478,7 +1478,7 @@ export default function OrganizerPage() {
                           Tournament Rules & Special Instructions
                         </h4>
                         <div className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl text-xs text-[#f5efdf] leading-relaxed whitespace-pre-line">
-                          {selectedLeague.rulesNotes || "Standard Ghanaian 10x10 Damii rules apply."}
+                          {selectedLeague.rulesNotes || "Standard 10x10 Damii rules apply."}
                         </div>
                       </div>
                     </div>

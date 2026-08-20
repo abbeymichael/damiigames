@@ -1,6 +1,6 @@
 # Deploying DAMII to a Node.js Production Server
 
-This guide provides comprehensive instructions for deploying the **DAMII Ghanaian Draughts Arena & Tournament Platform** on a production Node.js server environment (Cloud Run, VPS, Railway, Render, Docker, or bare metal).
+This guide provides comprehensive instructions for deploying the **DAMII Draughts Arena & Tournament Platform** on a production Node.js server environment (Cloud Run, VPS, Railway, Render, Docker, or bare metal).
 
 ---
 

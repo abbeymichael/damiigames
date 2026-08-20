@@ -1400,10 +1400,10 @@ export const memoryStore: DbRepository = {
       const defaultGames: GameCatalogItem[] = [
         {
           id: "game-damii-10x10",
-          name: "Ghanaian 10x10 Damii",
+          name: "10x10 Damii",
           slug: "damii-10x10",
           boardSize: 10,
-          description: "Traditional Ghanaian Draughts with flying kings and compulsory multi-hop captures.",
+          description: "Traditional Draughts with flying kings and compulsory multi-hop captures.",
           status: "enabled",
           minTimerSeconds: 30,
           maxTimerSeconds: 180,
@@ -1415,7 +1415,7 @@ export const memoryStore: DbRepository = {
         },
         {
           id: "game-damii-8x8",
-          name: "Ghanaian 8x8 Blitz Draughts",
+          name: "8x8 Blitz Draughts",
           slug: "damii-8x8",
           boardSize: 8,
           description: "Fast-paced compact 8x8 draughts format for quick blitz matches.",

@@ -1,15 +1,15 @@
 # AGENTS.md — DAMII Platform Instructions & Project Guidelines
 
-This file provides system instructions, architectural standards, current platform capabilities, and operational guidelines for AI coding agents working on the **DAMII (Ghanaian Draughts Arena & Tournament Platform)** codebase.
+This file provides system instructions, architectural standards, current platform capabilities, and operational guidelines for AI coding agents working on the **DAMII (Draughts Arena & Tournament Platform)** codebase.
 
 ---
 
 ## 1. Project Domain Overview
 
-**DAMII** is an enterprise-grade Ghanaian 10x10 Draughts (Damii) platform built with Next.js App Router, TypeScript, and Tailwind CSS.
+**DAMII** is an enterprise-grade 10x10 Draughts (Damii) platform built with Next.js App Router, TypeScript, and Tailwind CSS.
 
 ### Key Functional Domains & Recently Built Capabilities:
-- **Game Engine & Rules (`/lib/damii-rules.ts`)**: Standard 10x10 Ghanaian Damii rules, compulsory captures, multi-hop jumping sequences, flying king capabilities, turn clocks (60s), and reconnection grace periods (45s).
+- **Game Engine & Rules (`/lib/damii-rules.ts`)**: Standard 10x10 Damii rules, compulsory captures, multi-hop jumping sequences, flying king capabilities, turn clocks (60s), and reconnection grace periods (45s).
 - **Transport Layer & Real-time State**: Short-polling HTTP heartbeats (1.5s interval) and `navigator.sendBeacon` disconnection hooks over Next.js API Routes (`/app/api/damii`). Incorporates server-side move queue buffering (`movesJson` append-only log) so reconnected players recover full in-flight multi-jump sequences without losing state, alongside real-time player presence/heartbeat tracking.
 - **Admin Tournament Oversight & Spectator Center (`/app/admin`, `/lib/league-service.ts`, `/app/api/admin`)**: 
   - Comprehensive admin control over all tournament leagues with status filtering (`all`, `registration`, `active`, `completed`, `cancelled`).
@@ -42,7 +42,7 @@ This file provides system instructions, architectural standards, current platfor
 ├── drizzle/mysql/         # Generated SQL migrations (applied via `npm run db:migrate`)
 ├── lib/
 │   ├── admin-service.ts   # Admin logic, Audit logging & Manual Ledger Service
-│   ├── damii-rules.ts     # 10x10 Ghanaian Draughts Rules & Move Validator
+│   ├── damii-rules.ts     # 10x10 Draughts Rules & Move Validator
 │   ├── db/
 │   │   ├── repository.ts        # DbRepository storage contract
 │   │   ├── mysql-connection.ts  # Shared mysql2 pool + Drizzle handle

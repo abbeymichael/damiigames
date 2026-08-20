@@ -255,7 +255,7 @@ export function OrganizerApplicationDetailModal({
                     {app.intendedGameTypes || "damii-10x10"}
                   </p>
                   <p className="text-[11px] text-slate-300">
-                    Standard 10x10 Ghanaian Draughts / Tournament Brackets
+                    Standard 10x10 Draughts / Tournament Brackets
                   </p>
                 </div>
 

@@ -2213,11 +2213,11 @@ export const mysqlStore: DbRepository = {
       const defaultGames: GameCatalogItem[] = [
         {
           id: "game-damii-10x10",
-          name: "Ghanaian Damii (10x10)",
+          name: "Damii (10x10)",
           slug: "damii-10x10",
           iconUrl: "/icon.png",
           status: "enabled",
-          description: "Traditional Ghanaian 10x10 Draughts with flying kings and compulsory multi-capture chains.",
+          description: "Traditional 10x10 Draughts with flying kings and compulsory multi-capture chains.",
           createdAt: new Date().toISOString(),
         },
         {
@@ -2226,7 +2226,7 @@ export const mysqlStore: DbRepository = {
           slug: "damii-blitz",
           iconUrl: "/icon.png",
           status: "enabled",
-          description: "High-speed Ghanaian Draughts with 15-second move clocks for adrenaline play.",
+          description: "High-speed Draughts with 15-second move clocks for adrenaline play.",
           createdAt: new Date().toISOString(),
         },
         {
@@ -2258,12 +2258,12 @@ export const mysqlStore: DbRepository = {
         senderEmail: "support@damii.game",
         senderName: "DAMII Arena Notifications",
         enabled: true,
-        welcomeTemplate: "Welcome to DAMII Ghana! Master the 10x10 board, challenge players, and compete in tournaments.",
+        welcomeTemplate: "Welcome to DAMII! Master the 10x10 board, challenge players, and compete in tournaments.",
         payoutAlertTemplate: "Your withdrawal of GHS {amount} via Mobile Money ({phone}) has been processed successfully.",
       }, "system");
 
       await mysqlStore.saveSystemSetting("general", "config", {
-        appName: "DAMII Ghanaian Draughts Platform",
+        appName: "DAMII Draughts Platform",
         supportPhone: "+233 24 000 0000",
         supportEmail: "support@damii.game",
         defaultCurrency: "GHS",
