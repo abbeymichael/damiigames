@@ -36,18 +36,53 @@ export async function POST(req: NextRequest) {
     const {
       fullName,
       email,
-      ghanaCardNumber,
       dateOfBirth,
+      username,
+      ghanaCardNumber,
       gender,
       avatarUrl,
       region,
       city,
       address,
-      momoNumber,
       momoNetwork,
-      username,
       referralCode,
     } = body;
+
+    // Validate full legal name (Required)
+    const cleanFullName = typeof fullName === "string" ? fullName.trim() : "";
+    if (!cleanFullName || cleanFullName.length < 2) {
+      return NextResponse.json(
+        { error: "Full legal name is required (minimum 2 characters)." },
+        { status: 400 },
+      );
+    }
+
+    // Validate Date of Birth and enforce 18+ requirement (Underage not permitted)
+    if (!dateOfBirth) {
+      return NextResponse.json(
+        { error: "Date of birth is required to register." },
+        { status: 400 },
+      );
+    }
+    const dobDate = new Date(dateOfBirth);
+    if (isNaN(dobDate.getTime())) {
+      return NextResponse.json(
+        { error: "Invalid date of birth format." },
+        { status: 400 },
+      );
+    }
+    const today = new Date();
+    let age = today.getFullYear() - dobDate.getFullYear();
+    const monthDiff = today.getMonth() - dobDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dobDate.getDate())) {
+      age--;
+    }
+    if (age < 18) {
+      return NextResponse.json(
+        { error: "Underage registration is not permitted. You must be at least 18 years old to register on DAMII Arena." },
+        { status: 400 },
+      );
+    }
 
     // Validate username uniqueness if changed
     if (username && username.trim()) {

@@ -530,6 +530,19 @@ export function Header() {
     }
   };
 
+  const calculateAge = (dobString: string): number => {
+    if (!dobString) return 0;
+    const dob = new Date(dobString);
+    if (isNaN(dob.getTime())) return 0;
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const m = today.getMonth() - dob.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
   const handleCompleteProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
@@ -545,6 +558,17 @@ export function Header() {
       return;
     }
 
+    if (!profDob) {
+      setAuthError("Date of birth is required to verify player eligibility.");
+      return;
+    }
+
+    const age = calculateAge(profDob);
+    if (age < 18) {
+      setAuthError("Underage registration is not permitted. You must be at least 18 years old to join DAMII Draughts Arena.");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -555,13 +579,7 @@ export function Header() {
           username: profUsername.trim(),
           fullName: profFullName.trim(),
           email: profEmail.trim() || undefined,
-          ghanaCardNumber: profGhanaCard.trim() || undefined,
-          dateOfBirth: profDob ? new Date(profDob).toISOString() : undefined,
-          gender: profGender,
-          region: profRegion,
-          city: profCity,
-          momoNumber: profMomoNumber.trim() || undefined,
-          momoNetwork: profMomoNetwork,
+          dateOfBirth: new Date(profDob).toISOString(),
         }),
       });
 
@@ -2280,10 +2298,10 @@ export function Header() {
                 <form onSubmit={handleCompleteProfile} className="space-y-3.5">
                   <div className="p-3 bg-[#0c3b2e]/70 border border-[#d6a735]/30 rounded-xl text-xs space-y-1">
                     <span className="font-bold text-[#d6a735] flex items-center gap-1">
-                      <UserCheck size={14} /> Profile Completion &amp; Identity
+                      <UserCheck size={14} /> Player Registration Details
                     </span>
                     <p className="text-slate-300 text-[11px]">
-                      Complete your official player credentials to participate in tournaments, unlock rank badges, and receive prize payouts.
+                      Enter your official player details to complete registration. Players must be at least 18 years of age.
                     </p>
                   </div>
 
@@ -2320,144 +2338,46 @@ export function Header() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold text-[#f5efdf] mb-1 flex items-center gap-1">
-                        <Mail size={11} className="text-[#d6a735]" /> Email Address
+                        <Calendar size={11} className="text-[#d6a735]" /> Date of Birth * <span className="text-[10px] text-amber-400 font-bold">(18+ Only)</span>
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        max={new Date(Date.now() - 18 * 365.25 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}
+                        value={profDob}
+                        onChange={(e) => setProfDob(e.target.value)}
+                        className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
+                      />
+                      <small className="block text-[10px] text-slate-400 mt-1">
+                        Must be at least 18 years old. Underage registration is not allowed.
+                      </small>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1 flex items-center gap-1">
+                        <Mail size={11} className="text-[#d6a735]" /> Email Address <span className="text-[10px] text-slate-400 font-normal">(Optional)</span>
                       </label>
                       <input
                         type="email"
                         value={profEmail}
                         onChange={(e) => setProfEmail(e.target.value)}
-                        placeholder="player@example.com"
+                        placeholder="player@example.com (optional)"
                         className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
                       />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-[#f5efdf] mb-1 flex items-center gap-1">
-                        <CreditCard size={11} className="text-[#d6a735]" /> National ID / Card Number
-                      </label>
-                      <input
-                        type="text"
-                        value={profGhanaCard}
-                        onChange={(e) => setProfGhanaCard(e.target.value)}
-                        placeholder="e.g. ID-123456789-0"
-                        className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-[#f5efdf] mb-1 flex items-center gap-1">
-                        <Calendar size={11} className="text-[#d6a735]" /> Date of Birth
-                      </label>
-                      <input
-                        type="date"
-                        value={profDob}
-                        onChange={(e) => setProfDob(e.target.value)}
-                        className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-[#f5efdf] mb-1">
-                        Gender
-                      </label>
-                      <select
-                        value={profGender}
-                        onChange={(e) => setProfGender(e.target.value)}
-                        className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
-                      >
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-[#f5efdf] mb-1 flex items-center gap-1">
-                        <MapPin size={11} className="text-[#d6a735]" /> Region (Dynamic)
-                      </label>
-                      <select
-                        value={profRegion}
-                        onChange={(e) => setProfRegion(e.target.value)}
-                        className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
-                      >
-                        {dbRegions.length > 0 ? (
-                          dbRegions.map((r) => (
-                            <option key={r.id} value={r.name}>
-                              {r.name}
-                            </option>
-                          ))
-                        ) : (
-                          <>
-                            <option value="Greater Accra">Greater Accra</option>
-                            <option value="Ashanti">Ashanti</option>
-                            <option value="Western">Western</option>
-                            <option value="Eastern">Eastern</option>
-                            <option value="Central">Central</option>
-                            <option value="Northern">Northern</option>
-                            <option value="Volta">Volta</option>
-                            <option value="Upper East">Upper East</option>
-                            <option value="Upper West">Upper West</option>
-                            <option value="Bono">Bono</option>
-                          </>
-                        )}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-[#f5efdf] mb-1">
-                        City / Town (Type in)
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={profCity}
-                        onChange={(e) => setProfCity(e.target.value)}
-                        placeholder="Type your city or town"
-                        className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Payout Information - Phone number strictly locked to verified number */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[#0c3b2e]">
-                    <div>
-                      <label className="block text-xs font-bold text-[#f5efdf] mb-1 flex items-center justify-between">
-                        <span className="flex items-center gap-1">
-                          <Phone size={11} className="text-[#d6a735]" /> Payout Phone Number
-                        </span>
-                        <span className="text-[10px] text-amber-400 font-bold flex items-center gap-0.5">
-                          <Lock size={10} /> Locked
-                        </span>
-                      </label>
-                      <div className="w-full px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs font-mono flex items-center justify-between shadow-inner">
-                        <span>{regPhone || phoneNumber || "Verified Phone"}</span>
-                        <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-bold border border-amber-500/30">
-                          Verified Payout
-                        </span>
-                      </div>
                       <small className="block text-[10px] text-slate-400 mt-1">
-                        Locked to your verified phone number for security.
+                        Optional for match notifications &amp; alerts.
                       </small>
                     </div>
+                  </div>
 
-                    <div>
-                      <label className="block text-xs font-bold text-[#f5efdf] mb-1">
-                        Payout Mobile Network
-                      </label>
-                      <select
-                        value={profMomoNetwork}
-                        onChange={(e) => setProfMomoNetwork(e.target.value)}
-                        className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
-                      >
-                        <option value="MTN">MTN MoMo</option>
-                        <option value="Telecel">Telecel Cash</option>
-                        <option value="AT">AT Money</option>
-                      </select>
-                    </div>
+                  {/* Verified Phone Information */}
+                  <div className="p-2.5 bg-[#06261f] border border-[#184d3c] rounded-xl flex items-center justify-between text-xs">
+                    <span className="flex items-center gap-1 text-slate-300">
+                      <Phone size={12} className="text-[#d6a735]" /> Verified Phone: <strong className="text-white font-mono">{regPhone || phoneNumber || "Verified"}</strong>
+                    </span>
+                    <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-bold border border-amber-500/30 flex items-center gap-1">
+                      <Lock size={10} /> Verified
+                    </span>
                   </div>
 
                   <button
