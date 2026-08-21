@@ -1,30 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbRepository } from "@/lib/db-client";
-import { getSessionFromRequest } from "@/lib/auth-guard";
+import { getSessionFromRequest, handleAuthError } from "@/lib/auth-guard";
 import { OrganizerProfile } from "@/lib/types";
 
 export async function GET(req: NextRequest) {
-  const auth = await getSessionFromRequest(req);
-  if (!auth) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const auth = await getSessionFromRequest(req);
+    const user = auth?.user;
+    if (!auth || !user?.token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const orgProfile = await dbRepository.getOrganizerProfile(auth.user.token);
-  return NextResponse.json({
-    profile: auth.user,
-    organizerProfile: orgProfile || {
-      userId: auth.user.token,
-      username: auth.user.username,
-      status: "none",
-      requestedAt: "",
-    },
-  });
+    const orgProfile = await dbRepository.getOrganizerProfile(user.token);
+    return NextResponse.json({
+      profile: user,
+      organizerProfile: orgProfile || {
+        userId: user.token,
+        username: user.username,
+        status: "none",
+        requestedAt: "",
+      },
+    });
+  } catch (err) {
+    return handleAuthError(err);
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const auth = await getSessionFromRequest(req);
-    if (!auth) {
+    const user = auth?.user;
+    if (!auth || !user?.token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -35,7 +41,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Organization Name is required" }, { status: 400 });
     }
 
-    const existing = await dbRepository.getOrganizerProfile(auth.user.token);
+    const existing = await dbRepository.getOrganizerProfile(user.token);
     
     // Check cooldown if rejected (e.g. 14 days)
     if (existing && existing.status === "rejected" && existing.reviewedAt) {
@@ -51,8 +57,8 @@ export async function POST(req: NextRequest) {
 
     const now = new Date().toISOString();
     const updatedOrgProfile: OrganizerProfile = {
-      userId: auth.user.token,
-      username: auth.user.username,
+      userId: user.token,
+      username: user.username,
       status: "pending",
       requestedAt: now,
       organizationName: String(organizationName).trim(),
@@ -63,7 +69,7 @@ export async function POST(req: NextRequest) {
     await dbRepository.saveOrganizerProfile(updatedOrgProfile);
 
     // Also sync OrganizerApplication record
-    const existingApp = await dbRepository.getOrganizerApplicationByUserId(auth.user.token);
+    const existingApp = await dbRepository.getOrganizerApplicationByUserId(user.token);
     let appRecord = existingApp;
     if (existingApp) {
       appRecord = await dbRepository.updateOrganizerApplication(existingApp.id, {
@@ -75,7 +81,7 @@ export async function POST(req: NextRequest) {
     } else {
       appRecord = await dbRepository.createOrganizerApplication({
         id: `app-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        userId: auth.user.token,
+        userId: user.token,
         applicantType: "individual",
         organizationName: String(organizationName).trim(),
         ghanaCardFrontUrl: "https://damii.app/docs/gh-card-front.png",
@@ -94,10 +100,10 @@ export async function POST(req: NextRequest) {
     // Write Audit Log
     await dbRepository.createAdminLog({
       id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      adminToken: auth.user.token,
-      adminName: auth.user.username,
+      adminToken: user.token,
+      adminName: user.username,
       action: "organizer.requested",
-      target: auth.user.token,
+      target: user.token,
       detailsJson: JSON.stringify({ organizationName, bio, contactPhone }),
       createdAt: now,
     });
@@ -109,9 +115,6 @@ export async function POST(req: NextRequest) {
       message: "Your organizer request has been submitted and is pending admin approval. You can continue playing matches while waiting.",
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to submit organizer request" },
-      { status: 500 }
-    );
+    return handleAuthError(err);
   }
 }

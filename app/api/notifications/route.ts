@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbRepository } from "@/lib/db-client";
+import { notificationService } from "@/lib/notification-service";
 
 const cleanToken = (v: unknown) => String(v ?? "").trim().slice(0, 80);
 
@@ -13,113 +14,113 @@ export async function GET(req: NextRequest) {
   }
 
   if (!token) {
-    return NextResponse.json({ notifications: [], unreadCount: 0 });
+    return NextResponse.json({ notifications: [], unreadCount: 0, preferences: null });
   }
 
-  const profile = await dbRepository.getProfile(token);
+  let profile = await dbRepository.getProfile(token);
   if (!profile) {
-    return NextResponse.json({ notifications: [], unreadCount: 0 });
+    profile = await dbRepository.findProfileByUsername(token);
   }
 
-  const notifications: Array<{
-    id: string;
-    type: "league_invite" | "wager_settlement" | "system";
-    title: string;
-    message: string;
-    timestamp: string;
-    link: string;
-  }> = [];
-
-  // 1. Check open/active leagues (Invitations / Registrations)
-  const leagues = await dbRepository.listLeagues();
-  for (const l of leagues) {
-    if (l.status === "registration") {
-      const participants = await dbRepository.getLeagueParticipants(l.id);
-      const isParticipant = participants.some((p) => p.userToken === token);
-      if (!isParticipant) {
-        notifications.push({
-          id: `league-invite-${l.id}`,
-          type: "league_invite",
-          title: "League Registration Open",
-          message: `Join "${l.title}" - Prize Pool: ${l.prizePoolPoints} Points!`,
-          timestamp: l.updatedAt || l.createdAt,
-          link: "/leagues",
-        });
-      }
-    } else if (l.status === "active") {
-      const matches = await dbRepository.getLeagueMatches(l.id);
-      const userPendingMatch = matches.find(
-        (m) =>
-          (m.player1Token === token || m.player2Token === token) &&
-          (m.status === "pending" || m.status === "in_progress")
-      );
-      if (userPendingMatch) {
-        const opponentName =
-          userPendingMatch.player1Token === token
-            ? userPendingMatch.player2Name
-            : userPendingMatch.player1Name;
-        notifications.push({
-          id: `league-match-${userPendingMatch.id}`,
-          type: "league_invite",
-          title: "Tournament Match Scheduled",
-          message: `Your match vs ${opponentName || "TBD"} in "${l.title}" is ready!`,
-          timestamp: l.updatedAt || l.createdAt,
-          link: "/leagues",
-        });
-      }
-    }
-  }
-
-  // 2. Check recent Wager Settlements & Wallet Updates
-  const txs = await dbRepository.getUserTransactions(token, 15);
-  for (const tx of txs) {
-    if (tx.type === "wager_win") {
-      notifications.push({
-        id: `tx-wager-win-${tx.id}`,
-        type: "wager_settlement",
-        title: "Wager Victory Settled!",
-        message: `You won +${tx.amount} Points from your recent wager match!`,
-        timestamp: tx.createdAt,
-        link: "/wallet",
-      });
-    } else if (tx.type === "wager_refund") {
-      notifications.push({
-        id: `tx-wager-refund-${tx.id}`,
-        type: "wager_settlement",
-        title: "Wager Escrow Refunded",
-        message: `${tx.amount} Points returned to your wallet balance.`,
-        timestamp: tx.createdAt,
-        link: "/wallet",
-      });
-    } else if (tx.type === "league_prize") {
-      notifications.push({
-        id: `tx-league-prize-${tx.id}`,
-        type: "wager_settlement",
-        title: "League Prize Credited!",
-        message: `Congratulations! +${tx.amount} Points awarded for tournament placement.`,
-        timestamp: tx.createdAt,
-        link: "/wallet",
-      });
-    }
-  }
-
-  // 3. System Welcome Notification
-  notifications.push({
-    id: `system-welcome-${profile.token}`,
-    type: "system",
-    title: "Welcome to DAMII Arena",
-    message: `Account active as ${profile.username}. Current Balance: ${profile.points} Points.`,
-    timestamp: profile.createdAt,
-    link: "/arena",
-  });
-
-  // Deduplicate notifications by unique ID to prevent any duplicate keys
-  const uniqueNotifications = Array.from(
-    new Map(notifications.map((n) => [n.id, n])).values()
-  );
+  const lookupToken = profile ? profile.token : token;
+  const notifications = await notificationService.getUserNotifications(lookupToken);
+  const preferences = await notificationService.getUserPreferences(lookupToken);
 
   return NextResponse.json({
-    notifications: uniqueNotifications,
-    unreadCount: uniqueNotifications.length,
+    notifications,
+    unreadCount: notifications.filter((n) => !n.read).length,
+    preferences,
   });
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const action = String(body.action || "");
+    const rawToken = cleanToken(body.token);
+
+    let token = rawToken;
+    if (rawToken) {
+      const session = await dbRepository.getSession(rawToken);
+      if (session) token = session.userId;
+    }
+
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized: Valid player token required" }, { status: 401 });
+    }
+
+    const profile = await dbRepository.getProfile(token);
+    if (!profile) {
+      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+    }
+
+    if (action === "send_challenge") {
+      const targetUsername = String(body.targetUsername || "").trim();
+      const targetToken = body.targetToken ? String(body.targetToken).trim() : undefined;
+      const roomCode = String(body.roomCode || "").toUpperCase().trim();
+      const mode = body.mode === "wager" ? "wager" : "casual";
+      const wagerAmount = Number(body.wagerAmount || 0);
+
+      if (!roomCode) {
+        return NextResponse.json({ error: "Room code is required to send match challenge" }, { status: 400 });
+      }
+
+      const notif = await notificationService.createGameRequestNotification({
+        senderToken: token,
+        senderUsername: profile.username || "Challenger",
+        targetUsername,
+        targetToken,
+        roomCode,
+        mode,
+        wagerAmount,
+      });
+
+      return NextResponse.json({ success: true, notification: notif });
+    }
+
+    if (action === "mark_read") {
+      const id = String(body.id || "");
+      if (id) {
+        notificationService.markAsRead(id);
+      }
+      return NextResponse.json({ success: true });
+    }
+
+    if (action === "update_preferences") {
+      const updates = body.preferences || {};
+      const saved = await notificationService.saveUserPreferences(token, updates);
+      return NextResponse.json({ success: true, preferences: saved });
+    }
+
+    if (action === "test_notification") {
+      const testType = body.type || "game_request";
+      const sample = await notificationService.dispatchNotification({
+        recipientToken: token,
+        recipientUsername: profile.username,
+        senderName: testType === "game_request" ? "Grandmaster_Test" : undefined,
+        type: testType,
+        urgency: "urgent",
+        title:
+          testType === "game_request"
+            ? "⚔️ Match Challenge from Grandmaster_Test!"
+            : testType === "tournament_match"
+            ? "🏆 Tournament Game Time Approaching!"
+            : "🔔 In-App Audio Notification Test",
+        message:
+          testType === "game_request"
+            ? "Grandmaster_Test challenged you to a 50 Marbles Wager Match in Room #TEST99!"
+            : testType === "tournament_match"
+            ? 'Your Round 2 tournament match vs Kwesi_King in "Accra Championship" starts in 5 minutes.'
+            : "In-app audio and notification system is working flawlessly.",
+        link: testType === "game_request" ? "/arena?code=TEST99&join=1" : "/leagues",
+        actionLabel: testType === "game_request" ? "Accept Challenge & Play" : "View Bracket",
+        channels: ["in_app", "whatsapp", "sms"],
+      });
+      return NextResponse.json({ success: true, notification: sample });
+    }
+
+    return NextResponse.json({ error: `Unknown notification action: ${action}` }, { status: 400 });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || "Failed to process notification request" }, { status: 500 });
+  }
 }

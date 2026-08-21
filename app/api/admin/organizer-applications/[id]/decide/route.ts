@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbRepository } from "@/lib/db-client";
-import { requirePermission } from "@/lib/auth-guard";
+import { requirePermission, handleAuthError } from "@/lib/auth-guard";
 
 export async function POST(
   req: NextRequest,
@@ -8,8 +8,11 @@ export async function POST(
 ) {
   try {
     const auth = await requirePermission(req, "manage_organizers");
+    if (auth instanceof NextResponse) return auth;
+
     const { id } = await context.params;
-    const { user: adminUser } = auth;
+    const adminToken = auth?.user?.token || auth?.token || "admin";
+    const adminName = auth?.user?.username || "Admin";
 
     const application = await dbRepository.getOrganizerApplication(id);
     if (!application) {
@@ -33,7 +36,7 @@ export async function POST(
       // 1. Update application record
       const updatedApp = await dbRepository.updateOrganizerApplication(id, {
         status: "approved",
-        reviewedByAdminId: adminUser.token,
+        reviewedByAdminId: adminToken,
         reviewedAt: now,
         reviewNote: note || "Organizer credentials verified and approved.",
       });
@@ -57,7 +60,7 @@ export async function POST(
         username: profile?.username || user?.username,
         status: "approved",
         requestedAt: new Date(application.createdAt).toISOString(),
-        reviewedBy: adminUser.token,
+        reviewedBy: adminToken,
         reviewedAt: now,
         organizationName: application.organizationName || undefined,
       });
@@ -65,8 +68,8 @@ export async function POST(
       // 5. Create audit log
       await dbRepository.createAdminLog({
         id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        adminToken: adminUser.token,
-        adminName: adminUser.username,
+        adminToken,
+        adminName,
         action: "organizer_application.approved",
         target: application.userId,
         detailsJson: JSON.stringify({
@@ -88,7 +91,7 @@ export async function POST(
     if (decision === "reject") {
       const updatedApp = await dbRepository.updateOrganizerApplication(id, {
         status: "rejected",
-        reviewedByAdminId: adminUser.token,
+        reviewedByAdminId: adminToken,
         reviewedAt: now,
         reviewNote: note || "Application rejected. Did not meet platform organizer criteria.",
       });
@@ -98,7 +101,7 @@ export async function POST(
         userId: application.userId,
         status: "rejected",
         requestedAt: new Date(application.createdAt).toISOString(),
-        reviewedBy: adminUser.token,
+        reviewedBy: adminToken,
         reviewedAt: now,
         rejectionReason: note || "Application rejected by administrator.",
         organizationName: application.organizationName || undefined,
@@ -107,8 +110,8 @@ export async function POST(
       // Create audit log
       await dbRepository.createAdminLog({
         id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        adminToken: adminUser.token,
-        adminName: adminUser.username,
+        adminToken,
+        adminName,
         action: "organizer_application.rejected",
         target: application.userId,
         detailsJson: JSON.stringify({
@@ -130,7 +133,7 @@ export async function POST(
         status: "needs_info",
         needsInfoRequestedAt: now,
         needsInfoNote: note || "Additional information or documentation requested.",
-        reviewedByAdminId: adminUser.token,
+        reviewedByAdminId: adminToken,
         reviewedAt: now,
         reviewNote: note || "Additional information or documentation requested.",
       });
@@ -140,7 +143,7 @@ export async function POST(
         userId: application.userId,
         status: "pending",
         requestedAt: new Date(application.createdAt).toISOString(),
-        reviewedBy: adminUser.token,
+        reviewedBy: adminToken,
         reviewedAt: now,
         rejectionReason: `Additional information requested: ${note || "Please check requirement details."}`,
         organizationName: application.organizationName || undefined,
@@ -149,8 +152,8 @@ export async function POST(
       // Create audit log
       await dbRepository.createAdminLog({
         id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        adminToken: adminUser.token,
-        adminName: adminUser.username,
+        adminToken,
+        adminName,
         action: "organizer_application.needs_info",
         target: application.userId,
         detailsJson: JSON.stringify({
@@ -171,7 +174,7 @@ export async function POST(
       const { adminService } = await import("@/lib/admin-service");
       const tournamentHandling = body.tournamentHandling === "cancel_and_refund" ? "cancel_and_refund" : "reassign_to_system";
       const res = await adminService.revokeOrganizerStatus(
-        adminUser.token,
+        adminToken,
         id,
         note || "Organizer status revoked by administrator",
         tournamentHandling,
@@ -186,9 +189,6 @@ export async function POST(
 
     return NextResponse.json({ error: "Invalid decision" }, { status: 400 });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to record decision" },
-      { status: 500 },
-    );
+    return handleAuthError(error);
   }
 }

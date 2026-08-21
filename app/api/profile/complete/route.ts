@@ -6,11 +6,14 @@ import { securityService } from "@/lib/security";
 export async function GET(req: NextRequest) {
   try {
     const auth = await requireAuth(req);
-    const userId = auth.user.token;
+    const userId = auth?.user?.token || auth?.token;
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     let user = await dbRepository.getUserById(userId);
-    if (!user) {
-      user = await dbRepository.getUserByPhone(auth.user.phoneNumber || "");
+    if (!user && auth?.user?.phoneNumber) {
+      user = await dbRepository.getUserByPhone(auth.user.phoneNumber);
     }
 
     const profile = await dbRepository.getProfile(userId);
@@ -44,21 +47,24 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const auth = await requireAuth(req);
-    const userId = auth.user.token;
+    const userId = auth?.user?.token || auth?.token;
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     // Fetch user record from users table
     let user = await dbRepository.getUserById(userId);
     if (!user) {
       // If user profile exists in profiles table but not in users table, initialize it
-      user = await dbRepository.getUserByPhone(auth.user.phoneNumber || "");
+      user = await dbRepository.getUserByPhone(auth?.user?.phoneNumber || "");
       if (!user) {
         user = await dbRepository.saveUser({
           id: userId,
-          phoneNumber: auth.user.phoneNumber || `user_${userId.slice(-6)}`,
+          phoneNumber: auth?.user?.phoneNumber || `user_${userId.slice(-6)}`,
           phoneVerifiedAt: new Date().toISOString(),
-          username: auth.user.username,
-          role: auth.user.role === "organizer" ? "organizer" : auth.user.role === "admin" || auth.user.role === "super_admin" ? "admin" : "player",
-          createdAt: auth.user.createdAt || new Date().toISOString(),
+          username: auth?.user?.username || "Player",
+          role: auth?.user?.role === "organizer" ? "organizer" : auth?.user?.role === "admin" || auth?.user?.role === "super_admin" ? "admin" : "player",
+          createdAt: auth?.user?.createdAt || new Date().toISOString(),
         });
       }
     }

@@ -9,7 +9,10 @@ const REAPPLICATION_COOLDOWN_DAYS = 14;
 export async function GET(req: NextRequest) {
   try {
     const auth = await requireAuth(req);
-    const userId = auth.user.token;
+    const userId = auth?.user?.token || auth?.token;
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const application = await dbRepository.getOrganizerApplicationByUserId(userId);
     const profile = await dbRepository.getProfile(userId);
@@ -47,7 +50,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       success: true,
       application: application || null,
-      userRole: auth.user.role,
+      userRole: auth?.user?.role || auth?.role || "user",
       userProfile: profile || null,
       revocation: revocation || null,
       cooldown,
@@ -63,7 +66,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const auth = await requireAuth(req);
-    const userId = auth.user.token;
+    const userId = auth?.user?.token || auth?.token;
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const body = await req.json();
 
     const isDraft = Boolean(body.isDraft || body.status === "draft");

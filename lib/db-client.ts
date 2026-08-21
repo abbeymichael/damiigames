@@ -40,7 +40,6 @@ const booted = boot();
 function withStore<T extends keyof DbRepository>(method: T) {
   return (async (...args: unknown[]) => {
     const store = await booted;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (store[method] as any)(...args);
   }) as DbRepository[T] extends (...a: infer A) => infer R ? (...a: A) => R : never;
 }

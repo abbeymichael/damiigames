@@ -687,7 +687,7 @@ export interface TournamentActionRequest {
 /* ------------------------------------------------------------------------- */
 /* System Settings Categories & Payloads (Section 2.7)                       */
 /* ------------------------------------------------------------------------- */
-export type SystemSettingsCategory = "sms" | "email" | "general" | "backup" | "security";
+export type SystemSettingsCategory = "sms" | "email" | "whatsapp" | "notifications" | "general" | "backup" | "security";
 
 export interface SystemSettingEntry {
   id: string;
@@ -702,7 +702,13 @@ export interface SystemSettingEntry {
 export interface SmsSettings {
   provider: "hubtel" | "arkesel" | "twilio" | "mock";
   senderId: string;
+  apiKey?: string;
   apiKeyMasked?: string;
+  clientId?: string;
+  clientSecret?: string;
+  twilioAccountSid?: string;
+  twilioAuthToken?: string;
+  twilioFromNumber?: string;
   otpTemplate: string;
   matchInviteTemplate: string;
   tournamentAlertTemplate: string;
@@ -710,16 +716,81 @@ export interface SmsSettings {
 }
 
 export interface EmailSettings {
-  provider: "smtp" | "sendgrid" | "postmark" | "ses";
+  provider: "smtp" | "sendgrid" | "postmark" | "ses" | "mock";
   senderEmail: string;
   senderName: string;
   smtpHost?: string;
   smtpPort?: number;
   smtpUser?: string;
+  smtpPassword?: string;
   passwordMasked?: string;
+  apiKey?: string;
+  apiKeyMasked?: string;
+  secure?: boolean;
+  // Template: Game Request (1v1 Challenge)
+  gameRequestSubject?: string;
+  gameRequestTemplate?: string;
+  // Template: Tournament Match Approaching
+  tournamentApproachingSubject?: string;
+  tournamentApproachingTemplate?: string;
+  // Additional transactional templates
+  welcomeSubject?: string;
   welcomeTemplate: string;
+  payoutAlertSubject?: string;
   payoutAlertTemplate: string;
+  matchInviteSubject?: string;
+  matchInviteTemplate?: string;
+  tournamentAlertSubject?: string;
+  tournamentAlertTemplate?: string;
   enabled: boolean;
+}
+
+export interface WhatsAppSettings {
+  provider: "whatsapp_cloud_api" | "twilio_whatsapp" | "mock";
+  phoneNumberId?: string;
+  businessAccountId?: string;
+  accessToken?: string;
+  accessTokenMasked?: string;
+  twilioAccountSid?: string;
+  twilioAuthToken?: string;
+  twilioFromNumber?: string;
+  gameRequestTemplate: string;
+  tournamentAlertTemplate: string;
+  turnReminderTemplate: string;
+  enabled: boolean;
+}
+
+export interface InAppNotificationSettings {
+  enabled: boolean;
+  soundEnabled: boolean;
+  soundVolume: number; // 0 to 100
+  soundTheme: "classic" | "subtle" | "arcade" | "minimal";
+  toastPosition: "top-right" | "top-center" | "bottom-right";
+  autoDismissSeconds: number;
+}
+
+export interface NotificationChannelRouting {
+  game_request: NotificationChannel[];
+  tournament_match: NotificationChannel[];
+  tournament_alert: NotificationChannel[];
+  turn_reminder: NotificationChannel[];
+  league_invite: NotificationChannel[];
+  wager_settlement: NotificationChannel[];
+  system: NotificationChannel[];
+}
+
+export interface NotificationDispatchedLog {
+  id: string;
+  recipientToken?: string;
+  recipientContact?: string;
+  channel: NotificationChannel;
+  title: string;
+  message?: string;
+  actionUrl?: string;
+  type?: NotificationType;
+  status: "delivered" | "sent" | "queued" | "failed" | "mock_sent";
+  error?: string;
+  timestamp: string;
 }
 
 export interface GeneralConfigurations {
@@ -745,5 +816,86 @@ export interface SecurityPolicySettings {
   maxLoginAttempts: number;
   ipAllowlist: string[];
   flagDefaultCredentials: boolean;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Notification System & Multi-Channel Delivery (Section 3.0)               */
+/* ------------------------------------------------------------------------- */
+export type NotificationType =
+  | "game_request"
+  | "tournament_match"
+  | "tournament_alert"
+  | "turn_reminder"
+  | "league_invite"
+  | "wager_settlement"
+  | "system"
+  | "admin";
+
+export type NotificationChannel = "in_app" | "whatsapp" | "sms" | "email";
+
+export type NotificationUrgency = "urgent" | "high" | "normal" | "low";
+
+export interface NotificationItem {
+  id: string;
+  recipientId?: string;
+  recipientToken?: string;
+  recipientUsername?: string;
+  senderId?: string;
+  senderName?: string;
+  type: NotificationType;
+  urgency?: NotificationUrgency;
+  title: string;
+  message: string;
+  timestamp: string;
+  link: string; // Direct link to action or game room
+  actionLabel?: string;
+  actionPayload?: {
+    roomCode?: string;
+    leagueId?: string;
+    matchId?: string;
+    wagerAmount?: number;
+    gameMode?: string;
+    senderUsername?: string;
+    [key: string]: any;
+  };
+  channels?: NotificationChannel[];
+  read?: boolean;
+  expiresAt?: string;
+  deliveryStatus?: {
+    in_app: "delivered" | "read";
+    whatsapp?: "queued" | "sent" | "failed" | "disabled";
+    sms?: "queued" | "sent" | "failed" | "disabled";
+    email?: "queued" | "sent" | "failed" | "disabled";
+  };
+}
+
+export interface UserNotificationPreferences {
+  inAppSound: boolean;
+  inAppToast: boolean;
+  gameRequestsInApp: boolean;
+  tournamentAlertsInApp: boolean;
+  turnRemindersInApp: boolean;
+  whatsappEnabled: boolean;
+  whatsappNumber?: string;
+  whatsappGameRequests: boolean;
+  whatsappTournamentAlerts: boolean;
+  smsEnabled: boolean;
+  smsNumber?: string;
+  smsTournamentAlerts: boolean;
+  emailEnabled: boolean;
+  emailAddress?: string;
+  emailTournamentAlerts: boolean;
+  emailSettlements: boolean;
+}
+
+export interface WhatsAppSettings {
+  provider: "whatsapp_cloud_api" | "twilio_whatsapp" | "mock";
+  phoneNumberId?: string;
+  businessAccountId?: string;
+  accessTokenMasked?: string;
+  gameRequestTemplate: string;
+  tournamentAlertTemplate: string;
+  turnReminderTemplate: string;
+  enabled: boolean;
 }
 

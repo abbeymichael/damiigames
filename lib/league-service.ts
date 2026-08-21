@@ -1,5 +1,6 @@
 import { dbRepository } from "./db-client";
 import { League, LeagueMatch, LeagueParticipant, TournamentFormat, PrizeDistribution } from "./types";
+import { notificationService } from "./notification-service";
 
 export const leagueService = {
   async listLeagues(): Promise<League[]> {
@@ -719,6 +720,30 @@ export const leagueService = {
     await dbRepository.saveLeague(league);
     await dbRepository.setLeagueMatches(matches);
 
+    // Notify registered players that active round 1 matches are scheduled
+    for (const m of matches) {
+      if (m.player1Token && m.player2Token) {
+        notificationService.sendNotification({
+          userToken: m.player1Token,
+          username: m.player1Name,
+          type: "tournament_match",
+          title: `🏆 Tournament Round 1 Ready: ${league.title}`,
+          message: `Your match against ${m.player2Name} is queued. Head to the tournament bracket to play!`,
+          link: `/leagues`,
+          actionLabel: "View Bracket",
+        });
+        notificationService.sendNotification({
+          userToken: m.player2Token,
+          username: m.player2Name,
+          type: "tournament_match",
+          title: `🏆 Tournament Round 1 Ready: ${league.title}`,
+          message: `Your match against ${m.player1Name} is queued. Head to the tournament bracket to play!`,
+          link: `/leagues`,
+          actionLabel: "View Bracket",
+        });
+      }
+    }
+
     return matches;
   },
 
@@ -995,6 +1020,24 @@ export const leagueService = {
     match.roomCode = roomCode;
     match.status = "in_progress";
     await dbRepository.saveLeagueMatch(match);
+
+    // Dispatch in-app notification with audio chime and direct arena link to opponent
+    const opponentToken = match.player1Token === playerToken ? match.player2Token : match.player1Token;
+    const opponentName = match.player1Token === playerToken ? match.player2Name : match.player1Name;
+    const launcherName = match.player1Token === playerToken ? match.player1Name : match.player2Name;
+
+    if (opponentToken) {
+      notificationService.sendNotification({
+        userToken: opponentToken,
+        username: opponentName || "Contestant",
+        type: "tournament_match",
+        title: "🏆 Tournament Game Started!",
+        message: `${launcherName} has launched your tournament match room (${roomCode}). Enter the Arena to play!`,
+        link: `/arena?code=${roomCode}`,
+        actionLabel: "Enter Match Arena",
+        actionPayload: { roomCode, matchId: match.id, leagueId: match.leagueId },
+      });
+    }
 
     return { match, roomCode };
   },

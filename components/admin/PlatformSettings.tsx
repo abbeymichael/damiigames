@@ -23,8 +23,11 @@ import {
   Zap,
   Save,
   Check,
+  Bell,
+  RadioTower,
 } from "lucide-react";
 import type { AdminSettings } from "@/lib/types";
+import { NotificationSettings } from "@/components/admin/NotificationSettings";
 
 interface PlatformSettingsProps {
   token: string;
@@ -40,7 +43,7 @@ export function PlatformSettings({
   onSettingsUpdated,
 }: PlatformSettingsProps) {
   const [activeSection, setActiveSection] = useState<
-    "fees" | "timers" | "limits" | "breakers" | "rating" | "maintenance"
+    "fees" | "timers" | "limits" | "breakers" | "rating" | "notifications" | "maintenance"
   >("fees");
 
   const [busy, setBusy] = useState(false);
@@ -322,6 +325,18 @@ export function PlatformSettings({
 
         <button
           type="button"
+          onClick={() => setActiveSection("notifications")}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+            activeSection === "notifications"
+              ? "bg-[#d6a735] text-[#06261f] shadow-md font-bold"
+              : "text-slate-200 hover:text-white hover:bg-[#06261f]"
+          }`}
+        >
+          <Bell size={14} /> Notification Providers
+        </button>
+
+        <button
+          type="button"
           onClick={() => {
             setActiveSection("maintenance");
             if (!diagnostics) handleFetchDiagnostics();
@@ -359,10 +374,14 @@ export function PlatformSettings({
         </div>
       )}
 
-      {/* FORM CONTAINER */}
-      <form onSubmit={handleSaveSettings} className="space-y-6">
-        {/* TAB 1: HOUSE FEES & EXCHANGE RATES */}
-        {activeSection === "fees" && (
+      {/* NOTIFICATION PROVIDERS & MODES SECTION */}
+      {activeSection === "notifications" ? (
+        <NotificationSettings token={token} adminSecret={adminSecret} />
+      ) : (
+        /* FORM CONTAINER FOR PLATFORM SETTINGS */
+        <form onSubmit={handleSaveSettings} className="space-y-6">
+          {/* TAB 1: HOUSE FEES & EXCHANGE RATES */}
+          {activeSection === "fees" && (
           <div className="p-6 bg-[#081c15] border border-[#1a5e48] rounded-2xl shadow-xl space-y-5">
             <div className="border-b border-[#1a5e48] pb-3">
               <h3 className="text-sm font-bold text-[#f5efdf] flex items-center gap-2">
@@ -1020,20 +1039,21 @@ export function PlatformSettings({
           </div>
         )}
 
-        {/* SAVE BUTTON BAR */}
-        <div className="p-4 bg-[#081c15] border border-[#1a5e48] rounded-2xl flex items-center justify-between shadow-xl">
-          <div className="text-xs text-slate-200">
-            Changes take effect immediately across all arena and tournament matches.
+          {/* SAVE BUTTON BAR */}
+          <div className="p-4 bg-[#081c15] border border-[#1a5e48] rounded-2xl flex items-center justify-between shadow-xl">
+            <div className="text-xs text-slate-200">
+              Changes take effect immediately across all arena and tournament matches.
+            </div>
+            <button
+              type="submit"
+              disabled={busy}
+              className="px-6 py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold text-xs rounded-xl transition-all shadow-md flex items-center gap-2"
+            >
+              <Save size={16} /> Save Platform Configuration
+            </button>
           </div>
-          <button
-            type="submit"
-            disabled={busy}
-            className="px-6 py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold text-xs rounded-xl transition-all shadow-md flex items-center gap-2"
-          >
-            <Save size={16} /> Save Platform Configuration
-          </button>
-        </div>
-      </form>
+        </form>
+      )}
     </div>
   );
 }

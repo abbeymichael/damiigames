@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminService } from "@/lib/admin-service";
-import { requirePermission } from "@/lib/auth-guard";
+import { requirePermission, handleAuthError } from "@/lib/auth-guard";
 
 export async function GET(
   req: NextRequest,
@@ -11,16 +11,14 @@ export async function GET(
     if (auth instanceof NextResponse) return auth;
 
     const { id } = await context.params;
-    const detail = await adminService.getOrganizerApplicationDetail(auth.user.token, id);
+    const adminToken = auth?.user?.token || auth?.token || "admin";
+    const detail = await adminService.getOrganizerApplicationDetail(adminToken, id);
 
     return NextResponse.json({
       success: true,
       ...detail,
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to load organizer application detail" },
-      { status: 404 },
-    );
+    return handleAuthError(error);
   }
 }

@@ -12,6 +12,7 @@ export interface SoundSettings {
   capture: boolean;
   win: boolean;
   ui: boolean;
+  notification: boolean;
 }
 
 export const DEFAULT_SOUND_SETTINGS: SoundSettings = {
@@ -20,6 +21,7 @@ export const DEFAULT_SOUND_SETTINGS: SoundSettings = {
   capture: true,
   win: true,
   ui: true,
+  notification: true,
 };
 
 class SoundService {
@@ -376,6 +378,170 @@ class SoundService {
 
       osc.start(now);
       osc.stop(now + 0.12);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /**
+   * Attention-grabbing 3-tone ascending alert when a 1-on-1 game challenge arrives
+   */
+  public playGameRequest() {
+    if (!this.isCategoryEnabled("notification")) return;
+    const ctx = this.initCtx();
+    if (!ctx) return;
+
+    try {
+      const triad = [
+        { freq: 587.33, delay: 0, dur: 0.1 }, // D5
+        { freq: 739.99, delay: 0.08, dur: 0.1 }, // F#5
+        { freq: 880.0, delay: 0.16, dur: 0.12 }, // A5
+        { freq: 1174.66, delay: 0.26, dur: 0.28 }, // D6
+      ];
+
+      triad.forEach(({ freq, delay, dur }) => {
+        const now = ctx.currentTime + delay;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, now);
+
+        gain.gain.setValueAtTime(0.24, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + dur);
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /**
+   * Royal chime sequence when a tournament round or match time approaches
+   */
+  public playTournamentAlert() {
+    if (!this.isCategoryEnabled("notification")) return;
+    const ctx = this.initCtx();
+    if (!ctx) return;
+
+    try {
+      const notes = [
+        { freq: 523.25, delay: 0 }, // C5
+        { freq: 659.25, delay: 0.1 }, // E5
+        { freq: 783.99, delay: 0.2 }, // G5
+        { freq: 1046.5, delay: 0.32 }, // C6
+      ];
+
+      notes.forEach(({ freq, delay }) => {
+        const now = ctx.currentTime + delay;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(freq, now);
+
+        gain.gain.setValueAtTime(0.28, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.45);
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /**
+   * Dual blip pulse when a player's turn is waiting or timer is running low
+   */
+  public playTurnReminder() {
+    if (!this.isCategoryEnabled("notification")) return;
+    const ctx = this.initCtx();
+    if (!ctx) return;
+
+    try {
+      const pulses = [
+        { freq: 659.25, delay: 0 },
+        { freq: 880.0, delay: 0.12 },
+      ];
+
+      pulses.forEach(({ freq, delay }) => {
+        const now = ctx.currentTime + delay;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, now);
+
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.15);
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /**
+   * General notification chime dispatcher
+   */
+  public playNotification(type: string = "default") {
+    if (!this.isCategoryEnabled("notification")) return;
+
+    if (type === "game_request" || type === "challenge") {
+      this.playGameRequest();
+      return;
+    }
+    if (type === "tournament_match" || type === "tournament_alert" || type === "tournament") {
+      this.playTournamentAlert();
+      return;
+    }
+    if (type === "turn_reminder" || type === "turn") {
+      this.playTurnReminder();
+      return;
+    }
+
+    // Default clean glass ding
+    const ctx = this.initCtx();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(1760, now + 0.08);
+
+      osc2.type = "triangle";
+      osc2.frequency.setValueAtTime(1320, now);
+
+      gain.gain.setValueAtTime(0.22, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+      osc.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc2.start(now);
+      osc.stop(now + 0.35);
+      osc2.stop(now + 0.35);
     } catch {
       /* ignore */
     }

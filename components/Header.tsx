@@ -49,6 +49,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { getProfileRank } from "@/lib/rank-service";
+import { NotificationCenter } from "@/components/NotificationCenter";
 import {
   saveSessionToken,
   rotateSessionToken,
@@ -903,109 +904,8 @@ export function Header() {
           <div className="topbar-user">
             {userToken ? (
               <>
-                {/* Notification Bell Icon & Badge */}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsNotificationsOpen((prev) => !prev);
-                      setIsProfileDropdownOpen(false);
-                    }}
-                    aria-label="Notifications"
-                    className="relative p-2 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] rounded-xl border border-[#d6a735]/40 transition-colors flex items-center justify-center shadow-sm"
-                    title="Notifications & Updates"
-                  >
-                    <Bell size={16} />
-                    {unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 bg-[#d6a735] text-[#06261f] font-black text-[10px] rounded-full flex items-center justify-center shadow-md animate-pulse">
-                        {unreadCount}
-                      </span>
-                    )}
-                  </button>
-
-                  {/* Notification Dropdown Popover */}
-                  {isNotificationsOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-80 max-w-[90vw] bg-[#06261f] border border-[#d6a735]/40 rounded-2xl shadow-2xl z-50 p-3 space-y-2 text-left text-[#f5efdf] animate-in fade-in slide-in-from-top-2 duration-150">
-                      <div className="flex items-center justify-between pb-2 border-b border-[#0c3b2e]">
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-[#f5efdf]">
-                          <Bell size={14} className="text-[#d6a735]" />
-                          <span>Updates & Invitations</span>
-                          {unreadCount > 0 && (
-                            <span className="px-1.5 py-0.2 bg-[#d6a735]/20 text-[#d6a735] rounded-full text-[10px] font-extrabold">
-                              {unreadCount} New
-                            </span>
-                          )}
-                        </div>
-                        {unreadCount > 0 && (
-                          <button
-                            type="button"
-                            onClick={markAllNotificationsRead}
-                            className="text-[10px] text-[#d6a735] hover:underline font-bold"
-                          >
-                            Mark all read
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="max-h-72 overflow-y-auto space-y-2 scrollbar-thin">
-                        {notifications.length === 0 ? (
-                          <p className="text-xs text-slate-400 text-center py-4">No recent notifications</p>
-                        ) : (
-                          notifications.map((n, idx) => {
-                            const isUnread = !readIds.includes(n.id);
-                            return (
-                              <div
-                                key={`${n.id || "notif"}-${idx}`}
-                                className={`p-2.5 rounded-xl border transition-all relative ${
-                                  isUnread
-                                    ? "bg-[#0c3b2e] border-[#d6a735]/50"
-                                    : "bg-[#0c3b2e]/40 border-[#184d3c] opacity-80"
-                                }`}
-                              >
-                                <div className="flex items-start justify-between gap-2">
-                                  <NavLink
-                                    href={n.link}
-                                    onClick={() => {
-                                      markNotificationRead(n.id);
-                                      setIsNotificationsOpen(false);
-                                    }}
-                                    className="flex-1 min-w-0"
-                                  >
-                                    <div className="flex items-center gap-1.5 mb-1">
-                                      {n.type === "league_invite" ? (
-                                        <Trophy size={13} className="text-[#d6a735] shrink-0" />
-                                      ) : n.type === "wager_settlement" ? (
-                                        <Zap size={13} className="text-emerald-400 shrink-0" />
-                                      ) : (
-                                        <Sparkles size={13} className="text-sky-400 shrink-0" />
-                                      )}
-                                      <strong className="text-xs font-bold text-[#f5efdf] truncate block">
-                                        {n.title}
-                                      </strong>
-                                    </div>
-                                    <p className="text-[11px] text-[#cbd5e1] leading-tight mb-1">
-                                      {n.message}
-                                    </p>
-                                  </NavLink>
-                                  {isUnread && (
-                                    <button
-                                      type="button"
-                                      onClick={() => markNotificationRead(n.id)}
-                                      title="Mark as read"
-                                      className="p-1 hover:bg-[#144435] text-slate-400 hover:text-[#d6a735] rounded shrink-0"
-                                    >
-                                      <Check size={12} />
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                {/* Real-time In-App Notification Center with Web Audio & Multi-Channel */}
+                <NotificationCenter userToken={userToken} username={username} />
 
                 {/* Marbles Balance Tag - Hidden for Admin (Admins cannot own or wager marbles) */}
                 {!isAdmin && (

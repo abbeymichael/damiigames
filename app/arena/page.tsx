@@ -265,6 +265,7 @@ export default function ArenaPage() {
   const [subMode, setSubMode] = useState<SubMode>("pass_play");
   const [roomMode, setRoomMode] = useState<RoomMode>("casual");
   const [wagerInput, setWagerInput] = useState<number>(20);
+  const [challengeTargetUser, setChallengeTargetUser] = useState<string>("");
 
   // Dynamic Player Names
   const [localWhiteName, setLocalWhiteName] = useState<string>("Kwame (Player 1)");
@@ -580,6 +581,7 @@ export default function ArenaPage() {
       setOnlineError("Admin accounts cannot participate in player matches.");
       return;
     }
+    setChallengeTargetUser(targetUsername);
     setMode("online");
     setRoomMode(challengeType);
     setShowPregameModal(true);
@@ -786,6 +788,21 @@ export default function ArenaPage() {
         if (action === "create" || action === "join") {
           setShowPregameModal(false);
           setShowSettings(false);
+          // If a challenge target was specified, dispatch challenge notification with direct room link
+          if (action === "create" && challengeTargetUser.trim()) {
+            fetch("/api/notifications", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "send_challenge",
+                token,
+                targetUsername: challengeTargetUser.trim(),
+                roomCode: data.room.code,
+                wagerAmount: extra.wagerAmount || 0,
+              }),
+            }).catch(() => undefined);
+            setChallengeTargetUser("");
+          }
         }
       }
       return data;
@@ -2860,41 +2877,54 @@ export default function ArenaPage() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      <div className="flex gap-2">
-                        <select
-                          value={roomMode}
-                          onChange={(e) => setRoomMode(e.target.value as RoomMode)}
-                          className="flex-1 px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
-                        >
-                          <option value="casual">Casual Match (Free)</option>
-                          <option value="wager">Wager Match (GH₵ Escrow Pot)</option>
-                        </select>
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <select
+                            value={roomMode}
+                            onChange={(e) => setRoomMode(e.target.value as RoomMode)}
+                            className="flex-1 px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
+                          >
+                            <option value="casual">Casual Match (Free)</option>
+                            <option value="wager">Wager Match (GH₵ Escrow Pot)</option>
+                          </select>
 
-                        {roomMode === "wager" && (
+                          {roomMode === "wager" && (
+                            <input
+                              type="number"
+                              min={10}
+                              step={10}
+                              value={wagerInput}
+                              onChange={(e) => setWagerInput(Number(e.target.value))}
+                              placeholder="Stake GH₵"
+                              className="w-28 px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
+                            />
+                          )}
+
+                          <button
+                            type="button"
+                            disabled={onlineBusy}
+                            onClick={() =>
+                              void onlineAction("create", {
+                                mode: roomMode,
+                                wagerAmount: roomMode === "wager" ? wagerInput : 0,
+                              })
+                            }
+                            className="px-4 py-2 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold rounded-xl text-xs transition-all shadow-md shadow-[#d6a735]/10 flex items-center gap-1 shrink-0"
+                          >
+                            <Plus size={14} /> Create Room
+                          </button>
+                        </div>
+
+                        {/* Optional target player challenge field */}
+                        <div className="flex items-center gap-2">
                           <input
-                            type="number"
-                            min={10}
-                            step={10}
-                            value={wagerInput}
-                            onChange={(e) => setWagerInput(Number(e.target.value))}
-                            placeholder="Stake GH₵"
-                            className="w-28 px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
+                            type="text"
+                            value={challengeTargetUser}
+                            onChange={(e) => setChallengeTargetUser(e.target.value)}
+                            placeholder="Target Opponent Username (Optional - Sends Audio & In-App Alert)"
+                            className="w-full px-3 py-1.5 bg-[#06261f] border border-[#184d3c] rounded-lg text-[11px] text-[#f5efdf] placeholder-slate-500 focus:outline-none focus:border-[#d6a735]"
                           />
-                        )}
-
-                        <button
-                          type="button"
-                          disabled={onlineBusy}
-                          onClick={() =>
-                            void onlineAction("create", {
-                              mode: roomMode,
-                              wagerAmount: roomMode === "wager" ? wagerInput : 0,
-                            })
-                          }
-                          className="px-4 py-2 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold rounded-xl text-xs transition-all shadow-md shadow-[#d6a735]/10 flex items-center gap-1 shrink-0"
-                        >
-                          <Plus size={14} /> Create Room
-                        </button>
+                        </div>
                       </div>
 
                       {/* Transparent Player-Facing Escrow Audit Trail Breakdown */}

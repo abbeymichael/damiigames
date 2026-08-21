@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbRepository } from "@/lib/db-client";
-import { requirePermission } from "@/lib/auth-guard";
+import { requirePermission, handleAuthError } from "@/lib/auth-guard";
 import { OrganizerApplicationStatus } from "@/lib/types";
 
 export async function GET(req: NextRequest) {
   try {
     const auth = await requirePermission(req, "manage_organizers");
+    if (auth instanceof NextResponse) return auth;
 
     const { searchParams } = new URL(req.url);
     const statusParam = searchParams.get("status") as OrganizerApplicationStatus | null;
@@ -56,9 +57,6 @@ export async function GET(req: NextRequest) {
       count: enriched.length,
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to fetch organizer applications" },
-      { status: 500 },
-    );
+    return handleAuthError(error);
   }
 }

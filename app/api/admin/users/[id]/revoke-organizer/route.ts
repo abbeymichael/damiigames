@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminService } from "@/lib/admin-service";
-import { requirePermission } from "@/lib/auth-guard";
+import { requirePermission, handleAuthError } from "@/lib/auth-guard";
 
 export async function POST(
   req: NextRequest,
@@ -11,7 +11,7 @@ export async function POST(
     if (auth instanceof NextResponse) return auth;
 
     const { id } = await context.params;
-    const { user: adminUser } = auth;
+    const adminToken = auth?.user?.token || auth?.token || "admin";
 
     const body = await req.json();
     const reason = String(body.reason ?? "").trim();
@@ -27,7 +27,7 @@ export async function POST(
     }
 
     const result = await adminService.revokeOrganizerStatus(
-      adminUser.token,
+      adminToken,
       id,
       reason,
       tournamentHandling,
@@ -40,9 +40,6 @@ export async function POST(
       profile: result.profile,
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to revoke organizer status" },
-      { status: 500 },
-    );
+    return handleAuthError(error);
   }
 }

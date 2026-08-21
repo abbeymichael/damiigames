@@ -4,6 +4,7 @@ import { leagueService } from "@/lib/league-service";
 import { dbRepository } from "@/lib/db-client";
 import { attachAuthCookies } from "@/lib/auth-guard";
 import { hasPermission } from "@/lib/permissions";
+import { notificationService } from "@/lib/notification-service";
 
 const cleanToken = (v: unknown) => String(v ?? "").trim().slice(0, 80);
 
@@ -685,18 +686,88 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, setting: entry });
     }
 
+    /* ------------------------------------------------------------------------- */
+    /* Notification Providers, Channels & Routing (Section 3.0)                  */
+    /* ------------------------------------------------------------------------- */
+    if (action === "get_notification_settings") {
+      const settings = await notificationService.getAllNotificationSettings();
+      return NextResponse.json({ success: true, ...settings });
+    }
+
+    if (action === "save_notification_settings") {
+      const { category, data } = body;
+      if (!category || !data) {
+        return NextResponse.json({ error: "category ('in_app'|'whatsapp'|'sms'|'email'|'routing') and data object required" }, { status: 400 });
+      }
+      const updated = await notificationService.saveNotificationCategorySettings(category, data, token);
+      await adminService.logAdminAction(token, "Admin", "NOTIFICATION_SETTINGS_UPDATED", category, { category });
+      return NextResponse.json({ success: true, ...updated });
+    }
+
+    if (action === "send_test_notification") {
+      const {
+        channel,
+        recipient,
+        title,
+        message,
+        actionUrl,
+        actionLabel,
+        type,
+        customSubject,
+        customTemplate,
+        templateData,
+      } = body;
+      if (!channel || !recipient) {
+        return NextResponse.json({ error: "channel ('in_app'|'whatsapp'|'sms'|'email') and recipient required" }, { status: 400 });
+      }
+      const result = await notificationService.sendTestNotification({
+        channel,
+        recipient,
+        title,
+        message,
+        actionUrl,
+        actionLabel,
+        type,
+        customSubject,
+        customTemplate,
+        templateData,
+      });
+      await adminService.logAdminAction(token, "Admin", "TEST_NOTIFICATION_SENT", recipient, { channel, title, result });
+      return NextResponse.json({ success: true, result, message: `Test ${channel.toUpperCase()} notification sent to ${recipient}!` });
+    }
+
+    if (action === "get_notification_logs") {
+      const logs = notificationService.getDispatchedLogs();
+      return NextResponse.json({ success: true, logs });
+    }
+
     if (action === "send_test_sms") {
       const { phoneNumber, message } = body;
       if (!phoneNumber) return NextResponse.json({ error: "Phone number required" }, { status: 400 });
+      await notificationService.sendTestNotification({
+        channel: "sms",
+        recipient: phoneNumber,
+        message: message || "Test message from DAMII",
+      });
       await adminService.logAdminAction(token, "Admin", "TEST_SMS_SENT", phoneNumber, { message: message || "Test message from DAMII" });
       return NextResponse.json({ success: true, message: `Test SMS successfully queued to ${phoneNumber}` });
     }
 
     if (action === "send_test_email") {
-      const { email, subject, body: emailBody } = body;
+      const { email, subject, body: emailBody, type, customSubject, customTemplate, templateData } = body;
       if (!email) return NextResponse.json({ error: "Email required" }, { status: 400 });
+      const result = await notificationService.sendTestNotification({
+        channel: "email",
+        recipient: email,
+        title: subject || customSubject || "DAMII Test Email",
+        message: emailBody || customTemplate || "Test notification from DAMII",
+        type: type || "system",
+        customSubject: customSubject || subject,
+        customTemplate: customTemplate || emailBody,
+        templateData,
+      });
       await adminService.logAdminAction(token, "Admin", "TEST_EMAIL_SENT", email, { subject, body: emailBody });
-      return NextResponse.json({ success: true, message: `Test email successfully queued to ${email}` });
+      return NextResponse.json({ success: true, result, message: `Test email successfully queued to ${email}` });
     }
 
     return NextResponse.json({ error: "Invalid admin action" }, { status: 400 });

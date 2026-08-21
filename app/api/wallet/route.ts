@@ -8,7 +8,7 @@ const cleanToken = (v: unknown) => String(v ?? "").trim().slice(0, 80);
 
 async function resolveUserToken(req: NextRequest, fallbackToken?: string): Promise<string> {
   const authCtx = await getAuthContext(req);
-  if (authCtx) return authCtx.user.token;
+  if (authCtx?.user?.token) return authCtx.user.token;
   if (!fallbackToken) return "";
 
   const session = await dbRepository.getSession(fallbackToken);
