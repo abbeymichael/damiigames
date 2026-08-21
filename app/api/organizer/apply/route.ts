@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
 
     const application = await dbRepository.getOrganizerApplicationByUserId(userId);
     const profile = await dbRepository.getProfile(userId);
+    const userAccount = await dbRepository.getUserById(userId);
     const revocation = await dbRepository.getOrganizerRevocationByUserId(userId);
 
     // Compute cooldown if previously rejected
@@ -52,6 +53,9 @@ export async function GET(req: NextRequest) {
       application: application || null,
       userRole: auth?.user?.role || auth?.role || "user",
       userProfile: profile || null,
+      userAccount: userAccount || null,
+      isPhoneVerified: Boolean(userAccount?.phoneVerifiedAt || profile?.phoneNumber),
+      phoneNumber: userAccount?.phoneNumber || profile?.phoneNumber || "",
       revocation: revocation || null,
       cooldown,
     });
@@ -83,12 +87,19 @@ export async function POST(req: NextRequest) {
       selfieUrl,
       physicalAddress,
       proofOfAddressUrl,
-      intendedGameTypes,
-      expectedTournamentSize,
-      expectedFrequency,
-      priorExperience,
+      intendedGameTypes = ["damii-10x10"],
+      expectedTournamentSize = 16,
+      expectedFrequency = "monthly",
+      priorExperience, // Small bio
+      bio, // Alias for small bio
       termsAccepted,
+      termsRulesAccepted,
+      termsEscrowAccepted,
+      termsConductAccepted,
     } = body;
+
+    const smallBio = priorExperience || bio || "";
+    const allTermsAccepted = Boolean(termsAccepted || (termsRulesAccepted && termsEscrowAccepted && termsConductAccepted));
 
     const now = new Date().toISOString();
 
@@ -116,6 +127,49 @@ export async function POST(req: NextRequest) {
             isRevoked: true,
           },
           { status: 403 },
+        );
+      }
+    }
+
+    // Check user phone verification
+    const userAccount = await dbRepository.getUserById(userId);
+    const userProfile = await dbRepository.getProfile(userId);
+    const hasVerifiedPhone = Boolean(userAccount?.phoneVerifiedAt || (userProfile?.phoneNumber && userProfile?.phoneVerifiedAt));
+
+    // If NOT draft, validate mandatory fields for simplified organizer registration
+    if (!isDraft) {
+      if (!applicantType || !["individual", "organization"].includes(applicantType)) {
+        return NextResponse.json(
+          { error: "Applicant type must be 'individual' or 'company / organization'" },
+          { status: 400 },
+        );
+      }
+
+      if (!organizationName || !String(organizationName).trim()) {
+        return NextResponse.json(
+          {
+            error: applicantType === "organization"
+              ? "Company / Organization name is required"
+              : "Organizer display name or brand name is required",
+          },
+          { status: 400 },
+        );
+      }
+
+      if (!hasVerifiedPhone) {
+        return NextResponse.json(
+          {
+            error: "A verified phone number is required to apply for an Organizer license. Please verify your mobile phone number via OTP first.",
+            requiresPhoneVerification: true,
+          },
+          { status: 400 },
+        );
+      }
+
+      if (!allTermsAccepted) {
+        return NextResponse.json(
+          { error: "You must acknowledge and accept all DAMII Organizer Rules & Escrow Terms" },
+          { status: 400 },
         );
       }
     }
@@ -160,51 +214,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // If NOT draft, validate mandatory fields
-    if (!isDraft) {
-      if (!applicantType || !["individual", "organization"].includes(applicantType)) {
-        return NextResponse.json(
-          { error: "Applicant type must be 'individual' or 'organization'" },
-          { status: 400 },
-        );
-      }
-
-      if (applicantType === "organization" && !organizationName) {
-        return NextResponse.json(
-          { error: "Organization name is required for organization applicants" },
-          { status: 400 },
-        );
-      }
-
-      if (!ghanaCardFrontUrl || !ghanaCardBackUrl || !selfieUrl) {
-        return NextResponse.json(
-          { error: "Ghana Card (Front and Back) and verification selfie are required" },
-          { status: 400 },
-        );
-      }
-
-      if (!physicalAddress || !proofOfAddressUrl) {
-        return NextResponse.json(
-          { error: "Physical address and proof of address document are required" },
-          { status: 400 },
-        );
-      }
-
-      if (!intendedGameTypes) {
-        return NextResponse.json(
-          { error: "Intended game types are required" },
-          { status: 400 },
-        );
-      }
-
-      if (!termsAccepted) {
-        return NextResponse.json(
-          { error: "You must accept the Organizer Rules & Financial Escrow Terms" },
-          { status: 400 },
-        );
-      }
-    }
-
     const newStatus = isDraft ? "draft" : "pending";
     const targetStatus = existing?.status === "needs_info" && !isDraft ? "pending" : newStatus;
 
@@ -222,8 +231,8 @@ export async function POST(req: NextRequest) {
         intendedGameTypes: typeof intendedGameTypes === "object" ? JSON.stringify(intendedGameTypes) : intendedGameTypes ? String(intendedGameTypes).trim() : existing.intendedGameTypes,
         expectedTournamentSize: expectedTournamentSize ? Number(expectedTournamentSize) : existing.expectedTournamentSize,
         expectedFrequency: expectedFrequency ? String(expectedFrequency).trim() : existing.expectedFrequency,
-        priorExperience: priorExperience ? String(priorExperience).trim() : existing.priorExperience,
-        termsAcceptedAt: termsAccepted ? now : existing.termsAcceptedAt,
+        priorExperience: smallBio ? String(smallBio).trim() : existing.priorExperience,
+        termsAcceptedAt: allTermsAccepted ? now : existing.termsAcceptedAt,
         status: targetStatus,
         submittedAt: !isDraft ? now : existing.submittedAt,
         reviewNote: isDraft ? existing.reviewNote : null, // clear review note on full resubmit
@@ -235,7 +244,9 @@ export async function POST(req: NextRequest) {
           username: auth.user.username,
           status: "pending",
           requestedAt: now,
-          organizationName: organizationName || undefined,
+          organizationName: organizationName ? String(organizationName).trim() : undefined,
+          bio: smallBio ? String(smallBio).trim() : undefined,
+          contactPhone: userAccount?.phoneNumber || userProfile?.phoneNumber || undefined,
         });
 
         await dbRepository.createAdminLog({
@@ -244,7 +255,7 @@ export async function POST(req: NextRequest) {
           adminName: auth.user.username,
           action: existing.status === "needs_info" ? "organizer_application.resubmitted" : "organizer_application.submitted",
           target: userId,
-          detailsJson: JSON.stringify({ applicationId: existing.id, applicantType, organizationName }),
+          detailsJson: JSON.stringify({ applicationId: existing.id, applicantType, organizationName, bio: smallBio }),
           createdAt: now,
         });
       }
@@ -258,7 +269,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Creating new application (fresh draft or fresh submission after cooldown)
+    // Creating new application (fresh draft or fresh submission)
     const newApplicationId = crypto.randomUUID();
     const previousAppId = existing?.status === "rejected" ? existing.id : undefined;
 
@@ -273,11 +284,11 @@ export async function POST(req: NextRequest) {
       selfieUrl: selfieUrl ? String(selfieUrl).trim() : null,
       physicalAddress: physicalAddress ? String(physicalAddress).trim() : null,
       proofOfAddressUrl: proofOfAddressUrl ? String(proofOfAddressUrl).trim() : null,
-      intendedGameTypes: typeof intendedGameTypes === "object" ? JSON.stringify(intendedGameTypes) : intendedGameTypes ? String(intendedGameTypes).trim() : null,
-      expectedTournamentSize: expectedTournamentSize ? Number(expectedTournamentSize) : null,
-      expectedFrequency: expectedFrequency ? String(expectedFrequency).trim() : null,
-      priorExperience: priorExperience ? String(priorExperience).trim() : null,
-      termsAcceptedAt: termsAccepted ? now : null,
+      intendedGameTypes: typeof intendedGameTypes === "object" ? JSON.stringify(intendedGameTypes) : intendedGameTypes ? String(intendedGameTypes).trim() : JSON.stringify(["damii-10x10"]),
+      expectedTournamentSize: expectedTournamentSize ? Number(expectedTournamentSize) : 16,
+      expectedFrequency: expectedFrequency ? String(expectedFrequency).trim() : "monthly",
+      priorExperience: smallBio ? String(smallBio).trim() : null,
+      termsAcceptedAt: allTermsAccepted ? now : null,
       status: targetStatus,
       previousApplicationId: previousAppId,
       submittedAt: !isDraft ? now : null,
@@ -292,7 +303,9 @@ export async function POST(req: NextRequest) {
         username: auth.user.username,
         status: "pending",
         requestedAt: now,
-        organizationName: organizationName || undefined,
+        organizationName: organizationName ? String(organizationName).trim() : undefined,
+        bio: smallBio ? String(smallBio).trim() : undefined,
+        contactPhone: userAccount?.phoneNumber || userProfile?.phoneNumber || undefined,
       });
 
       await dbRepository.createAdminLog({
@@ -301,7 +314,7 @@ export async function POST(req: NextRequest) {
         adminName: auth.user.username,
         action: "organizer_application.submitted",
         target: userId,
-        detailsJson: JSON.stringify({ applicationId: newApplicationId, applicantType, organizationName, previousAppId }),
+        detailsJson: JSON.stringify({ applicationId: newApplicationId, applicantType, organizationName, bio: smallBio, previousAppId }),
         createdAt: now,
       });
     }
@@ -310,7 +323,7 @@ export async function POST(req: NextRequest) {
       success: true,
       message: isDraft
         ? "Application draft saved."
-        : "Your organizer application has been submitted successfully and is pending admin review.",
+        : "Your organizer application has been submitted successfully and is pending review.",
       application: newApplication,
     });
   } catch (error) {

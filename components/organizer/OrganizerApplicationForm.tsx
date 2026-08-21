@@ -5,28 +5,24 @@ import {
   Building,
   User,
   ShieldCheck,
-  FileText,
-  Upload,
   CheckCircle,
   AlertCircle,
   Clock,
-  HelpCircle,
-  XCircle,
-  ArrowRight,
-  ArrowLeft,
   Save,
   Send,
   RefreshCw,
-  Eye,
-  Info,
-  Award,
+  Phone,
   Check,
+  Shield,
+  Smartphone,
+  Lock,
   Calendar,
-  AlertTriangle,
-  RotateCcw,
+  Users,
+  ChevronRight,
+  Info,
   Sparkles,
 } from "lucide-react";
-import { OrganizerApplication, OrganizerApplicationStatus, Profile } from "@/lib/types";
+import { OrganizerApplication, OrganizerApplicationStatus } from "@/lib/types";
 
 interface OrganizerApplicationFormProps {
   token: string;
@@ -43,12 +39,11 @@ export function OrganizerApplicationForm({
   onApplicationUpdated,
   onSuccessNavigate,
 }: OrganizerApplicationFormProps) {
-  const [currentStep, setCurrentStep] = useState<number>(1);
   const [busy, setBusy] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  
+
   // Application Data State
   const [application, setApplication] = useState<OrganizerApplication | null>(initialApplication || null);
   const [cooldown, setCooldown] = useState<{
@@ -63,35 +58,39 @@ export function OrganizerApplicationForm({
   const [isRevoked, setIsRevoked] = useState(false);
   const [revocationReason, setRevocationReason] = useState("");
 
-  // Step 1: Type
+  // Phone Verification State
+  const [isPhoneVerified, setIsPhoneVerified] = useState(false);
+  const [verifiedPhoneNumber, setVerifiedPhoneNumber] = useState("");
+  const [phoneInput, setPhoneInput] = useState("");
+  const [otpRequestId, setOtpRequestId] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpExpiresAt, setOtpExpiresAt] = useState("");
+  const [otpDebugCode, setOtpDebugCode] = useState<string | null>(null);
+  const [otpCooldown, setOtpCooldown] = useState(0);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [isEditingPhone, setIsEditingPhone] = useState(false);
+
+  // Form Fields
   const [applicantType, setApplicantType] = useState<"individual" | "organization">("individual");
   const [organizationName, setOrganizationName] = useState("");
-  const [organizationRegNumber, setOrganizationRegNumber] = useState("");
-
-  // Step 2: KYC
-  const [ghanaCardFrontUrl, setGhanaCardFrontUrl] = useState("");
-  const [ghanaCardBackUrl, setGhanaCardBackUrl] = useState("");
-  const [selfieUrl, setSelfieUrl] = useState("");
-
-  // Step 3: Address & Proof
-  const [physicalAddress, setPhysicalAddress] = useState("");
-  const [proofOfAddressUrl, setProofOfAddressUrl] = useState("");
-
-  // Step 4: Intent & Experience
-  const [intendedGameTypes, setIntendedGameTypes] = useState<string[]>(["damii-10x10"]);
-  const [expectedTournamentSize, setExpectedTournamentSize] = useState<number>(16);
+  const [smallBio, setSmallBio] = useState("");
   const [expectedFrequency, setExpectedFrequency] = useState<string>("monthly");
-  const [priorExperience, setPriorExperience] = useState<string>("");
+  const [expectedTournamentSize, setExpectedTournamentSize] = useState<number>(16);
 
-  // Step 5: Terms
+  // Acknowledgements
   const [termsRulesAccepted, setTermsRulesAccepted] = useState(false);
   const [termsEscrowAccepted, setTermsEscrowAccepted] = useState(false);
   const [termsConductAccepted, setTermsConductAccepted] = useState(false);
 
-  // Document preview modal
-  const [previewDoc, setPreviewDoc] = useState<{ title: string; url: string } | null>(null);
+  // Cooldown countdown timer for OTP resend
+  useEffect(() => {
+    if (otpCooldown > 0) {
+      const timer = setTimeout(() => setOtpCooldown((prev) => prev - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [otpCooldown]);
 
-  // Helper for auth headers
   const getAuthHeaders = () => {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -101,26 +100,9 @@ export function OrganizerApplicationForm({
   const populateFormWithApp = (app: OrganizerApplication) => {
     if (app.applicantType) setApplicantType(app.applicantType);
     if (app.organizationName) setOrganizationName(app.organizationName);
-    if (app.organizationRegNumber) setOrganizationRegNumber(app.organizationRegNumber);
-    if (app.ghanaCardFrontUrl) setGhanaCardFrontUrl(app.ghanaCardFrontUrl);
-    if (app.ghanaCardBackUrl) setGhanaCardBackUrl(app.ghanaCardBackUrl);
-    if (app.selfieUrl) setSelfieUrl(app.selfieUrl);
-    if (app.physicalAddress) setPhysicalAddress(app.physicalAddress);
-    if (app.proofOfAddressUrl) setProofOfAddressUrl(app.proofOfAddressUrl);
-    
-    if (app.intendedGameTypes) {
-      try {
-        const parsed = JSON.parse(app.intendedGameTypes);
-        if (Array.isArray(parsed)) setIntendedGameTypes(parsed);
-        else setIntendedGameTypes([app.intendedGameTypes]);
-      } catch {
-        setIntendedGameTypes([app.intendedGameTypes]);
-      }
-    }
-    
-    if (app.expectedTournamentSize) setExpectedTournamentSize(app.expectedTournamentSize);
+    if (app.priorExperience) setSmallBio(app.priorExperience);
     if (app.expectedFrequency) setExpectedFrequency(app.expectedFrequency);
-    if (app.priorExperience) setPriorExperience(app.priorExperience);
+    if (app.expectedTournamentSize) setExpectedTournamentSize(app.expectedTournamentSize);
     if (app.termsAcceptedAt) {
       setTermsRulesAccepted(true);
       setTermsEscrowAccepted(true);
@@ -143,6 +125,15 @@ export function OrganizerApplicationForm({
         setApplication(data.application);
         populateFormWithApp(data.application);
       }
+
+      if (data.isPhoneVerified && data.phoneNumber) {
+        setIsPhoneVerified(true);
+        setVerifiedPhoneNumber(data.phoneNumber);
+        setPhoneInput(data.phoneNumber);
+      } else if (data.phoneNumber) {
+        setPhoneInput(data.phoneNumber);
+      }
+
       if (data.cooldown) {
         setCooldown(data.cooldown);
       }
@@ -161,43 +152,138 @@ export function OrganizerApplicationForm({
     loadApplicationStatus();
   }, [loadApplicationStatus]);
 
+  // Request OTP for Phone Verification
+  const handleRequestOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    const clean = phoneInput.trim().replace(/[\s\-()]/g, "");
+    if (!clean) {
+      setError("Please enter a valid Ghana mobile phone number.");
+      return;
+    }
+
+    if (clean.length < 9 || clean.length > 16) {
+      setError("Invalid phone number format. Please enter a valid 10-digit Ghana number (e.g. 0244123456).");
+      return;
+    }
+
+    setIsSendingOtp(true);
+    try {
+      const res = await fetch("/api/organizer/phone-otp", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          action: "send",
+          phoneNumber: clean,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setError(data.error || "Failed to send verification code.");
+        if (data.retryAfter) {
+          setOtpCooldown(Math.min(60, data.retryAfter));
+        }
+        return;
+      }
+
+      setOtpRequestId(data.requestId);
+      setOtpExpiresAt(data.expiresAt);
+      if (data.debugCode) {
+        setOtpDebugCode(data.debugCode);
+      }
+      setOtpCooldown(60);
+      setSuccess(`Verification code sent to ${clean}. Enter the 6-digit code below.`);
+    } catch {
+      setError("Network connection error. Failed to send verification code.");
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  // Verify OTP
+  const handleVerifyOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (!otpRequestId) {
+      setError("Please request a verification code first.");
+      return;
+    }
+
+    if (!otpCode.trim() || otpCode.trim().length !== 6) {
+      setError("Please enter the complete 6-digit verification code.");
+      return;
+    }
+
+    setIsVerifyingOtp(true);
+    try {
+      const res = await fetch("/api/organizer/phone-otp", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          action: "verify",
+          requestId: otpRequestId,
+          code: otpCode.trim(),
+          phoneNumber: phoneInput.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setError(data.error || "Invalid verification code. Please try again.");
+        return;
+      }
+
+      setIsPhoneVerified(true);
+      setVerifiedPhoneNumber(data.phoneNumber || phoneInput.trim());
+      setIsEditingPhone(false);
+      setOtpRequestId("");
+      setOtpCode("");
+      setOtpDebugCode(null);
+      setSuccess("Phone number verified successfully! You can now complete your application.");
+    } catch {
+      setError("Network connection error during OTP verification.");
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
+  // Save Application Draft
   const handleSaveDraft = async () => {
     setSavingDraft(true);
     setError("");
     setSuccess("");
 
     try {
-      const payload = {
-        isDraft: true,
-        applicantType,
-        organizationName: organizationName.trim() || undefined,
-        organizationRegNumber: organizationRegNumber.trim() || undefined,
-        ghanaCardFrontUrl: ghanaCardFrontUrl.trim() || undefined,
-        ghanaCardBackUrl: ghanaCardBackUrl.trim() || undefined,
-        selfieUrl: selfieUrl.trim() || undefined,
-        physicalAddress: physicalAddress.trim() || undefined,
-        proofOfAddressUrl: proofOfAddressUrl.trim() || undefined,
-        intendedGameTypes,
-        expectedTournamentSize,
-        expectedFrequency,
-        priorExperience: priorExperience.trim() || undefined,
-        termsAccepted: termsRulesAccepted && termsEscrowAccepted && termsConductAccepted,
-      };
-
       const res = await fetch("/api/organizer/apply", {
         method: "POST",
         headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          isDraft: true,
+          applicantType,
+          organizationName: organizationName.trim(),
+          priorExperience: smallBio.trim(),
+          expectedFrequency,
+          expectedTournamentSize,
+          termsRulesAccepted,
+          termsEscrowAccepted,
+          termsConductAccepted,
+          termsAccepted: termsRulesAccepted && termsEscrowAccepted && termsConductAccepted,
+        }),
       });
 
       const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || "Failed to save application draft");
-      }
+      if (!res.ok || data.error) throw new Error(data.error || "Failed to save draft");
 
       setApplication(data.application);
-      if (onApplicationUpdated && data.application) onApplicationUpdated(data.application);
-      setSuccess("Draft saved! You can close this page and return at any time to finish.");
+      setSuccess("Application draft saved successfully.");
+      if (onApplicationUpdated && data.application) {
+        onApplicationUpdated(data.application);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save draft");
     } finally {
@@ -205,868 +291,539 @@ export function OrganizerApplicationForm({
     }
   };
 
+  // Submit Final Application
   const handleSubmitFinal = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setError("");
     setSuccess("");
 
-    // Validate Steps
-    if (applicantType === "organization" && !organizationName.trim()) {
-      setError("Organization Name is required in Step 1.");
-      setCurrentStep(1);
+    if (!isPhoneVerified) {
+      setError("Phone number verification is required. Please verify your mobile number first.");
       return;
     }
-    if (!ghanaCardFrontUrl.trim() || !ghanaCardBackUrl.trim() || !selfieUrl.trim()) {
-      setError("Please provide all KYC identity documents in Step 2.");
-      setCurrentStep(2);
+
+    if (!organizationName.trim()) {
+      setError(
+        applicantType === "organization"
+          ? "Company or Organization name is required."
+          : "Organizer display name or brand name is required."
+      );
       return;
     }
-    if (!physicalAddress.trim() || !proofOfAddressUrl.trim()) {
-      setError("Physical address and proof of address document are required in Step 3.");
-      setCurrentStep(3);
+
+    if (!smallBio.trim()) {
+      setError("Please provide a brief bio or description of your tournament hosting background / plans.");
       return;
     }
-    if (intendedGameTypes.length === 0) {
-      setError("Please select at least one intended tournament format in Step 4.");
-      setCurrentStep(4);
-      return;
-    }
+
     if (!termsRulesAccepted || !termsEscrowAccepted || !termsConductAccepted) {
-      setError("You must acknowledge and accept all platform agreements in Step 5.");
-      setCurrentStep(5);
+      setError("You must acknowledge and accept all three platform agreements before submitting.");
       return;
     }
 
     setBusy(true);
     try {
-      const payload = {
-        isDraft: false,
-        applicantType,
-        organizationName: organizationName.trim() || undefined,
-        organizationRegNumber: organizationRegNumber.trim() || undefined,
-        ghanaCardFrontUrl: ghanaCardFrontUrl.trim(),
-        ghanaCardBackUrl: ghanaCardBackUrl.trim(),
-        selfieUrl: selfieUrl.trim(),
-        physicalAddress: physicalAddress.trim(),
-        proofOfAddressUrl: proofOfAddressUrl.trim(),
-        intendedGameTypes,
-        expectedTournamentSize,
-        expectedFrequency,
-        priorExperience: priorExperience.trim() || undefined,
-        termsAccepted: true,
-      };
-
       const res = await fetch("/api/organizer/apply", {
         method: "POST",
         headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          isDraft: false,
+          applicantType,
+          organizationName: organizationName.trim(),
+          priorExperience: smallBio.trim(),
+          expectedFrequency,
+          expectedTournamentSize,
+          termsRulesAccepted,
+          termsEscrowAccepted,
+          termsConductAccepted,
+          termsAccepted: true,
+        }),
       });
 
       const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || "Failed to submit organizer application");
-      }
+      if (!res.ok || data.error) throw new Error(data.error || "Submission failed");
 
       setApplication(data.application);
-      if (onApplicationUpdated && data.application) onApplicationUpdated(data.application);
       setSuccess(
-        application?.status === "needs_info"
-          ? "Your application has been resubmitted with requested updates! An admin will review shortly."
-          : "Your organizer license application has been submitted for commission review!"
+        data.message ||
+          "Your organizer application has been submitted successfully! An administrator will review your application."
       );
-      if (onSuccessNavigate) onSuccessNavigate();
+      if (onApplicationUpdated && data.application) {
+        onApplicationUpdated(data.application);
+      }
+      if (onSuccessNavigate) {
+        setTimeout(onSuccessNavigate, 2000);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Submission failed");
+      setError(err instanceof Error ? err.message : "Failed to submit organizer application");
     } finally {
       setBusy(false);
     }
   };
 
-  const handleStartNewApplicationAfterCooldown = () => {
-    // Reset state for new draft
-    setApplication(null);
-    setCurrentStep(1);
-    setError("");
-    setSuccess("");
-  };
-
-  // Preset Mock Upload Helpers for seamless testing
-  const handleQuickPopulateDoc = (type: "ghana_front" | "ghana_back" | "selfie" | "proof") => {
-    const seed = Math.floor(Math.random() * 1000);
-    if (type === "ghana_front") setGhanaCardFrontUrl(`https://picsum.photos/seed/ghana-card-front-${seed}/800/500`);
-    if (type === "ghana_back") setGhanaCardBackUrl(`https://picsum.photos/seed/ghana-card-back-${seed}/800/500`);
-    if (type === "selfie") setSelfieUrl(`https://picsum.photos/seed/selfie-${seed}/600/600`);
-    if (type === "proof") setProofOfAddressUrl(`https://picsum.photos/seed/utility-bill-${seed}/800/1000`);
-  };
-
-  /* ------------------------------------------------------------------------- */
-  /* STATUS SCREENS: Approved, Pending, Revoked, Rejected                      */
-  /* ------------------------------------------------------------------------- */
-
-  // CASE: Approved
-  if (userRole === "organizer" || application?.status === "approved") {
-    return (
-      <div className="p-8 bg-[#06261f] border border-[#114232] rounded-3xl text-center space-y-6 shadow-2xl animate-in fade-in">
-        <div className="w-20 h-20 bg-[#081c15] border-2 border-emerald-500 rounded-3xl flex items-center justify-center mx-auto text-emerald-400 shadow-xl">
-          <Award size={44} />
-        </div>
-        <div className="space-y-2">
-          <span className="px-3 py-1 bg-emerald-950 border border-emerald-500/50 text-emerald-300 font-bold rounded-full text-xs uppercase tracking-wider">
-            License Active & Certified
-          </span>
-          <h2 className="text-2xl font-black text-[#f5efdf]">
-            {application?.organizationName || "Official Tournament Organizer"}
-          </h2>
-          <p className="text-sm text-[#a3b8b0] max-w-lg mx-auto leading-relaxed">
-            Your organizer credentials are fully certified. You have authorized rights to create official draughts tournaments, disburse prize pools, and oversee bracket matches.
-          </p>
-        </div>
-        <div className="pt-2">
-          <button
-            onClick={() => {
-              if (onSuccessNavigate) onSuccessNavigate();
-              else window.location.href = "/organizer";
-            }}
-            className="px-6 py-3.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-sm transition-all shadow-lg inline-flex items-center gap-2"
-          >
-            Enter Tournament Organizer Studio <ArrowRight size={18} />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // CASE: Revoked
-  if (isRevoked) {
-    return (
-      <div className="p-8 bg-red-950/90 border border-red-600 rounded-3xl text-[#f5efdf] space-y-6 shadow-2xl animate-in fade-in">
-        <div className="w-16 h-16 bg-red-900/60 border border-red-500 rounded-2xl flex items-center justify-center text-red-300 shadow-lg">
-          <XCircle size={36} />
-        </div>
-        <div>
-          <h2 className="text-2xl font-black text-red-200">
-            Organizer Privileges Revoked
-          </h2>
-          <p className="text-sm text-red-300 mt-2 leading-relaxed">
-            Your certified organizer privileges were revoked by system administration for cause.
-          </p>
-        </div>
-        <div className="p-4 bg-[#081c15] border border-red-800/80 rounded-2xl space-y-2 text-xs">
-          <div className="text-[#a3b8b0] font-bold uppercase tracking-wider">Reason for Revocation:</div>
-          <div className="text-red-200 text-sm font-semibold">{revocationReason}</div>
-        </div>
-        <p className="text-xs text-[#a3b8b0]">
-          In accordance with platform governance rules, reapplication following a revocation requires manual administrator review and clearance. Please contact platform support.
-        </p>
-      </div>
-    );
-  }
-
-  // CASE: Pending Review (Submitted & Waiting)
-  if (application && application.status === "pending") {
-    return (
-      <div className="p-8 bg-[#06261f] border border-[#114232] rounded-3xl text-[#f5efdf] space-y-6 shadow-2xl animate-in fade-in">
-        <div className="flex items-center justify-between gap-4 border-b border-[#114232] pb-6">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-amber-950/80 border border-amber-500/60 rounded-2xl flex items-center justify-center text-amber-400 shrink-0 shadow-lg animate-pulse">
-              <Clock size={30} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-black text-[#f5efdf]">
-                  Application Under Commission Review
-                </h2>
-                <span className="px-2.5 py-0.5 bg-amber-950 border border-amber-500/50 text-amber-300 rounded text-[10px] font-bold uppercase">
-                  Pending
-                </span>
-              </div>
-              <p className="text-xs text-[#a3b8b0] mt-0.5">
-                Submitted on {new Date(application.submittedAt || application.createdAt).toLocaleString()}
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={loadApplicationStatus}
-            disabled={busy}
-            className="px-4 py-2 bg-[#081c15] hover:bg-[#0c3b2e] text-[#d6a735] border border-[#d6a735]/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
-          >
-            <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh Status
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl space-y-2">
-            <span className="text-[10px] uppercase font-bold text-[#a3b8b0]">Applicant / Brand</span>
-            <div className="text-sm font-bold text-[#f5efdf]">
-              {application.organizationName || "Individual Organizer"}
-            </div>
-            <div className="text-[#a3b8b0]">
-              Format: <strong className="text-[#f5efdf] capitalize">{application.applicantType}</strong>
-            </div>
-            <div className="text-[#a3b8b0]">
-              Address: <strong className="text-[#f5efdf]">{application.physicalAddress}</strong>
-            </div>
-          </div>
-
-          <div className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl space-y-2">
-            <span className="text-[10px] uppercase font-bold text-[#a3b8b0]">Tournament Intent</span>
-            <div className="text-[#a3b8b0]">
-              Frequency: <strong className="text-[#f5efdf] capitalize">{application.expectedFrequency}</strong>
-            </div>
-            <div className="text-[#a3b8b0]">
-              Avg. Size: <strong className="text-[#f5efdf]">{application.expectedTournamentSize || 16} Players</strong>
-            </div>
-            <div className="text-[#a3b8b0]">
-              Game Rules: <strong className="text-[#f5efdf]">Standard 10×10 Damii</strong>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 bg-[#0c3b2e]/60 border border-[#184d3c] rounded-2xl flex items-start gap-3 text-xs text-[#a3b8b0]">
-          <Info size={18} className="text-[#d6a735] shrink-0 mt-0.5" />
-          <p leading-relaxed>
-            System administrators and compliance officers review submitted KYC credentials within 24 hours. Once verified, your account role will upgrade to <strong>Certified Organizer</strong> and the Command Studio will unlock immediately.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // CASE: Rejected with 14-day Cooldown
-  if (application && application.status === "rejected" && cooldown.isCooldownActive) {
-    return (
-      <div className="p-8 bg-red-950/70 border border-red-600/80 rounded-3xl text-[#f5efdf] space-y-6 shadow-2xl animate-in fade-in">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 bg-red-900/60 border border-red-500 rounded-2xl flex items-center justify-center text-red-300 shrink-0 shadow-lg">
-            <XCircle size={30} />
-          </div>
-          <div>
-            <h2 className="text-xl font-black text-red-200">
-              Application Not Approved
-            </h2>
-            <p className="text-xs text-red-300 mt-0.5">
-              Reviewed on {application.reviewedAt ? new Date(application.reviewedAt).toLocaleDateString() : "Recently"}
-            </p>
-          </div>
-        </div>
-
-        <div className="p-4 bg-[#081c15] border border-red-800/80 rounded-2xl space-y-1.5 text-xs">
-          <span className="text-[#a3b8b0] uppercase font-bold text-[10px]">Review Feedback Note:</span>
-          <p className="text-red-200 text-sm font-semibold">
-            {application.reviewNote || "Submitted credentials do not meet current platform organizer standards."}
-          </p>
-        </div>
-
-        <div className="p-5 bg-[#06261f] border border-amber-500/50 rounded-2xl space-y-3">
-          <div className="flex items-center gap-2 text-amber-300 font-bold text-sm">
-            <Clock size={16} /> 14-Day Reapplication Cooldown Active
-          </div>
-          <p className="text-xs text-[#a3b8b0] leading-relaxed">
-            In order to maintain platform trust and prevent repeated invalid filings, rejected applications undergo a 14-day cooldown period. You will be eligible to prepare and submit a revised application on:
-          </p>
-          <div className="p-3 bg-[#081c15] rounded-xl border border-[#114232] flex items-center justify-between text-xs font-bold">
-            <span className="text-[#f5efdf]">
-              Eligible Date: {cooldown.reapplyEligibleAt ? new Date(cooldown.reapplyEligibleAt).toLocaleDateString() : "In 14 days"}
-            </span>
-            <span className="text-[#d6a735]">{cooldown.remainingDays} Day(s) Remaining</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* ------------------------------------------------------------------------- */
-  /* ACTIVE FORM: Draft, Needs Info, Fresh, or Cooldown Expired                */
-  /* ------------------------------------------------------------------------- */
-
-  const steps = [
-    { number: 1, title: "Applicant Type" },
-    { number: 2, title: "ID & KYC" },
-    { number: 3, title: "Address" },
-    { number: 4, title: "Experience" },
-    { number: 5, title: "Rules & Terms" },
-    { number: 6, title: "Review & Submit" },
-  ];
+  const isApproved =
+    userRole === "organizer" ||
+    userRole === "facilitator" ||
+    userRole === "admin" ||
+    userRole === "super_admin" ||
+    application?.status === "approved";
 
   return (
     <div className="space-y-6">
-      {/* Needs Info Banner if in needs_info state */}
-      {application?.status === "needs_info" && (
-        <div className="p-5 bg-cyan-950/90 border border-cyan-500 rounded-3xl text-cyan-100 shadow-xl space-y-3 animate-in fade-in">
-          <div className="flex items-start gap-3">
-            <HelpCircle size={24} className="text-cyan-400 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <h3 className="font-bold text-base text-cyan-200">
-                Action Required: Additional Information Requested
-              </h3>
-              <p className="text-xs text-cyan-300 leading-relaxed">
-                The reviewing administrator has requested corrections or additional documentation before your license can be approved.
-              </p>
-            </div>
-          </div>
-
-          <div className="p-4 bg-[#081c15] border border-cyan-700/80 rounded-2xl space-y-1 text-xs">
-            <span className="text-cyan-400 font-bold uppercase text-[10px]">
-              Admin Note ({application.needsInfoRequestedAt ? new Date(application.needsInfoRequestedAt).toLocaleDateString() : "Recent"}):
-            </span>
-            <p className="text-sm font-semibold text-cyan-100">
-              {application.needsInfoNote || application.reviewNote || "Please review and clarify your submitted documents."}
-            </p>
-          </div>
-
-          <p className="text-xs text-[#a3b8b0]">
-            Update the necessary fields below and submit to return your application to the pending review queue.
-          </p>
-        </div>
-      )}
-
-      {/* Messages */}
+      {/* ERROR & SUCCESS BANNERS */}
       {error && (
-        <div className="p-4 bg-red-950/90 border border-red-600 rounded-2xl text-red-200 flex items-center justify-between text-xs font-semibold shadow-lg">
-          <div className="flex items-center gap-2">
-            <AlertCircle size={16} className="text-red-400 shrink-0" />
-            <span>{error}</span>
+        <div className="p-4 bg-red-950/90 border border-red-600/80 rounded-2xl text-red-200 flex items-center justify-between gap-3 shadow-xl animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <AlertCircle size={20} className="text-red-400 shrink-0" />
+            <span className="text-sm font-semibold">{error}</span>
           </div>
-          <button onClick={() => setError("")} className="text-red-400 hover:text-white">
-            <XCircle size={16} />
+          <button onClick={() => setError("")} className="text-red-400 hover:text-white p-1 rounded-lg">
+            ✕
           </button>
         </div>
       )}
 
       {success && (
-        <div className="p-4 bg-emerald-950/90 border border-emerald-500 rounded-2xl text-emerald-200 flex items-center justify-between text-xs font-semibold shadow-lg">
-          <div className="flex items-center gap-2">
-            <CheckCircle size={16} className="text-emerald-400 shrink-0" />
-            <span>{success}</span>
+        <div className="p-4 bg-emerald-950/90 border border-emerald-500/80 rounded-2xl text-emerald-200 flex items-center justify-between gap-3 shadow-xl animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <CheckCircle size={20} className="text-emerald-400 shrink-0" />
+            <span className="text-sm font-semibold">{success}</span>
           </div>
-          <button onClick={() => setSuccess("")} className="text-emerald-400 hover:text-white">
-            <XCircle size={16} />
+          <button onClick={() => setSuccess("")} className="text-emerald-400 hover:text-white p-1 rounded-lg">
+            ✕
           </button>
         </div>
       )}
 
-      {/* Stepper Header */}
-      <div className="p-5 bg-[#06261f] border border-[#114232] rounded-3xl shadow-xl space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* --- STATUS OVERVIEW PANEL --- */}
+      {isApproved ? (
+        <div className="p-6 bg-gradient-to-br from-[#0c3b2e] to-[#06261f] border border-emerald-500/60 rounded-3xl shadow-xl flex items-center gap-4">
+          <div className="w-14 h-14 bg-emerald-900/60 border border-emerald-400/50 rounded-2xl flex items-center justify-center text-emerald-400 shrink-0">
+            <ShieldCheck size={32} />
+          </div>
           <div>
-            <h2 className="text-lg font-black text-[#f5efdf] flex items-center gap-2">
-              <ShieldCheck size={20} className="text-[#d6a735]" /> Certified Organizer Application
-            </h2>
-            <p className="text-xs text-[#a3b8b0]">
-              Step {currentStep} of 6: <strong className="text-[#f5efdf]">{steps[currentStep - 1].title}</strong>
-              {application?.status === "draft" && (
-                <span className="ml-2 px-2 py-0.5 bg-[#081c15] border border-[#d6a735]/40 text-[#d6a735] rounded text-[10px] uppercase font-bold">
-                  Draft Saved
+            <span className="px-2.5 py-0.5 bg-emerald-950 text-emerald-300 border border-emerald-500/40 rounded-full text-[11px] font-black uppercase tracking-wider">
+              Licensed Organizer
+            </span>
+            <h3 className="text-lg font-black text-[#f5efdf] mt-1">Certified Tournament Organizer</h3>
+            <p className="text-xs text-[#a3b8b0] mt-0.5">
+              You are authorized to create tournament brackets, manage entry fees, and moderate 10x10 Draughts leagues.
+            </p>
+          </div>
+        </div>
+      ) : application?.status === "pending" ? (
+        <div className="p-6 bg-[#06261f] border border-amber-500/60 rounded-3xl shadow-xl space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-amber-950/80 border border-amber-500/50 rounded-2xl flex items-center justify-center text-amber-400 shrink-0">
+                <Clock size={24} className="animate-spin" />
+              </div>
+              <div>
+                <span className="px-2.5 py-0.5 bg-amber-950 text-amber-300 border border-amber-500/40 rounded-full text-[11px] font-black uppercase tracking-wider">
+                  Pending Admin Review
                 </span>
-              )}
+                <h3 className="text-base font-black text-[#f5efdf] mt-0.5">Application Under Review</h3>
+              </div>
+            </div>
+            <button
+              onClick={loadApplicationStatus}
+              disabled={busy}
+              className="px-3.5 py-2 bg-[#081c15] hover:bg-[#0c3b2e] text-[#d6a735] border border-[#114232] rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
+            >
+              <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh
+            </button>
+          </div>
+          <p className="text-xs text-[#a3b8b0] leading-relaxed">
+            Your application for <strong>{application.organizationName || "Organizer License"}</strong> was submitted on{" "}
+            {new Date(application.submittedAt || application.createdAt).toLocaleString()}. Platform administrators are
+            reviewing your credentials.
+          </p>
+        </div>
+      ) : application?.status === "needs_info" ? (
+        <div className="p-6 bg-amber-950/80 border border-amber-500 rounded-3xl shadow-xl space-y-3">
+          <div className="flex items-center gap-3">
+            <AlertCircle size={24} className="text-amber-400 shrink-0" />
+            <div>
+              <h3 className="text-base font-black text-[#f5efdf]">Additional Information Requested</h3>
+              <p className="text-xs text-amber-200">
+                Admin Note: {application.reviewNote || application.needsInfoNote || "Please update your details."}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : cooldown.isCooldownActive ? (
+        <div className="p-6 bg-red-950/80 border border-red-500/60 rounded-3xl shadow-xl space-y-2">
+          <h3 className="text-base font-black text-red-200">Re-application Cooldown Active</h3>
+          <p className="text-xs text-red-300 leading-relaxed">
+            Your previous organizer application was reviewed and declined. You may submit a new application in{" "}
+            <strong>{cooldown.remainingDays} day(s)</strong> (on{" "}
+            {cooldown.reapplyEligibleAt ? new Date(cooldown.reapplyEligibleAt).toLocaleDateString() : "eligible date"}).
+          </p>
+        </div>
+      ) : null}
+
+      {/* --- APPLICATION FORM CONTAINER --- */}
+      {(!isApproved && !cooldown.isCooldownActive && application?.status !== "pending") && (
+        <form onSubmit={handleSubmitFinal} className="p-6 sm:p-8 bg-[#06261f] border border-[#114232] rounded-3xl shadow-2xl space-y-8">
+          {/* Header */}
+          <div className="border-b border-[#114232] pb-5">
+            <div className="flex items-center gap-2 text-xs font-bold text-[#d6a735] uppercase tracking-wider mb-1">
+              <Sparkles size={14} /> Simplified License Application
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black text-[#f5efdf]">Organizer Registration</h2>
+            <p className="text-xs sm:text-sm text-[#a3b8b0] mt-1 leading-relaxed">
+              Verify your mobile number and set up your organizer profile to start hosting official 10x10 Draughts tournaments.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleSaveDraft}
-              disabled={savingDraft || busy}
-              className="px-3.5 py-2 bg-[#081c15] hover:bg-[#0c3b2e] text-[#d6a735] border border-[#d6a735]/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
-            >
-              <Save size={14} className={savingDraft ? "animate-spin" : ""} />
-              {savingDraft ? "Saving..." : "Save Draft"}
-            </button>
-          </div>
-        </div>
-
-        {/* Stepper Progress Bar */}
-        <div className="grid grid-cols-6 gap-1.5">
-          {steps.map((step) => {
-            const isDone = currentStep > step.number;
-            const isCurrent = currentStep === step.number;
-            return (
-              <button
-                key={step.number}
-                type="button"
-                onClick={() => setCurrentStep(step.number)}
-                className={`py-2 px-1 rounded-xl text-[11px] font-bold transition-all text-center flex flex-col items-center gap-1 ${
-                  isCurrent
-                    ? "bg-[#d6a735] text-[#06261f] shadow-md"
-                    : isDone
-                    ? "bg-emerald-950/80 text-emerald-300 border border-emerald-500/40"
-                    : "bg-[#081c15] text-[#a3b8b0] border border-[#114232] opacity-70"
-                }`}
-              >
-                <span className="text-[10px] opacity-80">Step {step.number}</span>
-                <span className="hidden sm:inline line-clamp-1">{step.title}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* STEP FORM CONTAINER */}
-      <div className="p-6 sm:p-8 bg-[#06261f] border border-[#114232] rounded-3xl shadow-2xl space-y-6">
-        {/* --- STEP 1: APPLICANT TYPE --- */}
-        {currentStep === 1 && (
-          <div className="space-y-6 animate-in fade-in">
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-[#f5efdf]">
-                1. Select Applicant Organization Type
-              </h3>
-              <p className="text-xs text-[#a3b8b0]">
-                Indicate whether you are applying as an independent Draughts Facilitator or representing a registered Draughts Club / Enterprise.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div
-                onClick={() => setApplicantType("individual")}
-                className={`p-5 rounded-2xl border cursor-pointer transition-all space-y-2 flex flex-col justify-between ${
-                  applicantType === "individual"
-                    ? "bg-[#0c3b2e] border-[#d6a735] ring-2 ring-[#d6a735]/40"
-                    : "bg-[#081c15] border-[#114232] hover:border-[#184d3c]"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="p-2.5 bg-[#081c15] border border-[#114232] rounded-xl text-[#d6a735]">
-                    <User size={22} />
-                  </div>
-                  {applicantType === "individual" && <CheckCircle size={18} className="text-[#d6a735]" />}
+          {/* --- SECTION 1: PHONE NUMBER VERIFICATION --- */}
+          <div className="space-y-4 p-5 bg-[#081c15] border border-[#114232] rounded-2xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[#0c3b2e] border border-[#184d3c] flex items-center justify-center text-[#d6a735]">
+                  <Phone size={16} />
                 </div>
                 <div>
-                  <h4 className="font-bold text-sm text-[#f5efdf]">Individual Facilitator</h4>
-                  <p className="text-xs text-[#a3b8b0] mt-1">
-                    Independent tournament director hosting personal or community matches.
+                  <h3 className="text-sm font-bold text-[#f5efdf]">1. Mobile Phone Verification (Required)</h3>
+                  <p className="text-[11px] text-[#a3b8b0]">
+                    Verified phone number ensures secure tournament escrow communications and organizer identity.
                   </p>
                 </div>
               </div>
 
-              <div
-                onClick={() => setApplicantType("organization")}
-                className={`p-5 rounded-2xl border cursor-pointer transition-all space-y-2 flex flex-col justify-between ${
-                  applicantType === "organization"
-                    ? "bg-[#0c3b2e] border-[#d6a735] ring-2 ring-[#d6a735]/40"
-                    : "bg-[#081c15] border-[#114232] hover:border-[#184d3c]"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="p-2.5 bg-[#081c15] border border-[#114232] rounded-xl text-[#d6a735]">
-                    <Building size={22} />
-                  </div>
-                  {applicantType === "organization" && <CheckCircle size={18} className="text-[#d6a735]" />}
-                </div>
-                <div>
-                  <h4 className="font-bold text-sm text-[#f5efdf]">Registered Organization / Club</h4>
-                  <p className="text-xs text-[#a3b8b0] mt-1">
-                    Draughts club, esports association, venue, or commercial gaming entity.
-                  </p>
-                </div>
-              </div>
+              {isPhoneVerified && !isEditingPhone && (
+                <span className="px-3 py-1 bg-emerald-950 text-emerald-300 border border-emerald-500/50 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-xs">
+                  <ShieldCheck size={14} className="text-emerald-400" /> Phone Verified
+                </span>
+              )}
             </div>
 
-            {applicantType === "organization" && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-5 bg-[#081c15] border border-[#114232] rounded-2xl animate-in fade-in">
-                <div>
-                  <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
-                    Organization / Brand Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={organizationName}
-                    onChange={(e) => setOrganizationName(e.target.value)}
-                    placeholder="e.g. Accra Central Draughts League"
-                    className="w-full px-4 py-2.5 bg-[#06261f] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
-                  />
+            {isPhoneVerified && !isEditingPhone ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-[#06261f] border border-emerald-500/30 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <Smartphone className="text-emerald-400" size={20} />
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-[#a3b8b0]">Verified Phone Number</span>
+                    <p className="text-sm font-mono font-bold text-[#f5efdf]">{verifiedPhoneNumber}</p>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
-                    Business / Club Registration ID (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={organizationRegNumber}
-                    onChange={(e) => setOrganizationRegNumber(e.target.value)}
-                    placeholder="e.g. BN-89201948"
-                    className="w-full px-4 py-2.5 bg-[#06261f] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
-                  />
+                <button
+                  type="button"
+                  onClick={() => setIsEditingPhone(true)}
+                  className="text-xs text-[#d6a735] hover:underline font-bold"
+                >
+                  Change / Re-verify
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4 pt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
+                      Ghana Mobile Number *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="tel"
+                        value={phoneInput}
+                        onChange={(e) => setPhoneInput(e.target.value)}
+                        placeholder="e.g. 0244123456 or 0501234567"
+                        disabled={isSendingOtp || isVerifyingOtp}
+                        className="w-full px-4 py-3 bg-[#06261f] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/40 text-sm font-mono focus:outline-none focus:border-[#d6a735]"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      onClick={() => handleRequestOtp()}
+                      disabled={isSendingOtp || !phoneInput.trim() || otpCooldown > 0}
+                      className="w-full py-3 px-4 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    >
+                      <Send size={14} className={isSendingOtp ? "animate-spin" : ""} />
+                      {isSendingOtp
+                        ? "Sending..."
+                        : otpCooldown > 0
+                        ? `Resend in ${otpCooldown}s`
+                        : "Send 6-Digit OTP"}
+                    </button>
+                  </div>
                 </div>
+
+                {/* OTP input field when requestId is generated */}
+                {otpRequestId && (
+                  <div className="p-4 bg-[#06261f] border border-[#d6a735]/40 rounded-xl space-y-3 animate-in fade-in">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[#d6a735] flex items-center gap-1.5">
+                        <Lock size={14} /> Enter 6-Digit Verification Code
+                      </span>
+                      {otpDebugCode && (
+                        <span className="text-[11px] bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/40 font-mono">
+                          Dev Demo Code: {otpDebugCode}
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <input
+                        type="text"
+                        maxLength={6}
+                        value={otpCode}
+                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                        placeholder="123456"
+                        className="sm:col-span-2 px-4 py-3 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-center tracking-widest font-mono text-lg font-black focus:outline-none focus:border-[#d6a735]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleVerifyOtp()}
+                        disabled={isVerifyingOtp || otpCode.length !== 6}
+                        className="py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      >
+                        <CheckCircle size={15} className={isVerifyingOtp ? "animate-spin" : ""} />
+                        {isVerifyingOtp ? "Verifying..." : "Verify Code"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
 
-        {/* --- STEP 2: IDENTIFICATION & KYC --- */}
-        {currentStep === 2 && (
-          <div className="space-y-6 animate-in fade-in">
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-[#f5efdf]">
-                2. National ID & Verification KYC
-              </h3>
+          {/* --- SECTION 2: APPLICANT TYPE (INDIVIDUAL OR COMPANY) --- */}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1">
+                2. Organizer Classification *
+              </label>
               <p className="text-xs text-[#a3b8b0]">
-                All certified organizers must be verified against their official Government / National Identity Card to guarantee player prize pool security.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Front Card */}
-              <div className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-[#d6a735] uppercase">National ID Front *</label>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickPopulateDoc("ghana_front")}
-                    className="text-[10px] text-[#d6a735] hover:underline"
-                  >
-                    Use Sample Photo
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={ghanaCardFrontUrl}
-                  onChange={(e) => setGhanaCardFrontUrl(e.target.value)}
-                  placeholder="Paste image URL (https://...)"
-                  className="w-full px-3 py-2 bg-[#06261f] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
-                />
-                {ghanaCardFrontUrl && (
-                  <div className="relative aspect-video rounded-xl overflow-hidden border border-[#114232] bg-black">
-                    <img src={ghanaCardFrontUrl} alt="National ID Front" className="w-full h-full object-cover" />
-                  </div>
-                )}
-              </div>
-
-              {/* Back Card */}
-              <div className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-[#d6a735] uppercase">National ID Back *</label>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickPopulateDoc("ghana_back")}
-                    className="text-[10px] text-[#d6a735] hover:underline"
-                  >
-                    Use Sample Photo
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={ghanaCardBackUrl}
-                  onChange={(e) => setGhanaCardBackUrl(e.target.value)}
-                  placeholder="Paste image URL (https://...)"
-                  className="w-full px-3 py-2 bg-[#06261f] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
-                />
-                {ghanaCardBackUrl && (
-                  <div className="relative aspect-video rounded-xl overflow-hidden border border-[#114232] bg-black">
-                    <img src={ghanaCardBackUrl} alt="National ID Back" className="w-full h-full object-cover" />
-                  </div>
-                )}
-              </div>
-
-              {/* Verification Selfie */}
-              <div className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-[#d6a735] uppercase">Verification Selfie *</label>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickPopulateDoc("selfie")}
-                    className="text-[10px] text-[#d6a735] hover:underline"
-                  >
-                    Use Sample Photo
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={selfieUrl}
-                  onChange={(e) => setSelfieUrl(e.target.value)}
-                  placeholder="Paste image URL (https://...)"
-                  className="w-full px-3 py-2 bg-[#06261f] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
-                />
-                {selfieUrl && (
-                  <div className="relative aspect-video rounded-xl overflow-hidden border border-[#114232] bg-black">
-                    <img src={selfieUrl} alt="Selfie" className="w-full h-full object-cover" />
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* --- STEP 3: PHYSICAL ADDRESS & PROOF --- */}
-        {currentStep === 3 && (
-          <div className="space-y-6 animate-in fade-in">
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-[#f5efdf]">
-                3. Physical Location & Proof of Address
-              </h3>
-              <p className="text-xs text-[#a3b8b0]">
-                Provide your verified operating location or tournament venue.
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
-                  Physical / Venue Address *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={physicalAddress}
-                  onChange={(e) => setPhysicalAddress(e.target.value)}
-                  placeholder="e.g. House 42, Independence Avenue, Ridge, Accra"
-                  className="w-full px-4 py-2.5 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
-                />
-              </div>
-
-              <div className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-[#d6a735] uppercase">
-                    Proof of Address Document (Utility Bill / Tenancy / GPS Digital Address) *
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickPopulateDoc("proof")}
-                    className="text-[10px] text-[#d6a735] hover:underline"
-                  >
-                    Use Sample Document
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={proofOfAddressUrl}
-                  onChange={(e) => setProofOfAddressUrl(e.target.value)}
-                  placeholder="Paste document image/PDF URL (https://...)"
-                  className="w-full px-3 py-2 bg-[#06261f] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
-                />
-                {proofOfAddressUrl && (
-                  <div className="relative aspect-video max-h-48 rounded-xl overflow-hidden border border-[#114232] bg-black">
-                    <img src={proofOfAddressUrl} alt="Proof of Address" className="w-full h-full object-cover" />
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* --- STEP 4: INTENT & EXPERIENCE --- */}
-        {currentStep === 4 && (
-          <div className="space-y-6 animate-in fade-in">
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-[#f5efdf]">
-                4. Tournament Organizing Intent & Experience
-              </h3>
-              <p className="text-xs text-[#a3b8b0]">
-                Tell the tournament commission about the types of events you intend to run.
+                Select whether you are applying as an individual draughts organizer or representing a company / gaming organization.
               </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
-                  Expected Event Frequency
-                </label>
-                <select
-                  value={expectedFrequency}
-                  onChange={(e) => setExpectedFrequency(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
-                >
-                  <option value="weekly">Weekly Tournaments</option>
-                  <option value="bi-weekly">Bi-Weekly Tournaments</option>
-                  <option value="monthly">Monthly Championships</option>
-                  <option value="quarterly">Quarterly Major Cups</option>
-                  <option value="special_invitational">Special Invitational Cups</option>
-                </select>
+              {/* Option 1: Individual */}
+              <div
+                onClick={() => setApplicantType("individual")}
+                className={`p-5 rounded-2xl border cursor-pointer transition-all ${
+                  applicantType === "individual"
+                    ? "bg-[#0c3b2e]/80 border-[#d6a735] shadow-lg ring-1 ring-[#d6a735]/50"
+                    : "bg-[#081c15] border-[#114232] hover:border-[#184d3c]"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-10 h-10 rounded-xl bg-[#06261f] border border-[#114232] flex items-center justify-center text-[#d6a735]">
+                    <User size={20} />
+                  </div>
+                  <div
+                    className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+                      applicantType === "individual" ? "border-[#d6a735] bg-[#d6a735]" : "border-[#114232]"
+                    }`}
+                  >
+                    {applicantType === "individual" && <Check size={12} className="text-[#06261f] stroke-[3]" />}
+                  </div>
+                </div>
+                <h4 className="text-sm font-bold text-[#f5efdf]">Individual Organizer</h4>
+                <p className="text-xs text-[#a3b8b0] mt-1 leading-relaxed">
+                  Independent club host, community referee, or local draughts coordinator.
+                </p>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
-                  Expected Bracket Size
-                </label>
-                <select
-                  value={expectedTournamentSize}
-                  onChange={(e) => setExpectedTournamentSize(Number(e.target.value))}
-                  className="w-full px-4 py-2.5 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
-                >
-                  <option value={8}>8 Players (Single Elimination)</option>
-                  <option value={16}>16 Players (Standard)</option>
-                  <option value={32}>32 Players (Grand Tournament)</option>
-                  <option value={64}>64 Players (Major Championship)</option>
-                </select>
+              {/* Option 2: Company / Organization */}
+              <div
+                onClick={() => setApplicantType("organization")}
+                className={`p-5 rounded-2xl border cursor-pointer transition-all ${
+                  applicantType === "organization"
+                    ? "bg-[#0c3b2e]/80 border-[#d6a735] shadow-lg ring-1 ring-[#d6a735]/50"
+                    : "bg-[#081c15] border-[#114232] hover:border-[#184d3c]"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-10 h-10 rounded-xl bg-[#06261f] border border-[#114232] flex items-center justify-center text-[#d6a735]">
+                    <Building size={20} />
+                  </div>
+                  <div
+                    className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+                      applicantType === "organization" ? "border-[#d6a735] bg-[#d6a735]" : "border-[#114232]"
+                    }`}
+                  >
+                    {applicantType === "organization" && <Check size={12} className="text-[#06261f] stroke-[3]" />}
+                  </div>
+                </div>
+                <h4 className="text-sm font-bold text-[#f5efdf]">Company / Organization</h4>
+                <p className="text-xs text-[#a3b8b0] mt-1 leading-relaxed">
+                  Registered esports entity, draughts club, gaming center, brand, or federation.
+                </p>
               </div>
+            </div>
+          </div>
+
+          {/* --- SECTION 3: ORGANIZER DETAILS & SMALL BIO --- */}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
+                3. {applicantType === "organization" ? "Company / Organization Name *" : "Organizer / Brand Name *"}
+              </label>
+              <input
+                type="text"
+                required
+                value={organizationName}
+                onChange={(e) => setOrganizationName(e.target.value)}
+                placeholder={
+                  applicantType === "organization"
+                    ? "e.g. Ghana Draughts Association or Kumasi Gaming Hub"
+                    : "e.g. Master Kofi Draughts Club or Accra League Organizer"
+                }
+                className="w-full px-4 py-3 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/40 text-sm focus:outline-none focus:border-[#d6a735]"
+              />
             </div>
 
             <div>
               <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
-                Past Draughts Organizing Background / Bio
+                4. Small Bio / About Your Organization *
               </label>
               <textarea
+                required
                 rows={3}
-                value={priorExperience}
-                onChange={(e) => setPriorExperience(e.target.value)}
-                placeholder="Briefly describe your experience running draughts competitions, venue partnerships, or refereeing..."
-                className="w-full px-4 py-2.5 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
+                value={smallBio}
+                onChange={(e) => setSmallBio(e.target.value)}
+                placeholder="Tell us briefly about yourself, your club or company, your draughts community background, and your plans for organizing tournaments on DAMII..."
+                className="w-full px-4 py-3 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/40 text-sm leading-relaxed focus:outline-none focus:border-[#d6a735]"
               />
+              <p className="text-[11px] text-[#a3b8b0] mt-1">
+                A short summary helping platform moderators understand your community and tournament goals.
+              </p>
             </div>
           </div>
-        )}
 
-        {/* --- STEP 5: TERMS ACCEPTANCE & PLATFORM RULES --- */}
-        {currentStep === 5 && (
-          <div className="space-y-6 animate-in fade-in">
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-[#f5efdf]">
-                5. Platform Rules & Financial Escrow Acknowledgement
-              </h3>
-              <p className="text-xs text-[#a3b8b0]">
-                All certified organizers must abide by server-authoritative draughts rules and financial integrity guarantees.
-              </p>
+          {/* --- SECTION 4: TOURNAMENT PLANS & FREQUENCY --- */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-5 bg-[#081c15] border border-[#114232] rounded-2xl">
+            <div>
+              <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5 flex items-center gap-1.5">
+                <Calendar size={14} /> Expected Event Frequency
+              </label>
+              <select
+                value={expectedFrequency}
+                onChange={(e) => setExpectedFrequency(e.target.value)}
+                className="w-full px-4 py-2.5 bg-[#06261f] border border-[#114232] rounded-xl text-[#f5efdf] text-xs font-bold focus:outline-none focus:border-[#d6a735]"
+              >
+                <option value="weekly">Weekly Tournaments</option>
+                <option value="bi-weekly">Bi-Weekly Tournaments</option>
+                <option value="monthly">Monthly Tournaments</option>
+                <option value="special-events">Quarterly / Special Events</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5 flex items-center gap-1.5">
+                <Users size={14} /> Target Tournament Bracket Size
+              </label>
+              <select
+                value={expectedTournamentSize}
+                onChange={(e) => setExpectedTournamentSize(Number(e.target.value))}
+                className="w-full px-4 py-2.5 bg-[#06261f] border border-[#114232] rounded-xl text-[#f5efdf] text-xs font-bold focus:outline-none focus:border-[#d6a735]"
+              >
+                <option value={8}>8 Players (Fast Bracket)</option>
+                <option value={16}>16 Players (Standard Tournament)</option>
+                <option value={32}>32 Players (Major Championship)</option>
+                <option value={64}>64+ Players (Open Grand Slam)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* --- SECTION 5: ACKNOWLEDGEMENTS & ESCROW TERMS --- */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-xs font-bold text-[#d6a735] uppercase">
+              <Shield size={15} /> 5. Organizer Acknowledgements & Financial Escrow Rules
             </div>
 
             <div className="space-y-3">
-              <label className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl flex items-start gap-3 cursor-pointer hover:border-[#184d3c] transition-colors">
+              {/* Term 1 */}
+              <label className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl flex items-start gap-3.5 cursor-pointer hover:border-[#184d3c] transition-colors">
                 <input
                   type="checkbox"
+                  required
                   checked={termsRulesAccepted}
                   onChange={(e) => setTermsRulesAccepted(e.target.checked)}
-                  className="mt-1 accent-[#d6a735]"
+                  className="mt-1 w-4 h-4 accent-[#d6a735] rounded"
                 />
                 <div className="text-xs leading-relaxed text-[#a3b8b0]">
                   <strong className="text-[#f5efdf] block font-bold mb-0.5">
-                    10×10 Draughts Rule Enforcement
+                    Official 10x10 Draughts Rules & Fair Bracket Management
                   </strong>
-                  I agree that all tournaments created under my license strictly enforce standard Damii rules, compulsory multi-hop jump completions, 60-second turn clocks, and flying king moves.
+                  I agree to uphold official 10x10 Damii rules, maintain impartial match moderation, and never tamper with player results or tournament brackets.
                 </div>
               </label>
 
-              <label className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl flex items-start gap-3 cursor-pointer hover:border-[#184d3c] transition-colors">
+              {/* Term 2 */}
+              <label className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl flex items-start gap-3.5 cursor-pointer hover:border-[#184d3c] transition-colors">
                 <input
                   type="checkbox"
+                  required
                   checked={termsEscrowAccepted}
                   onChange={(e) => setTermsEscrowAccepted(e.target.checked)}
-                  className="mt-1 accent-[#d6a735]"
+                  className="mt-1 w-4 h-4 accent-[#d6a735] rounded"
                 />
                 <div className="text-xs leading-relaxed text-[#a3b8b0]">
                   <strong className="text-[#f5efdf] block font-bold mb-0.5">
-                    Server Escrow & Automatic Ledger Prize Distribution
+                    Platform Automated Escrow & Transparent Prize Settlement
                   </strong>
-                  I acknowledge that all entry fees and prize pools are escrowed by the server ledger and automatically disbursed to verified winners. Organizers cannot alter prize disbursements outside platform ledger policies.
+                  I acknowledge that all participant entry fees and tournament prize pools are locked safely in DAMII escrow and disbursed automatically to winners with zero manual off-platform diversions.
                 </div>
               </label>
 
-              <label className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl flex items-start gap-3 cursor-pointer hover:border-[#184d3c] transition-colors">
+              {/* Term 3 */}
+              <label className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl flex items-start gap-3.5 cursor-pointer hover:border-[#184d3c] transition-colors">
                 <input
                   type="checkbox"
+                  required
                   checked={termsConductAccepted}
                   onChange={(e) => setTermsConductAccepted(e.target.checked)}
-                  className="mt-1 accent-[#d6a735]"
+                  className="mt-1 w-4 h-4 accent-[#d6a735] rounded"
                 />
                 <div className="text-xs leading-relaxed text-[#a3b8b0]">
                   <strong className="text-[#f5efdf] block font-bold mb-0.5">
-                    Organizer Code of Conduct & Revocation Terms
+                    Organizer Code of Conduct & License Standards
                   </strong>
-                  I understand that match fixing, improper manual score manipulation, or failure to fulfill event schedules will result in immediate license revocation and tournament reassignment.
+                  I understand that match manipulation, schedule neglect, or abusive behavior will result in immediate license revocation and tournament reassignment.
                 </div>
               </label>
             </div>
           </div>
-        )}
 
-        {/* --- STEP 6: REVIEW & FINAL SUBMIT --- */}
-        {currentStep === 6 && (
-          <div className="space-y-6 animate-in fade-in">
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-[#f5efdf]">
-                6. Review Application & Final Submit
-              </h3>
-              <p className="text-xs text-[#a3b8b0]">
-                Verify your submitted information before final filing.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-              <div className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl space-y-2">
-                <span className="text-[10px] uppercase font-bold text-[#d6a735]">Applicant & Business</span>
-                <p><strong className="text-[#f5efdf]">Type:</strong> <span className="capitalize">{applicantType}</span></p>
-                {applicantType === "organization" && (
-                  <p><strong className="text-[#f5efdf]">Organization Name:</strong> {organizationName || "Not provided"}</p>
-                )}
-                <p><strong className="text-[#f5efdf]">Physical Address:</strong> {physicalAddress || "Not provided"}</p>
-              </div>
-
-              <div className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl space-y-2">
-                <span className="text-[10px] uppercase font-bold text-[#d6a735]">Tournaments & Frequency</span>
-                <p><strong className="text-[#f5efdf]">Event Frequency:</strong> <span className="capitalize">{expectedFrequency}</span></p>
-                <p><strong className="text-[#f5efdf]">Average Size:</strong> {expectedTournamentSize} Players</p>
-                <p><strong className="text-[#f5efdf]">Rules Acknowledged:</strong> <span className="text-emerald-400 font-bold">Yes</span></p>
-              </div>
-            </div>
-
-            {/* Document checklist */}
-            <div className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl space-y-2 text-xs">
-              <span className="text-[10px] uppercase font-bold text-[#d6a735]">KYC Documents Attached</span>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center pt-1">
-                <div className={`p-2 rounded-xl border ${ghanaCardFrontUrl ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300" : "bg-red-950/60 border-red-500/40 text-red-300"}`}>
-                  National ID Front: {ghanaCardFrontUrl ? "✓" : "✗"}
-                </div>
-                <div className={`p-2 rounded-xl border ${ghanaCardBackUrl ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300" : "bg-red-950/60 border-red-500/40 text-red-300"}`}>
-                  National ID Back: {ghanaCardBackUrl ? "✓" : "✗"}
-                </div>
-                <div className={`p-2 rounded-xl border ${selfieUrl ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300" : "bg-red-950/60 border-red-500/40 text-red-300"}`}>
-                  Selfie: {selfieUrl ? "✓" : "✗"}
-                </div>
-                <div className={`p-2 rounded-xl border ${proofOfAddressUrl ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300" : "bg-red-950/60 border-red-500/40 text-red-300"}`}>
-                  Proof Address: {proofOfAddressUrl ? "✓" : "✗"}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* NAVIGATION CONTROLS */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-[#114232]">
-          <button
-            type="button"
-            disabled={currentStep === 1 || busy}
-            onClick={() => setCurrentStep((prev) => Math.max(1, prev - 1))}
-            className="px-4 py-2.5 bg-[#081c15] hover:bg-[#0c3b2e] text-[#f5efdf] border border-[#114232] rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors disabled:opacity-40"
-          >
-            <ArrowLeft size={14} /> Back
-          </button>
-
-          <div className="flex items-center gap-2">
+          {/* --- SUBMISSION BUTTONS --- */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-6 border-t border-[#114232]">
             <button
               type="button"
               onClick={handleSaveDraft}
               disabled={savingDraft || busy}
-              className="px-4 py-2.5 bg-[#081c15] hover:bg-[#0c3b2e] text-[#d6a735] border border-[#d6a735]/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
+              className="px-5 py-3 bg-[#081c15] hover:bg-[#0c3b2e] text-[#d6a735] border border-[#d6a735]/40 rounded-xl text-xs font-bold flex items-center gap-2 transition-colors disabled:opacity-50"
             >
-              <Save size={14} className={savingDraft ? "animate-spin" : ""} />
-              {savingDraft ? "Saving..." : "Save Draft"}
+              <Save size={15} className={savingDraft ? "animate-spin" : ""} />
+              {savingDraft ? "Saving Draft..." : "Save Draft"}
             </button>
 
-            {currentStep < 6 ? (
-              <button
-                type="button"
-                onClick={() => setCurrentStep((prev) => Math.min(6, prev + 1))}
-                className="px-5 py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] rounded-xl text-xs font-black flex items-center gap-1.5 transition-all shadow-md"
-              >
-                Next Step <ArrowRight size={14} />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => handleSubmitFinal()}
-                disabled={busy}
-                className="px-6 py-2.5 bg-gradient-to-r from-[#d6a735] to-[#f39c12] hover:opacity-90 text-[#06261f] rounded-xl text-xs font-black flex items-center gap-2 transition-all shadow-xl"
-              >
-                <Send size={14} className={busy ? "animate-spin" : ""} />
-                {busy
-                  ? "Submitting Application..."
-                  : application?.status === "needs_info"
-                  ? "Resubmit Application"
-                  : "Submit Application"}
-              </button>
-            )}
+            <button
+              type="submit"
+              disabled={
+                busy ||
+                !isPhoneVerified ||
+                !organizationName.trim() ||
+                !smallBio.trim() ||
+                !termsRulesAccepted ||
+                !termsEscrowAccepted ||
+                !termsConductAccepted
+              }
+              className="px-8 py-3.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] rounded-xl text-sm font-black flex items-center gap-2 transition-all shadow-xl disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Send size={16} className={busy ? "animate-spin" : ""} />
+              {busy
+                ? "Submitting Application..."
+                : application?.status === "needs_info"
+                ? "Resubmit Organizer Application"
+                : "Submit Organizer Application"}
+            </button>
           </div>
-        </div>
-      </div>
+        </form>
+      )}
     </div>
   );
 }

@@ -83,6 +83,20 @@ export default function OrganizerPage() {
   const [regUsername, setRegUsername] = useState("");
   const [regPasscode, setRegPasscode] = useState("");
   const [regPhone, setRegPhone] = useState("");
+  const [regOtpRequestId, setRegOtpRequestId] = useState("");
+  const [regOtpCode, setRegOtpCode] = useState("");
+  const [regOtpCooldown, setRegOtpCooldown] = useState(0);
+  const [regOtpDebugCode, setRegOtpDebugCode] = useState<string | null>(null);
+  const [regIsSendingOtp, setRegIsSendingOtp] = useState(false);
+  const [regIsVerifyingOtp, setRegIsVerifyingOtp] = useState(false);
+
+  // Countdown timer for registration OTP cooldown
+  useEffect(() => {
+    if (regOtpCooldown > 0) {
+      const timer = setTimeout(() => setRegOtpCooldown((prev) => prev - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [regOtpCooldown]);
 
   // Organizer License Application Form state
   const [appOrgName, setAppOrgName] = useState("");
@@ -311,67 +325,129 @@ export default function OrganizerPage() {
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
+  const handleRequestRegOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setRegIsSendingOtp(true);
     setError("");
     setSuccess("");
 
-    if (!regUsername.trim() || !regPasscode.trim()) {
-      setError("Username and passcode are required.");
-      setBusy(false);
+    const clean = regPhone.trim().replace(/[\s\-()]/g, "");
+    if (!clean) {
+      setError("Please enter a valid Ghana mobile phone number (e.g. 0244123456).");
+      setRegIsSendingOtp(false);
       return;
     }
 
-    if (regPasscode.length < 3) {
-      setError("Password must be at least 3 characters.");
-      setBusy(false);
+    if (clean.length < 9 || clean.length > 16) {
+      setError("Invalid phone number format. Please enter a valid 10-digit Ghana number.");
+      setRegIsSendingOtp(false);
       return;
     }
 
     try {
-      const res = await fetch("/api/auth", {
+      const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "register",
-          username: regUsername.trim(),
-          passcode: regPasscode.trim(),
-          phoneNumber: regPhone.trim() || undefined,
+          phoneNumber: clean,
         }),
       });
 
       const data = await res.json();
       if (!res.ok || data.error) {
-        setError(data.error || "Registration failed. Please try a different username.");
-        setBusy(false);
+        setError(data.error || "Failed to send verification code.");
+        if (data.retryAfter) {
+          setRegOtpCooldown(Math.min(60, data.retryAfter));
+        }
+        return;
+      }
+
+      setRegOtpRequestId(data.requestId);
+      if (data.debugCode) {
+        setRegOtpDebugCode(data.debugCode);
+      }
+      setRegOtpCooldown(60);
+      setSuccess(`6-digit verification code sent to ${clean}. Enter code below to complete account registration.`);
+    } catch {
+      setError("Server connection failed during OTP request.");
+    } finally {
+      setRegIsSendingOtp(false);
+    }
+  };
+
+  const handleVerifyRegOtpAndRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegIsVerifyingOtp(true);
+    setError("");
+    setSuccess("");
+
+    if (!regOtpRequestId) {
+      setError("Please request a phone verification code first.");
+      setRegIsVerifyingOtp(false);
+      return;
+    }
+
+    if (!regOtpCode.trim() || regOtpCode.trim().length !== 6) {
+      setError("Please enter the complete 6-digit verification code.");
+      setRegIsVerifyingOtp(false);
+      return;
+    }
+
+    if (!regUsername.trim()) {
+      setError("Desired username / organizer handle is required.");
+      setRegIsVerifyingOtp(false);
+      return;
+    }
+
+    if (!regPasscode.trim() || regPasscode.length < 3) {
+      setError("Password must be at least 3 characters.");
+      setRegIsVerifyingOtp(false);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requestId: regOtpRequestId,
+          code: regOtpCode.trim(),
+          username: regUsername.trim(),
+          password: regPasscode.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setError(data.error || "Phone verification failed. Please check the code and try again.");
+        setRegIsVerifyingOtp(false);
         return;
       }
 
       saveSessionToken(data.token, data.csrfToken);
       localStorage.setItem("damii-player-token", data.token);
-      localStorage.setItem("damii-player-name", data.profile.username);
+      localStorage.setItem("damii-player-name", data.user?.username || data.profile?.username || regUsername.trim());
       localStorage.setItem(
         "damii-auth-user",
         JSON.stringify({
           token: data.token,
-          username: data.profile.username,
-          points: data.profile.points || 500,
-          role: data.profile.role || "user",
+          username: data.user?.username || data.profile?.username || regUsername.trim(),
+          points: data.profile?.points || 500,
+          role: data.user?.role || data.profile?.role || "user",
         })
       );
 
       setToken(data.token);
-      setUsername(data.profile.username);
-      setRole(data.profile.role || "user");
-      setSuccess(`Account registered successfully! Welcome, ${data.profile.username}. You can now complete your Organizer application.`);
+      setUsername(data.user?.username || data.profile?.username || regUsername.trim());
+      setRole(data.user?.role || data.profile?.role || "user");
+      setSuccess(`Phone verified and account created successfully! Welcome, ${data.user?.username || regUsername.trim()}. You can now complete your Organizer application.`);
       window.dispatchEvent(new Event("damii-auth-changed"));
       fetchOrganizerRequestStatus(data.token);
       loadLeagues();
     } catch {
-      setError("Server connection failed during registration.");
+      setError("Server connection failed during registration verification.");
     } finally {
-      setBusy(false);
+      setRegIsVerifyingOtp(false);
     }
   };
 
@@ -1020,56 +1096,105 @@ export default function OrganizerPage() {
                   </div>
                 </form>
               ) : (
-                <form onSubmit={handleRegister} className="space-y-4 text-left">
-                  <div>
-                    <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
-                      Desired Username / Organizer Handle *
+                <div className="space-y-4 text-left">
+                  {/* Step 1: Ghana Mobile Phone Number (Required & Verified) */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-[#d6a735] uppercase">
+                      Ghana Mobile Phone (Required & Verified) *
                     </label>
-                    <input
-                      type="text"
-                      required
-                      value={regUsername}
-                      onChange={(e) => setRegUsername(e.target.value)}
-                      placeholder="e.g. Accra_Draughts_Club"
-                      className="w-full px-4 py-3 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/50 text-sm focus:outline-none focus:border-[#d6a735]"
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="tel"
+                        required
+                        value={regPhone}
+                        onChange={(e) => setRegPhone(e.target.value)}
+                        placeholder="e.g. 0244123456"
+                        disabled={regIsSendingOtp || regIsVerifyingOtp}
+                        className="w-full px-4 py-3 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/50 text-sm font-mono focus:outline-none focus:border-[#d6a735]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRequestRegOtp()}
+                        disabled={regIsSendingOtp || !regPhone.trim() || regOtpCooldown > 0}
+                        className="px-4 py-3 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-xs whitespace-nowrap transition-all shadow-md disabled:opacity-50"
+                      >
+                        {regIsSendingOtp
+                          ? "Sending..."
+                          : regOtpCooldown > 0
+                          ? `${regOtpCooldown}s`
+                          : regOtpRequestId
+                          ? "Resend Code"
+                          : "Send OTP"}
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-[#a3b8b0]">
+                      We will send a 6-digit SMS verification code to verify your phone number.
+                    </p>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
-                      Password / Passcode *
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      value={regPasscode}
-                      onChange={(e) => setRegPasscode(e.target.value)}
-                      placeholder="Create a strong password (min 3 chars)"
-                      className="w-full px-4 py-3 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/50 text-sm focus:outline-none focus:border-[#d6a735]"
-                    />
-                  </div>
+                  {/* Step 2: OTP Code & Password */}
+                  {regOtpRequestId ? (
+                    <form onSubmit={handleVerifyRegOtpAndRegister} className="space-y-4 pt-2 border-t border-[#114232] animate-in fade-in">
+                      {regOtpDebugCode && (
+                        <div className="p-2.5 bg-emerald-950/80 border border-emerald-500/50 rounded-xl text-xs text-emerald-300 font-mono flex items-center justify-between">
+                          <span>Demo Environment Code:</span>
+                          <span className="font-bold text-[#d6a735] text-sm">{regOtpDebugCode}</span>
+                        </div>
+                      )}
 
-                  <div>
-                    <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
-                      Mobile / MoMo Phone (Optional)
-                    </label>
-                    <input
-                      type="tel"
-                      value={regPhone}
-                      onChange={(e) => setRegPhone(e.target.value)}
-                      placeholder="e.g. 0244123456"
-                      className="w-full px-4 py-3 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/50 text-sm focus:outline-none focus:border-[#d6a735]"
-                    />
-                  </div>
+                      <div>
+                        <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
+                          6-Digit Verification Code *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          maxLength={6}
+                          value={regOtpCode}
+                          onChange={(e) => setRegOtpCode(e.target.value.replace(/\D/g, ""))}
+                          placeholder="123456"
+                          className="w-full px-4 py-3 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-center tracking-widest font-mono text-lg font-black focus:outline-none focus:border-[#d6a735]"
+                        />
+                      </div>
 
-                  <button
-                    type="submit"
-                    disabled={busy}
-                    className="w-full py-3.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2"
-                  >
-                    <UserPlus size={18} />
-                    {busy ? "Creating Account..." : "Create Account & Apply for License"}
-                  </button>
+                      <div>
+                        <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
+                          Desired Username / Organizer Handle *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={regUsername}
+                          onChange={(e) => setRegUsername(e.target.value)}
+                          placeholder="e.g. Accra_Draughts_Club"
+                          className="w-full px-4 py-3 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/50 text-sm focus:outline-none focus:border-[#d6a735]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
+                          Password / Passcode *
+                        </label>
+                        <input
+                          type="password"
+                          required
+                          value={regPasscode}
+                          onChange={(e) => setRegPasscode(e.target.value)}
+                          placeholder="Create password (min 3 chars)"
+                          className="w-full px-4 py-3 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/50 text-sm focus:outline-none focus:border-[#d6a735]"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={regIsVerifyingOtp || regOtpCode.length !== 6 || !regUsername.trim() || !regPasscode.trim()}
+                        className="w-full py-3.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-40"
+                      >
+                        <UserPlus size={18} />
+                        {regIsVerifyingOtp ? "Verifying Phone & Creating Account..." : "Verify & Apply for Organizer License"}
+                      </button>
+                    </form>
+                  ) : null}
 
                   <div className="pt-2 text-center">
                     <p className="text-xs text-[#a3b8b0]">
@@ -1087,7 +1212,7 @@ export default function OrganizerPage() {
                       </button>
                     </p>
                   </div>
-                </form>
+                </div>
               )}
             </div>
           </section>

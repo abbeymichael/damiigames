@@ -306,111 +306,133 @@ export function OrganizerApplicationDetailModal({
           {/* TAB 2: KYC & VERIFICATION DOCUMENTS */}
           {activeTab === "documents" && (
             <div className="space-y-4">
-              <p className="text-xs text-slate-300">
-                Inspect official Ghana Card identity documents and proof of physical business address. Click any document to view high-resolution preview.
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Ghana Card Front */}
-                <div className="p-3.5 bg-[#041d17] border border-[#1a5e48] rounded-xl space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-[#f5efdf] text-xs flex items-center gap-1.5">
-                      <CreditCard size={14} className="text-[#d6a735]" /> Ghana Card (Front)
-                    </span>
-                    <span className="text-[10px] text-emerald-400 font-bold uppercase bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800/60">
-                      Uploaded
-                    </span>
+              {!(app.ghanaCardFrontUrl || app.ghanaCardBackUrl || app.selfieUrl || app.proofOfAddressUrl) ? (
+                <div className="p-6 bg-[#041d17] border border-[#1a5e48] rounded-2xl text-center space-y-3">
+                  <div className="w-12 h-12 rounded-xl bg-[#0c3b2e] border border-[#1a5e48] flex items-center justify-center mx-auto text-[#d6a735]">
+                    <Shield size={24} />
                   </div>
-                  <div
-                    onClick={() => setSelectedDocPreview({ title: "Ghana Card (Front)", url: app.ghanaCardFrontUrl })}
-                    className="relative aspect-video rounded-lg overflow-hidden border border-[#114232] cursor-pointer group bg-black/40 flex items-center justify-center"
-                  >
-                    <img
-                      src={app.ghanaCardFrontUrl}
-                      alt="Ghana Card Front"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                    />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold gap-1.5">
-                      <ExternalLink size={14} /> Click to Expand Scan
-                    </div>
-                  </div>
+                  <h4 className="text-sm font-bold text-[#f5efdf]">Physical KYC Documents Kept at Bay</h4>
+                  <p className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
+                    Under the current simplified organizer onboarding framework, physical Ghana Card scans and utility bills are not required. The applicant’s identity is secured via verified mobile phone and platform terms acknowledgement.
+                  </p>
                 </div>
+              ) : (
+                <>
+                  <p className="text-xs text-slate-300">
+                    Inspect official Ghana Card identity documents and proof of physical business address. Click any document to view high-resolution preview.
+                  </p>
 
-                {/* Ghana Card Back */}
-                <div className="p-3.5 bg-[#041d17] border border-[#1a5e48] rounded-xl space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-[#f5efdf] text-xs flex items-center gap-1.5">
-                      <CreditCard size={14} className="text-[#d6a735]" /> Ghana Card (Back)
-                    </span>
-                    <span className="text-[10px] text-emerald-400 font-bold uppercase bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800/60">
-                      Uploaded
-                    </span>
-                  </div>
-                  <div
-                    onClick={() => setSelectedDocPreview({ title: "Ghana Card (Back)", url: app.ghanaCardBackUrl })}
-                    className="relative aspect-video rounded-lg overflow-hidden border border-[#114232] cursor-pointer group bg-black/40 flex items-center justify-center"
-                  >
-                    <img
-                      src={app.ghanaCardBackUrl}
-                      alt="Ghana Card Back"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                    />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold gap-1.5">
-                      <ExternalLink size={14} /> Click to Expand Scan
-                    </div>
-                  </div>
-                </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Ghana Card Front */}
+                    {app.ghanaCardFrontUrl && (
+                      <div className="p-3.5 bg-[#041d17] border border-[#1a5e48] rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-[#f5efdf] text-xs flex items-center gap-1.5">
+                            <CreditCard size={14} className="text-[#d6a735]" /> Ghana Card (Front)
+                          </span>
+                          <span className="text-[10px] text-emerald-400 font-bold uppercase bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800/60">
+                            Uploaded
+                          </span>
+                        </div>
+                        <div
+                          onClick={() => setSelectedDocPreview({ title: "Ghana Card (Front)", url: app.ghanaCardFrontUrl! })}
+                          className="relative aspect-video rounded-lg overflow-hidden border border-[#114232] cursor-pointer group bg-black/40 flex items-center justify-center"
+                        >
+                          <img
+                            src={app.ghanaCardFrontUrl}
+                            alt="Ghana Card Front"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold gap-1.5">
+                            <ExternalLink size={14} /> Click to Expand Scan
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-                {/* Live Selfie Photo */}
-                <div className="p-3.5 bg-[#041d17] border border-[#1a5e48] rounded-xl space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-[#f5efdf] text-xs flex items-center gap-1.5">
-                      <User size={14} className="text-cyan-400" /> Applicant Live Selfie
-                    </span>
-                    <span className="text-[10px] text-emerald-400 font-bold uppercase bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800/60">
-                      Biometric Match
-                    </span>
-                  </div>
-                  <div
-                    onClick={() => setSelectedDocPreview({ title: "Live Selfie Photo", url: app.selfieUrl })}
-                    className="relative aspect-video rounded-lg overflow-hidden border border-[#114232] cursor-pointer group bg-black/40 flex items-center justify-center"
-                  >
-                    <img
-                      src={app.selfieUrl}
-                      alt="Live Selfie"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                    />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold gap-1.5">
-                      <ExternalLink size={14} /> Click to Expand Selfie
-                    </div>
-                  </div>
-                </div>
+                    {/* Ghana Card Back */}
+                    {app.ghanaCardBackUrl && (
+                      <div className="p-3.5 bg-[#041d17] border border-[#1a5e48] rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-[#f5efdf] text-xs flex items-center gap-1.5">
+                            <CreditCard size={14} className="text-[#d6a735]" /> Ghana Card (Back)
+                          </span>
+                          <span className="text-[10px] text-emerald-400 font-bold uppercase bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800/60">
+                            Uploaded
+                          </span>
+                        </div>
+                        <div
+                          onClick={() => setSelectedDocPreview({ title: "Ghana Card (Back)", url: app.ghanaCardBackUrl! })}
+                          className="relative aspect-video rounded-lg overflow-hidden border border-[#114232] cursor-pointer group bg-black/40 flex items-center justify-center"
+                        >
+                          <img
+                            src={app.ghanaCardBackUrl}
+                            alt="Ghana Card Back"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold gap-1.5">
+                            <ExternalLink size={14} /> Click to Expand Scan
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-                {/* Proof of Address Document */}
-                <div className="p-3.5 bg-[#041d17] border border-[#1a5e48] rounded-xl space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-[#f5efdf] text-xs flex items-center gap-1.5">
-                      <FileText size={14} className="text-amber-400" /> Proof of Physical Address
-                    </span>
-                    <span className="text-[10px] text-emerald-400 font-bold uppercase bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800/60">
-                      Utility / Lease
-                    </span>
+                    {/* Live Selfie Photo */}
+                    {app.selfieUrl && (
+                      <div className="p-3.5 bg-[#041d17] border border-[#1a5e48] rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-[#f5efdf] text-xs flex items-center gap-1.5">
+                            <User size={14} className="text-cyan-400" /> Applicant Live Selfie
+                          </span>
+                          <span className="text-[10px] text-emerald-400 font-bold uppercase bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800/60">
+                            Biometric Match
+                          </span>
+                        </div>
+                        <div
+                          onClick={() => setSelectedDocPreview({ title: "Live Selfie Photo", url: app.selfieUrl! })}
+                          className="relative aspect-video rounded-lg overflow-hidden border border-[#114232] cursor-pointer group bg-black/40 flex items-center justify-center"
+                        >
+                          <img
+                            src={app.selfieUrl}
+                            alt="Live Selfie"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold gap-1.5">
+                            <ExternalLink size={14} /> Click to Expand Selfie
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Proof of Address Document */}
+                    {app.proofOfAddressUrl && (
+                      <div className="p-3.5 bg-[#041d17] border border-[#1a5e48] rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-[#f5efdf] text-xs flex items-center gap-1.5">
+                            <FileText size={14} className="text-amber-400" /> Proof of Physical Address
+                          </span>
+                          <span className="text-[10px] text-emerald-400 font-bold uppercase bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800/60">
+                            Utility / Lease
+                          </span>
+                        </div>
+                        <div
+                          onClick={() => setSelectedDocPreview({ title: "Proof of Physical Address", url: app.proofOfAddressUrl! })}
+                          className="relative aspect-video rounded-lg overflow-hidden border border-[#114232] cursor-pointer group bg-black/40 flex items-center justify-center"
+                        >
+                          <img
+                            src={app.proofOfAddressUrl}
+                            alt="Proof of Address"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold gap-1.5">
+                            <ExternalLink size={14} /> Click to Expand Document
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div
-                    onClick={() => setSelectedDocPreview({ title: "Proof of Physical Address", url: app.proofOfAddressUrl })}
-                    className="relative aspect-video rounded-lg overflow-hidden border border-[#114232] cursor-pointer group bg-black/40 flex items-center justify-center"
-                  >
-                    <img
-                      src={app.proofOfAddressUrl}
-                      alt="Proof of Address"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                    />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold gap-1.5">
-                      <ExternalLink size={14} /> Click to Expand Document
-                    </div>
-                  </div>
-                </div>
-              </div>
+                </>
+              )}
 
               {/* Document Zoom Lightbox Modal */}
               {selectedDocPreview && (
