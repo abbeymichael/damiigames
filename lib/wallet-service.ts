@@ -1,6 +1,7 @@
 import { dbRepository } from "./db-client";
 import { securityService } from "./security";
 import { WalletTransaction, WagerEscrow } from "./types";
+import { notificationService } from "./notification-service";
 
 export const walletService = {
   // 1 GHS = 100 Points
@@ -23,7 +24,7 @@ export const walletService = {
     };
   },
 
-  async initPaystackTopup(userToken: string, amountGhs: number, email?: string) {
+  async initPaystackTopup(userToken: string, amountGhs: number, email?: string, customCallbackUrl?: string) {
     if (!amountGhs || isNaN(amountGhs) || amountGhs <= 0 || !Number.isFinite(amountGhs)) {
       throw new Error("Amount must be a positive number in GHS");
     }
@@ -61,39 +62,66 @@ export const walletService = {
 
     await dbRepository.createTransaction(tx);
 
-    const secretKey = process.env.PAYSTACK_SECRET_KEY;
-    let authorizationUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://damii.gh"}/wallet?ref=${ref}`;
-
-    if (secretKey) {
-      try {
-        const response = await fetch("https://api.paystack.co/transaction/initialize", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${secretKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email: email || `${profile.username.toLowerCase().replace(/\s+/g, "")}@damii.gh`,
-            amount: pointsToAdd * 100, // in pesewas
-            reference: ref,
-            currency: "GHS",
-            callback_url: `${process.env.NEXT_PUBLIC_APP_URL || "https://damii.gh"}/wallet?ref=${ref}`,
-          }),
-        });
-        const data = await response.json();
-        if (data.status && data.data?.authorization_url) {
-          authorizationUrl = data.data.authorization_url;
-        }
-      } catch (err) {
-        if (process.env.NODE_ENV === "production") {
-          throw new Error("Failed to communicate with Paystack payment gateway");
-        }
-      }
-    } else if (process.env.NODE_ENV === "production") {
-      throw new Error("PAYSTACK_SECRET_KEY is not configured on the server");
+    const secretKey = (process.env.PAYSTACK_SECRET_KEY || "").trim();
+    if (!secretKey) {
+      throw new Error("PAYSTACK_SECRET_KEY is not configured on the server. Please configure your Paystack secret key in Settings.");
     }
 
-    return { reference: ref, authorizationUrl, pointsToAdd, amountGhs: pointsToAdd };
+    const baseCallback = customCallbackUrl || process.env.NEXT_PUBLIC_APP_URL || "https://damii.gh";
+    const callbackUrl = baseCallback.includes("?")
+      ? `${baseCallback}&ref=${encodeURIComponent(ref)}`
+      : `${baseCallback.replace(/\/$/, "")}/wallet?ref=${encodeURIComponent(ref)}`;
+
+    let authorizationUrl = "";
+    let accessCode = "";
+
+    try {
+      const response = await fetch("https://api.paystack.co/transaction/initialize", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: email || `${profile.username.toLowerCase().replace(/[^a-z0-9]/g, "") || "player"}@damii.gh`,
+          amount: Math.round(pointsToAdd * 100), // amount in pesewas (GH₵ 1.00 = 100 pesewas)
+          reference: ref,
+          currency: "GHS",
+          channels: ["mobile_money", "card"],
+          callback_url: callbackUrl,
+          metadata: {
+            userToken,
+            username: profile.username,
+            points: pointsToAdd,
+            custom_fields: [
+              {
+                display_name: "DAMII Username",
+                variable_name: "damii_username",
+                value: profile.username,
+              },
+              {
+                display_name: "Marbles",
+                variable_name: "marbles_quantity",
+                value: pointsToAdd.toString(),
+              },
+            ],
+          },
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.status || !data?.data?.authorization_url) {
+        const errMsg = data?.message || `HTTP ${response.status} failed to communicate with Paystack`;
+        throw new Error(`Paystack Gateway: ${errMsg}`);
+      }
+
+      authorizationUrl = data.data.authorization_url;
+      accessCode = data.data.access_code || "";
+    } catch (err) {
+      throw new Error("Paystack Gateway Error: " + (err instanceof Error ? err.message : String(err)));
+    }
+
+    return { reference: ref, authorizationUrl, accessCode, pointsToAdd, amountGhs: pointsToAdd };
   },
 
   async verifyAndCreditPaystack(reference: string) {
@@ -118,42 +146,59 @@ export const walletService = {
         return { success: true, message: "Transaction already credited", tx };
       }
 
-      let verified = false;
-      const secretKey = process.env.PAYSTACK_SECRET_KEY;
-
-      if (secretKey) {
-        try {
-          const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(cleanRef)}`, {
-            headers: { Authorization: `Bearer ${secretKey}` },
-          });
-          const json = await res.json();
-          if (json.status && json.data?.status === "success") {
-            const paidPesewas = json.data.amount;
-            const expectedPesewas = tx.amount * 100;
-            if (typeof paidPesewas === "number" && paidPesewas >= expectedPesewas) {
-              verified = true;
-            }
-          }
-        } catch {
-          verified = false;
-        }
-      } else {
-        if (process.env.NODE_ENV === "production") {
-          throw new Error("PAYSTACK_SECRET_KEY environment variable is missing in production");
-        }
-        verified = true;
+      const secretKey = (process.env.PAYSTACK_SECRET_KEY || "").trim();
+      if (!secretKey) {
+        throw new Error("PAYSTACK_SECRET_KEY is not configured on the server. Please add your key in Settings.");
       }
 
-      if (verified) {
-        await dbRepository.markPaystackRefProcessed(cleanRef);
-        tx.status = "completed";
-        await dbRepository.createTransaction(tx);
-        await dbRepository.updateProfileBalance(tx.userToken, tx.amount);
-        return { success: true, message: `Successfully added GH₵ ${tx.amount} to your wallet!`, tx };
-      } else {
+      const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(cleanRef)}`, {
+        headers: { Authorization: `Bearer ${secretKey}` },
+      });
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json) {
+        const msg = json?.message || `HTTP ${res.status} from Paystack verify endpoint`;
+        throw new Error(`Paystack Verification Error: ${msg}`);
+      }
+
+      const paystackStatus = json.data?.status; // "success" | "failed" | "abandoned" | "ongoing" | "pending"
+      const paidPesewas = json.data?.amount;
+      const expectedPesewas = Math.round(tx.amount * 100);
+
+      if (paystackStatus === "success") {
+        if (typeof paidPesewas === "number" && paidPesewas >= expectedPesewas) {
+          await dbRepository.markPaystackRefProcessed(cleanRef);
+          tx.status = "completed";
+          await dbRepository.createTransaction(tx);
+          await dbRepository.updateProfileBalance(tx.userToken, tx.amount);
+
+          // Notify user of successful deposit
+          notificationService.sendNotification({
+            userToken: tx.userToken,
+            type: "account_alert",
+            title: "💳 Mobile Money Deposit Confirmed",
+            message: `GH₵ ${tx.amount}.00 (${tx.amount} Marbles) has been credited to your wallet.`,
+            link: "/wallet",
+            actionLabel: "View Balance",
+          }).catch(() => {});
+
+          return { success: true, message: `Successfully added GH₵ ${tx.amount}.00 (${tx.amount} Marbles) to your wallet!`, tx };
+        } else {
+          throw new Error(`Payment amount mismatch: Expected GH₵ ${tx.amount}, received GH₵ ${(paidPesewas || 0) / 100}`);
+        }
+      } else if (paystackStatus === "failed") {
         tx.status = "failed";
         await dbRepository.createTransaction(tx);
-        throw new Error("Paystack payment verification failed: Payment not confirmed by gateway");
+        throw new Error(`Paystack Payment Failed: ${json.data?.gateway_response || "Payment was declined by provider"}`);
+      } else {
+        // Payment is still awaiting user authorization on phone/card
+        return {
+          success: false,
+          pending: true,
+          status: paystackStatus || "pending",
+          message: `Payment is currently ${paystackStatus || "pending"}. Please complete the payment on Paystack.`,
+          tx,
+        };
       }
     });
   },
@@ -210,6 +255,16 @@ export const walletService = {
       createdAt: new Date().toISOString(),
     };
     await dbRepository.createTransaction(tx);
+
+    // Notify user of cashout request submission
+    notificationService.sendNotification({
+      userToken,
+      type: "account_alert",
+      title: "💸 Cashout Request Submitted",
+      message: `Your withdrawal request of GH₵ ${ghsValue.toFixed(2)} to ${momoProvider} (${momoNumber}) has been queued for disbursement.`,
+      link: "/wallet",
+      actionLabel: "View Wallet",
+    }).catch(() => {});
 
     return { reference: ref, pointsDeducted: ghsValue, ghsValue };
   },
@@ -306,6 +361,17 @@ export const walletService = {
         createdAt: now,
       });
 
+      // Notify winner of victory and pot payout
+      notificationService.sendNotification({
+        userToken: winnerToken,
+        type: "wager_result",
+        title: "🏆 Wager Match Won!",
+        message: `Congratulations! You won GH₵ ${winnerPayout.toFixed(2)} in Room #${escrow.roomCode}.`,
+        link: "/wallet",
+        actionLabel: "View Payout",
+        actionPayload: { roomCode: escrow.roomCode, winnerPayout },
+      }).catch(() => {});
+
       // Record platform fee entry for system ledger
       if (platformFee > 0) {
         await dbRepository.createTransaction({
@@ -356,6 +422,27 @@ export const walletService = {
           metaJson: JSON.stringify({ roomCode: escrow.roomCode }),
           createdAt: now,
         });
+      }
+
+      // Notify both players of draw and refunded stakes
+      notificationService.sendNotification({
+        userToken: escrow.player1Token,
+        type: "wager_result",
+        title: "🤝 Wager Match Draw",
+        message: `The match in Room #${escrow.roomCode} ended in a draw. Your stake of GH₵ ${refundPerPlayer.toFixed(2)} has been refunded.`,
+        link: "/wallet",
+        actionLabel: "View Wallet",
+      }).catch(() => {});
+
+      if (escrow.player2Token) {
+        notificationService.sendNotification({
+          userToken: escrow.player2Token,
+          type: "wager_result",
+          title: "🤝 Wager Match Draw",
+          message: `The match in Room #${escrow.roomCode} ended in a draw. Your stake of GH₵ ${refundPerPlayer.toFixed(2)} has been refunded.`,
+          link: "/wallet",
+          actionLabel: "View Wallet",
+        }).catch(() => {});
       }
     }
 

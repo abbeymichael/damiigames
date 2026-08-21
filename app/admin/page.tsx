@@ -68,6 +68,7 @@ import { RolesManagement } from "@/components/admin/RolesManagement";
 import { AdminStaffTable } from "@/components/admin/AdminStaffTable";
 import { GamesCatalogTable } from "@/components/admin/GamesCatalogTable";
 import { TournamentRequestsTable } from "@/components/admin/TournamentRequestsTable";
+import { LegalPagesEditor } from "@/components/admin/LegalPagesEditor";
 import {
   ResponsiveContainer,
   LineChart,
@@ -327,6 +328,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { key: "audit", label: "Audit Trail", icon: ScrollText, permission: "audit.view" },
       { key: "settings", label: "System Settings", icon: Settings, permission: "system.settings.view" },
+      { key: "pages", label: "Legal & Policy Pages", icon: FileText, permission: "system.settings.view" },
     ],
   },
 ];
@@ -1963,7 +1965,7 @@ export default function AdminPage() {
                         <Wallet size={18} className="text-[#d6a735]" /> Financial Ledger & Balance Audit System
                       </h3>
                       <p className="text-xs text-slate-200 mt-0.5">
-                        Record manual credits/debits, manage Paystack Mobile Money top-ups, wager pot escrow logs, and payout settlements.
+                        Record manual credits/debits, manage Mobile Money top-ups, wager pot escrow logs, and payout settlements.
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1991,7 +1993,7 @@ export default function AdminPage() {
                       <p className="text-xl font-black text-[#d6a735]">
                         GH₵ {typeof metrics?.totalVolumePoints === "number" ? metrics.totalVolumePoints.toFixed(2) : (metrics?.totalVolumePoints || 8450)}
                       </p>
-                      <p className="text-[10px] text-slate-300 font-medium">Mobile Money Paystack Inflow</p>
+                      <p className="text-[10px] text-slate-300 font-medium">Mobile Money Gateway Inflow</p>
                     </div>
 
                     <div className="p-3.5 bg-[#06261f] border border-[#1a5e48] rounded-xl space-y-1">
@@ -2093,6 +2095,11 @@ export default function AdminPage() {
                   refreshAdminData();
                 }}
               />
+            )}
+
+            {/* TAB: LEGAL & POLICY PAGES */}
+            {activeTab === "pages" && (
+              <LegalPagesEditor token={token} />
             )}
           </main>
         </div>

@@ -446,7 +446,7 @@ export function PlatformSettings({
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-300">
-                  Fixed treasury standard rate for Paystack Mobile Money deposits.
+                  Fixed treasury standard rate for Mobile Money deposits.
                 </p>
               </div>
 
@@ -556,7 +556,7 @@ export function PlatformSettings({
           <div className="p-6 bg-[#081c15] border border-[#1a5e48] rounded-2xl shadow-xl space-y-5">
             <div className="border-b border-[#1a5e48] pb-3">
               <h3 className="text-sm font-bold text-[#f5efdf] flex items-center gap-2">
-                <Scale size={18} className="text-[#d6a735]" /> Paystack Deposit & Mobile Money Cashout Limits
+                <Scale size={18} className="text-[#d6a735]" /> Mobile Money Deposit & Cashout Limits
               </h3>
               <p className="text-xs text-slate-200 mt-1">
                 Protect treasury liquidity and enforce AML transaction thresholds for Mobile Money (MTN, Telecel, AT).
@@ -567,7 +567,7 @@ export function PlatformSettings({
               {/* DEPOSIT LIMITS */}
               <div className="p-4 bg-[#041c17] border border-[#1a5e48] rounded-xl space-y-3">
                 <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider block border-b border-[#1a5e48] pb-1">
-                  Paystack Top-Up Limits (GH₵)
+                  Top-Up Limits (GH₵)
                 </span>
                 <div>
                   <label className="block text-xs font-medium text-slate-200 mb-1">Minimum Deposit per Tx</label>

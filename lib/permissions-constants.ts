@@ -124,7 +124,7 @@ export const SEED_ROLES_CONFIG = [
   },
   {
     name: "Finance Admin",
-    description: "Wallet oversight, Paystack payouts, manual ledger adjustments, and escrow limits.",
+    description: "Wallet oversight, Mobile Money payouts, manual ledger adjustments, and escrow limits.",
     isSystemRole: false,
     permissionKeys: [
       "wallet.view",

@@ -9,6 +9,7 @@ import {
   UserDetailPayload,
 } from "./types";
 import { leagueService } from "./league-service";
+import { notificationService } from "./notification-service";
 
 export const adminService = {
   async verifyAdminAccessAsync(token: string, secretKeyInput?: string): Promise<boolean> {
@@ -441,6 +442,17 @@ export const adminService = {
       { applicationId, organizationName: app.organizationName, reviewNote: note }
     );
 
+    // Notify user of organizer approval
+    notificationService.sendNotification({
+      userToken: app.userId,
+      username: applicant?.username,
+      type: "admin_notice",
+      title: "🎉 Organizer Application Approved!",
+      message: `Your application for "${app.organizationName || "Tournament Organizer"}" has been approved! You can now create and host tournaments.`,
+      link: "/leagues",
+      actionLabel: "Create Tournament",
+    }).catch(() => {});
+
     return updatedApp;
   },
 
@@ -481,6 +493,16 @@ export const adminService = {
       { applicationId, reviewNote: note }
     );
 
+    // Notify user of rejection
+    notificationService.sendNotification({
+      userToken: app.userId,
+      type: "admin_notice",
+      title: "📋 Organizer Application Status",
+      message: `Your organizer application was reviewed: ${note}`,
+      link: "/leagues",
+      actionLabel: "View Application",
+    }).catch(() => {});
+
     return updatedApp;
   },
 
@@ -512,6 +534,16 @@ export const adminService = {
       app.userId,
       { applicationId, reviewNote: note }
     );
+
+    // Notify user of info request
+    notificationService.sendNotification({
+      userToken: app.userId,
+      type: "admin_notice",
+      title: "📋 Action Required: Organizer Application",
+      message: `The admin team requested additional information: ${note}`,
+      link: "/leagues",
+      actionLabel: "Update Application",
+    }).catch(() => {});
 
     return updatedApp;
   },
@@ -1213,6 +1245,19 @@ export const adminService = {
         newMarbles: updatedUser?.marbles,
       }
     );
+
+    // Notify user of balance adjustment
+    const signText = numAmount > 0 ? `+${numAmount}` : `${numAmount}`;
+    const currLabel = currency === "marbles" ? "Marbles" : "Points";
+    notificationService.sendNotification({
+      userToken: targetToken,
+      username: targetUser.username,
+      type: "account_alert",
+      title: "💼 Wallet Balance Adjustment",
+      message: `An administrative transaction of ${signText} ${currLabel} was recorded: ${reason || "Ledger adjustment"}.`,
+      link: "/wallet",
+      actionLabel: "View Wallet",
+    }).catch(() => {});
 
     return { transaction: newTx, profile: updatedUser };
   },

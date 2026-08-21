@@ -657,19 +657,21 @@ export const notificationService = {
       /* ignore transaction fetch error */
     }
 
-    // 4. Welcome message
-    items.push({
-      id: `system-welcome-${profile.token}`,
-      recipientToken: token,
-      type: "system",
-      urgency: "low",
-      title: "Welcome to DAMII Arena",
-      message: `Account active as ${profile.username}. Current Balance: ${profile.points} Points.`,
-      timestamp: profile.createdAt,
-      link: "/arena",
-      actionLabel: "Go to Arena",
-      channels: ["in_app"],
-    });
+    // 4. Welcome message (if profile exists)
+    if (profile) {
+      items.push({
+        id: `system-welcome-${profile.token}`,
+        recipientToken: token,
+        type: "system",
+        urgency: "low",
+        title: "Welcome to DAMII Arena",
+        message: `Account active as ${profile.username}. Current Balance: ${profile.points} Points.`,
+        timestamp: profile.createdAt,
+        link: "/arena",
+        actionLabel: "Go to Arena",
+        channels: ["in_app"],
+      });
+    }
 
     // Deduplicate by ID
     const uniqueMap = new Map<string, NotificationItem>();

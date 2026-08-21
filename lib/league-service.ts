@@ -310,6 +310,18 @@ export const leagueService = {
 
     const updated = await dbRepository.updateParticipantStatus(participantId, "approved");
 
+    // Notify applicant of approval
+    notificationService.sendNotification({
+      userToken: part.userToken,
+      username: part.username,
+      type: "tournament_match",
+      title: `🎉 Registration Approved: ${league.title}`,
+      message: `Your registration for "${league.title}" has been approved! Prepare for bracket generation.`,
+      link: `/leagues`,
+      actionLabel: "View Tournament",
+      actionPayload: { leagueId: league.id },
+    }).catch(() => {});
+
     // Check if bracket generation threshold met
     const allApproved = (await dbRepository.getLeagueParticipants(league.id)).filter((p) => p.status === "approved");
     if (allApproved.length >= league.maxParticipants) {
@@ -355,7 +367,21 @@ export const leagueService = {
       });
     }
 
-    return dbRepository.updateParticipantStatus(participantId, "rejected");
+    const result = await dbRepository.updateParticipantStatus(participantId, "rejected");
+
+    // Notify applicant of rejection & refund
+    notificationService.sendNotification({
+      userToken: part.userToken,
+      username: part.username,
+      type: "tournament_match",
+      title: `⚠️ Registration Update: ${league.title}`,
+      message: `Your registration application for "${league.title}" was not approved. Any entry fees have been refunded.`,
+      link: `/leagues`,
+      actionLabel: "View Tournaments",
+      actionPayload: { leagueId: league.id },
+    }).catch(() => {});
+
+    return result;
   },
 
   async addParticipantManual(organizerToken: string, leagueId: string, usernameToAdd: string) {
@@ -452,6 +478,17 @@ export const leagueService = {
             metaJson: JSON.stringify({ note: `100% Entry fee refund due to tournament cancellation: ${reason || "Cancelled by Organizer"}` }),
             createdAt: new Date().toISOString(),
           });
+
+          // Notify participant
+          notificationService.sendNotification({
+            userToken: p.userToken,
+            username: p.username,
+            type: "tournament_match",
+            title: `⚠️ Tournament Cancelled: ${league.title}`,
+            message: `"${league.title}" has been cancelled (${reason || "Organizer cancelled"}). Your ${league.entryFeePoints} Points entry fee has been refunded.`,
+            link: "/leagues",
+            actionLabel: "View Tournaments",
+          }).catch(() => {});
         }
       }
     }
@@ -834,6 +871,33 @@ export const leagueService = {
     }
 
     await dbRepository.setLeagueMatches(newMatches);
+
+    // Notify registered players that active round matches are ready
+    for (const m of newMatches) {
+      if (m.player1Token && m.player2Token && m.status === "pending") {
+        notificationService.sendNotification({
+          userToken: m.player1Token,
+          username: m.player1Name,
+          type: "tournament_match",
+          title: `🏆 Round ${nextRound} Ready: ${league.title}`,
+          message: `Your Round ${nextRound} match against ${m.player2Name} is ready! Check the bracket to begin.`,
+          link: `/leagues`,
+          actionLabel: "View Match",
+          actionPayload: { leagueId: league.id, round: nextRound },
+        }).catch(() => {});
+        notificationService.sendNotification({
+          userToken: m.player2Token,
+          username: m.player2Name,
+          type: "tournament_match",
+          title: `🏆 Round ${nextRound} Ready: ${league.title}`,
+          message: `Your Round ${nextRound} match against ${m.player1Name} is ready! Check the bracket to begin.`,
+          link: `/leagues`,
+          actionLabel: "View Match",
+          actionPayload: { leagueId: league.id, round: nextRound },
+        }).catch(() => {});
+      }
+    }
+
     return newMatches;
   },
 

@@ -1,32 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { walletService } from "@/lib/wallet-service";
 import { dbRepository } from "@/lib/db-client";
-import { getAuthContext } from "@/lib/auth-guard";
+import { getAuthContext, validateCsrfToken } from "@/lib/auth-guard";
 import { securityService } from "@/lib/security";
 
 const cleanToken = (v: unknown) => String(v ?? "").trim().slice(0, 80);
 
-async function resolveUserToken(req: NextRequest, fallbackToken?: string): Promise<string> {
+async function resolveUserSession(req: NextRequest, fallbackToken?: string) {
   const authCtx = await getAuthContext(req);
-  if (authCtx?.user?.token) return authCtx.user.token;
-  if (!fallbackToken) return "";
+  if (authCtx?.user?.token) {
+    return { userToken: authCtx.user.token, session: authCtx.session };
+  }
+  if (!fallbackToken) return { userToken: "", session: null };
 
   const session = await dbRepository.getSession(fallbackToken);
-  if (session) return session.userId;
-  return fallbackToken;
+  if (session) return { userToken: session.userId, session };
+  return { userToken: fallbackToken, session: null };
 }
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const paramToken = cleanToken(searchParams.get("token"));
-  const userToken = await resolveUserToken(req, paramToken);
+  const { userToken } = await resolveUserSession(req, paramToken);
 
   if (!userToken) {
     return NextResponse.json({ error: "Token or session required" }, { status: 400 });
   }
 
   const balance = await walletService.getBalance(userToken);
-  const transactions = await dbRepository.getUserTransactions(userToken, 20);
+  const transactions = await dbRepository.getUserTransactions(userToken, 50);
   const settings = await dbRepository.getAdminSettings();
 
   return NextResponse.json({ balance, transactions, settings });
@@ -37,11 +39,14 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const action = String(body.action ?? "").trim().toLowerCase();
     const paramToken = cleanToken(body.token);
-    const userToken = await resolveUserToken(req, paramToken);
+    const { userToken, session } = await resolveUserSession(req, paramToken);
 
     if (!userToken) {
       return NextResponse.json({ error: "Token or session required" }, { status: 400 });
     }
+
+    // Enforce CSRF token verification on state-changing wallet actions
+    validateCsrfToken(req, session);
 
     // Rate limiting for wallet financial actions (15 requests per minute)
     const rateCheck = securityService.checkRateLimit(`wallet:${userToken}`, 15, 60 * 1000);
@@ -55,7 +60,8 @@ export async function POST(req: NextRequest) {
     if (action === "deposit") {
       const amountGhs = Number(body.amountGhs);
       const email = String(body.email ?? "");
-      const res = await walletService.initPaystackTopup(userToken, amountGhs, email);
+      const callbackUrl = String(body.callbackUrl ?? req.headers.get("origin") ?? "");
+      const res = await walletService.initPaystackTopup(userToken, amountGhs, email, callbackUrl);
       return NextResponse.json(res);
     }
 
@@ -82,7 +88,8 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Wallet error" },
-      { status: 500 }
+      { status: (error as any)?.status || 500 }
     );
   }
 }
+

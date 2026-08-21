@@ -114,7 +114,7 @@ export function Footer() {
               </li>
               <li>
                 <span className="text-[#a3b8b0]/70 flex items-center gap-1.5 cursor-default">
-                  <CheckCircle size={12} className="text-emerald-400" /> Paystack Mobile Escrow
+                  <CheckCircle size={12} className="text-emerald-400" /> DAMII Escrow Vault
                 </span>
               </li>
             </ul>
@@ -128,17 +128,17 @@ export function Footer() {
           </div>
 
           <div className="flex items-center gap-6">
-            <span className="hover:text-[#f5efdf] transition-colors cursor-pointer">
+            <NavLink href="/rules" className="hover:text-[#d6a735] transition-colors">
               Compulsory Jump Rules
-            </span>
-            <span>•</span>
-            <span className="hover:text-[#f5efdf] transition-colors cursor-pointer">
+            </NavLink>
+            <span className="text-[#114232]">•</span>
+            <NavLink href="/fair-play" className="hover:text-[#d6a735] transition-colors">
               Fair Play Guarantee
-            </span>
-            <span>•</span>
-            <span className="hover:text-[#f5efdf] transition-colors cursor-pointer">
+            </NavLink>
+            <span className="text-[#114232]">•</span>
+            <NavLink href="/terms" className="hover:text-[#d6a735] transition-colors">
               Terms of Service
-            </span>
+            </NavLink>
           </div>
         </div>
       </div>
