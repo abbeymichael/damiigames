@@ -179,6 +179,61 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, matches });
     }
 
+    if (action === "schedule_match") {
+      const { matchId, scheduledTimeIso } = body;
+      if (!matchId || !scheduledTimeIso) {
+        return NextResponse.json({ error: "Match ID and Scheduled Time (ISO) required" }, { status: 400 });
+      }
+
+      const match = await leagueService.scheduleMatch(token, String(matchId), String(scheduledTimeIso));
+      return NextResponse.json({ success: true, match });
+    }
+
+    if (action === "schedule_round") {
+      const { leagueId, round, startDateTimeIso, matchDurationMinutes, breakMinutes, staggerMatches } = body;
+      if (!leagueId || !round || !startDateTimeIso) {
+        return NextResponse.json({ error: "League ID, Round, and Start Date Time required" }, { status: 400 });
+      }
+
+      const matches = await leagueService.scheduleRound(token, String(leagueId), Number(round), {
+        startDateTimeIso: String(startDateTimeIso),
+        matchDurationMinutes: Number(matchDurationMinutes) || 20,
+        breakMinutes: Number(breakMinutes) || 5,
+        staggerMatches: Boolean(staggerMatches),
+      });
+      return NextResponse.json({ success: true, matches });
+    }
+
+    if (action === "delay_round") {
+      const { leagueId, round, delayMinutes, reason } = body;
+      if (!leagueId || !round || !delayMinutes) {
+        return NextResponse.json({ error: "League ID, Round, and Delay Minutes required" }, { status: 400 });
+      }
+
+      const matches = await leagueService.delayRound(token, String(leagueId), Number(round), Number(delayMinutes), reason ? String(reason) : undefined);
+      return NextResponse.json({ success: true, matches });
+    }
+
+    if (action === "forfeit_match") {
+      const { matchId, forfeitingPlayerToken, reason } = body;
+      if (!matchId || !forfeitingPlayerToken) {
+        return NextResponse.json({ error: "Match ID and Forfeiting Player Token required" }, { status: 400 });
+      }
+
+      const res = await leagueService.forfeitMatch(token, String(matchId), String(forfeitingPlayerToken), String(reason || "Organizer Walkover"));
+      return NextResponse.json({ success: true, ...res });
+    }
+
+    if (action === "broadcast_announcement") {
+      const { leagueId, title, message } = body;
+      if (!leagueId || !title || !message) {
+        return NextResponse.json({ error: "League ID, Title, and Message required" }, { status: 400 });
+      }
+
+      const res = await leagueService.broadcastTournamentAnnouncement(token, String(leagueId), String(title), String(message));
+      return NextResponse.json(res);
+    }
+
     if (action === "disburse_prizes") {
       const { leagueId, winnerToken, runnerUpToken, thirdPlaceToken } = body;
       if (!leagueId) return NextResponse.json({ error: "League ID required" }, { status: 400 });

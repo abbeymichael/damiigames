@@ -50,6 +50,13 @@ import {
   LogIn,
   Filter,
   Search,
+  Radio,
+  Megaphone,
+  Hourglass,
+  Swords,
+  Timer,
+  FastForward,
+  Bell,
 } from "lucide-react";
 import type {
   League,
@@ -60,6 +67,7 @@ import type {
   OrganizerProfile,
 } from "@/lib/types";
 import { BracketTreeView } from "@/components/BracketTreeView";
+import { CountdownTimer } from "@/components/CountdownTimer";
 import { getAuthHeaders, saveSessionToken } from "@/lib/client-auth";
 
 export default function OrganizerPage() {
@@ -95,7 +103,7 @@ export default function OrganizerPage() {
 
   // UI Navigation Tabs
   const [activeTab, setActiveTab] = useState<"tournaments" | "create" | "manage">("tournaments");
-  const [manageSubTab, setManageSubTab] = useState<"overview" | "participants" | "bracket" | "prizes">("overview");
+  const [manageSubTab, setManageSubTab] = useState<"overview" | "participants" | "fixtures" | "bracket" | "prizes">("overview");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -104,6 +112,28 @@ export default function OrganizerPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [copiedCode, setCopiedCode] = useState(false);
+
+  // Fixtures & Scheduling States
+  const [scheduleRoundNumber, setScheduleRoundNumber] = useState(1);
+  const [scheduleRoundStartTime, setScheduleRoundStartTime] = useState("");
+  const [scheduleRoundInterval, setScheduleRoundInterval] = useState(0);
+  const [delayRoundNumber, setDelayRoundNumber] = useState(1);
+  const [delayMinutes, setDelayMinutes] = useState(10);
+  const [delayReason, setDelayReason] = useState("");
+  const [fixtureRoundFilter, setFixtureRoundFilter] = useState<number | "all">("all");
+
+  // Single Match Schedule Modal
+  const [selectedMatchForSchedule, setSelectedMatchForSchedule] = useState<LeagueMatch | null>(null);
+  const [scheduledMatchDateTime, setScheduledMatchDateTime] = useState("");
+
+  // Forfeit Match Modal
+  const [selectedMatchForForfeit, setSelectedMatchForForfeit] = useState<LeagueMatch | null>(null);
+  const [forfeitPlayerToken, setForfeitPlayerToken] = useState("");
+  const [forfeitReason, setForfeitReason] = useState("");
+
+  // Broadcast Announcement
+  const [announcementMessage, setAnnouncementMessage] = useState("");
+  const [announcementType, setAnnouncementType] = useState<"general" | "urgent" | "schedule">("general");
 
   // Create Tournament Form state
   const [title, setTitle] = useState("");
@@ -610,6 +640,163 @@ export default function OrganizerPage() {
       if (selectedLeagueId) loadLeagueDetails(selectedLeagueId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Score override failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleScheduleMatch = async (matchId: string, scheduledTimeIso: string) => {
+    if (!selectedLeagueId || !matchId) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/league", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          action: "schedule_match",
+          token,
+          leagueId: selectedLeagueId,
+          matchId,
+          scheduledTime: scheduledTimeIso,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Failed to schedule match");
+
+      setSuccess("Match scheduled successfully!");
+      setSelectedMatchForSchedule(null);
+      loadLeagueDetails(selectedLeagueId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Scheduling failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleScheduleRound = async () => {
+    if (!selectedLeagueId || !scheduleRoundStartTime) {
+      setError("Please pick a starting date and time for the round.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const startTimeIso = new Date(scheduleRoundStartTime).toISOString();
+      const res = await fetch("/api/league", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          action: "schedule_round",
+          token,
+          leagueId: selectedLeagueId,
+          round: Number(scheduleRoundNumber),
+          startTime: startTimeIso,
+          intervalMinutes: Number(scheduleRoundInterval) || 0,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Failed to schedule round fixtures");
+
+      setSuccess(`Round ${scheduleRoundNumber} fixtures scheduled successfully!`);
+      loadLeagueDetails(selectedLeagueId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Round scheduling failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelayRound = async () => {
+    if (!selectedLeagueId) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/league", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          action: "delay_round",
+          token,
+          leagueId: selectedLeagueId,
+          round: Number(delayRoundNumber),
+          delayMinutes: Number(delayMinutes) || 10,
+          reason: delayReason.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Failed to delay round");
+
+      setSuccess(`Round ${delayRoundNumber} delayed by ${delayMinutes} minutes! Participants notified.`);
+      setDelayReason("");
+      loadLeagueDetails(selectedLeagueId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Round delay failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleForfeitMatch = async () => {
+    if (!selectedLeagueId || !selectedMatchForForfeit || !forfeitPlayerToken) {
+      setError("Please select the player forfeiting the match.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/league", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          action: "forfeit_match",
+          token,
+          leagueId: selectedLeagueId,
+          matchId: selectedMatchForForfeit.id,
+          forfeitPlayerToken,
+          reason: forfeitReason.trim() || "Walkover forfeiture by organizer",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Failed to forfeit match");
+
+      setSuccess("Match walkover recorded and non-forfeiting player advanced to next round!");
+      setSelectedMatchForForfeit(null);
+      setForfeitReason("");
+      setForfeitPlayerToken("");
+      loadLeagueDetails(selectedLeagueId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Forfeiture failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleBroadcastAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedLeagueId || !announcementMessage.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/league", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          action: "broadcast_announcement",
+          token,
+          leagueId: selectedLeagueId,
+          message: announcementMessage.trim(),
+          type: announcementType,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Failed to broadcast announcement");
+
+      setSuccess("Announcement broadcast to all tournament participants!");
+      setAnnouncementMessage("");
+      loadLeagueDetails(selectedLeagueId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Broadcast failed");
     } finally {
       setBusy(false);
     }
@@ -1395,6 +1582,17 @@ export default function OrganizerPage() {
                   </button>
 
                   <button
+                    onClick={() => setManageSubTab("fixtures")}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+                      manageSubTab === "fixtures"
+                        ? "bg-[#d6a735] text-[#06261f]"
+                        : "text-[#a3b8b0] hover:text-white"
+                    }`}
+                  >
+                    <Calendar size={15} /> Fixtures & Scheduling ({activeLeagueDetails?.matches.length || 0})
+                  </button>
+
+                  <button
                     onClick={() => setManageSubTab("bracket")}
                     className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
                       manageSubTab === "bracket"
@@ -1402,7 +1600,7 @@ export default function OrganizerPage() {
                         : "text-[#a3b8b0] hover:text-white"
                     }`}
                   >
-                    <Gavel size={15} /> Bracket & Matches ({activeLeagueDetails?.matches.length || 0})
+                    <Gavel size={15} /> Bracket Tree
                   </button>
 
                   <button
@@ -1613,6 +1811,376 @@ export default function OrganizerPage() {
                   </div>
                 )}
 
+                {/* SUB-TAB: FIXTURES & SCHEDULING CONTROL CENTER */}
+                {manageSubTab === "fixtures" && (
+                  <div className="space-y-8">
+                    {/* Control Panels Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      {/* 1. Cycle / Round Bulk Scheduler */}
+                      <div className="p-6 bg-[#06261f] border border-[#184d3c] rounded-3xl space-y-4 shadow-xl">
+                        <div className="flex items-center gap-2 text-[#d6a735]">
+                          <Calendar size={18} />
+                          <h3 className="font-bold text-sm text-[#f5efdf]">Cycle &amp; Round Scheduler</h3>
+                        </div>
+                        <p className="text-xs text-[#a3b8b0]">
+                          Set specific start dates &amp; times for matches in each cycle. Winner automatically moves to next round.
+                        </p>
+
+                        <div className="space-y-3 text-xs">
+                          <div>
+                            <label className="block text-[#a3b8b0] mb-1 font-bold">Select Cycle / Round</label>
+                            <select
+                              value={scheduleRoundNumber}
+                              onChange={(e) => setScheduleRoundNumber(Number(e.target.value))}
+                              className="w-full px-3 py-2 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none"
+                            >
+                              {Array.from(new Set(activeLeagueDetails?.matches.map((m) => m.round) || [1])).map((r) => (
+                                <option key={r} value={r}>
+                                  Round / Cycle {r} ({activeLeagueDetails?.matches.filter((m) => m.round === r).length} Matches)
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[#a3b8b0] mb-1 font-bold">Start Date &amp; Time</label>
+                            <input
+                              type="datetime-local"
+                              value={scheduleRoundStartTime}
+                              onChange={(e) => setScheduleRoundStartTime(e.target.value)}
+                              className="w-full px-3 py-2 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[#a3b8b0] mb-1 font-bold">Match Spacing / Break</label>
+                            <select
+                              value={scheduleRoundInterval}
+                              onChange={(e) => setScheduleRoundInterval(Number(e.target.value))}
+                              className="w-full px-3 py-2 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none"
+                            >
+                              <option value={0}>Simultaneous (All at once)</option>
+                              <option value={15}>+15 mins staggered</option>
+                              <option value={20}>+20 mins staggered</option>
+                              <option value={30}>+30 mins staggered</option>
+                              <option value={45}>+45 mins staggered</option>
+                              <option value={60}>+60 mins staggered</option>
+                            </select>
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={busy || !scheduleRoundStartTime}
+                            onClick={handleScheduleRound}
+                            className="w-full py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+                          >
+                            <Timer size={14} /> Apply Schedule to Round {scheduleRoundNumber}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 2. Delay / Push Round */}
+                      <div className="p-6 bg-[#06261f] border border-[#184d3c] rounded-3xl space-y-4 shadow-xl">
+                        <div className="flex items-center gap-2 text-amber-400">
+                          <Hourglass size={18} />
+                          <h3 className="font-bold text-sm text-[#f5efdf]">Delay / Extend Break</h3>
+                        </div>
+                        <p className="text-xs text-[#a3b8b0]">
+                          Need more time between rounds? Push round start time back by minutes and update countdowns.
+                        </p>
+
+                        <div className="space-y-3 text-xs">
+                          <div>
+                            <label className="block text-[#a3b8b0] mb-1 font-bold">Select Round to Delay</label>
+                            <select
+                              value={delayRoundNumber}
+                              onChange={(e) => setDelayRoundNumber(Number(e.target.value))}
+                              className="w-full px-3 py-2 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none"
+                            >
+                              {Array.from(new Set(activeLeagueDetails?.matches.map((m) => m.round) || [1])).map((r) => (
+                                <option key={r} value={r}>
+                                  Round / Cycle {r}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[#a3b8b0] mb-1 font-bold">Delay Duration</label>
+                            <select
+                              value={delayMinutes}
+                              onChange={(e) => setDelayMinutes(Number(e.target.value))}
+                              className="w-full px-3 py-2 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none"
+                            >
+                              <option value={5}>+5 Minutes Break</option>
+                              <option value={10}>+10 Minutes Break</option>
+                              <option value={15}>+15 Minutes Break</option>
+                              <option value={20}>+20 Minutes Break</option>
+                              <option value={30}>+30 Minutes Break</option>
+                              <option value={60}>+60 Minutes Break</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[#a3b8b0] mb-1 font-bold">Reason Note (Sent to players)</label>
+                            <input
+                              type="text"
+                              value={delayReason}
+                              onChange={(e) => setDelayReason(e.target.value)}
+                              placeholder="e.g. 10 minute rest break before semifinals..."
+                              className="w-full px-3 py-2 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none"
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={handleDelayRound}
+                            className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-black rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5"
+                          >
+                            <FastForward size={14} /> Push Round {delayRoundNumber} (+{delayMinutes}m)
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 3. Broadcast Announcement */}
+                      <form
+                        onSubmit={handleBroadcastAnnouncement}
+                        className="p-6 bg-[#06261f] border border-[#184d3c] rounded-3xl space-y-4 shadow-xl flex flex-col justify-between"
+                      >
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 text-sky-400">
+                            <Megaphone size={18} />
+                            <h3 className="font-bold text-sm text-[#f5efdf]">Broadcast Notification</h3>
+                          </div>
+                          <p className="text-xs text-[#a3b8b0]">
+                            Send live alerts directly to all registered players (fixtures update, check-in calls, etc).
+                          </p>
+
+                          <div>
+                            <label className="block text-[#a3b8b0] mb-1 font-bold text-xs">Alert Priority</label>
+                            <select
+                              value={announcementType}
+                              onChange={(e) => setAnnouncementType(e.target.value as any)}
+                              className="w-full px-3 py-2 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none"
+                            >
+                              <option value="general">General Announcement</option>
+                              <option value="schedule">Schedule &amp; Fixtures Alert</option>
+                              <option value="urgent">Urgent Check-in / Notice</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[#a3b8b0] mb-1 font-bold text-xs">Message</label>
+                            <textarea
+                              rows={2}
+                              value={announcementMessage}
+                              onChange={(e) => setAnnouncementMessage(e.target.value)}
+                              placeholder="e.g. Round 2 starting at 19:30 GMT. Please head to your boards!"
+                              className="w-full px-3 py-2 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={busy || !announcementMessage.trim()}
+                          className="w-full py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-black rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50 mt-3"
+                        >
+                          <Send size={14} /> Send Broadcast to All Players
+                        </button>
+                      </form>
+                    </div>
+
+                    {/* Fixtures List with Per-Match Controls */}
+                    <div className="p-6 bg-[#06261f] border border-[#184d3c] rounded-3xl space-y-6 shadow-xl">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#184d3c] pb-4">
+                        <div>
+                          <h3 className="text-base font-bold text-[#f5efdf] flex items-center gap-2">
+                            <Swords size={18} className="text-[#d6a735]" /> Match Fixtures Controller
+                          </h3>
+                          <p className="text-xs text-[#a3b8b0] mt-0.5">
+                            Manage match times, room links, player walkovers, and live score results per fixture.
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-[#a3b8b0]">Filter Round:</span>
+                          <select
+                            value={fixtureRoundFilter}
+                            onChange={(e) => setFixtureRoundFilter(e.target.value === "all" ? "all" : Number(e.target.value))}
+                            className="px-3 py-1.5 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] font-bold focus:outline-none"
+                          >
+                            <option value="all">All Cycles / Rounds</option>
+                            {Array.from(new Set(activeLeagueDetails?.matches.map((m) => m.round) || [])).map((r) => (
+                              <option key={r} value={r}>
+                                Round {r}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {activeLeagueDetails?.matches.length === 0 ? (
+                        <p className="text-xs text-slate-400 italic text-center py-6">
+                          No matches generated yet. Launch the bracket from the Overview tab.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {activeLeagueDetails?.matches
+                            .filter((m) => fixtureRoundFilter === "all" || m.round === fixtureRoundFilter)
+                            .map((match) => {
+                              const isFinished = match.status === "completed";
+                              const isLive = match.status === "in_progress";
+
+                              return (
+                                <div
+                                  key={match.id}
+                                  className={`p-4 bg-[#081c15] border rounded-2xl space-y-3.5 transition-all ${
+                                    isLive
+                                      ? "border-amber-500/80 shadow-md ring-1 ring-amber-500/30"
+                                      : isFinished
+                                      ? "border-[#114232] opacity-80"
+                                      : "border-[#184d3c] hover:border-[#d6a735]/40"
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between text-xs pb-2 border-b border-[#114232]">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-mono font-bold text-[#d6a735]">
+                                        R{match.round} • Match #{match.matchNumber}
+                                      </span>
+                                      <span
+                                        className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                                          isFinished
+                                            ? "bg-emerald-950 text-emerald-300 border border-emerald-700"
+                                            : isLive
+                                            ? "bg-amber-950 text-amber-300 border border-amber-600 animate-pulse"
+                                            : "bg-[#06261f] text-slate-400 border border-[#184d3c]"
+                                        }`}
+                                      >
+                                        {match.status.replace("_", " ")}
+                                      </span>
+                                    </div>
+
+                                    {match.scheduledTime && !isFinished && (
+                                      <CountdownTimer targetIso={match.scheduledTime} compact />
+                                    )}
+                                  </div>
+
+                                  {/* Contestants */}
+                                  <div className="space-y-1.5 text-xs">
+                                    <div className="flex items-center justify-between p-2 bg-[#06261f] rounded-xl font-bold">
+                                      <span className={match.winnerToken === match.player1Token ? "text-[#d6a735]" : "text-[#f5efdf]"}>
+                                        {match.player1Name || "TBD (Pending)"}
+                                      </span>
+                                      {match.winnerToken === match.player1Token && (
+                                        <span className="text-[10px] text-[#d6a735] font-black flex items-center gap-1">
+                                          <Trophy size={11} /> WINNER
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-center font-mono text-[9px] text-slate-500">VS</div>
+                                    <div className="flex items-center justify-between p-2 bg-[#06261f] rounded-xl font-bold">
+                                      <span className={match.winnerToken === match.player2Token ? "text-[#d6a735]" : "text-[#f5efdf]"}>
+                                        {match.player2Name || "TBD (Pending)"}
+                                      </span>
+                                      {match.winnerToken === match.player2Token && (
+                                        <span className="text-[10px] text-[#d6a735] font-black flex items-center gap-1">
+                                          <Trophy size={11} /> WINNER
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Schedule Time & Action Buttons */}
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-[#114232] text-xs">
+                                    <div className="text-[11px] text-slate-400 font-mono">
+                                      {match.scheduledTime ? (
+                                        <span className="flex items-center gap-1">
+                                          <Clock size={11} className="text-[#d6a735]" />
+                                          {new Date(match.scheduledTime).toLocaleDateString([], { month: "short", day: "numeric" })} at {new Date(match.scheduledTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-500">No time set</span>
+                                      )}
+                                    </div>
+
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      {/* Set Time Button */}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedMatchForSchedule(match);
+                                          setScheduledMatchDateTime(
+                                            match.scheduledTime
+                                              ? new Date(match.scheduledTime).toISOString().slice(0, 16)
+                                              : ""
+                                          );
+                                        }}
+                                        className="px-2.5 py-1 bg-[#06261f] hover:bg-[#0c3b2e] text-[#d6a735] font-bold rounded-lg border border-[#114232] text-[11px] flex items-center gap-1 transition-colors"
+                                      >
+                                        <Calendar size={11} /> Set Time
+                                      </button>
+
+                                      {/* Start Match / Room Code */}
+                                      {!match.roomCode && match.status !== "completed" && (
+                                        <button
+                                          type="button"
+                                          disabled={busy}
+                                          onClick={() => handleStartMatchRoom(match.id)}
+                                          className="px-2.5 py-1 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-lg text-[11px] flex items-center gap-1 transition-all"
+                                        >
+                                          <Play size={11} className="fill-current" /> Launch Room
+                                        </button>
+                                      )}
+
+                                      {match.roomCode && (
+                                        <a
+                                          href={`/arena?code=${match.roomCode}&mode=league&spectate=1`}
+                                          className="px-2.5 py-1 bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 font-bold rounded-lg border border-emerald-700 text-[11px] flex items-center gap-1"
+                                        >
+                                          <Eye size={11} /> Arena ({match.roomCode})
+                                        </a>
+                                      )}
+
+                                      {/* Forfeit Walkover Button */}
+                                      {!isFinished && match.player1Token && match.player2Token && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setSelectedMatchForForfeit(match);
+                                            setForfeitPlayerToken(match.player1Token || "");
+                                            setForfeitReason("");
+                                          }}
+                                          className="px-2.5 py-1 bg-red-950/60 hover:bg-red-900 text-red-300 font-bold rounded-lg border border-red-800 text-[11px] flex items-center gap-1"
+                                        >
+                                          <UserX size={11} /> Walkover
+                                        </button>
+                                      )}
+
+                                      {/* Score / Advance */}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedMatchForScore(match);
+                                          setScoringWinnerToken(match.player1Token || "");
+                                          setScoringDisputeNotes("");
+                                        }}
+                                        className="px-2.5 py-1 bg-[#06261f] hover:bg-[#0c3b2e] text-[#f5efdf] font-bold rounded-lg border border-[#114232] text-[11px] flex items-center gap-1"
+                                      >
+                                        <Gavel size={11} /> Result
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* SUB-TAB 3: BRACKET ENGINE & MATCHES */}
                 {manageSubTab === "bracket" && (
                   <div className="space-y-6">
@@ -1718,6 +2286,144 @@ export default function OrganizerPage() {
               </div>
             )}
           </section>
+        )}
+
+        {/* Schedule Single Match Modal */}
+        {selectedMatchForSchedule && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-[#06261f] border border-[#184d3c] rounded-3xl p-6 max-w-md w-full space-y-5 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-[#114232] pb-3">
+                <h3 className="font-bold text-base text-[#f5efdf] flex items-center gap-2">
+                  <Calendar size={18} className="text-[#d6a735]" /> Set Fixture Date &amp; Time
+                </h3>
+                <button
+                  onClick={() => setSelectedMatchForSchedule(null)}
+                  className="text-[#a3b8b0] hover:text-white"
+                >
+                  <XCircle size={20} />
+                </button>
+              </div>
+
+              <div className="p-3 bg-[#081c15] border border-[#114232] rounded-2xl text-xs space-y-1">
+                <div className="font-bold text-[#d6a735]">
+                  Round {selectedMatchForSchedule.round} • Match #{selectedMatchForSchedule.matchNumber}
+                </div>
+                <div className="text-[#f5efdf]">
+                  {selectedMatchForSchedule.player1Name || "TBD"} vs {selectedMatchForSchedule.player2Name || "TBD"}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="block text-xs font-bold text-[#d6a735] uppercase">
+                  Select Match Kickoff Date &amp; Time
+                </label>
+                <input
+                  type="datetime-local"
+                  value={scheduledMatchDateTime}
+                  onChange={(e) => setScheduledMatchDateTime(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-sm focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedMatchForSchedule(null)}
+                  className="flex-1 py-2.5 bg-[#081c15] border border-[#114232] text-[#a3b8b0] font-bold rounded-xl text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || !scheduledMatchDateTime}
+                  onClick={() => {
+                    if (selectedMatchForSchedule && scheduledMatchDateTime) {
+                      const isoString = new Date(scheduledMatchDateTime).toISOString();
+                      handleScheduleMatch(selectedMatchForSchedule.id, isoString);
+                    }
+                  }}
+                  className="flex-1 py-2.5 bg-[#d6a735] text-[#06261f] font-black rounded-xl text-xs shadow-md disabled:opacity-50"
+                >
+                  Save Schedule
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Forfeit / Walkover Modal */}
+        {selectedMatchForForfeit && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-[#06261f] border border-[#184d3c] rounded-3xl p-6 max-w-md w-full space-y-5 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-[#114232] pb-3">
+                <h3 className="font-bold text-base text-red-300 flex items-center gap-2">
+                  <UserX size={18} className="text-red-400" /> Forfeit Match / Walkover
+                </h3>
+                <button
+                  onClick={() => setSelectedMatchForForfeit(null)}
+                  className="text-[#a3b8b0] hover:text-white"
+                >
+                  <XCircle size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-red-300 uppercase mb-1.5">
+                    Select Player Forfeiting (Opponent Will Advance)
+                  </label>
+                  <select
+                    value={forfeitPlayerToken}
+                    onChange={(e) => setForfeitPlayerToken(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-[#081c15] border border-red-900/60 rounded-xl text-[#f5efdf] text-sm focus:outline-none"
+                  >
+                    <option value="">-- Choose Forfeiting Player --</option>
+                    {selectedMatchForForfeit.player1Token && (
+                      <option value={selectedMatchForForfeit.player1Token}>
+                        {selectedMatchForForfeit.player1Name} (Forfeits)
+                      </option>
+                    )}
+                    {selectedMatchForForfeit.player2Token && (
+                      <option value={selectedMatchForForfeit.player2Token}>
+                        {selectedMatchForForfeit.player2Name} (Forfeits)
+                      </option>
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#d6a735] uppercase mb-1.5">
+                    Forfeiture Reason (No show, rule violation, disconnect, etc)
+                  </label>
+                  <input
+                    type="text"
+                    value={forfeitReason}
+                    onChange={(e) => setForfeitReason(e.target.value)}
+                    placeholder="e.g. Player did not report to board after grace period..."
+                    className="w-full px-4 py-2.5 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-sm focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedMatchForForfeit(null)}
+                  className="flex-1 py-2.5 bg-[#081c15] border border-[#114232] text-[#a3b8b0] font-bold rounded-xl text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || !forfeitPlayerToken}
+                  onClick={handleForfeitMatch}
+                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white font-black rounded-xl text-xs shadow-md disabled:opacity-50"
+                >
+                  Award Walkover &amp; Advance
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Score Override Modal */}

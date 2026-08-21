@@ -17,8 +17,10 @@ import {
   Crown,
   ChevronRight,
   Award,
+  Calendar,
 } from "lucide-react";
 import type { LeagueMatch, LeagueParticipant, TournamentFormat } from "@/lib/types";
+import { CountdownTimer } from "./CountdownTimer";
 
 interface BracketTreeViewProps {
   matches: LeagueMatch[];
@@ -210,19 +212,36 @@ export function BracketTreeView({
                                     : "border-[#184d3c]"
                                 } ${isP1Highlighted || isP2Highlighted ? "ring-2 ring-[#d6a735] border-[#d6a735] bg-[#0c3b2e]" : ""}`}
                               >
-                                {/* Status Header Bar */}
-                                <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 pb-1.5 border-b border-[#184d3c]">
-                                  <span className="font-mono text-[#d6a735]">Match #{match.matchNumber}</span>
-                                  {match.status === "in_progress" ? (
-                                    <span className="text-amber-300 font-extrabold flex items-center gap-1 animate-pulse">
-                                      <Zap size={12} className="text-amber-400" /> LIVE NOW
-                                    </span>
-                                  ) : match.status === "completed" ? (
-                                    <span className="text-emerald-400 font-bold flex items-center gap-1">
-                                      <CheckCircle size={12} /> Finished
-                                    </span>
-                                  ) : (
-                                    <span className="text-slate-400 font-medium">Scheduled</span>
+                                {/* Status & Schedule Header Bar */}
+                                <div className="flex flex-col gap-1 pb-1.5 border-b border-[#184d3c]">
+                                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-400">
+                                    <span className="font-mono text-[#d6a735]">Match #{match.matchNumber}</span>
+                                    {match.status === "in_progress" ? (
+                                      <span className="text-amber-300 font-extrabold flex items-center gap-1 animate-pulse">
+                                        <Zap size={12} className="text-amber-400" /> LIVE NOW
+                                      </span>
+                                    ) : match.status === "completed" ? (
+                                      <span className="text-emerald-400 font-bold flex items-center gap-1">
+                                        <CheckCircle size={12} /> Finished
+                                      </span>
+                                    ) : match.scheduledTime ? (
+                                      <CountdownTimer targetIso={match.scheduledTime} compact />
+                                    ) : (
+                                      <span className="text-slate-400 font-medium">Pending Schedule</span>
+                                    )}
+                                  </div>
+                                  {match.scheduledTime && match.status !== "completed" && (
+                                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                                      <span className="flex items-center gap-1">
+                                        <Calendar size={10} className="text-[#d6a735]" />
+                                        {new Date(match.scheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                      </span>
+                                      {match.status === "pending" && (
+                                        <span className="text-slate-400">
+                                          {new Date(match.scheduledTime).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                        </span>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
 
@@ -416,21 +435,32 @@ export function BracketTreeView({
                     key={match.id}
                     className="p-4 bg-[#06261f] border border-[#184d3c] rounded-2xl space-y-3.5 shadow-lg hover:border-[#d6a735]/40 transition-all"
                   >
-                    <div className="flex items-center justify-between text-xs border-b border-[#184d3c] pb-2">
-                      <span className="font-extrabold uppercase text-[#d6a735]">
-                        Round {match.round} • Match #{match.matchNumber}
-                      </span>
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                          match.status === "completed"
-                            ? "bg-emerald-950 text-emerald-300 border border-emerald-700"
-                            : match.status === "in_progress"
-                            ? "bg-amber-950 text-amber-300 border border-amber-600 animate-pulse"
-                            : "bg-[#081c15] text-slate-400 border border-[#184d3c]"
-                        }`}
-                      >
-                        {match.status.replace("_", " ")}
-                      </span>
+                    <div className="flex flex-col gap-1.5 border-b border-[#184d3c] pb-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-extrabold uppercase text-[#d6a735]">
+                          Round {match.round} • Match #{match.matchNumber}
+                        </span>
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                            match.status === "completed"
+                              ? "bg-emerald-950 text-emerald-300 border border-emerald-700"
+                              : match.status === "in_progress"
+                              ? "bg-amber-950 text-amber-300 border border-amber-600 animate-pulse"
+                              : "bg-[#081c15] text-slate-400 border border-[#184d3c]"
+                          }`}
+                        >
+                          {match.status.replace("_", " ")}
+                        </span>
+                      </div>
+                      {match.scheduledTime && match.status !== "completed" && (
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="flex items-center gap-1 text-slate-400 font-mono text-[10px]">
+                            <Calendar size={11} className="text-[#d6a735]" />
+                            {new Date(match.scheduledTime).toLocaleDateString([], { month: "short", day: "numeric" })} • {new Date(match.scheduledTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                          <CountdownTimer targetIso={match.scheduledTime} compact />
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-2 text-xs">

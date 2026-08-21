@@ -726,40 +726,126 @@ export const leagueService = {
     const matches: LeagueMatch[] = [];
     const now = new Date().toISOString();
 
-    let matchCounter = 1;
-    for (let i = 0; i < participants.length; i += 2) {
-      const p1 = participants[i];
-      const p2 = participants[i + 1] || null;
+    const count = participants.length;
+    // Calculate smallest power of 2 >= count
+    let bracketSize = 2;
+    while (bracketSize < count) {
+      bracketSize *= 2;
+    }
+    const totalRounds = Math.log2(bracketSize);
 
-      const match: LeagueMatch = {
-        id: `match-${league.id}-r1-m${matchCounter}`,
-        leagueId: league.id,
-        round: 1,
-        matchNumber: matchCounter,
-        bracketType: "winners",
-        player1Token: p1 ? p1.userToken : null,
-        player1Name: p1 ? p1.username : "BYE",
-        player1Score: 0,
-        player2Token: p2 ? p2.userToken : null,
-        player2Name: p2 ? p2.username : "BYE",
-        player2Score: 0,
-        winnerToken: !p2 && p1 ? p1.userToken : null, // Automatic bye victory
-        roomCode: null,
-        status: !p2 && p1 ? "completed" : "pending",
-        createdAt: now,
-      };
-      matches.push(match);
-      matchCounter++;
+    // Standard tournament seed pairings for bracketSize (e.g. for 8: [1,8], [4,5], [2,7], [3,6])
+    const generateSeeds = (num: number): number[] => {
+      let rounds = Math.log2(num) - 1;
+      let pls = [1, 2];
+      for (let i = 0; i < rounds; i++) {
+        const next: number[] = [];
+        const sum = pls.length * 2 + 1;
+        for (const p of pls) {
+          next.push(p);
+          next.push(sum - p);
+        }
+        pls = next;
+      }
+      return pls;
+    };
+
+    const seedOrder = generateSeeds(bracketSize);
+    // Create map from seed (1-indexed) to participant
+    const seedMap = new Map<number, LeagueParticipant>();
+    participants.forEach((p, idx) => {
+      seedMap.set(p.seed || idx + 1, p);
+    });
+
+    // 1. Pre-generate ALL matches across all rounds in the tree
+    for (let r = 1; r <= totalRounds; r++) {
+      const matchesInRound = bracketSize / Math.pow(2, r);
+      for (let m = 1; m <= matchesInRound; m++) {
+        const matchId = `match-${league.id}-r${r}-m${m}`;
+        const match: LeagueMatch = {
+          id: matchId,
+          leagueId: league.id,
+          round: r,
+          matchNumber: m,
+          bracketType: r === totalRounds ? "final" : "winners",
+          player1Token: null,
+          player1Name: null,
+          player1Score: 0,
+          player2Token: null,
+          player2Name: null,
+          player2Score: 0,
+          winnerToken: null,
+          roomCode: null,
+          status: "pending",
+          createdAt: now,
+        };
+        matches.push(match);
+      }
+    }
+
+    // 2. Populate Round 1 seeded players
+    const r1Matches = matches.filter((m) => m.round === 1);
+    for (let i = 0; i < r1Matches.length; i++) {
+      const match = r1Matches[i];
+      const s1 = seedOrder[i * 2];
+      const s2 = seedOrder[i * 2 + 1];
+
+      const p1 = seedMap.get(s1) || null;
+      const p2 = seedMap.get(s2) || null;
+
+      match.player1Token = p1 ? p1.userToken : null;
+      match.player1Name = p1 ? p1.username : null;
+      match.player2Token = p2 ? p2.userToken : null;
+      match.player2Name = p2 ? p2.username : null;
+
+      if (p1 && !p2) {
+        // P1 gets a BYE
+        match.winnerToken = p1.userToken;
+        match.status = "completed";
+        match.disputeNotes = "Auto-advanced via Round 1 BYE";
+      } else if (!p1 && p2) {
+        // P2 gets a BYE
+        match.winnerToken = p2.userToken;
+        match.status = "completed";
+        match.disputeNotes = "Auto-advanced via Round 1 BYE";
+      } else if (!p1 && !p2) {
+        match.status = "completed";
+      } else {
+        match.status = "pending";
+      }
+    }
+
+    // 3. Propagate any BYE winners from Round 1 into Round 2 slots immediately
+    for (let r = 1; r < totalRounds; r++) {
+      const currentRMatches = matches.filter((m) => m.round === r);
+      const nextRMatches = matches.filter((m) => m.round === r + 1);
+
+      for (const m of currentRMatches) {
+        if (m.status === "completed" && m.winnerToken) {
+          const targetMatchNum = Math.ceil(m.matchNumber / 2);
+          const targetMatch = nextRMatches.find((nm) => nm.matchNumber === targetMatchNum);
+          if (targetMatch) {
+            const winnerName = m.winnerToken === m.player1Token ? m.player1Name : m.player2Name;
+            if (m.matchNumber % 2 === 1) {
+              targetMatch.player1Token = m.winnerToken;
+              targetMatch.player1Name = winnerName;
+            } else {
+              targetMatch.player2Token = m.winnerToken;
+              targetMatch.player2Name = winnerName;
+            }
+          }
+        }
+      }
     }
 
     league.status = "active";
-    league.roundsCount = Math.ceil(Math.log2(participants.length));
+    league.roundsCount = totalRounds;
     await dbRepository.saveLeague(league);
     await dbRepository.setLeagueMatches(matches);
 
     // Notify registered players that active round 1 matches are scheduled
-    for (const m of matches) {
-      if (m.player1Token && m.player2Token) {
+    for (const m of r1Matches) {
+      if (m.player1Token && m.player2Token && m.status === "pending") {
         notificationService.sendNotification({
           userToken: m.player1Token,
           username: m.player1Name,
@@ -768,7 +854,7 @@ export const leagueService = {
           message: `Your match against ${m.player2Name} is queued. Head to the tournament bracket to play!`,
           link: `/leagues`,
           actionLabel: "View Bracket",
-        });
+        }).catch(() => {});
         notificationService.sendNotification({
           userToken: m.player2Token,
           username: m.player2Name,
@@ -777,7 +863,7 @@ export const leagueService = {
           message: `Your match against ${m.player1Name} is queued. Head to the tournament bracket to play!`,
           link: `/leagues`,
           actionLabel: "View Bracket",
-        });
+        }).catch(() => {});
       }
     }
 
@@ -1122,12 +1208,19 @@ export const leagueService = {
     const league = await dbRepository.getLeague(match.leagueId);
     if (!league) throw new Error("League not found");
 
-    if (
-      profile.role !== "admin" &&
-      profile.role !== "super_admin" &&
-      league.facilitatorToken !== facilitatorOrAdminToken
-    ) {
-      throw new Error("Only the tournament facilitator or an admin can verify match results");
+    const isStaff =
+      profile.role === "admin" ||
+      profile.role === "super_admin" ||
+      profile.role === "organizer" ||
+      profile.role === "facilitator" ||
+      league.facilitatorToken === facilitatorOrAdminToken;
+
+    const isContestant =
+      match.player1Token === facilitatorOrAdminToken ||
+      match.player2Token === facilitatorOrAdminToken;
+
+    if (!isStaff && !isContestant) {
+      throw new Error("Only tournament organizers, administrators, or active match contestants can report match results");
     }
 
     if (winnerToken === "draw") {
@@ -1141,6 +1234,13 @@ export const leagueService = {
     }
 
     await dbRepository.saveLeagueMatch(match);
+
+    const winnerName =
+      winnerToken === "draw"
+        ? null
+        : winnerToken === match.player1Token
+        ? match.player1Name
+        : match.player2Name;
 
     // Update player scores / statistics for Round Robin & Swiss
     if (league.format === "round_robin" || league.format === "swiss") {
@@ -1160,76 +1260,360 @@ export const leagueService = {
       }
     }
 
-    // Evaluate round completion and tournament progression
+    // Evaluate progression for Single Elimination / Double Elimination
     const currentMatches = await dbRepository.getLeagueMatches(league.id);
     const activeRound = match.round;
-    const roundMatches = currentMatches.filter((m) => m.round === activeRound);
-    const allRoundDone = roundMatches.every((m) => m.status === "completed");
+    const totalRounds = league.roundsCount || Math.ceil(Math.log2(league.maxParticipants || 8));
 
-    if (allRoundDone) {
-      if (league.format === "round_robin") {
-        const totalRounds = league.roundsCount || 3;
-        if (activeRound >= totalRounds) {
-          await this.finalizeRoundRobinTournament(league);
+    if (league.format === "single_elimination" || !league.format) {
+      if (activeRound < totalRounds && winnerToken && winnerToken !== "draw") {
+        // INSTANT WINNER PROGRESSION to next level in bracket
+        const targetMatchNum = Math.ceil(match.matchNumber / 2);
+        let targetMatch = currentMatches.find(
+          (m) => m.round === activeRound + 1 && m.matchNumber === targetMatchNum
+        );
+
+        if (!targetMatch) {
+          // Create next match if not pre-generated
+          targetMatch = {
+            id: `match-${league.id}-r${activeRound + 1}-m${targetMatchNum}`,
+            leagueId: league.id,
+            round: activeRound + 1,
+            matchNumber: targetMatchNum,
+            bracketType: activeRound + 1 === totalRounds ? "final" : "winners",
+            player1Token: null,
+            player1Name: null,
+            player1Score: 0,
+            player2Token: null,
+            player2Name: null,
+            player2Score: 0,
+            winnerToken: null,
+            roomCode: null,
+            status: "pending",
+            createdAt: new Date().toISOString(),
+          };
         }
-      } else if (league.format === "swiss") {
-        const totalRounds = league.roundsCount || 3;
-        if (activeRound >= totalRounds) {
-          await this.finalizeRoundRobinTournament(league);
+
+        if (match.matchNumber % 2 === 1) {
+          targetMatch.player1Token = winnerToken;
+          targetMatch.player1Name = winnerName;
         } else {
-          // Generate next Swiss round with Swiss pairing
-          await this.generateNextSwissRoundMatches(league, activeRound + 1);
+          targetMatch.player2Token = winnerToken;
+          targetMatch.player2Name = winnerName;
         }
-      } else {
-        // Single Elimination / Double Elimination
-        const roundWinners = roundMatches.map((m) => m.winnerToken).filter(Boolean) as string[];
 
-        if (roundWinners.length === 1) {
-          // Tournament Champion Decided!
-          const grandWinnerToken = roundWinners[0];
-          const runnerUpToken = roundMatches.find((m) => m.winnerToken === grandWinnerToken)
-            ? (roundMatches[0].player1Token === grandWinnerToken ? roundMatches[0].player2Token : roundMatches[0].player1Token)
-            : null;
-
-          await this.payoutTournamentPrizePool(league, grandWinnerToken, runnerUpToken, null);
-        } else if (roundWinners.length > 1) {
-          // Generate Next Round
-          const nextRound = activeRound + 1;
-          const nextMatches: LeagueMatch[] = [];
-          let nextMatchNum = 1;
-
-          for (let i = 0; i < roundWinners.length; i += 2) {
-            const w1Token = roundWinners[i];
-            const w2Token = roundWinners[i + 1] || null;
-            const p1 = await dbRepository.getProfile(w1Token);
-            const p2 = w2Token ? await dbRepository.getProfile(w2Token) : null;
-
-            const nMatch: LeagueMatch = {
-              id: `match-${league.id}-r${nextRound}-m${nextMatchNum}`,
-              leagueId: league.id,
-              round: nextRound,
-              matchNumber: nextMatchNum,
-              bracketType: match.bracketType,
-              player1Token: w1Token,
-              player1Name: p1 ? p1.username : "TBD",
-              player1Score: 0,
-              player2Token: w2Token,
-              player2Name: p2 ? p2.username : "BYE",
-              player2Score: 0,
-              winnerToken: !w2Token ? w1Token : null,
-              roomCode: null,
-              status: !w2Token ? "completed" : "pending",
-              createdAt: new Date().toISOString(),
-            };
-            nextMatches.push(nMatch);
-            nextMatchNum++;
+        // If both players are now in place for the next match, notify them & schedule if same day
+        if (targetMatch.player1Token && targetMatch.player2Token) {
+          targetMatch.status = "pending";
+          if (!targetMatch.scheduledTime) {
+            // Default 10-minute break for same-day rounds
+            const autoTime = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+            targetMatch.scheduledTime = autoTime;
           }
-          await dbRepository.setLeagueMatches(nextMatches);
+
+          notificationService.sendNotification({
+            userToken: targetMatch.player1Token,
+            username: targetMatch.player1Name,
+            type: "tournament_match",
+            title: `🏆 Round ${activeRound + 1} Match Ready: ${league.title}`,
+            message: `You advanced! Your match against ${targetMatch.player2Name} is set. Head to the tournament board to compete.`,
+            link: `/leagues`,
+            actionLabel: "View Match",
+            actionPayload: { matchId: targetMatch.id, leagueId: league.id },
+          }).catch(() => {});
+
+          notificationService.sendNotification({
+            userToken: targetMatch.player2Token,
+            username: targetMatch.player2Name,
+            type: "tournament_match",
+            title: `🏆 Round ${activeRound + 1} Match Ready: ${league.title}`,
+            message: `You advanced! Your match against ${targetMatch.player1Name} is set. Head to the tournament board to compete.`,
+            link: `/leagues`,
+            actionLabel: "View Match",
+            actionPayload: { matchId: targetMatch.id, leagueId: league.id },
+          }).catch(() => {});
+        }
+
+        await dbRepository.saveLeagueMatch(targetMatch);
+      } else if (activeRound >= totalRounds && winnerToken && winnerToken !== "draw") {
+        // Tournament Grand Final Concluded!
+        const grandWinnerToken = winnerToken;
+        const runnerUpToken =
+          match.player1Token === grandWinnerToken ? match.player2Token : match.player1Token;
+
+        await this.payoutTournamentPrizePool(league, grandWinnerToken, runnerUpToken, null);
+      }
+    } else if (league.format === "round_robin" || league.format === "swiss") {
+      const roundMatches = currentMatches.filter((m) => m.round === activeRound);
+      const allRoundDone = roundMatches.every((m) => m.status === "completed");
+
+      if (allRoundDone) {
+        if (activeRound >= (league.roundsCount || 3)) {
+          await this.finalizeRoundRobinTournament(league);
+        } else if (league.format === "swiss") {
+          await this.generateNextSwissRoundMatches(league, activeRound + 1);
         }
       }
     }
 
     return { match, league };
+  },
+
+  async scheduleMatch(
+    facilitatorOrAdminToken: string,
+    matchId: string,
+    scheduledTimeIso: string
+  ) {
+    const profile = await dbRepository.getProfile(facilitatorOrAdminToken);
+    if (!profile) throw new Error("Unauthorized profile");
+
+    const matchesList = await dbRepository.getLeagueMatches("");
+    const match = matchesList.find((m) => m.id === matchId);
+    if (!match) throw new Error("Match not found");
+
+    const league = await dbRepository.getLeague(match.leagueId);
+    if (!league) throw new Error("League not found");
+
+    const isStaff =
+      profile.role === "admin" ||
+      profile.role === "super_admin" ||
+      profile.role === "organizer" ||
+      profile.role === "facilitator" ||
+      league.facilitatorToken === facilitatorOrAdminToken;
+
+    if (!isStaff) throw new Error("Only tournament organizers or administrators can set match schedules");
+
+    match.scheduledTime = scheduledTimeIso;
+    await dbRepository.saveLeagueMatch(match);
+
+    // Notify participants
+    if (match.player1Token) {
+      notificationService.sendNotification({
+        userToken: match.player1Token,
+        username: match.player1Name,
+        type: "tournament_match",
+        title: `⏰ Match Scheduled: ${league.title}`,
+        message: `Your Round ${match.round} Match #${match.matchNumber} is scheduled for ${new Date(scheduledTimeIso).toLocaleString()}.`,
+        link: `/leagues`,
+        actionLabel: "View Schedule",
+      }).catch(() => {});
+    }
+
+    if (match.player2Token) {
+      notificationService.sendNotification({
+        userToken: match.player2Token,
+        username: match.player2Name,
+        type: "tournament_match",
+        title: `⏰ Match Scheduled: ${league.title}`,
+        message: `Your Round ${match.round} Match #${match.matchNumber} is scheduled for ${new Date(scheduledTimeIso).toLocaleString()}.`,
+        link: `/leagues`,
+        actionLabel: "View Schedule",
+      }).catch(() => {});
+    }
+
+    return match;
+  },
+
+  async scheduleRound(
+    facilitatorOrAdminToken: string,
+    leagueId: string,
+    round: number,
+    options: {
+      startDateTimeIso: string;
+      matchDurationMinutes?: number;
+      breakMinutes?: number;
+      staggerMatches?: boolean;
+    }
+  ) {
+    const profile = await dbRepository.getProfile(facilitatorOrAdminToken);
+    if (!profile) throw new Error("Unauthorized profile");
+
+    const league = await dbRepository.getLeague(leagueId);
+    if (!league) throw new Error("League not found");
+
+    const isStaff =
+      profile.role === "admin" ||
+      profile.role === "super_admin" ||
+      profile.role === "organizer" ||
+      profile.role === "facilitator" ||
+      league.facilitatorToken === facilitatorOrAdminToken;
+
+    if (!isStaff) throw new Error("Only tournament organizers or administrators can schedule rounds");
+
+    const allMatches = await dbRepository.getLeagueMatches(leagueId);
+    const roundMatches = allMatches.filter((m) => m.round === round);
+    if (roundMatches.length === 0) throw new Error(`No matches found in Round ${round}`);
+
+    const baseStartTime = new Date(options.startDateTimeIso).getTime();
+    const durationMs = (options.matchDurationMinutes || 20) * 60 * 1000;
+    const breakMs = (options.breakMinutes || 5) * 60 * 1000;
+    const stagger = Boolean(options.staggerMatches);
+
+    const updatedMatches: LeagueMatch[] = [];
+    for (let i = 0; i < roundMatches.length; i++) {
+      const match = roundMatches[i];
+      const matchStartMs = stagger ? baseStartTime + i * (durationMs + breakMs) : baseStartTime;
+      const scheduledTimeIso = new Date(matchStartMs).toISOString();
+
+      match.scheduledTime = scheduledTimeIso;
+      await dbRepository.saveLeagueMatch(match);
+      updatedMatches.push(match);
+
+      if (match.player1Token) {
+        notificationService.sendNotification({
+          userToken: match.player1Token,
+          username: match.player1Name,
+          type: "tournament_match",
+          title: `⏰ Round ${round} Fixture Scheduled`,
+          message: `Your match vs ${match.player2Name || "Opponent"} in ${league.title} is set for ${new Date(scheduledTimeIso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`,
+          link: `/leagues`,
+          actionLabel: "View Match",
+        }).catch(() => {});
+      }
+      if (match.player2Token) {
+        notificationService.sendNotification({
+          userToken: match.player2Token,
+          username: match.player2Name,
+          type: "tournament_match",
+          title: `⏰ Round ${round} Fixture Scheduled`,
+          message: `Your match vs ${match.player1Name || "Opponent"} in ${league.title} is set for ${new Date(scheduledTimeIso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`,
+          link: `/leagues`,
+          actionLabel: "View Match",
+        }).catch(() => {});
+      }
+    }
+
+    return updatedMatches;
+  },
+
+  async delayRound(
+    facilitatorOrAdminToken: string,
+    leagueId: string,
+    round: number,
+    delayMinutes: number,
+    reason?: string
+  ) {
+    const profile = await dbRepository.getProfile(facilitatorOrAdminToken);
+    if (!profile) throw new Error("Unauthorized profile");
+
+    const league = await dbRepository.getLeague(leagueId);
+    if (!league) throw new Error("League not found");
+
+    const isStaff =
+      profile.role === "admin" ||
+      profile.role === "super_admin" ||
+      profile.role === "organizer" ||
+      profile.role === "facilitator" ||
+      league.facilitatorToken === facilitatorOrAdminToken;
+
+    if (!isStaff) throw new Error("Only organizers or administrators can delay rounds");
+
+    const allMatches = await dbRepository.getLeagueMatches(leagueId);
+    const roundMatches = allMatches.filter((m) => m.round === round && m.status !== "completed");
+    const delayMs = delayMinutes * 60 * 1000;
+
+    const updatedMatches: LeagueMatch[] = [];
+    for (const match of roundMatches) {
+      const currentMs = match.scheduledTime ? new Date(match.scheduledTime).getTime() : Date.now();
+      const newTimeIso = new Date(currentMs + delayMs).toISOString();
+      match.scheduledTime = newTimeIso;
+      await dbRepository.saveLeagueMatch(match);
+      updatedMatches.push(match);
+
+      const noticeMsg = `Round ${round} has been delayed by ${delayMinutes} minutes${reason ? ` (${reason})` : ""}. New start time: ${new Date(newTimeIso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`;
+
+      if (match.player1Token) {
+        notificationService.sendNotification({
+          userToken: match.player1Token,
+          username: match.player1Name,
+          type: "tournament_match",
+          title: `⚠️ Round ${round} Delayed by ${delayMinutes}m`,
+          message: noticeMsg,
+          link: `/leagues`,
+          actionLabel: "View Fixtures",
+        }).catch(() => {});
+      }
+      if (match.player2Token) {
+        notificationService.sendNotification({
+          userToken: match.player2Token,
+          username: match.player2Name,
+          type: "tournament_match",
+          title: `⚠️ Round ${round} Delayed by ${delayMinutes}m`,
+          message: noticeMsg,
+          link: `/leagues`,
+          actionLabel: "View Fixtures",
+        }).catch(() => {});
+      }
+    }
+
+    return updatedMatches;
+  },
+
+  async forfeitMatch(
+    facilitatorOrAdminToken: string,
+    matchId: string,
+    forfeitingPlayerToken: string,
+    reason: string
+  ) {
+    const matchesList = await dbRepository.getLeagueMatches("");
+    const match = matchesList.find((m) => m.id === matchId);
+    if (!match) throw new Error("Match not found");
+
+    const winningToken =
+      match.player1Token === forfeitingPlayerToken ? match.player2Token : match.player1Token;
+
+    if (!winningToken) {
+      throw new Error("Cannot determine winning contestant for walkover");
+    }
+
+    return this.submitLeagueMatchResult(
+      facilitatorOrAdminToken,
+      matchId,
+      winningToken,
+      `Walkover / Forfeit: ${reason}`
+    );
+  },
+
+  async broadcastTournamentAnnouncement(
+    facilitatorOrAdminToken: string,
+    leagueId: string,
+    title: string,
+    message: string
+  ) {
+    const profile = await dbRepository.getProfile(facilitatorOrAdminToken);
+    if (!profile) throw new Error("Unauthorized profile");
+
+    const league = await dbRepository.getLeague(leagueId);
+    if (!league) throw new Error("League not found");
+
+    const isStaff =
+      profile.role === "admin" ||
+      profile.role === "super_admin" ||
+      profile.role === "organizer" ||
+      profile.role === "facilitator" ||
+      league.facilitatorToken === facilitatorOrAdminToken;
+
+    if (!isStaff) throw new Error("Only tournament organizers or administrators can broadcast announcements");
+
+    const participants = await dbRepository.getLeagueParticipants(leagueId);
+    let count = 0;
+
+    for (const p of participants) {
+      if (p.userToken) {
+        notificationService.sendNotification({
+          userToken: p.userToken,
+          username: p.username,
+          type: "system_alert",
+          title: `📢 ${title}`,
+          message: `${message} — Organizer, ${league.title}`,
+          link: `/leagues`,
+          actionLabel: "View Tournament",
+        }).catch(() => {});
+        count++;
+      }
+    }
+
+    return { success: true, broadcastCount: count };
   },
 
   async finalizeRoundRobinTournament(league: League) {

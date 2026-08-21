@@ -28,9 +28,15 @@ import {
   UserX,
   Grid,
   GitBranch,
+  Calendar,
+  Zap,
+  Swords,
+  Eye,
+  Hourglass,
 } from "lucide-react";
 import type { League, LeagueMatch, LeagueParticipant, TournamentFormat } from "@/lib/types";
 import { BracketTreeView } from "@/components/BracketTreeView";
+import { CountdownTimer } from "@/components/CountdownTimer";
 
 export default function TournamentDetailPage() {
   const params = useParams();
@@ -46,7 +52,7 @@ export default function TournamentDetailPage() {
   const [username, setUsername] = useState("");
   const [userRole, setUserRole] = useState("user");
 
-  const [activeTab, setActiveTab] = useState<"bracket" | "roster" | "rules">("bracket");
+  const [activeTab, setActiveTab] = useState<"bracket" | "fixtures" | "roster" | "rules">("bracket");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -263,6 +269,21 @@ export default function TournamentDetailPage() {
   const userParticipant = participants.find((p) => p.userToken === token);
   const approvedParticipants = participants.filter((p) => p.status === "approved" || !p.status);
   const pendingParticipants = participants.filter((p) => p.status === "pending");
+
+  const myUpcomingMatch = matches.find(
+    (m) =>
+      Boolean(token && (m.player1Token === token || m.player2Token === token)) &&
+      (m.status === "pending" || m.status === "in_progress")
+  );
+
+  const fixtureRounds = Array.from(new Set(matches.map((m) => m.round))).sort((a, b) => a - b);
+
+  const getRoundTitle = (round: number, totalRounds: number) => {
+    if (round === totalRounds) return "🏆 Championship Final";
+    if (round === totalRounds - 1 && totalRounds >= 2) return "Semifinals";
+    if (round === totalRounds - 2 && totalRounds >= 3) return "Quarterfinals";
+    return `Round / Cycle ${round}`;
+  };
 
   const entryFeeMarbles = league?.entryFeeMarbles || league?.entryFeePoints || 0;
   const prizePoolMarbles = league?.prizePoolPoints || 0;
@@ -558,21 +579,88 @@ export default function TournamentDetailPage() {
           )}
         </section>
 
+        {/* LOGGED IN PLAYER PERSONAL UPCOMING MATCH HERO & COUNTDOWN */}
+        {myUpcomingMatch && (
+          <section className="p-5 sm:p-6 bg-gradient-to-r from-[#06261f] via-[#0c3b2e] to-[#06261f] border-2 border-[#d6a735] rounded-3xl shadow-2xl space-y-4 animate-in fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-0.5 bg-[#d6a735] text-[#06261f] text-[10px] font-black uppercase rounded-full flex items-center gap-1">
+                    <Swords size={12} /> Your Active Match
+                  </span>
+                  <span className="text-xs font-mono font-bold text-[#d6a735]">
+                    Round {myUpcomingMatch.round} • Match #{myUpcomingMatch.matchNumber}
+                  </span>
+                  {myUpcomingMatch.status === "in_progress" ? (
+                    <span className="px-2.5 py-0.5 bg-amber-500/20 border border-amber-400 text-amber-300 text-[10px] font-black uppercase rounded-full flex items-center gap-1 animate-pulse">
+                      <Zap size={11} /> Live Now
+                    </span>
+                  ) : myUpcomingMatch.scheduledTime ? (
+                    <CountdownTimer targetIso={myUpcomingMatch.scheduledTime} />
+                  ) : (
+                    <span className="text-xs text-slate-400">Scheduled</span>
+                  )}
+                </div>
+
+                <h3 className="text-base sm:text-lg font-black text-[#f5efdf] flex items-center gap-2 flex-wrap">
+                  <span>
+                    {myUpcomingMatch.player1Token === token
+                      ? `You (${myUpcomingMatch.player1Name}) vs ${myUpcomingMatch.player2Name || "TBD"}`
+                      : `${myUpcomingMatch.player1Name || "TBD"} vs You (${myUpcomingMatch.player2Name})`}
+                  </span>
+                </h3>
+
+                {myUpcomingMatch.scheduledTime && (
+                  <p className="text-xs text-slate-300 flex items-center gap-1.5 font-mono">
+                    <Calendar size={13} className="text-[#d6a735]" />
+                    <span>Scheduled for:</span>
+                    <strong className="text-[#f5efdf]">
+                      {new Date(myUpcomingMatch.scheduledTime).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} at {new Date(myUpcomingMatch.scheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </strong>
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => handleStartMatchRoom(myUpcomingMatch.id)}
+                  className="w-full sm:w-auto px-6 py-3 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black text-xs sm:text-sm rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2 active:scale-95"
+                >
+                  <Play size={16} className="fill-current" />
+                  Enter Match Board Ahead of Time
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Tab Navigation */}
-        <div className="flex border-b border-[#184d3c] gap-2 sm:gap-4 text-xs sm:text-sm font-bold">
+        <div className="flex border-b border-[#184d3c] gap-2 sm:gap-4 text-xs sm:text-sm font-bold overflow-x-auto">
           <button
             onClick={() => setActiveTab("bracket")}
-            className={`pb-3 px-4 flex items-center gap-2 border-b-2 transition-all ${
+            className={`pb-3 px-4 flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${
               activeTab === "bracket"
                 ? "border-[#d6a735] text-[#d6a735]"
                 : "border-transparent text-slate-400 hover:text-[#f5efdf]"
             }`}
           >
-            <GitBranch size={16} /> Tournament Bracket ({matches.length} Matches)
+            <GitBranch size={16} /> Tournament Bracket ({matches.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("fixtures")}
+            className={`pb-3 px-4 flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${
+              activeTab === "fixtures"
+                ? "border-[#d6a735] text-[#d6a735]"
+                : "border-transparent text-slate-400 hover:text-[#f5efdf]"
+            }`}
+          >
+            <Calendar size={16} /> Fixtures &amp; Schedule ({fixtureRounds.length} Cycles)
           </button>
           <button
             onClick={() => setActiveTab("roster")}
-            className={`pb-3 px-4 flex items-center gap-2 border-b-2 transition-all ${
+            className={`pb-3 px-4 flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${
               activeTab === "roster"
                 ? "border-[#d6a735] text-[#d6a735]"
                 : "border-transparent text-slate-400 hover:text-[#f5efdf]"
@@ -582,7 +670,7 @@ export default function TournamentDetailPage() {
           </button>
           <button
             onClick={() => setActiveTab("rules")}
-            className={`pb-3 px-4 flex items-center gap-2 border-b-2 transition-all ${
+            className={`pb-3 px-4 flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${
               activeTab === "rules"
                 ? "border-[#d6a735] text-[#d6a735]"
                 : "border-transparent text-slate-400 hover:text-[#f5efdf]"
@@ -608,6 +696,184 @@ export default function TournamentDetailPage() {
               }}
               title={league.title}
             />
+          </section>
+        )}
+
+        {activeTab === "fixtures" && (
+          <section className="space-y-6">
+            {matches.length === 0 ? (
+              <div className="p-12 text-center text-slate-300 italic bg-[#06261f] rounded-3xl border border-[#184d3c] space-y-3">
+                <Calendar size={36} className="mx-auto text-[#d6a735] animate-pulse" />
+                <p className="text-sm font-bold text-[#f5efdf]">Fixtures have not been scheduled yet.</p>
+                <p className="text-xs text-slate-400 max-w-md mx-auto">
+                  The tournament organizer will generate and schedule the fixtures once registrations close.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {fixtureRounds.map((roundNum) => {
+                  const roundMatches = matches.filter((m) => m.round === roundNum);
+                  const firstScheduledMatch = roundMatches.find((m) => m.scheduledTime);
+
+                  return (
+                    <div key={`cycle-${roundNum}`} className="p-6 bg-[#06261f] border border-[#184d3c] rounded-3xl space-y-4 shadow-xl">
+                      {/* Cycle Header */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#184d3c]">
+                        <div className="flex items-center gap-3">
+                          <span className="w-8 h-8 rounded-xl bg-[#0c3b2e] border border-[#d6a735]/40 text-[#d6a735] font-black text-sm flex items-center justify-center">
+                            R{roundNum}
+                          </span>
+                          <div>
+                            <h3 className="text-sm sm:text-base font-bold text-[#f5efdf]">
+                              {getRoundTitle(roundNum, fixtureRounds.length)}
+                            </h3>
+                            <span className="text-xs text-slate-400">
+                              {roundMatches.length} {roundMatches.length === 1 ? "Match Fixture" : "Match Fixtures"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {firstScheduledMatch?.scheduledTime && (
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-mono text-slate-300 flex items-center gap-1.5 bg-[#081c15] px-3 py-1.5 rounded-xl border border-[#184d3c]">
+                              <Calendar size={13} className="text-[#d6a735]" />
+                              {new Date(firstScheduledMatch.scheduledTime).toLocaleDateString([], { month: "short", day: "numeric" })} • {new Date(firstScheduledMatch.scheduledTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                            <CountdownTimer targetIso={firstScheduledMatch.scheduledTime} />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Matches in Cycle */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {roundMatches.map((match) => {
+                          const isP1User = Boolean(token && match.player1Token === token);
+                          const isP2User = Boolean(token && match.player2Token === token);
+                          const isP1Winner = Boolean(match.winnerToken && match.winnerToken === match.player1Token);
+                          const isP2Winner = Boolean(match.winnerToken && match.winnerToken === match.player2Token);
+                          const isUserInMatch = isP1User || isP2User;
+
+                          return (
+                            <div
+                              key={match.id}
+                              className={`p-4 rounded-2xl border transition-all space-y-3.5 ${
+                                isUserInMatch
+                                  ? "bg-[#0c3b2e] border-[#d6a735] shadow-lg ring-1 ring-[#d6a735]/40"
+                                  : "bg-[#081c15] border-[#184d3c] hover:border-[#d6a735]/40"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between text-xs pb-2 border-b border-[#184d3c]">
+                                <span className="font-mono text-[#d6a735] font-bold">Match #{match.matchNumber}</span>
+                                <div className="flex items-center gap-2">
+                                  {match.scheduledTime && match.status !== "completed" && (
+                                    <CountdownTimer targetIso={match.scheduledTime} compact />
+                                  )}
+                                  <span
+                                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                      match.status === "completed"
+                                        ? "bg-emerald-950 text-emerald-300 border border-emerald-700"
+                                        : match.status === "in_progress"
+                                        ? "bg-amber-950 text-amber-300 border border-amber-600 animate-pulse"
+                                        : "bg-[#06261f] text-slate-400 border border-[#184d3c]"
+                                    }`}
+                                  >
+                                    {match.status.replace("_", " ")}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="space-y-2 text-xs">
+                                {/* Player 1 */}
+                                <div
+                                  className={`p-2.5 rounded-xl font-bold flex items-center justify-between ${
+                                    isP1Winner
+                                      ? "bg-[#d6a735]/25 text-[#d6a735] border border-[#d6a735]/50"
+                                      : isP1User
+                                      ? "bg-[#06261f] text-[#d6a735] border border-[#d6a735]/40"
+                                      : "bg-[#06261f] text-[#f5efdf]"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 truncate">
+                                    <Shield size={14} className={match.player1Token ? "text-[#d6a735]" : "text-slate-500"} />
+                                    <span className="truncate">{match.player1Name || "TBD (Waiting for winner)"}</span>
+                                    {isP1User && (
+                                      <span className="text-[9px] bg-[#d6a735] text-[#06261f] font-black px-1.5 py-0.2 rounded-full">
+                                        YOU
+                                      </span>
+                                    )}
+                                  </div>
+                                  {isP1Winner && <Crown size={14} className="text-[#d6a735] shrink-0" />}
+                                </div>
+
+                                <div className="text-center font-mono text-[10px] text-slate-400">VS</div>
+
+                                {/* Player 2 */}
+                                <div
+                                  className={`p-2.5 rounded-xl font-bold flex items-center justify-between ${
+                                    isP2Winner
+                                      ? "bg-[#d6a735]/25 text-[#d6a735] border border-[#d6a735]/50"
+                                      : isP2User
+                                      ? "bg-[#06261f] text-[#d6a735] border border-[#d6a735]/40"
+                                      : "bg-[#06261f] text-[#f5efdf]"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 truncate">
+                                    <Shield size={14} className={match.player2Token ? "text-[#d6a735]" : "text-slate-500"} />
+                                    <span className="truncate">{match.player2Name || "TBD (Waiting for winner)"}</span>
+                                    {isP2User && (
+                                      <span className="text-[9px] bg-[#d6a735] text-[#06261f] font-black px-1.5 py-0.2 rounded-full">
+                                        YOU
+                                      </span>
+                                    )}
+                                  </div>
+                                  {isP2Winner && <Crown size={14} className="text-[#d6a735] shrink-0" />}
+                                </div>
+                              </div>
+
+                              {/* Controls */}
+                              <div className="flex items-center justify-between pt-2 border-t border-[#184d3c] text-xs">
+                                <div className="text-[11px] text-slate-400 font-mono">
+                                  {match.scheduledTime ? (
+                                    <span className="flex items-center gap-1">
+                                      <Clock size={11} className="text-[#d6a735]" />
+                                      {new Date(match.scheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  ) : (
+                                    <span>Time TBD</span>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  {isUserInMatch && match.status !== "completed" && (
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() => handleStartMatchRoom(match.id)}
+                                      className="px-3 py-1.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-lg text-xs flex items-center gap-1 transition-all shadow"
+                                    >
+                                      <Play size={12} className="fill-current" /> Enter Match Arena
+                                    </button>
+                                  )}
+
+                                  {match.roomCode && (
+                                    <a
+                                      href={`/arena?code=${match.roomCode}&mode=league&spectate=1`}
+                                      className="px-3 py-1.5 bg-[#06261f] hover:bg-[#0c3b2e] text-[#d6a735] font-bold rounded-lg border border-[#d6a735]/40 text-xs flex items-center gap-1 transition-colors"
+                                    >
+                                      <Eye size={12} /> Watch Live
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
         )}
 
