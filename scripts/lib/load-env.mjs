@@ -76,6 +76,7 @@ export function resolveMysqlConfig() {
   let user = process.env.MYSQL_USER || "root";
   let password = process.env.MYSQL_PASSWORD || "";
   let database = process.env.MYSQL_DATABASE || "damii";
+  let ssl = ["1", "true", "yes", "on"].includes(String(process.env.MYSQL_SSL || "").toLowerCase());
 
   if (url && /^mysql(2)?:\/\//i.test(url)) {
     const parsed = new URL(url);
@@ -85,6 +86,19 @@ export function resolveMysqlConfig() {
     password = decodeURIComponent(parsed.password) || password;
     const dbName = parsed.pathname.replace(/^\//, "");
     if (dbName) database = decodeURIComponent(dbName);
+
+    const sslParam =
+      parsed.searchParams.get("ssl") ||
+      parsed.searchParams.get("sslmode") ||
+      parsed.searchParams.get("ssl-mode");
+    if (
+      sslParam &&
+      sslParam.toLowerCase() !== "false" &&
+      sslParam.toLowerCase() !== "disable" &&
+      sslParam.toLowerCase() !== "0"
+    ) {
+      ssl = true;
+    }
   }
 
   return {
@@ -94,8 +108,6 @@ export function resolveMysqlConfig() {
     password,
     database,
     multipleStatements: true,
-    ssl: ["1", "true", "yes", "on"].includes(String(process.env.MYSQL_SSL || "").toLowerCase())
-      ? { rejectUnauthorized: false }
-      : undefined,
+    ssl: ssl ? { rejectUnauthorized: false } : undefined,
   };
 }

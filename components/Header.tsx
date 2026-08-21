@@ -323,6 +323,18 @@ export function Header() {
             if (data.balance.bestStreak !== undefined) setBestStreak(data.balance.bestStreak);
             if (data.balance.matchesLast7Days !== undefined) setMatchesLast7Days(data.balance.matchesLast7Days);
             if (data.balance.opponentRatingAvg !== undefined) setOpponentRatingAvg(data.balance.opponentRatingAvg);
+
+            // Update cached user object in localStorage
+            try {
+              const currentAuth = localStorage.getItem("damii-auth-user");
+              const parsed = currentAuth ? JSON.parse(currentAuth) : {};
+              parsed.points = data.balance.points;
+              parsed.username = data.balance.username || parsed.username;
+              parsed.role = data.balance.role || parsed.role;
+              localStorage.setItem("damii-auth-user", JSON.stringify(parsed));
+            } catch {
+              // ignore
+            }
           }
         })
         .catch(() => undefined);
@@ -389,6 +401,14 @@ export function Header() {
     syncAuth();
 
     const handleAuthChange = () => syncAuth();
+    const handleBalanceChange = (e: Event) => {
+      const custom = e as CustomEvent<{ points?: number }>;
+      if (custom.detail?.points !== undefined && typeof custom.detail.points === "number") {
+        setPoints(custom.detail.points);
+      }
+      syncAuth();
+    };
+
     const handleOpenAuth = (e: Event) => {
       setAuthError("");
       setAuthSuccess("");
@@ -400,13 +420,33 @@ export function Header() {
     };
 
     window.addEventListener("damii-auth-changed", handleAuthChange);
+    window.addEventListener("damii-balance-changed", handleBalanceChange);
+    window.addEventListener("damii-wallet-updated", handleAuthChange);
     window.addEventListener("storage", handleAuthChange);
     window.addEventListener("damii-open-auth", handleOpenAuth);
 
+    // Periodic reactive polling every 5s so balance stays fresh across tab changes / background settlements
+    const balanceInterval = setInterval(() => {
+      const activeTok = localStorage.getItem("damii_session_token") || localStorage.getItem("damii-player-token");
+      if (activeTok && document.visibilityState === "visible") {
+        fetch(`/api/wallet?token=${encodeURIComponent(activeTok)}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data?.balance?.points !== undefined) {
+              setPoints((prev) => (prev !== data.balance.points ? data.balance.points : prev));
+            }
+          })
+          .catch(() => undefined);
+      }
+    }, 5000);
+
     return () => {
       window.removeEventListener("damii-auth-changed", handleAuthChange);
+      window.removeEventListener("damii-balance-changed", handleBalanceChange);
+      window.removeEventListener("damii-wallet-updated", handleAuthChange);
       window.removeEventListener("storage", handleAuthChange);
       window.removeEventListener("damii-open-auth", handleOpenAuth);
+      clearInterval(balanceInterval);
     };
   }, [pathname, syncAuth]);
 

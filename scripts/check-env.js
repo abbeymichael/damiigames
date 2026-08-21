@@ -32,6 +32,8 @@ async function main() {
   let password = process.env.MYSQL_PASSWORD || "";
   let database = process.env.MYSQL_DATABASE || "damii";
 
+  let ssl = ["1", "true", "yes", "on"].includes(String(process.env.MYSQL_SSL || "").toLowerCase());
+
   if (url) {
     if (!/^mysql(2)?:\/\//i.test(url)) {
       problems.push(`DATABASE_URL must start with mysql:// (received "${url.split(":")[0]}://...")`);
@@ -43,6 +45,19 @@ async function main() {
         user = decodeURIComponent(parsed.username) || user;
         password = decodeURIComponent(parsed.password) || password;
         database = decodeURIComponent(parsed.pathname.replace(/^\//, "")) || database;
+
+        const sslParam =
+          parsed.searchParams.get("ssl") ||
+          parsed.searchParams.get("sslmode") ||
+          parsed.searchParams.get("ssl-mode");
+        if (
+          sslParam &&
+          sslParam.toLowerCase() !== "false" &&
+          sslParam.toLowerCase() !== "disable" &&
+          sslParam.toLowerCase() !== "0"
+        ) {
+          ssl = true;
+        }
       } catch {
         problems.push("DATABASE_URL could not be parsed as a URL");
       }
@@ -68,7 +83,14 @@ async function main() {
 
   const mysql = await import("mysql2/promise");
   try {
-    const conn = await mysql.createConnection({ host, port, user, password, database });
+    const conn = await mysql.createConnection({
+      host,
+      port,
+      user,
+      password,
+      database,
+      ssl: ssl ? { rejectUnauthorized: false } : undefined,
+    });
     await conn.query("SELECT 1");
     await conn.end();
     console.log("✓ MySQL connection OK");

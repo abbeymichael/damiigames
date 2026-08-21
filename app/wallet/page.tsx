@@ -83,7 +83,16 @@ export default function WalletPage() {
         headers: getAuthHeaders(),
       });
       const data = await res.json();
-      if (data.balance) setBalance(data.balance);
+      if (data.balance) {
+        setBalance(data.balance);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("damii-balance-changed", {
+              detail: { points: data.balance.points },
+            })
+          );
+        }
+      }
       if (Array.isArray(data.transactions)) setTransactions(data.transactions);
       if (data.settings) {
         setLimits({

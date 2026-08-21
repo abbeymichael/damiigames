@@ -87,6 +87,7 @@ function parseMysqlConfig(problems: string[]): MysqlConfig | null {
   let user = process.env.MYSQL_USER || "root";
   let password = process.env.MYSQL_PASSWORD || "";
   let database = process.env.MYSQL_DATABASE || "damii";
+  let ssl = bool(process.env.MYSQL_SSL, false);
 
   if (url) {
     if (!/^mysql(2)?:\/\//i.test(url)) {
@@ -103,6 +104,19 @@ function parseMysqlConfig(problems: string[]): MysqlConfig | null {
       password = decodeURIComponent(parsed.password) || password;
       const dbName = parsed.pathname.replace(/^\//, "");
       database = dbName ? decodeURIComponent(dbName) : database;
+
+      const sslParam =
+        parsed.searchParams.get("ssl") ||
+        parsed.searchParams.get("sslmode") ||
+        parsed.searchParams.get("ssl-mode");
+      if (
+        sslParam &&
+        sslParam.toLowerCase() !== "false" &&
+        sslParam.toLowerCase() !== "disable" &&
+        sslParam.toLowerCase() !== "0"
+      ) {
+        ssl = true;
+      }
     } catch {
       problems.push("DATABASE_URL could not be parsed as a URL");
       return null;
@@ -125,7 +139,7 @@ function parseMysqlConfig(problems: string[]): MysqlConfig | null {
     password,
     database,
     connectionLimit: Math.max(1, int(process.env.MYSQL_POOL_SIZE, 10)),
-    ssl: bool(process.env.MYSQL_SSL, false),
+    ssl,
   };
 }
 
