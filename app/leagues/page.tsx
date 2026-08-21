@@ -1,84 +1,47 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import { SharedHeader } from "@/components/SharedHeader";
 import { Footer } from "@/components/Footer";
 import {
   Trophy,
-  Plus,
   Users,
   Shield,
   Award,
   CheckCircle,
   Lock,
-  Calendar,
   Clock,
-  Eye,
-  UserCheck,
-  UserX,
-  Copy,
-  Check,
-  Play,
-  Settings,
-  Grid,
-  TrendingUp,
-  Sliders,
+  ArrowRight,
+  Crown,
+  Search,
+  Filter,
   Sparkles,
-  HelpCircle,
+  Flame,
+  PlusCircle,
+  Building2,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  GitBranch,
 } from "lucide-react";
-import type { League, LeagueMatch, LeagueParticipant, TournamentFormat } from "@/lib/types";
-import { BracketTreeView } from "@/components/BracketTreeView";
+import type { League, TournamentFormat } from "@/lib/types";
 
-export default function LeaguesPage() {
+export default function LeaguesDirectoryPage() {
   const [leagues, setLeagues] = useState<League[]>([]);
-  const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null);
-  const [activeLeagueDetails, setActiveLeagueDetails] = useState<{
-    league: League;
-    participants: LeagueParticipant[];
-    matches: LeagueMatch[];
-  } | null>(null);
-
-  const [token, setToken] = useState("");
-  const [username, setUsername] = useState("");
-  const [userRole, setUserRole] = useState("user");
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [joiningLeagueId, setJoiningLeagueId] = useState<string | null>(null);
-  const [inviteCodeInput, setInviteCodeInput] = useState("");
-  const [copiedCode, setCopiedCode] = useState(false);
-
-  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
-  // Create form state
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [entryFee, setEntryFee] = useState(50);
-  const [prizePool, setPrizePool] = useState(5000);
-  const [maxParticipants, setMaxParticipants] = useState(8);
-  const [format, setFormat] = useState<TournamentFormat>("single_elimination");
-  const [isPrivate, setIsPrivate] = useState(false);
-  const [inviteCode, setInviteCode] = useState("");
-  const [requiresApproval, setRequiresApproval] = useState(false);
-  const [scheduleDate, setScheduleDate] = useState("Saturdays & Sundays");
-  const [scheduleTime, setScheduleTime] = useState("18:00 GMT");
-  const [turnTimerSeconds, setTurnTimerSeconds] = useState(60);
-  const [rulesNotes, setRulesNotes] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "registration" | "active" | "completed">("all");
+  const [formatFilter, setFormatFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // Quick Match Score Modal
-  const [selectedMatchForScore, setSelectedMatchForScore] = useState<LeagueMatch | null>(null);
-  const [scoringWinnerToken, setSelectedScoringWinnerToken] = useState<string | "draw">("");
-  const [scoringDisputeNotes, setScoringDisputeNotes] = useState("");
+  const [userRole, setUserRole] = useState("user");
+  const [userToken, setUserToken] = useState("");
 
   useEffect(() => {
-    const syncLeagueAuth = () => {
-      const saved = localStorage.getItem("damii-player-token");
-      setToken(saved || "");
-      setUsername(localStorage.getItem("damii-player-name") || "");
+    const syncAuth = () => {
+      const savedToken = localStorage.getItem("damii-player-token") || "";
+      setUserToken(savedToken);
 
       const authUser = localStorage.getItem("damii-auth-user");
       if (authUser) {
@@ -86,786 +49,426 @@ export default function LeaguesPage() {
           const parsed = JSON.parse(authUser);
           if (parsed.role) setUserRole(parsed.role);
         } catch {
-          /* silent */
+          /* ignore */
         }
       }
     };
 
-    syncLeagueAuth();
+    syncAuth();
     loadLeagues();
 
-    window.addEventListener("damii-auth-changed", syncLeagueAuth);
-    return () => window.removeEventListener("damii-auth-changed", syncLeagueAuth);
+    window.addEventListener("damii-auth-changed", syncAuth);
+    return () => window.removeEventListener("damii-auth-changed", syncAuth);
   }, []);
 
-  useEffect(() => {
-    if (selectedLeagueId) {
-      loadLeagueDetails(selectedLeagueId);
-    }
-  }, [selectedLeagueId]);
-
   async function loadLeagues() {
+    setLoading(true);
+    setError("");
     try {
       const res = await fetch("/api/league");
       const data = await res.json();
-      if (data.leagues) {
-        setLeagues(data.leagues);
-        if (data.leagues.length > 0 && !selectedLeagueId) {
-          setSelectedLeagueId(data.leagues[0].id);
-        }
-      }
-    } catch {
-      // Retain
-    }
-  }
-
-  async function loadLeagueDetails(id: string) {
-    try {
-      const res = await fetch(`/api/league?id=${encodeURIComponent(id)}`);
-      const data = await res.json();
-      if (data.league) {
-        setActiveLeagueDetails(data);
-      }
-    } catch {
-      // Retain
-    }
-  }
-
-  async function handleCreateLeague(e: React.FormEvent) {
-    e.preventDefault();
-    if (!title.trim()) return;
-    if (!token) {
-      window.dispatchEvent(new CustomEvent("damii-open-auth"));
-      setError("Authentication Required: Please sign in or register to host a tournament.");
-      return;
-    }
-    setBusy(true); setError(""); setSuccess("");
-    try {
-      const res = await fetch("/api/league", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "create",
-          token,
-          facilitatorName: username,
-          title,
-          description,
-          entryFeePoints: entryFee,
-          prizePoolPoints: prizePool,
-          maxParticipants,
-          format,
-          isPrivate,
-          inviteCode: isPrivate ? inviteCode : undefined,
-          requiresApproval,
-          scheduleDate,
-          scheduleTime,
-          gameDays: `Match Days: ${scheduleDate} @ ${scheduleTime}`,
-          turnTimerSeconds,
-          rulesNotes,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to create league");
-      setSuccess(`Tournament "${data.league.title}" created successfully!`);
-      setShowCreateModal(false);
-      loadLeagues();
+      if (!res.ok) throw new Error(data.error || "Failed to load tournaments");
+      setLeagues(data.leagues || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Creation failed");
+      setError(err instanceof Error ? err.message : "Failed to load tournaments");
     } finally {
-      setBusy(false);
+      setLoading(false);
     }
   }
 
-  async function initiateJoinLeague(league: League) {
-    if (!token) {
-      window.dispatchEvent(new CustomEvent("damii-open-auth"));
-      setError("Authentication Required: Please sign in or register to join a tournament.");
-      return;
+  // Filtered tournament list
+  const filteredLeagues = leagues.filter((league) => {
+    // Status filter
+    if (statusFilter !== "all" && league.status !== statusFilter) {
+      return false;
     }
-    if (league.isPrivate) {
-      setJoiningLeagueId(league.id);
-      setInviteCodeInput("");
-      setShowInviteModal(true);
-    } else {
-      await handleJoinLeague(league.id);
+    // Format filter
+    if (formatFilter !== "all" && league.format !== formatFilter) {
+      return false;
     }
-  }
-
-  async function handleJoinLeague(leagueId: string, codeToSubmit?: string) {
-    if (!token) {
-      window.dispatchEvent(new CustomEvent("damii-open-auth"));
-      setError("Authentication Required: Please sign in or register for a tournament.");
-      return;
+    // Search query filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      const matchTitle = league.title?.toLowerCase().includes(query);
+      const matchHost = league.facilitatorName?.toLowerCase().includes(query);
+      const matchDesc = league.description?.toLowerCase().includes(query);
+      if (!matchTitle && !matchHost && !matchDesc) return false;
     }
-    setBusy(true); setError(""); setSuccess("");
-    try {
-      const res = await fetch("/api/league", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "join",
-          token,
-          leagueId,
-          inviteCode: codeToSubmit || inviteCodeInput,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to join tournament");
+    return true;
+  });
 
-      if (data.status === "pending") {
-        setSuccess("Application submitted! Awaiting facilitator approval.");
-      } else {
-        setSuccess("Successfully registered for the tournament!");
-      }
-
-      setShowInviteModal(false);
-      loadLeagueDetails(leagueId);
-      loadLeagues();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleToggleCheckIn() {
-    if (!selectedLeagueId) return;
-    setBusy(true); setError(""); setSuccess("");
-    try {
-      const res = await fetch("/api/league", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "checkin", token, leagueId: selectedLeagueId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Check-in failed");
-      setSuccess(data.participant.checkedIn ? "Player check-in confirmed!" : "Check-in status updated.");
-      loadLeagueDetails(selectedLeagueId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Check-in error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleApproveParticipant(participantId: string) {
-    setBusy(true); setError(""); setSuccess("");
-    try {
-      const res = await fetch("/api/league", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "approve", token, participantId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Approval failed");
-      setSuccess("Participant approved successfully!");
-      if (selectedLeagueId) loadLeagueDetails(selectedLeagueId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to approve");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleRejectParticipant(participantId: string) {
-    setBusy(true); setError(""); setSuccess("");
-    try {
-      const res = await fetch("/api/league", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "reject", token, participantId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Rejection failed");
-      setSuccess("Participant application rejected & fee refunded.");
-      if (selectedLeagueId) loadLeagueDetails(selectedLeagueId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to reject");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleStartMatchRoom(matchId: string) {
-    setBusy(true); setError(""); setSuccess("");
-    try {
-      const res = await fetch("/api/league", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "start_match_room", token, matchId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to start match arena");
-      window.location.href = `/arena?code=${data.roomCode}&mode=league`;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Match room launch failed");
-      setBusy(false);
-    }
-  }
-
-  async function handleSubmitMatchScore(e: React.FormEvent) {
-    e.preventDefault();
-    if (!selectedMatchForScore || !scoringWinnerToken) return;
-    setBusy(true); setError(""); setSuccess("");
-    try {
-      const res = await fetch("/api/league", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "result",
-          token,
-          matchId: selectedMatchForScore.id,
-          winnerToken: scoringWinnerToken,
-          disputeNotes: scoringDisputeNotes,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Result submission failed");
-      setSuccess("Match result verified and bracket updated successfully!");
-      setSelectedMatchForScore(null);
-      if (selectedLeagueId) loadLeagueDetails(selectedLeagueId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Score submission failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleForceGenerateBracket() {
-    if (!selectedLeagueId) return;
-    setBusy(true); setError(""); setSuccess("");
-    try {
-      const res = await fetch("/api/league", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "generate_bracket", token, leagueId: selectedLeagueId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Bracket generation failed");
-      setSuccess("Tournament bracket & match pairings generated successfully!");
-      loadLeagueDetails(selectedLeagueId);
-      loadLeagues();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Bracket generation error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const isFacilitator =
-    activeLeagueDetails?.league.facilitatorToken === token ||
-    userRole === "admin" ||
-    userRole === "super_admin" ||
-    userRole === "organizer" ||
-    userRole === "facilitator";
-  const userParticipant = activeLeagueDetails?.participants.find((p) => p.userToken === token);
+  // Calculate quick platform totals
+  const totalPrizeMarbles = leagues.reduce((sum, l) => sum + (l.prizePoolPoints || 0), 0);
+  const liveCount = leagues.filter((l) => l.status === "active").length;
+  const regCount = leagues.filter((l) => l.status === "registration").length;
 
   return (
-    <main className="app-shell">
+    <main className="min-h-screen bg-[#081c15] text-[#f5efdf] flex flex-col">
       <SharedHeader />
 
-      <section className="league-page-header">
-        <div>
-          <span className="eyebrow"><Trophy size={16} /> DAMII TOURNAMENT & LEAGUE ENGINE</span>
-          <h1>Professional Tournament Hub</h1>
-          <p>Compete in Single Elimination, Double Elimination, Round Robin, or Swiss brackets. Earn prize pools, national rating points, and trophy accolades.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button className="btn-secondary text-xs flex items-center gap-1.5" onClick={() => loadLeagues()}>
-            <RefreshCw size={14} /> Refresh
-          </button>
-          <button
-            className="btn-primary"
-            onClick={() => {
-              if (!token) {
-                window.dispatchEvent(new CustomEvent("damii-open-auth"));
-                setError("Authentication Required: Please sign in or register to host a tournament.");
-                return;
-              }
-              setShowCreateModal(true);
-            }}
-          >
-            <Plus size={18} /> Host Tournament
-          </button>
-        </div>
-      </section>
-
-      {error && <p className="alert-banner error"><AlertCircle size={16} /> {error}</p>}
-      {success && <p className="alert-banner success"><CheckCircle size={16} /> {success}</p>}
-
-      <section className="league-layout">
-        {/* Sidebar League Selector */}
-        <aside className="league-sidebar bg-[#081c15] border border-[#114232] p-4 rounded-2xl shadow-xl">
-          <div className="flex items-center justify-between pb-2 border-b border-[#114232]">
-            <h3 className="text-xs font-bold text-[#f5efdf] uppercase tracking-wider">Tournament Leagues</h3>
-            <span className="text-[11px] font-mono text-[#d6a735] bg-[#0c3b2e] px-2 py-0.5 rounded border border-[#d6a735]/30">
-              {leagues.length} Total
-            </span>
-          </div>
-
-          <div className="league-list mt-3 space-y-2.5">
-            {leagues.map((league) => (
-              <div
-                key={league.id}
-                className={`league-card-item bg-[#06261f] border border-[#114232] p-3 rounded-xl cursor-pointer hover:border-[#d6a735]/50 transition-all ${selectedLeagueId === league.id ? "active ring-1 ring-[#d6a735] border-[#d6a735] bg-[#0c3b2e]" : ""}`}
-                onClick={() => setSelectedLeagueId(league.id)}
-              >
-                <div className="league-card-header flex items-center justify-between mb-1">
-                  <strong className="flex items-center gap-1.5 text-[#f5efdf] text-xs">
-                    {league.isPrivate && <Lock size={13} className="text-[#d6a735] shrink-0" />}
-                    <span className="truncate">{league.title}</span>
-                  </strong>
-                  <span className={`status-tag uppercase text-[9px] font-bold px-1.5 py-0.5 rounded ${league.status === "active" ? "bg-emerald-950 text-emerald-300 border border-emerald-700" : "bg-[#0c3b2e] text-[#a3b8b0]"}`}>{league.status}</span>
-                </div>
-                <p className="line-clamp-2 text-xs text-[#a3b8b0]">{league.description}</p>
-                <div className="league-card-meta flex items-center justify-between pt-1.5 text-[11px] text-[#a3b8b0]">
-                  <span className="flex items-center gap-1"><Users size={12} /> {league.participantCount} / {league.maxParticipants}</span>
-                  <span className="font-mono text-[#d6a735]">GH₵ {league.entryFeePoints} Fee</span>
-                  <span className="font-mono text-emerald-400 font-bold">GH₵ {league.prizePoolPoints} Prize</span>
-                </div>
-                <div className="mt-1.5 flex items-center gap-1 text-[10px] text-[#a3b8b0] font-mono capitalize">
-                  <Grid size={11} /> {league.format?.replace("_", " ") || "single elimination"}
-                </div>
-              </div>
-            ))}
-          </div>
-        </aside>
-
-        {/* Tournament Details & Bracket Viewer */}
-        <div className="league-details-view">
-          {activeLeagueDetails ? (
-            <div className="bracket-container space-y-4">
-              {/* Header Meta Banner */}
-              <div className="league-meta-banner bg-[#081c15] border border-[#114232] p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="text-lg font-bold text-[#f5efdf]">
-                      {activeLeagueDetails.league.title}
-                    </h2>
-                    {activeLeagueDetails.league.isPrivate && (
-                      <span className="px-2 py-0.5 bg-[#0c3b2e] border border-[#d6a735]/40 text-[#d6a735] rounded text-xs font-bold flex items-center gap-1">
-                        <Lock size={12} /> Private Code
-                      </span>
-                    )}
-                    <span className="px-2 py-0.5 bg-[#06261f] border border-[#114232] text-[#d6a735] rounded text-xs font-mono font-bold capitalize">
-                      {activeLeagueDetails.league.format?.replace("_", " ") || "Single Elimination"}
-                    </span>
-                  </div>
-                  <p className="text-xs text-[#a3b8b0] mt-1">
-                    Hosted by <strong className="text-[#d6a735]">{activeLeagueDetails.league.facilitatorName}</strong> • Match Days: {activeLeagueDetails.league.scheduleDate || "Saturdays"} @ {activeLeagueDetails.league.scheduleTime || "18:00 GMT"}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  {userParticipant && (
-                    <button
-                      disabled={busy}
-                      onClick={handleToggleCheckIn}
-                      className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors ${
-                        userParticipant.checkedIn
-                          ? "bg-emerald-950 text-emerald-300 border border-emerald-700"
-                          : "bg-[#d6a735] text-[#06261f] hover:bg-[#b88c24]"
-                      }`}
-                    >
-                      <CheckCircle size={14} />
-                      {userParticipant.checkedIn ? "✓ Checked In" : "Click to Check-In"}
-                    </button>
-                  )}
-
-                  {activeLeagueDetails.league.status === "registration" && !userParticipant && (
-                    <button
-                      disabled={busy}
-                      className="btn-primary"
-                      onClick={() => initiateJoinLeague(activeLeagueDetails.league)}
-                    >
-                      {activeLeagueDetails.league.requiresApproval ? "Apply for Entry" : "Register Now"} (GH₵ {activeLeagueDetails.league.entryFeePoints})
-                    </button>
-                  )}
-
-                  {activeLeagueDetails.league.status === "completed" && (
-                    <div className="winner-badge flex items-center gap-2 bg-[#d6a735] text-[#06261f] font-black px-3 py-1.5 rounded-xl shadow-lg">
-                      <Award size={18} /> Champion: {activeLeagueDetails.league.winnerName}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Facilitator Private Code Banner */}
-              {isFacilitator && activeLeagueDetails.league.isPrivate && activeLeagueDetails.league.inviteCode && (
-                <div className="p-3 bg-[#0c3b2e] border border-[#d6a735]/40 rounded-xl flex items-center justify-between text-xs text-[#f5efdf]">
-                  <span className="flex items-center gap-2">
-                    <Lock size={14} className="text-[#d6a735]" /> Private Invitation Code:{" "}
-                    <strong className="font-mono text-[#d6a735] bg-[#081c15] px-2 py-1 rounded border border-[#114232] text-sm">
-                      {activeLeagueDetails.league.inviteCode}
-                    </strong>
+      <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Hero Section */}
+        <section className="p-6 sm:p-10 bg-[#06261f] border border-[#184d3c] rounded-3xl shadow-2xl space-y-6 relative overflow-hidden">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+            <div className="space-y-2.5 max-w-2xl">
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 bg-[#d6a735]/20 text-[#d6a735] border border-[#d6a735]/40 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
+                  <Trophy size={13} className="text-[#d6a735]" /> Official Tournament Arena
+                </span>
+                {liveCount > 0 && (
+                  <span className="px-3 py-1 bg-amber-950/80 text-amber-300 border border-amber-500/40 rounded-full text-xs font-bold flex items-center gap-1.5 animate-pulse">
+                    <Flame size={12} className="text-amber-400" /> {liveCount} Live Now
                   </span>
-                  <button
-                    className="px-2.5 py-1 bg-[#d6a735] text-[#06261f] rounded-lg font-bold hover:bg-[#b88c24] transition-colors flex items-center gap-1 text-xs"
-                    onClick={() => {
-                      navigator.clipboard.writeText(activeLeagueDetails.league.inviteCode || "");
-                      setCopiedCode(true);
-                      setTimeout(() => setCopiedCode(false), 2000);
-                    }}
-                  >
-                    {copiedCode ? <Check size={12} /> : <Copy size={12} />} Copy Code
-                  </button>
-                </div>
-              )}
-
-              {/* Facilitator Control Center Panel */}
-              {isFacilitator && (
-                <div className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-[#114232]">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-[#d6a735] flex items-center gap-1.5">
-                      <Settings size={14} /> Facilitator &amp; Host Control Dashboard
-                    </h4>
-                    {activeLeagueDetails.league.status === "registration" && (
-                      <button
-                        disabled={busy || activeLeagueDetails.participants.filter((p) => p.status === "approved").length < 2}
-                        onClick={handleForceGenerateBracket}
-                        className="px-3 py-1 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] text-xs font-bold rounded-lg transition-colors flex items-center gap-1"
-                      >
-                        <Sparkles size={12} /> Generate Bracket Now
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Pending Applications Review */}
-                  {activeLeagueDetails.league.requiresApproval && (
-                    <div className="space-y-2">
-                      <h5 className="text-[11px] font-bold text-[#f5efdf] uppercase">
-                        Pending Player Applications ({activeLeagueDetails.participants.filter((p) => p.status === "pending").length})
-                      </h5>
-                      {activeLeagueDetails.participants.filter((p) => p.status === "pending").length === 0 ? (
-                        <p className="text-xs text-[#a3b8b0] italic">No pending applications awaiting review.</p>
-                      ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {activeLeagueDetails.participants.filter((p) => p.status === "pending").map((p) => (
-                            <div key={p.id} className="flex items-center justify-between p-2.5 bg-[#06261f] border border-[#114232] rounded-xl text-xs">
-                              <span className="font-bold text-[#f5efdf]">{p.username}</span>
-                              <div className="flex gap-1.5">
-                                <button
-                                  disabled={busy}
-                                  onClick={() => handleApproveParticipant(p.id)}
-                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-[11px] flex items-center gap-1"
-                                >
-                                  <UserCheck size={12} /> Approve
-                                </button>
-                                <button
-                                  disabled={busy}
-                                  onClick={() => handleRejectParticipant(p.id)}
-                                  className="px-2.5 py-1 bg-red-950 hover:bg-red-900 text-red-200 border border-red-800 rounded-lg font-bold text-[11px] flex items-center gap-1"
-                                >
-                                  <UserX size={12} /> Reject
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tournament Standings / Participants Chip Bar */}
-              <div className="participants-bar bg-[#081c15] border border-[#114232] p-4 rounded-2xl">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-bold text-[#f5efdf] uppercase tracking-wider flex items-center gap-1.5">
-                    <Users size={14} className="text-[#d6a735]" />
-                    Tournament Roster &amp; Standings ({activeLeagueDetails.participants.filter((p) => p.status !== "rejected").length})
-                  </h4>
-                  {activeLeagueDetails.league.format === "round_robin" && (
-                    <span className="text-[11px] font-mono text-[#d6a735]">Wins: 3 Points • Draw: 1 Point</span>
-                  )}
-                </div>
-
-                <div className="chips flex flex-wrap gap-2">
-                  {activeLeagueDetails.participants.map((p) => (
-                    <span
-                      className={`user-chip flex items-center gap-1.5 px-3 py-1.5 bg-[#06261f] border border-[#114232] rounded-xl text-xs ${
-                        p.status === "pending" ? "opacity-60 italic border-dashed" : ""
-                      }`}
-                      key={p.id}
-                    >
-                      <Shield size={12} className={p.checkedIn ? "text-emerald-400" : "text-[#a3b8b0]"} />
-                      <strong className="text-[#f5efdf]">{p.username}</strong>
-                      {p.seed ? <span className="text-[10px] font-mono text-[#a3b8b0]">#{p.seed}</span> : null}
-                      {p.checkedIn && <span className="text-[10px] text-emerald-400 font-bold">✓</span>}
-                      {activeLeagueDetails.league.format === "round_robin" && (
-                        <span className="text-[10px] font-mono text-[#d6a735] font-bold bg-[#0c3b2e] px-1.5 py-0.2 rounded border border-[#d6a735]/30">
-                          {p.pointsScore || 0} pts
-                        </span>
-                      )}
-                    </span>
-                  ))}
-                </div>
+                )}
               </div>
 
-              {/* Standings Table for Round Robin & Swiss Formats */}
-              {(activeLeagueDetails.league.format === "round_robin" || activeLeagueDetails.league.format === "swiss") && (
-                <div className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl my-4">
-                  <h3 className="text-xs font-bold text-[#d6a735] uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                    <TrendingUp size={16} /> Live Leaderboard Standings
-                  </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="border-b border-[#114232] text-[#a3b8b0] font-semibold uppercase">
-                          <th className="py-2 px-3">Rank</th>
-                          <th className="py-2 px-3">Player</th>
-                          <th className="py-2 px-3 text-center">Played</th>
-                          <th className="py-2 px-3 text-center">Wins</th>
-                          <th className="py-2 px-3 text-center">Draws</th>
-                          <th className="py-2 px-3 text-center">Losses</th>
-                          <th className="py-2 px-3 text-right font-mono text-[#d6a735]">Total Points</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#114232] font-mono">
-                        {[...activeLeagueDetails.participants]
-                          .sort((a, b) => (b.pointsScore || 0) - (a.pointsScore || 0))
-                          .map((p, idx) => (
-                            <tr key={p.id} className="hover:bg-[#0c3b2e]/50 transition-colors">
-                              <td className="py-2 px-3 font-bold text-[#d6a735]">#{idx + 1}</td>
-                              <td className="py-2 px-3 font-sans font-bold text-[#f5efdf]">{p.username}</td>
-                              <td className="py-2 px-3 text-center text-[#f5efdf]">{(p.winsCount || 0) + (p.drawsCount || 0) + (p.lossesCount || 0)}</td>
-                              <td className="py-2 px-3 text-center text-emerald-400 font-bold">{p.winsCount || 0}</td>
-                              <td className="py-2 px-3 text-center text-sky-400">{p.drawsCount || 0}</td>
-                              <td className="py-2 px-3 text-center text-red-400">{p.lossesCount || 0}</td>
-                              <td className="py-2 px-3 text-right font-extrabold text-[#d6a735] text-sm">{p.pointsScore || 0}</td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
+              <h1 className="text-2xl sm:text-4xl font-black text-[#f5efdf] tracking-tight">
+                DAMII TOURNAMENTS &amp; BRACKETS
+              </h1>
 
-              {/* Tournament Bracket Tree Visualizer */}
-              <BracketTreeView
-                matches={activeLeagueDetails.matches}
-                participants={activeLeagueDetails.participants}
-                format={activeLeagueDetails.league.format}
-                userToken={token}
-                isFacilitator={isFacilitator}
-                onStartMatch={handleStartMatchRoom}
-                onSetScore={(match) => {
-                  setSelectedMatchForScore(match);
-                  setSelectedScoringWinnerToken(match.player1Token || "");
-                }}
-                title={activeLeagueDetails.league.title}
-              />
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                Compete in official 10x10 draughts championships, climb national ranking leaderboards, and win
+                marbles in certified Single Elimination, Double Elimination, and Round-Robin leagues.
+              </p>
             </div>
-          ) : (
-            <div className="p-12 text-center text-[#a3b8b0] italic bg-[#081c15] border border-[#114232] rounded-2xl">
-              Select a tournament league from the sidebar to view details, bracket, and standings.
+
+            {/* Quick Organizer CTA Button */}
+            <div className="shrink-0">
+              <Link
+                href="/organizer"
+                className="inline-flex items-center gap-2 px-5 py-3 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black text-xs sm:text-sm rounded-2xl shadow-xl transition-all active:scale-95"
+              >
+                <Building2 size={16} /> Host a Tournament
+              </Link>
             </div>
-          )}
-        </div>
-      </section>
+          </div>
 
-      {/* Facilitator Quick Match Scoring Modal */}
-      {selectedMatchForScore && (
-        <div className="modal-overlay" onClick={() => setSelectedMatchForScore(null)}>
-          <div className="modal-card max-w-md bg-[#081c15] border border-[#114232] text-[#f5efdf]" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-sm font-bold text-[#d6a735] uppercase tracking-wider flex items-center gap-2 mb-2">
-              <Award size={18} /> Facilitator Match Result Verification
-            </h3>
-            <p className="text-xs text-[#a3b8b0] mb-4">
-              Select the match winner to update bracket progress and advance players to the next round.
-            </p>
+          {/* Quick Stats Banner */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6 border-t border-[#184d3c] relative z-10">
+            <div className="p-3.5 bg-[#081c15] border border-[#184d3c] rounded-2xl">
+              <small className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Total Tournaments
+              </small>
+              <strong className="text-base sm:text-lg font-black text-[#f5efdf] font-mono block mt-0.5">
+                {leagues.length} Events
+              </strong>
+            </div>
 
-            <form onSubmit={handleSubmitMatchScore} className="space-y-4">
-              <div className="space-y-2">
-                <label className="block text-xs font-semibold text-[#f5efdf]">Select Match Result</label>
-                <div className="space-y-1.5">
-                  {selectedMatchForScore.player1Token && (
-                    <label className="flex items-center gap-2 p-2.5 bg-[#06261f] border border-[#114232] rounded-xl cursor-pointer hover:border-[#d6a735]/50">
-                      <input
-                        type="radio"
-                        name="scoringWinner"
-                        value={selectedMatchForScore.player1Token}
-                        checked={scoringWinnerToken === selectedMatchForScore.player1Token}
-                        onChange={(e) => setSelectedScoringWinnerToken(e.target.value)}
-                      />
-                      <span className="text-xs font-bold text-[#f5efdf]">
-                        {selectedMatchForScore.player1Name} (Victory)
-                      </span>
-                    </label>
-                  )}
+            <div className="p-3.5 bg-[#081c15] border border-[#184d3c] rounded-2xl">
+              <small className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Open for Registration
+              </small>
+              <strong className="text-base sm:text-lg font-black text-emerald-400 font-mono block mt-0.5">
+                {regCount} Open
+              </strong>
+            </div>
 
-                  {selectedMatchForScore.player2Token && (
-                    <label className="flex items-center gap-2 p-2.5 bg-[#06261f] border border-[#114232] rounded-xl cursor-pointer hover:border-[#d6a735]/50">
-                      <input
-                        type="radio"
-                        name="scoringWinner"
-                        value={selectedMatchForScore.player2Token}
-                        checked={scoringWinnerToken === selectedMatchForScore.player2Token}
-                        onChange={(e) => setSelectedScoringWinnerToken(e.target.value)}
-                      />
-                      <span className="text-xs font-bold text-[#f5efdf]">
-                        {selectedMatchForScore.player2Name} (Victory)
-                      </span>
-                    </label>
-                  )}
+            <div className="p-3.5 bg-[#081c15] border border-[#184d3c] rounded-2xl">
+              <small className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Live In Progress
+              </small>
+              <strong className="text-base sm:text-lg font-black text-amber-400 font-mono block mt-0.5">
+                {liveCount} Active
+              </strong>
+            </div>
 
-                  <label className="flex items-center gap-2 p-2.5 bg-[#06261f] border border-[#114232] rounded-xl cursor-pointer hover:border-[#d6a735]/50">
-                    <input
-                      type="radio"
-                      name="scoringWinner"
-                      value="draw"
-                      checked={scoringWinnerToken === "draw"}
-                      onChange={(e) => setSelectedScoringWinnerToken(e.target.value)}
-                    />
-                    <span className="text-xs font-bold text-sky-400">Match Draw (Round Robin Only)</span>
-                  </label>
-                </div>
+            <div className="p-3.5 bg-[#081c15] border border-[#184d3c] rounded-2xl">
+              <small className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Total Prize Marbles
+              </small>
+              <strong className="text-base sm:text-lg font-black text-[#d6a735] font-mono block mt-0.5">
+                {totalPrizeMarbles.toLocaleString()} Marbles
+              </strong>
+            </div>
+          </div>
+        </section>
+
+        {/* Filter & Search Bar */}
+        <section className="space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            {/* Status Filter Tabs */}
+            <div className="flex items-center gap-1.5 p-1 bg-[#06261f] border border-[#184d3c] rounded-2xl overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setStatusFilter("all")}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                  statusFilter === "all"
+                    ? "bg-[#d6a735] text-[#06261f] font-black shadow-md"
+                    : "text-slate-300 hover:text-[#f5efdf]"
+                }`}
+              >
+                All Tournaments ({leagues.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("registration")}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                  statusFilter === "registration"
+                    ? "bg-[#d6a735] text-[#06261f] font-black shadow-md"
+                    : "text-slate-300 hover:text-[#f5efdf]"
+                }`}
+              >
+                Registration Open ({regCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("active")}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                  statusFilter === "active"
+                    ? "bg-[#d6a735] text-[#06261f] font-black shadow-md"
+                    : "text-slate-300 hover:text-[#f5efdf]"
+                }`}
+              >
+                Live &amp; Active ({liveCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("completed")}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                  statusFilter === "completed"
+                    ? "bg-[#d6a735] text-[#06261f] font-black shadow-md"
+                    : "text-slate-300 hover:text-[#f5efdf]"
+                }`}
+              >
+                Completed
+              </button>
+            </div>
+
+            {/* Format Dropdown & Search Input */}
+            <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+              <div className="relative min-w-[160px]">
+                <select
+                  value={formatFilter}
+                  onChange={(e) => setFormatFilter(e.target.value)}
+                  aria-label="Filter tournaments by format"
+                  className="w-full pl-3 pr-8 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] font-bold focus:outline-none focus:border-[#d6a735] transition-colors"
+                >
+                  <option value="all">All Formats</option>
+                  <option value="single_elimination">Single Elimination</option>
+                  <option value="double_elimination">Double Elimination</option>
+                  <option value="round_robin">Round Robin</option>
+                  <option value="swiss">Swiss System</option>
+                </select>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-[#f5efdf] mb-1">Audit Notes / Dispute Resolution</label>
+              <div className="relative flex-1 sm:w-64">
+                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  value={scoringDisputeNotes}
-                  onChange={(e) => setScoringDisputeNotes(e.target.value)}
-                  placeholder="e.g. Verified by referee / Disconnection forfeit"
-                  className="w-full px-3 py-2 bg-[#06261f] border border-[#114232] rounded-xl text-xs text-[#f5efdf]"
+                  placeholder="Search tournaments..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] placeholder-slate-400 focus:outline-none focus:border-[#d6a735] transition-colors"
                 />
               </div>
 
-              <div className="modal-actions flex justify-end gap-2 pt-2">
-                <button type="button" className="btn-secondary" onClick={() => setSelectedMatchForScore(null)}>Cancel</button>
-                <button type="submit" disabled={busy} className="btn-primary">Verify &amp; Advance Bracket</button>
-              </div>
-            </form>
+              <button
+                type="button"
+                onClick={loadLeagues}
+                className="p-2.5 bg-[#06261f] hover:bg-[#0c3b2e] text-slate-300 hover:text-[#f5efdf] rounded-xl border border-[#184d3c] transition-colors shrink-0"
+                title="Refresh tournaments list"
+              >
+                <RefreshCw size={14} />
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        </section>
 
-      {/* Private League Invitation Code Modal */}
-      {showInviteModal && joiningLeagueId && (
-        <div className="modal-overlay" onClick={() => setShowInviteModal(false)}>
-          <div className="modal-card bg-[#081c15] border border-[#114232] text-[#f5efdf]" onClick={(e) => e.stopPropagation()}>
-            <h3 className="flex items-center gap-2 text-[#d6a735]">
-              <Lock size={18} /> Private Tournament Invitation Code
-            </h3>
-            <p className="text-xs text-[#a3b8b0] my-2">This tournament is invitation-only. Please enter the invitation code provided by the facilitator.</p>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              if (joiningLeagueId) handleJoinLeague(joiningLeagueId);
-            }}>
-              <label className="block text-xs font-semibold text-[#f5efdf] mb-1">Invitation Code
-                <input
-                  required
-                  autoFocus
-                  className="w-full px-3 py-2 bg-[#06261f] border border-[#114232] rounded-xl font-mono uppercase tracking-widest text-center text-lg text-[#d6a735]"
-                  value={inviteCodeInput}
-                  onChange={(e) => setInviteCodeInput(e.target.value.toUpperCase())}
-                  placeholder="e.g. DAMII88"
-                />
-              </label>
-              <div className="modal-actions mt-4 flex justify-end gap-2">
-                <button type="button" className="btn-secondary" onClick={() => setShowInviteModal(false)}>Cancel</button>
-                <button type="submit" disabled={busy} className="btn-primary">Submit Code &amp; Join</button>
-              </div>
-            </form>
+        {/* Error Alert */}
+        {error && (
+          <div className="p-4 bg-red-950/80 border border-red-800 rounded-2xl flex items-center justify-between text-xs text-red-200">
+            <div className="flex items-center gap-2 font-medium">
+              <AlertCircle size={16} className="text-red-400 shrink-0" />
+              <span>{error}</span>
+            </div>
+            <button onClick={() => setError("")} className="text-red-300 hover:text-white font-bold ml-4">
+              ✕
+            </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Host New Tournament Modal */}
-      {showCreateModal && (
-        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-          <div className="modal-card max-w-lg bg-[#081c15] border border-[#114232] text-[#f5efdf]" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-base font-bold text-[#d6a735] uppercase tracking-wider mb-2">Host a Tournament League</h3>
-            <form onSubmit={handleCreateLeague} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-[#f5efdf] mb-1">Tournament Title</label>
-                <input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Greater Accra Damii Cup 2026" className="w-full px-3 py-2 bg-[#06261f] border border-[#114232] rounded-xl text-xs text-[#f5efdf]" />
-              </div>
+        {/* Tournament Cards Grid */}
+        {loading ? (
+          <div className="py-20 text-center space-y-3">
+            <RefreshCw size={36} className="mx-auto text-[#d6a735] animate-spin" />
+            <p className="text-xs text-slate-400">Loading tournaments...</p>
+          </div>
+        ) : filteredLeagues.length === 0 ? (
+          <div className="p-12 text-center text-slate-300 bg-[#06261f] rounded-3xl border border-[#184d3c] space-y-4">
+            <Trophy size={40} className="mx-auto text-[#d6a735]" />
+            <h3 className="text-base font-bold text-[#f5efdf]">No Tournaments Found</h3>
+            <p className="text-xs text-slate-400 max-w-md mx-auto">
+              No tournaments match your current filter criteria. Check back soon or host your own tournament event.
+            </p>
+            <button
+              onClick={() => {
+                setStatusFilter("all");
+                setFormatFilter("all");
+                setSearchQuery("");
+              }}
+              className="px-4 py-2 bg-[#081c15] hover:bg-[#0c3b2e] text-[#d6a735] rounded-xl text-xs font-bold border border-[#184d3c] transition-colors"
+            >
+              Clear Filters
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filteredLeagues.map((league) => {
+              const entryFeeMarbles = league.entryFeeMarbles || league.entryFeePoints || 0;
+              const prizePoolMarbles = league.prizePoolPoints || 0;
+              const partCount = league.participantCount || 0;
+              const maxPart = league.maxParticipants || 8;
+              const progressPct = Math.min(100, Math.round((partCount / maxPart) * 100));
 
-              <div>
-                <label className="block text-xs font-semibold text-[#f5efdf] mb-1">Description &amp; Overview</label>
-                <textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Tournament details & guidelines" className="w-full px-3 py-2 bg-[#06261f] border border-[#114232] rounded-xl text-xs text-[#f5efdf]" />
-              </div>
+              return (
+                <div
+                  key={league.id}
+                  className="bg-[#06261f] border border-[#184d3c] rounded-3xl p-5 sm:p-6 shadow-xl hover:border-[#d6a735]/50 transition-all flex flex-col justify-between space-y-5 group"
+                >
+                  {/* Top Bar */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      {/* Status Badge */}
+                      {league.status === "registration" ? (
+                        <span className="px-2.5 py-0.5 bg-emerald-950 text-emerald-300 border border-emerald-600 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          Registration Open
+                        </span>
+                      ) : league.status === "active" ? (
+                        <span className="px-2.5 py-0.5 bg-amber-950 text-amber-300 border border-amber-600 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                          <Flame size={10} className="text-amber-400" />
+                          Live Rounds
+                        </span>
+                      ) : league.status === "completed" ? (
+                        <span className="px-2.5 py-0.5 bg-[#d6a735]/20 text-[#d6a735] border border-[#d6a735]/40 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                          <Crown size={10} />
+                          Completed
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 bg-slate-900 text-slate-400 border border-slate-700 rounded-full text-[10px] font-bold uppercase">
+                          {league.status}
+                        </span>
+                      )}
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-semibold text-[#f5efdf] mb-1">Entry Fee (GH₵)</label>
-                  <input type="number" min={0} value={entryFee} onChange={(e) => setEntryFee(Number(e.target.value))} className="w-full px-3 py-2 bg-[#06261f] border border-[#114232] rounded-xl text-xs text-[#f5efdf]" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-[#f5efdf] mb-1">Prize Pool (GH₵)</label>
-                  <input type="number" min={0} value={prizePool} onChange={(e) => setPrizePool(Number(e.target.value))} className="w-full px-3 py-2 bg-[#06261f] border border-[#114232] rounded-xl text-xs text-[#f5efdf]" />
-                </div>
-              </div>
+                      {/* Format Badge */}
+                      <span className="px-2.5 py-0.5 bg-[#081c15] text-[#d6a735] border border-[#184d3c] rounded-full text-[10px] font-mono font-bold capitalize">
+                        {league.format?.replace("_", " ") || "Single Elimination"}
+                      </span>
+                    </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-semibold text-[#f5efdf] mb-1">Tournament Format</label>
-                  <select value={format} onChange={(e) => setFormat(e.target.value as TournamentFormat)} className="w-full px-3 py-2 bg-[#06261f] border border-[#114232] rounded-xl text-xs text-[#f5efdf]">
-                    <option value="single_elimination">Single Elimination</option>
-                    <option value="double_elimination">Double Elimination</option>
-                    <option value="round_robin">Round Robin League</option>
-                    <option value="swiss">Swiss System</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-[#f5efdf] mb-1">Max Capacity</label>
-                  <select value={maxParticipants} onChange={(e) => setMaxParticipants(Number(e.target.value))} className="w-full px-3 py-2 bg-[#06261f] border border-[#114232] rounded-xl text-xs text-[#f5efdf]">
-                    <option value={4}>4 Players</option>
-                    <option value={8}>8 Players</option>
-                    <option value={16}>16 Players</option>
-                    <option value={32}>32 Players</option>
-                  </select>
-                </div>
-              </div>
+                    {/* Tournament Title */}
+                    <div>
+                      <h2 className="text-base sm:text-lg font-black text-[#f5efdf] group-hover:text-[#d6a735] transition-colors leading-snug line-clamp-1">
+                        {league.title}
+                      </h2>
+                      <p className="text-xs text-slate-300 flex items-center gap-1.5 mt-1">
+                        <Shield size={12} className="text-[#d6a735]" />
+                        <span>Organized by {league.facilitatorName}</span>
+                      </p>
+                    </div>
 
-              {/* Tournament Privacy & Approval Settings */}
-              <div className="p-3 bg-[#06261f] border border-[#114232] rounded-xl space-y-2 text-xs">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
-                  <span className="font-bold text-[#d6a735]">Private Tournament (Invitation Code Only)</span>
-                </label>
-
-                {isPrivate && (
-                  <div className="pt-1">
-                    <label className="block text-[#a3b8b0] mb-0.5">Custom Invite Code (Optional)</label>
-                    <input
-                      value={inviteCode}
-                      onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                      placeholder="e.g. GHANA2026 (Auto-generated if blank)"
-                      className="w-full px-2.5 py-1.5 bg-[#081c15] border border-[#114232] rounded-lg font-mono uppercase text-xs text-[#f5efdf]"
-                    />
+                    {league.description && (
+                      <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                        {league.description}
+                      </p>
+                    )}
                   </div>
-                )}
 
-                <label className="flex items-center gap-2 cursor-pointer pt-1">
-                  <input type="checkbox" checked={requiresApproval} onChange={(e) => setRequiresApproval(e.target.checked)} />
-                  <span className="font-bold text-[#f5efdf]">Require Facilitator Approval for Applicants</span>
-                </label>
-              </div>
+                  {/* Metrics Box */}
+                  <div className="space-y-3 pt-3 border-t border-[#184d3c]">
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="p-2.5 bg-[#081c15] border border-[#184d3c] rounded-xl">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Prize Pool</span>
+                        <strong className="text-xs font-black text-[#d6a735] font-mono block mt-0.5">
+                          {prizePoolMarbles > 0 ? `${prizePoolMarbles.toLocaleString()} Marbles` : "Trophy"}
+                        </strong>
+                      </div>
 
-              {/* Schedule Days & Times */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-semibold text-[#f5efdf] mb-1">Match Days</label>
-                  <input value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} placeholder="e.g. Saturdays & Sundays" className="w-full px-3 py-2 bg-[#06261f] border border-[#114232] rounded-xl text-xs text-[#f5efdf]" />
+                      <div className="p-2.5 bg-[#081c15] border border-[#184d3c] rounded-xl">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Entry Fee</span>
+                        <strong className="text-xs font-black text-[#f5efdf] font-mono block mt-0.5">
+                          {entryFeeMarbles > 0 ? `${entryFeeMarbles.toLocaleString()} Marbles` : "Free"}
+                        </strong>
+                      </div>
+                    </div>
+
+                    {/* Capacity Progress Bar */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[11px] font-bold">
+                        <span className="text-slate-400 flex items-center gap-1">
+                          <Users size={12} /> Players
+                        </span>
+                        <span className="text-[#f5efdf]">
+                          {partCount} / {maxPart} Registered
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-[#081c15] rounded-full overflow-hidden border border-[#184d3c]">
+                        <div
+                          className="h-full bg-gradient-to-r from-[#d6a735] to-emerald-400 transition-all duration-300"
+                          style={{ width: `${progressPct}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Schedule info */}
+                    <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1">
+                      <span className="flex items-center gap-1">
+                        <Clock size={12} /> {league.scheduleDate || "Weekends"}
+                      </span>
+                      <span className="font-mono text-[#d6a735] font-bold">
+                        {league.turnTimerSeconds || 60}s Clock
+                      </span>
+                    </div>
+
+                    {/* Winner Callout if Completed */}
+                    {league.status === "completed" && league.winnerName && (
+                      <div className="p-2 bg-[#081c15] border border-[#d6a735]/30 rounded-xl flex items-center justify-between text-xs">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase">Winner</span>
+                        <span className="font-black text-[#d6a735] flex items-center gap-1">
+                          <Crown size={12} className="text-[#d6a735]" /> {league.winnerName}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* CTA Button */}
+                    <Link
+                      href={`/leagues/${league.id}`}
+                      className="w-full py-2.5 px-4 bg-[#081c15] hover:bg-[#d6a735] text-[#d6a735] hover:text-[#06261f] border border-[#184d3c] hover:border-[#d6a735] rounded-2xl font-black text-xs transition-all flex items-center justify-center gap-2 shadow group-hover:shadow-lg"
+                    >
+                      <span>View Details &amp; Bracket</span>
+                      <ArrowRight size={14} />
+                    </Link>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-[#f5efdf] mb-1">Match Time</label>
-                  <input value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} placeholder="e.g. 18:00 GMT" className="w-full px-3 py-2 bg-[#06261f] border border-[#114232] rounded-xl text-xs text-[#f5efdf]" />
-                </div>
-              </div>
-
-              <div className="modal-actions flex justify-end gap-2 pt-2">
-                <button type="button" className="btn-secondary" onClick={() => setShowCreateModal(false)}>Cancel</button>
-                <button type="submit" disabled={busy} className="btn-primary">Create Tournament</button>
-              </div>
-            </form>
+              );
+            })}
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Host Tournament Organizer Banner */}
+        <section className="p-6 sm:p-8 bg-gradient-to-r from-[#06261f] to-[#081c15] border border-[#d6a735]/40 rounded-3xl shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="space-y-2 text-center md:text-left">
+            <h3 className="text-lg sm:text-xl font-black text-[#d6a735] flex items-center justify-center md:justify-start gap-2">
+              <Building2 size={20} /> Want to Host an Official DAMII Tournament?
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
+              Certified organizers can create custom single and double elimination tournaments, seed players,
+              distribute marble prize pools, and run sanctioned club championships.
+            </p>
+          </div>
+
+          <div className="shrink-0">
+            <Link
+              href="/organizer"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black text-xs sm:text-sm rounded-2xl shadow-xl transition-all active:scale-95"
+            >
+              <span>Go to Organizer Portal</span>
+              <ArrowRight size={16} />
+            </Link>
+          </div>
+        </section>
+      </div>
+
       <Footer />
     </main>
   );

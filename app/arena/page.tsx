@@ -250,6 +250,14 @@ type Profile = {
   losses: number;
   draws: number;
   role?: string;
+  status?: string;
+};
+
+type LobbyPlayer = Profile & {
+  rank?: RankInfo;
+  isOnline?: boolean;
+  presenceStatus?: "online" | "in_match" | "offline";
+  lastSeenAt?: string;
 };
 
 export default function ArenaPage() {
@@ -295,7 +303,7 @@ export default function ArenaPage() {
 
   // Arena Lobby & Hub State
   const [lobbyRooms, setLobbyRooms] = useState<Room[]>([]);
-  const [lobbyPlayers, setLobbyPlayers] = useState<Array<Profile & { rank?: RankInfo }>>([]);
+  const [lobbyPlayers, setLobbyPlayers] = useState<LobbyPlayer[]>([]);
   const [lobbyLeagues, setLobbyLeagues] = useState<League[]>([]);
   const [lobbyLoading, setLobbyLoading] = useState(true);
   const [lobbyTab, setLobbyTab] = useState<"live" | "players" | "tournaments">("live");
@@ -531,15 +539,22 @@ export default function ArenaPage() {
   useEffect(() => {
     const fetchLobbyData = async () => {
       try {
-        const res = await fetch("/api/damii?lobby=1");
+        const queryParams = new URLSearchParams({ lobby: "1" });
+        if (token) queryParams.set("token", token);
+        if (username) queryParams.set("username", username);
+
+        const res = await fetch(`/api/damii?${queryParams.toString()}`);
         if (!res.ok) return;
         const data = await res.json();
         if (data.activeRooms) setLobbyRooms(data.activeRooms);
         if (data.leaderboard) {
-          const mapped = (data.leaderboard as Profile[]).map((p) => ({
-            ...p,
-            rank: getProfileRank(p.rating),
-          }));
+          const nonPlayerRoles = new Set(["admin", "super_admin", "organizer", "facilitator", "treasurer"]);
+          const mapped: LobbyPlayer[] = (data.leaderboard as LobbyPlayer[])
+            .filter((p) => !nonPlayerRoles.has(p.role || "") && p.status !== "banned")
+            .map((p) => ({
+              ...p,
+              rank: getProfileRank(p),
+            }));
           setLobbyPlayers(mapped);
         }
         if (data.leagues) setLobbyLeagues(data.leagues);
@@ -553,7 +568,7 @@ export default function ArenaPage() {
     fetchLobbyData();
     const interval = window.setInterval(fetchLobbyData, 4000);
     return () => window.clearInterval(interval);
-  }, []);
+  }, [token, username]);
 
   function handleDirectChallenge(targetUsername: string, challengeType: "casual" | "wager" = "casual") {
     if (!token) {
@@ -1606,7 +1621,7 @@ export default function ArenaPage() {
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <h2 className="text-sm sm:text-base font-bold text-[#f5efdf]">Arena Roster & Online Ranks</h2>
+                  <h2 className="text-sm sm:text-base font-bold text-[#f5efdf]">Arena Players & Online Ranks</h2>
                   <p className="text-xs text-slate-400">Request free or wagered matches directly against any registered player.</p>
                 </div>
                 <div className="relative">
@@ -1621,67 +1636,91 @@ export default function ArenaPage() {
                 </div>
               </div>
 
-              {lobbyPlayers.length === 0 ? (
-                <div className="p-8 text-center bg-[#06261f] border border-[#184d3c] rounded-2xl text-slate-400 text-xs">
-                  No ranked players registered yet.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {lobbyPlayers
-                    .filter((p) =>
-                      playerSearchQuery
-                        ? p.username.toLowerCase().includes(playerSearchQuery.toLowerCase())
-                        : true
-                    )
-                    .map((p, idx) => {
+              {(() => {
+                const NON_PLAYER_ROLES = ["admin", "super_admin", "organizer", "facilitator", "treasurer"];
+                const activePlayers = lobbyPlayers.filter((p) => {
+                  const isPlayer = !p.role || !NON_PLAYER_ROLES.includes(p.role);
+                  const isNotBanned = p.status !== "banned";
+                  const matchesSearch = playerSearchQuery
+                    ? p.username.toLowerCase().includes(playerSearchQuery.toLowerCase())
+                    : true;
+                  return isPlayer && isNotBanned && matchesSearch;
+                });
+
+                if (activePlayers.length === 0) {
+                  return (
+                    <div className="p-8 text-center bg-[#06261f] border border-[#184d3c] rounded-2xl text-slate-400 text-xs">
+                      No active players registered yet.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {activePlayers.map((p, idx) => {
                       const isSelf = p.username === username;
                       const isAdmin = p.role === "admin" || p.role === "super_admin";
+                      const isOnline = Boolean(p.isOnline || p.presenceStatus === "online" || p.presenceStatus === "in_match");
+                      const isInMatch = p.presenceStatus === "in_match";
 
                       return (
                         <div
                           key={p.username}
                           className="p-4 bg-[#06261f] border border-[#184d3c] hover:border-[#1f5e4a] rounded-2xl space-y-3 shadow-md flex flex-col justify-between"
                         >
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="h-7 w-7 rounded-full bg-[#0c3b2e] border border-[#184d3c] text-[#d6a735] font-black text-xs flex items-center justify-center">
+                          <div className="space-y-3">
+                            {/* Player Header: Rank Number, Name, Online Status */}
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <span className="h-8 w-8 rounded-full bg-[#0c3b2e] border border-[#184d3c] text-[#d6a735] font-black text-xs flex items-center justify-center shrink-0 shadow-inner">
                                   {idx + 1}
                                 </span>
-                                <div>
+                                <div className="min-w-0">
                                   <div className="flex items-center gap-1.5">
                                     <strong className="text-xs sm:text-sm text-[#f5efdf] truncate">{p.username}</strong>
                                     {isSelf && (
-                                      <span className="text-[10px] px-1.5 py-0.2 bg-[#d6a735]/20 text-[#d6a735] font-bold rounded-full">
+                                      <span className="text-[10px] px-1.5 py-0.2 bg-[#d6a735]/20 text-[#d6a735] font-bold rounded-full shrink-0">
                                         You
                                       </span>
                                     )}
                                   </div>
-                                  <div className="text-[10px] text-slate-400 flex items-center gap-1">
-                                    <Award size={11} className="text-[#d6a735]" />
-                                    <span>{p.rank?.title || "Novice"} ({p.rating} ELO)</span>
-                                  </div>
+                                  <span className="text-[10px] text-slate-400 truncate block">
+                                    {p.rank?.aka || "Draughts Player"}
+                                  </span>
                                 </div>
                               </div>
-                              <span className="text-[10px] px-2 py-0.5 bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-bold rounded-full flex items-center gap-1">
-                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                Active
-                              </span>
+
+                              {/* Online / In Match / Offline Status Badge */}
+                              {isInMatch ? (
+                                <span className="text-[10px] px-2.5 py-0.5 bg-amber-950/80 border border-amber-500/40 text-amber-300 font-bold rounded-full flex items-center gap-1.5 shrink-0">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-ping" />
+                                  In Match
+                                </span>
+                              ) : isOnline ? (
+                                <span className="text-[10px] px-2.5 py-0.5 bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-bold rounded-full flex items-center gap-1.5 shrink-0">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                  Online
+                                </span>
+                              ) : (
+                                <span className="text-[10px] px-2.5 py-0.5 bg-slate-900 border border-slate-700/60 text-slate-400 font-medium rounded-full flex items-center gap-1.5 shrink-0">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />
+                                  Offline
+                                </span>
+                              )}
                             </div>
 
-                            {/* Performance Stats */}
-                            <div className="grid grid-cols-3 gap-1.5 p-2 bg-[#081c15] border border-[#184d3c] rounded-xl text-center text-[10px]">
-                              <div>
-                                <span className="text-slate-400 block">Wins</span>
-                                <strong className="text-emerald-400 font-mono text-xs">{p.wins}</strong>
+                            {/* Rank & Rating Banner (Wins, Losses, Points Removed) */}
+                            <div className="flex items-center justify-between p-2.5 bg-[#081c15] border border-[#184d3c] rounded-xl text-xs">
+                              <div className="flex items-center gap-2">
+                                <span className="text-base select-none">{p.rank?.badgeEmoji || "🪵"}</span>
+                                <div>
+                                  <small className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Rank</small>
+                                  <strong className="text-xs font-bold text-[#f5efdf] block leading-none">{p.rank?.title || "Draft Learner"}</strong>
+                                </div>
                               </div>
-                              <div>
-                                <span className="text-slate-400 block">Losses</span>
-                                <strong className="text-red-400 font-mono text-xs">{p.losses}</strong>
-                              </div>
-                              <div>
-                                <span className="text-slate-400 block">Points</span>
-                                <strong className="text-[#d6a735] font-mono text-xs">{p.points}</strong>
+                              <div className="text-right">
+                                <small className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Rating</small>
+                                <strong className="text-xs font-black text-[#d6a735] font-mono leading-none">{p.rating} ELO</strong>
                               </div>
                             </div>
                           </div>
@@ -1710,8 +1749,9 @@ export default function ArenaPage() {
                         </div>
                       );
                     })}
-                </div>
-              )}
+                  </div>
+                );
+              })()}
             </div>
           )}
 

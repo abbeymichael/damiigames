@@ -47,9 +47,9 @@ export function AdminTable<T>({
             </tr>
           </thead>
           <tbody className="divide-y divide-[#114232]/50">
-            {data.map((row) => (
+            {data.map((row, rowIdx) => (
               <tr
-                key={keyExtractor(row)}
+                key={`${keyExtractor(row)}-${rowIdx}`}
                 className="hover:bg-[#081c15]/60 transition-colors"
               >
                 {columns.map((col, idx) => (
@@ -69,9 +69,9 @@ export function AdminTable<T>({
 
       {/* Mobile Responsive Cards View */}
       <div className="block md:hidden space-y-3">
-        {data.map((row) => (
+        {data.map((row, rowIdx) => (
           <div
-            key={keyExtractor(row)}
+            key={`${keyExtractor(row)}-${rowIdx}`}
             className="p-4 rounded-2xl border border-[#114232] bg-[#06261f] space-y-2 shadow-md"
           >
             {mobileCardRender ? (

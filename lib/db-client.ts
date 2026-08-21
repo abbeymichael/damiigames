@@ -66,6 +66,7 @@ export const dbRepository: DbRepository = {
   getProfile: withStore("getProfile"),
   getAllProfiles: withStore("getAllProfiles"),
   findProfileByUsername: withStore("findProfileByUsername"),
+  findProfileByPhone: withStore("findProfileByPhone"),
   createRegisteredProfile: withStore("createRegisteredProfile"),
   updateUserProfile: withStore("updateUserProfile"),
   upsertProfile: withStore("upsertProfile"),
@@ -89,6 +90,8 @@ export const dbRepository: DbRepository = {
   getAllRooms: withStore("listRooms"),
 
   createTransaction: withStore("createTransaction"),
+  getTransaction: withStore("getTransaction"),
+  updateTransaction: withStore("updateTransaction"),
   getUserTransactions: withStore("getUserTransactions"),
   getAllTransactions: withStore("getAllTransactions"),
 

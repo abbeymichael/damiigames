@@ -103,8 +103,8 @@ export function TournamentsTable({
                 </td>
               </tr>
             ) : (
-              filteredLeagues.map((l) => (
-                <tr key={l.id} className="hover:bg-[#0c3b2e]/50 transition-colors">
+              filteredLeagues.map((l, idx) => (
+                <tr key={`${l.id || "league"}-${idx}`} className="hover:bg-[#0c3b2e]/50 transition-colors">
                   <td className="py-3 px-3">
                     <div className="font-bold text-[#f5efdf] text-sm">{l.title}</div>
                     <div className="text-[10px] text-cyan-300 font-mono">ID: {l.id}</div>

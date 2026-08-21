@@ -310,6 +310,22 @@ export const memoryStore: DbRepository = {
     return null;
   },
 
+  async findProfileByPhone(phoneNumber) {
+    const clean = phoneNumber.trim();
+    if (!clean) return null;
+    const data = getMemoryData();
+    const digitsOnly = clean.replace(/\D/g, "");
+    const last9 = digitsOnly.length >= 9 ? digitsOnly.slice(-9) : digitsOnly;
+    for (const p of data.profiles.values()) {
+      if (p.phoneNumber) {
+        if (p.phoneNumber === clean) return { ...p };
+        const pDigits = p.phoneNumber.replace(/\D/g, "");
+        if (last9 && pDigits.endsWith(last9)) return { ...p };
+      }
+    }
+    return null;
+  },
+
   async createRegisteredProfile(token, username, passcode, phoneNumber, explicitRole, passwordSalt) {
     const data = getMemoryData();
     const now = new Date().toISOString();
@@ -479,7 +495,9 @@ export const memoryStore: DbRepository = {
   async getLeaderboard(limit = 10) {
     const data = getMemoryData();
     const profiles = Array.from(data.profiles.values()).map((p) => ({ ...p }));
+    const nonPlayerRoles = new Set(["admin", "super_admin", "organizer", "facilitator", "treasurer"]);
     return profiles
+      .filter((p) => !nonPlayerRoles.has(p.role) && p.status !== "banned")
       .sort((a, b) => getProfileRank(b).dpi - getProfileRank(a).dpi || b.wins - a.wins)
       .slice(0, limit);
   },
@@ -557,8 +575,29 @@ export const memoryStore: DbRepository = {
   // --- Wallet ---
   async createTransaction(tx) {
     const data = getMemoryData();
-    data.walletTransactions.unshift({ ...tx });
+    const existingIdx = data.walletTransactions.findIndex((t) => t.id === tx.id);
+    if (existingIdx >= 0) {
+      data.walletTransactions[existingIdx] = { ...data.walletTransactions[existingIdx], ...tx };
+    } else {
+      data.walletTransactions.unshift({ ...tx });
+    }
     return { ...tx };
+  },
+
+  async getTransaction(id: string) {
+    const data = getMemoryData();
+    const found = data.walletTransactions.find((t) => t.id === id);
+    return found ? { ...found } : null;
+  },
+
+  async updateTransaction(id: string, updates: Partial<WalletTransaction>) {
+    const data = getMemoryData();
+    const idx = data.walletTransactions.findIndex((t) => t.id === id);
+    if (idx >= 0) {
+      data.walletTransactions[idx] = { ...data.walletTransactions[idx], ...updates };
+      return { ...data.walletTransactions[idx] };
+    }
+    return null;
   },
 
   async getUserTransactions(token, limit = 20) {

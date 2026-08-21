@@ -113,8 +113,13 @@ export async function GET(req: NextRequest) {
     link: "/arena",
   });
 
+  // Deduplicate notifications by unique ID to prevent any duplicate keys
+  const uniqueNotifications = Array.from(
+    new Map(notifications.map((n) => [n.id, n])).values()
+  );
+
   return NextResponse.json({
-    notifications,
-    unreadCount: notifications.length,
+    notifications: uniqueNotifications,
+    unreadCount: uniqueNotifications.length,
   });
 }

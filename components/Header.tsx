@@ -44,6 +44,8 @@ import {
   UserCheck,
   Lock,
   Coins,
+  Copy,
+  EyeOff,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { getProfileRank } from "@/lib/rank-service";
@@ -196,6 +198,11 @@ export function Header() {
   const [regPhone, setRegPhone] = useState("");
   const [regRequestId, setRegRequestId] = useState("");
   const [regOtpCode, setRegOtpCode] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [regConfirmPassword, setRegConfirmPassword] = useState("");
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [createdUsername, setCreatedUsername] = useState<string | null>(null);
+  const [hasCopiedUsername, setHasCopiedUsername] = useState(false);
   const [regExpiresAt, setRegExpiresAt] = useState("");
   const [regDebugCode, setRegDebugCode] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -490,24 +497,29 @@ export function Header() {
 
       // Save credentials & active session
       saveSessionToken(data.token, data.csrfToken);
-      localStorage.setItem("damii-player-token", data.token);
-      localStorage.setItem("damii-player-name", data.user?.username || `Player_${regPhone.slice(-4)}`);
-      localStorage.setItem(
-        "damii-auth-user",
-        JSON.stringify({
-          token: data.token,
-          username: data.user?.username || `Player_${regPhone.slice(-4)}`,
-          points: 500,
-          role: data.user?.role || "player",
-        })
-      );
-
       setUserToken(data.token);
-      setPhoneNumber(data.user?.phoneNumber || regPhone);
-      setProfileCompleted(Boolean(data.profileCompleted));
+      const verifiedPhone = data.user?.phoneNumber || data.phoneNumber || regPhone;
+      setPhoneNumber(verifiedPhone);
 
-      if (data.profileCompleted) {
-        setAuthSuccess("Phone verified! Welcome back to DAMII Arena.");
+      const isCompleted = Boolean(data.profileCompleted || data.user?.profileCompletedAt);
+      setProfileCompleted(isCompleted);
+
+      // If this was an existing user who already has a completed profile, log them straight in
+      if (isCompleted && (data.username || data.user?.username)) {
+        const uname = data.username || data.user?.username;
+        localStorage.setItem("damii-player-token", data.token);
+        localStorage.setItem("damii-player-name", uname);
+        localStorage.setItem(
+          "damii-auth-user",
+          JSON.stringify({
+            token: data.token,
+            username: uname,
+            points: 500,
+            role: data.user?.role || "player",
+          })
+        );
+        setUsername(uname);
+        setAuthSuccess(`🎉 Welcome back, ${uname}!`);
         window.dispatchEvent(new Event("damii-auth-changed"));
         setTimeout(() => {
           setIsAuthOpen(false);
@@ -516,10 +528,13 @@ export function Header() {
           setAuthSuccess("");
         }, 1200);
       } else {
-        // Pre-fill profile completion fields
-        setProfMomoNumber(regPhone);
-        setProfUsername(data.user?.username || "");
-        setProfFullName(data.user?.fullName || "");
+        // Move to Step 3: Complete Player Registration Details
+        if (data.user?.fullName) setProfFullName(data.user.fullName);
+        if (data.user?.email) setProfEmail(data.user.email);
+        const assignedGamerTag = data.username || data.user?.username || "";
+        if (assignedGamerTag) {
+          setProfUsername(assignedGamerTag);
+        }
         setRegStep(3);
         setAuthSuccess("Phone verified successfully! Complete your player profile below.");
       }
@@ -549,12 +564,12 @@ export function Header() {
     setAuthSuccess("");
 
     if (!profUsername.trim()) {
-      setAuthError("Please choose an Arena username / gamer tag.");
+      setAuthError("Gamer Tag / Username is required.");
       return;
     }
 
     if (!profFullName.trim()) {
-      setAuthError("Full legal name is required for platform registration.");
+      setAuthError("Full legal name is required for registration.");
       return;
     }
 
@@ -569,6 +584,21 @@ export function Header() {
       return;
     }
 
+    if (!regPassword.trim()) {
+      setAuthError("Please enter a password for your account.");
+      return;
+    }
+
+    if (regPassword.length < 4) {
+      setAuthError("Password must be at least 4 characters long.");
+      return;
+    }
+
+    if (regPassword !== regConfirmPassword) {
+      setAuthError("Passwords do not match. Please verify your password confirmation.");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -580,6 +610,8 @@ export function Header() {
           fullName: profFullName.trim(),
           email: profEmail.trim() || undefined,
           dateOfBirth: new Date(profDob).toISOString(),
+          password: regPassword.trim(),
+          confirmPassword: regConfirmPassword.trim(),
         }),
       });
 
@@ -591,11 +623,23 @@ export function Header() {
         return;
       }
 
-      setAuthSuccess("Player profile registered & verified! Welcome to DAMII Arena.");
+      const finalName = data.user?.username || profUsername.trim();
+      setAuthSuccess(`🎉 Welcome to DAMII Arena, ${finalName}! Your player profile is registered & verified.`);
       setProfileCompleted(true);
-      if (data.user?.username) {
-        localStorage.setItem("damii-player-name", data.user.username);
-        setUsername(data.user.username);
+      setUsername(finalName);
+
+      localStorage.setItem("damii-player-name", finalName);
+      if (userToken) {
+        localStorage.setItem("damii-player-token", userToken);
+        localStorage.setItem(
+          "damii-auth-user",
+          JSON.stringify({
+            token: userToken,
+            username: finalName,
+            points: 500,
+            role: data.user?.role || "player",
+          })
+        );
       }
 
       window.dispatchEvent(new Event("damii-auth-changed"));
@@ -604,10 +648,12 @@ export function Header() {
         setIsAuthOpen(false);
         setRegStep(1);
         setRegOtpCode("");
+        setRegPassword("");
+        setRegConfirmPassword("");
         setAuthSuccess("");
-      }, 1200);
+      }, 1400);
     } catch {
-      setAuthError("Failed to save profile. Please try again.");
+      setAuthError("Failed to save profile. Please check your connection.");
     } finally {
       setIsLoading(false);
     }
@@ -905,11 +951,11 @@ export function Header() {
                         {notifications.length === 0 ? (
                           <p className="text-xs text-slate-400 text-center py-4">No recent notifications</p>
                         ) : (
-                          notifications.map((n) => {
+                          notifications.map((n, idx) => {
                             const isUnread = !readIds.includes(n.id);
                             return (
                               <div
-                                key={n.id}
+                                key={`${n.id || "notif"}-${idx}`}
                                 className={`p-2.5 rounded-xl border transition-all relative ${
                                   isUnread
                                     ? "bg-[#0c3b2e] border-[#d6a735]/50"
@@ -2078,24 +2124,28 @@ export function Header() {
                 <ShieldCheck className="text-[#d6a735]" size={22} />
                 <div>
                   <h3 className="text-base sm:text-lg font-black font-serif text-[#f5efdf]">
-                    {authMode === "login"
+                    {createdUsername
+                      ? "Account Created Successfully!"
+                      : authMode === "login"
                       ? "Player Account Sign In"
                       : authMode === "complete_profile"
                       ? "Complete Player Profile"
                       : regStep === 1
                       ? "Register with Phone & OTP"
                       : regStep === 2
-                      ? "Verify 6-Digit OTP Code"
+                      ? "Verify Phone & Set Password"
                       : "Complete Player Profile"}
                   </h3>
                   <p className="text-[11px] text-[#d6a735]">
-                    {authMode === "login"
-                      ? "Sign in with your username and passcode"
+                    {createdUsername
+                      ? "Your unique 6-character Gamer Tag has been generated"
+                      : authMode === "login"
+                      ? "Sign in with your username or phone number and password"
                       : authMode === "complete_profile" || regStep === 3
                       ? "Step 3 of 3: Identity & Payout Account"
                       : regStep === 2
-                      ? "Step 2 of 3: SMS Verification"
-                      : "Step 1 of 3: Instant Phone Verification"}
+                      ? "Step 2 of 2: Code Verification & Password"
+                      : "Step 1 of 2: Instant Phone Verification"}
                   </p>
                 </div>
               </div>
@@ -2229,12 +2279,12 @@ export function Header() {
                       </button>
                     </div>
                     <p className="text-slate-300 text-[11px]">
-                      A 6-digit code was sent to <strong className="text-white">{regPhone}</strong>.
+                      A 6-digit verification code was sent to <strong className="text-white">{regPhone}</strong>.
                     </p>
                   </div>
 
                   {regDebugCode && (
-                    <div className="p-2.5 bg-amber-950/60 border border-amber-800 rounded-xl text-amber-200 text-xs flex items-center justify-between">
+                    <div className="p-2 bg-amber-950/60 border border-amber-800 rounded-xl text-amber-200 text-xs flex items-center justify-between">
                       <span>Sandbox Code: <strong>{regDebugCode}</strong></span>
                       <button
                         type="button"
@@ -2248,7 +2298,7 @@ export function Header() {
 
                   <div>
                     <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center gap-1">
-                      <KeyRound size={13} className="text-[#d6a735]" /> 6-Digit SMS Code
+                      <KeyRound size={13} className="text-[#d6a735]" /> 6-Digit SMS Code *
                     </label>
                     <input
                       type="text"
@@ -2258,7 +2308,7 @@ export function Header() {
                       value={regOtpCode}
                       onChange={(e) => setRegOtpCode(e.target.value.replace(/\D/g, ""))}
                       placeholder="e.g. 123456"
-                      className="w-full px-3.5 py-3 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-center text-lg font-mono tracking-widest focus:outline-none focus:border-[#d6a735] transition-colors"
+                      className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-center text-xl font-mono tracking-widest focus:outline-none focus:border-[#d6a735] transition-colors"
                     />
                   </div>
 
@@ -2284,9 +2334,9 @@ export function Header() {
                     disabled={isLoading || regOtpCode.length < 4}
                     className="w-full py-3 bg-[#d6a735] hover:bg-[#b88c24] disabled:opacity-50 text-[#06261f] font-black rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    {isLoading ? "Verifying..." : (
+                    {isLoading ? "Verifying Code..." : (
                       <>
-                        <CheckCircle2 size={16} /> Verify &amp; Continue
+                        <CheckCircle2 size={16} /> Verify Code &amp; Continue
                       </>
                     )}
                   </button>
@@ -2296,6 +2346,12 @@ export function Header() {
               {/* Registration Step 3 / Complete Profile */}
               {((authMode === "register" && regStep === 3) || authMode === "complete_profile") && (
                 <form onSubmit={handleCompleteProfile} className="space-y-3.5">
+                  <div className="p-3 bg-emerald-950/80 border border-emerald-500/50 rounded-xl text-xs space-y-1">
+                    <span className="font-bold text-emerald-300 flex items-center gap-1.5 text-xs">
+                      <CheckCircle2 size={15} className="text-emerald-400" /> Phone verified successfully! Complete your player profile below.
+                    </span>
+                  </div>
+
                   <div className="p-3 bg-[#0c3b2e]/70 border border-[#d6a735]/30 rounded-xl text-xs space-y-1">
                     <span className="font-bold text-[#d6a735] flex items-center gap-1">
                       <UserCheck size={14} /> Player Registration Details
@@ -2307,17 +2363,28 @@ export function Header() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-bold text-[#f5efdf] mb-1">
-                        Gamer Tag / Username *
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1 flex items-center justify-between">
+                        <span className="flex items-center gap-1">
+                          <Sparkles size={12} className="text-[#d6a735]" /> Gamer Tag / Username *
+                        </span>
+                        <span className="text-[10px] bg-[#0c3b2e] text-[#d6a735] px-1.5 py-0.5 rounded font-mono font-bold border border-[#184d3c] flex items-center gap-1">
+                          <Lock size={10} /> Read-only
+                        </span>
                       </label>
-                      <input
-                        type="text"
-                        required
-                        value={profUsername}
-                        onChange={(e) => setProfUsername(e.target.value)}
-                        placeholder="e.g. Kwame_Grandmaster"
-                        className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
-                      />
+                      <div className="relative">
+                        <input
+                          type="text"
+                          readOnly
+                          disabled
+                          required
+                          value={profUsername || "Assigning..."}
+                          placeholder="e.g. lemon264"
+                          className="w-full px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-[#d6a735] font-mono font-bold text-xs cursor-not-allowed select-none opacity-90"
+                        />
+                      </div>
+                      <small className="block text-[10px] text-slate-400 mt-1">
+                        Permanently generated fruit tag assigned to your account.
+                      </small>
                     </div>
 
                     <div>
@@ -2370,12 +2437,54 @@ export function Header() {
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1 flex items-center justify-between">
+                        <span className="flex items-center gap-1">
+                          <Lock size={12} className="text-[#d6a735]" /> Create Password *
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowRegPassword(!showRegPassword)}
+                          className="text-[10px] text-slate-400 hover:text-slate-200 flex items-center gap-1"
+                        >
+                          {showRegPassword ? <EyeOff size={11} /> : <Eye size={11} />}
+                          {showRegPassword ? "Hide" : "Show"}
+                        </button>
+                      </label>
+                      <input
+                        type={showRegPassword ? "text" : "password"}
+                        required
+                        minLength={4}
+                        value={regPassword}
+                        onChange={(e) => setRegPassword(e.target.value)}
+                        placeholder="Create password (min 4 characters)"
+                        className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-xs focus:outline-none focus:border-[#d6a735] transition-colors"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1 flex items-center gap-1">
+                        <Lock size={12} className="text-[#d6a735]" /> Confirm Password *
+                      </label>
+                      <input
+                        type={showRegPassword ? "text" : "password"}
+                        required
+                        minLength={4}
+                        value={regConfirmPassword}
+                        onChange={(e) => setRegConfirmPassword(e.target.value)}
+                        placeholder="Confirm password"
+                        className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-xs focus:outline-none focus:border-[#d6a735] transition-colors"
+                      />
+                    </div>
+                  </div>
+
                   {/* Verified Phone Information */}
                   <div className="p-2.5 bg-[#06261f] border border-[#184d3c] rounded-xl flex items-center justify-between text-xs">
                     <span className="flex items-center gap-1 text-slate-300">
-                      <Phone size={12} className="text-[#d6a735]" /> Verified Phone: <strong className="text-white font-mono">{regPhone || phoneNumber || "Verified"}</strong>
+                      <Phone size={12} className="text-[#d6a735]" /> Verified Phone: <strong className="text-white font-mono">{regPhone || phoneNumber || "0553340120"}</strong>
                     </span>
-                    <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-bold border border-amber-500/30 flex items-center gap-1">
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-bold border border-emerald-500/30 flex items-center gap-1">
                       <Lock size={10} /> Verified
                     </span>
                   </div>
@@ -2385,7 +2494,7 @@ export function Header() {
                     disabled={isLoading}
                     className="w-full py-3 bg-[#d6a735] hover:bg-[#b88c24] disabled:opacity-50 text-[#06261f] font-black rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer mt-2"
                   >
-                    {isLoading ? "Saving Profile..." : (
+                    {isLoading ? "Completing Profile..." : (
                       <>
                         <Sparkles size={16} /> Complete Profile &amp; Enter Arena
                       </>
@@ -2398,29 +2507,29 @@ export function Header() {
               {authMode === "login" && (
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-[#f5efdf] mb-1.5">
-                      Username or Phone Number
+                    <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center gap-1">
+                      <User size={13} className="text-[#d6a735]" /> Gamer Tag or Phone Number
                     </label>
                     <input
                       type="text"
                       required
                       value={formUsername}
                       onChange={(e) => setFormUsername(e.target.value)}
-                      placeholder="e.g. Kwame_Master"
+                      placeholder="e.g. lemon264 or 0241234567"
                       className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-sm focus:outline-none focus:border-[#d6a735] transition-colors"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-[#f5efdf] mb-1.5">
-                      Passcode / PIN
+                    <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center gap-1">
+                      <Lock size={13} className="text-[#d6a735]" /> Password / Passcode
                     </label>
                     <input
                       type="password"
                       required
                       value={formPasscode}
                       onChange={(e) => setFormPasscode(e.target.value)}
-                      placeholder="Enter secret passcode"
+                      placeholder="Enter your account password"
                       className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-sm focus:outline-none focus:border-[#d6a735] transition-colors"
                     />
                   </div>

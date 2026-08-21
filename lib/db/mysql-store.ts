@@ -384,6 +384,29 @@ export const mysqlStore: DbRepository = {
     return row ? rowToProfile(row) : null;
   },
 
+  async findProfileByPhone(phoneNumber) {
+    const clean = phoneNumber.trim();
+    if (!clean) return null;
+    const [row] = await getDb()
+      .select()
+      .from(schema.profiles)
+      .where(eq(schema.profiles.phoneNumber, clean))
+      .limit(1);
+    if (row) return rowToProfile(row);
+    const digitsOnly = clean.replace(/\D/g, "");
+    if (digitsOnly.length >= 9) {
+      const last9 = digitsOnly.slice(-9);
+      const allRows = await getDb().select().from(schema.profiles);
+      const match = allRows.find((r) => {
+        if (!r.phoneNumber) return false;
+        const rDigits = r.phoneNumber.replace(/\D/g, "");
+        return rDigits.endsWith(last9);
+      });
+      if (match) return rowToProfile(match);
+    }
+    return null;
+  },
+
   async createRegisteredProfile(token, username, passcode, phoneNumber, explicitRole, passwordSalt) {
     const now = new Date().toISOString();
     const role: Role = explicitRole && VALID_ROLES.includes(explicitRole) ? explicitRole : "user";
@@ -602,8 +625,10 @@ export const mysqlStore: DbRepository = {
   async getLeaderboard(limit = 10) {
     // DPI ordering is computed in JS (rank-service), so fetch the competitive pool.
     const rows = await getDb().select().from(schema.profiles);
+    const nonPlayerRoles = new Set(["admin", "super_admin", "organizer", "facilitator", "treasurer"]);
     return rows
       .map(rowToProfile)
+      .filter((p) => !nonPlayerRoles.has(p.role) && p.status !== "banned")
       .sort((a, b) => getProfileRank(b).dpi - getProfileRank(a).dpi || b.wins - a.wins)
       .slice(0, limit);
   },
@@ -751,8 +776,41 @@ export const mysqlStore: DbRepository = {
 
   // --- Wallet ---
   async createTransaction(tx) {
-    await getDb().insert(schema.walletTransactions).values(transactionToRow(tx));
+    const row = transactionToRow(tx);
+    const [existing] = await getDb()
+      .select()
+      .from(schema.walletTransactions)
+      .where(eq(schema.walletTransactions.id, tx.id))
+      .limit(1);
+    if (existing) {
+      await getDb()
+        .update(schema.walletTransactions)
+        .set(row)
+        .where(eq(schema.walletTransactions.id, tx.id));
+    } else {
+      await getDb().insert(schema.walletTransactions).values(row);
+    }
     return { ...tx };
+  },
+
+  async getTransaction(id: string) {
+    const [row] = await getDb()
+      .select()
+      .from(schema.walletTransactions)
+      .where(eq(schema.walletTransactions.id, id))
+      .limit(1);
+    return row ? rowToTransaction(row) : null;
+  },
+
+  async updateTransaction(id: string, updates: Partial<WalletTransaction>) {
+    const existing = await this.getTransaction(id);
+    if (!existing) return null;
+    const merged = { ...existing, ...updates };
+    await getDb()
+      .update(schema.walletTransactions)
+      .set(transactionToRow(merged))
+      .where(eq(schema.walletTransactions.id, id));
+    return merged;
   },
 
   async getUserTransactions(token, limit = 20) {

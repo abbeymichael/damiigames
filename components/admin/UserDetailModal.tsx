@@ -768,8 +768,8 @@ export function UserDetailModal({
                             </td>
                           </tr>
                         ) : (
-                          data.ledgerEntries.map((entry) => (
-                            <tr key={entry.id} className="hover:bg-[#0c3b2e]/40 transition-colors">
+                          data.ledgerEntries.map((entry, idx) => (
+                            <tr key={`${entry.id || "entry"}-${idx}`} className="hover:bg-[#0c3b2e]/40 transition-colors">
                               <td className="py-2 px-3 text-slate-300 font-mono text-[11px]">
                                 {new Date(entry.recordedAt).toLocaleString()}
                               </td>
@@ -835,8 +835,8 @@ export function UserDetailModal({
                             </td>
                           </tr>
                         ) : (
-                          data.matches.map((m) => (
-                            <tr key={m.id} className="hover:bg-[#0c3b2e]/40 transition-colors">
+                          data.matches.map((m, idx) => (
+                            <tr key={`${m.id || "match"}-${idx}`} className="hover:bg-[#0c3b2e]/40 transition-colors">
                               <td className="py-2 px-3 text-slate-300 font-mono text-[11px]">
                                 {new Date(m.playedAt).toLocaleDateString()}
                               </td>
@@ -938,8 +938,8 @@ export function UserDetailModal({
                         <Award size={16} className="text-cyan-400" /> Tournaments Created as Organizer
                       </h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {data.organizedTournaments.map((l) => (
-                          <div key={l.id} className="p-3 bg-[#041c17] border border-[#114232] rounded-xl space-y-1 text-xs">
+                        {data.organizedTournaments.map((l, idx) => (
+                          <div key={`${l.id || "tourn"}-${idx}`} className="p-3 bg-[#041c17] border border-[#114232] rounded-xl space-y-1 text-xs">
                             <div className="flex items-center justify-between">
                               <span className="font-bold text-slate-100">{l.title}</span>
                               <span className="px-2 py-0.5 bg-[#0c3b2e] text-[#d6a735] font-bold rounded text-[10px] uppercase">
@@ -984,8 +984,8 @@ export function UserDetailModal({
                             </td>
                           </tr>
                         ) : (
-                          data.auditLogs.map((log) => (
-                            <tr key={log.id} className="hover:bg-[#0c3b2e]/40 transition-colors">
+                          data.auditLogs.map((log, idx) => (
+                            <tr key={`${log.id || "log"}-${idx}`} className="hover:bg-[#0c3b2e]/40 transition-colors">
                               <td className="py-2 px-3 text-slate-300 font-mono text-[11px]">
                                 {new Date(log.createdAt).toLocaleString()}
                               </td>

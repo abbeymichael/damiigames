@@ -373,7 +373,7 @@ export function LedgerTable({
                     </td>
                   </tr>
                 ) : (
-                  filteredLedger.map((le) => {
+                  filteredLedger.map((le, idx) => {
                     const calculatedFund: SystemFundType =
                       le.fundType ||
                       (le.userId === "platform-treasury" || le.entryType === "platform_fee"
@@ -386,7 +386,7 @@ export function LedgerTable({
                     const isCredit = amtNum >= 0;
 
                     return (
-                      <tr key={le.id} className="hover:bg-[#0c3b2e]/50 transition-colors font-mono">
+                      <tr key={`${le.id || "le"}-${idx}`} className="hover:bg-[#0c3b2e]/50 transition-colors font-mono">
                         <td className="py-2.5 px-3">
                           <div className="font-semibold text-[#f8fafc] text-[11px] truncate max-w-[140px]">
                             {le.id.slice(0, 8)}...
@@ -470,8 +470,8 @@ export function LedgerTable({
                   </td>
                 </tr>
               ) : (
-                filteredTransactions.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-[#0c3b2e]/50 transition-colors">
+                filteredTransactions.map((tx, idx) => (
+                  <tr key={`${tx.id || "tx"}-${idx}`} className="hover:bg-[#0c3b2e]/50 transition-colors">
                     <td className="py-2.5 px-3 font-mono text-[11px] text-slate-200 font-semibold">
                       {tx.reference || tx.id}
                     </td>

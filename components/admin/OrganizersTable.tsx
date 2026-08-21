@@ -230,8 +230,8 @@ export function OrganizersTable({
                 </td>
               </tr>
             ) : (
-              filteredApplications.map((app) => (
-                <tr key={app.id} className="hover:bg-[#0c3b2e]/40 transition-colors">
+              filteredApplications.map((app, idx) => (
+                <tr key={`${app.id || "app"}-${idx}`} className="hover:bg-[#0c3b2e]/40 transition-colors">
                   <td className="py-3 px-3">
                     <div className="flex items-center gap-2">
                       <div className="p-1.5 bg-[#041d17] border border-[#1a5e48] rounded-lg text-[#d6a735]">

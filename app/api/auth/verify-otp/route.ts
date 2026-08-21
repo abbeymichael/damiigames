@@ -3,7 +3,61 @@ import crypto from "crypto";
 import { dbRepository } from "@/lib/db-client";
 import { attachAuthCookies } from "@/lib/auth-guard";
 import { getClientIp, verifyOtpAttempt } from "@/lib/otp";
-import { User } from "@/lib/types";
+import { securityService } from "@/lib/security";
+
+// Helper to strip sensitive secrets before sending profile to client
+function sanitizeProfileResponse(profile: Record<string, unknown>) {
+  const copy = { ...profile };
+  delete copy.passcode;
+  delete copy.passwordSalt;
+  return copy;
+}
+
+const FRUITS = [
+  "Lemon",
+  "Apple",
+  "Grape",
+  "Mango",
+  "Orange",
+  "Banana",
+  "Cherry",
+  "Peach",
+  "Berry",
+  "Melon",
+  "Papaya",
+  "Guava",
+  "Kiwi",
+  "Lime",
+  "Plum",
+  "Fig",
+  "Coconut",
+  "Apricot",
+  "Pear",
+  "Citrus",
+];
+
+/**
+ * Generates a unique capitalized fruit-with-numbers gamer tag (e.g. Lemon264, Apple743, Grape455)
+ */
+async function generateUniqueUsername(): Promise<string> {
+  for (let i = 0; i < 100; i++) {
+    const rawFruit = FRUITS[Math.floor(Math.random() * FRUITS.length)];
+    const capitalizedFruit = rawFruit.charAt(0).toUpperCase() + rawFruit.slice(1);
+    const num = Math.floor(100 + Math.random() * 900); // 3-digit number (100-999)
+    const candidate = `${capitalizedFruit}${num}`;
+    const [existingProf, existingUser] = await Promise.all([
+      dbRepository.findProfileByUsername(candidate),
+      dbRepository.getUserByUsername(candidate),
+    ]);
+    if (!existingProf && !existingUser) {
+      return candidate;
+    }
+  }
+  // Fallback if collision
+  const rawFruit = FRUITS[Math.floor(Math.random() * FRUITS.length)];
+  const capitalizedFruit = rawFruit.charAt(0).toUpperCase() + rawFruit.slice(1);
+  return `${capitalizedFruit}${Math.floor(100 + Math.random() * 900)}`;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,10 +67,26 @@ export async function POST(req: NextRequest) {
 
     const requestId = String(body.requestId || "").trim();
     const code = String(body.code || "").trim();
+    const password = String(body.password || body.passcode || "").trim();
+    const confirmPassword = String(body.confirmPassword || body.passwordConfirmation || "").trim();
 
     if (!requestId || !code) {
       return NextResponse.json(
-        { error: "Both requestId and verification code are required" },
+        { error: "Both requestId and 6-digit verification code are required." },
+        { status: 400 },
+      );
+    }
+
+    if (password && password.length < 4) {
+      return NextResponse.json(
+        { error: "Password must be at least 4 characters long." },
+        { status: 400 },
+      );
+    }
+
+    if (password && confirmPassword && password !== confirmPassword) {
+      return NextResponse.json(
+        { error: "Passwords do not match. Please verify your password confirmation." },
         { status: 400 },
       );
     }
@@ -33,7 +103,19 @@ export async function POST(req: NextRequest) {
     const phoneNumber = verification.phoneNumber;
     const now = new Date().toISOString();
 
-    // 2. Find or create user in users table with phoneVerifiedAt
+    // 2. Auto-generate unique 6-character username candidate
+    const autoUsername = await generateUniqueUsername();
+
+    // 3. Hash the chosen password with salt (if provided)
+    let passwordHash: string | undefined = undefined;
+    let passwordSalt: string | undefined = undefined;
+    if (password) {
+      const hashed = securityService.hashPassword(password);
+      passwordHash = hashed.hash;
+      passwordSalt = hashed.salt;
+    }
+
+    // 4. Find or create user in users table with phoneVerifiedAt
     let user = await dbRepository.getUserByPhone(phoneNumber);
 
     if (!user) {
@@ -41,12 +123,15 @@ export async function POST(req: NextRequest) {
       user = await dbRepository.saveUser({
         id: userId,
         phoneNumber,
+        username: autoUsername,
         phoneVerifiedAt: now,
         role: "player",
         createdAt: now,
       });
     } else {
       user = await dbRepository.updateUser(user.id, {
+        phoneNumber,
+        username: user.username || autoUsername,
         phoneVerifiedAt: now,
       });
     }
@@ -55,28 +140,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Failed to persist user profile" }, { status: 500 });
     }
 
-    // 3. Find or create matching platform profile for game play, ratings, and wallet
+    const finalUsername = user.username || autoUsername;
+
+    // 5. Create or update matching platform profile
     let profile = await dbRepository.getProfile(user.id);
     if (!profile) {
-      // Check if username was already set on user
-      const defaultUsername = user.username || `player_${phoneNumber.slice(-4)}_${Math.random().toString(36).substring(2, 6)}`;
       profile = await dbRepository.createRegisteredProfile(
         user.id,
-        defaultUsername,
-        "", // no password required for OTP-verified accounts
+        finalUsername,
+        passwordHash || "temp_otp_verified",
         phoneNumber,
+        user.role === "admin" ? "admin" : "user",
+        passwordSalt,
       );
-      profile.role = user.role;
+    } else {
+      profile.username = finalUsername;
+      if (passwordHash && passwordSalt) {
+        profile.passcode = passwordHash;
+        profile.passwordSalt = passwordSalt;
+      }
+      profile.phoneNumber = phoneNumber;
       await dbRepository.saveProfile(profile);
     }
 
-    // 4. Create active authenticated session
-    const session = await dbRepository.createSession(user.id, user.role, ipAddress, userAgent);
+    // 6. Create active authenticated session
+    const session = await dbRepository.createSession(user.id, profile.role || user.role, ipAddress, userAgent);
 
     const res = NextResponse.json({
       success: true,
-      message: "Phone number verified successfully",
+      message: `Account created successfully! Your unique Username / Gamer ID is ${finalUsername}.`,
+      username: finalUsername,
       user,
+      profile: sanitizeProfileResponse(profile as unknown as Record<string, unknown>),
       token: session.token,
       csrfToken: session.csrfToken,
       profileCompleted: Boolean(user.profileCompletedAt),
@@ -86,7 +181,7 @@ export async function POST(req: NextRequest) {
     return res;
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "OTP verification failed" },
+      { error: error instanceof Error ? error.message : "Registration verification failed" },
       { status: 500 },
     );
   }

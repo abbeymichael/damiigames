@@ -19,6 +19,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid phone number format" }, { status: 400 });
     }
 
+    // 0. Phone number uniqueness check (cannot request OTP for existing registered phone)
+    const existingUser = await dbRepository.getUserByPhone(sanitizedPhone);
+    const existingProfile = await dbRepository.findProfileByPhone(sanitizedPhone);
+    if (existingUser || existingProfile) {
+      return NextResponse.json(
+        {
+          error: "This phone number is already registered. Please sign in with your account or use a different phone number.",
+          alreadyRegistered: true,
+        },
+        { status: 400 },
+      );
+    }
+
     // 1. Rate limiting check (phone and IP limits)
     const rateCheck = await canSendOtp(sanitizedPhone, ipAddress);
     if (!rateCheck.allowed) {

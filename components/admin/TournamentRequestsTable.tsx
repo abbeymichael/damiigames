@@ -134,10 +134,10 @@ export function TournamentRequestsTable({
                   </td>
                 </tr>
               ) : (
-                filtered.map((req) => {
+                filtered.map((req, idx) => {
                   const typeMeta = typeLabels[req.requestType] || { label: req.requestType, color: "bg-[#06261f] text-slate-300 border-[#114232]" };
                   return (
-                    <tr key={req.id} className="hover:bg-[#0c3b2e]/50 transition-colors">
+                    <tr key={`${req.id || "req"}-${idx}`} className="hover:bg-[#0c3b2e]/50 transition-colors">
                       <td className="py-3 px-3">
                         <span className={`px-2 py-0.5 text-[10px] font-bold rounded border ${typeMeta.color}`}>
                           {typeMeta.label}

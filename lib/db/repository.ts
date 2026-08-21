@@ -75,6 +75,7 @@ export interface DbRepository {
   getProfile(token: string): Promise<Profile | null>;
   getAllProfiles(): Promise<Profile[]>;
   findProfileByUsername(username: string): Promise<Profile | null>;
+  findProfileByPhone(phoneNumber: string): Promise<Profile | null>;
   createRegisteredProfile(
     token: string,
     username: string,

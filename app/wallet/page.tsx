@@ -297,8 +297,8 @@ export default function WalletPage() {
               {transactions.length === 0 ? (
                 <tr><td colSpan={6} className="empty-cell">No transaction history found.</td></tr>
               ) : (
-                transactions.map((tx) => (
-                  <tr key={tx.id}>
+                transactions.map((tx, idx) => (
+                  <tr key={`${tx.id || "tx"}-${idx}`}>
                     <td>{new Date(tx.createdAt).toLocaleDateString()}</td>
                     <td><span className={`tx-type ${tx.type}`}>{tx.type.replace("_", " ")}</span></td>
                     <td><span className="px-1.5 py-0.5 bg-[#0c3b2e] text-[#d6a735] font-bold rounded text-[10px]">MARBLE</span></td>

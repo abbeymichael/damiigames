@@ -188,8 +188,8 @@ export function AdminStaffTable({
                   </td>
                 </tr>
               ) : (
-                adminAccounts.map((acc) => (
-                  <tr key={acc.userId} className="hover:bg-[#0c3b2e]/50 transition-colors">
+                adminAccounts.map((acc, idx) => (
+                  <tr key={`${acc.userId || "admin"}-${idx}`} className="hover:bg-[#0c3b2e]/50 transition-colors">
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-[#f5efdf] text-sm">{acc.username}</span>

@@ -290,6 +290,21 @@ export const fileStore: any = {
     return null;
   },
 
+  async findProfileByPhone(phoneNumber) {
+    const clean = phoneNumber.trim();
+    if (!clean) return null;
+    const digitsOnly = clean.replace(/\D/g, "");
+    const last9 = digitsOnly.length >= 9 ? digitsOnly.slice(-9) : digitsOnly;
+    for (const p of data().profiles.values()) {
+      if (p.phoneNumber) {
+        if (p.phoneNumber === clean) return { ...p };
+        const pDigits = p.phoneNumber.replace(/\D/g, "");
+        if (last9 && pDigits.endsWith(last9)) return { ...p };
+      }
+    }
+    return null;
+  },
+
   async createRegisteredProfile(token, username, passcode, phoneNumber, explicitRole, passwordSalt) {
     return lockKey(`profile:${token}`, async () => {
       const now = new Date().toISOString();
@@ -546,6 +561,22 @@ export const fileStore: any = {
       data().transactions.set(tx.id, { ...tx });
       data().saveToDisk();
       return { ...tx };
+    });
+  },
+
+  async getTransaction(id: string) {
+    const found = data().transactions.get(id);
+    return found ? { ...found } : null;
+  },
+
+  async updateTransaction(id: string, updates: Partial<WalletTransaction>) {
+    return lockKey(`tx:${id}`, async () => {
+      const existing = data().transactions.get(id);
+      if (!existing) return null;
+      const merged = { ...existing, ...updates };
+      data().transactions.set(id, merged);
+      data().saveToDisk();
+      return merged;
     });
   },
 

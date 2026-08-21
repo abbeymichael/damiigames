@@ -213,9 +213,14 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Passcode/password required" }, { status: 400 });
       }
 
-      const profile = await dbRepository.findProfileByUsername(username);
+      let profile = await dbRepository.findProfileByUsername(username);
       if (!profile) {
-        return NextResponse.json({ error: "Account not found. Please register." }, { status: 404 });
+        // Also support logging in using registered phone number
+        profile = await dbRepository.findProfileByPhone(username);
+      }
+
+      if (!profile) {
+        return NextResponse.json({ error: "Account not found. Please check your username or phone number, or register." }, { status: 404 });
       }
 
       if (profile.status === "banned") {

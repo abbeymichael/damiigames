@@ -1,6 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbRepository } from "@/lib/db-client";
 import { requireAuth } from "@/lib/auth-guard";
+import { securityService } from "@/lib/security";
+
+export async function GET(req: NextRequest) {
+  try {
+    const auth = await requireAuth(req);
+    const userId = auth.user.token;
+
+    let user = await dbRepository.getUserById(userId);
+    if (!user) {
+      user = await dbRepository.getUserByPhone(auth.user.phoneNumber || "");
+    }
+
+    const profile = await dbRepository.getProfile(userId);
+
+    return NextResponse.json({
+      success: true,
+      user: user || null,
+      profile: profile
+        ? {
+            token: profile.token,
+            username: profile.username,
+            phoneNumber: profile.phoneNumber,
+            rating: profile.rating,
+            marbles: profile.marbles,
+            points: profile.points,
+            role: profile.role,
+            wins: profile.wins,
+            losses: profile.losses,
+            draws: profile.draws,
+          }
+        : null,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to load profile details" },
+      { status: 401 },
+    );
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,6 +77,9 @@ export async function POST(req: NextRequest) {
       email,
       dateOfBirth,
       username,
+      password,
+      confirmPassword,
+      passcode,
       ghanaCardNumber,
       gender,
       avatarUrl,
@@ -48,6 +90,25 @@ export async function POST(req: NextRequest) {
       referralCode,
     } = body;
 
+    // Validate Password if provided
+    const cleanPassword = typeof password === "string" ? password.trim() : typeof passcode === "string" ? passcode.trim() : "";
+    const cleanConfirmPassword = typeof confirmPassword === "string" ? confirmPassword.trim() : "";
+
+    if (cleanPassword) {
+      if (cleanPassword.length < 4) {
+        return NextResponse.json(
+          { error: "Password must be at least 4 characters long." },
+          { status: 400 },
+        );
+      }
+      if (cleanConfirmPassword && cleanPassword !== cleanConfirmPassword) {
+        return NextResponse.json(
+          { error: "Passwords do not match. Please verify your password confirmation." },
+          { status: 400 },
+        );
+      }
+    }
+
     // Validate full legal name (Required)
     const cleanFullName = typeof fullName === "string" ? fullName.trim() : "";
     if (!cleanFullName || cleanFullName.length < 2) {
@@ -57,10 +118,40 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (cleanFullName.length > 100) {
+      return NextResponse.json(
+        { error: "Full legal name cannot exceed 100 characters." },
+        { status: 400 },
+      );
+    }
+
+    // Validate Email format if provided
+    const cleanEmail = typeof email === "string" ? email.trim() : "";
+    if (cleanEmail) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(cleanEmail)) {
+        return NextResponse.json(
+          { error: "Please provide a valid email address (e.g. player@example.com)." },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Validate Ghana Card if provided
+    const cleanGhanaCard = typeof ghanaCardNumber === "string" ? ghanaCardNumber.trim() : "";
+    if (cleanGhanaCard) {
+      if (cleanGhanaCard.length < 6 || cleanGhanaCard.length > 30) {
+        return NextResponse.json(
+          { error: "Ghana Card ID number must be between 6 and 30 characters (e.g. GHA-123456789-0)." },
+          { status: 400 },
+        );
+      }
+    }
+
     // Validate Date of Birth and enforce 18+ requirement (Underage not permitted)
     if (!dateOfBirth) {
       return NextResponse.json(
-        { error: "Date of birth is required to register." },
+        { error: "Date of birth is required." },
         { status: 400 },
       );
     }
@@ -79,69 +170,87 @@ export async function POST(req: NextRequest) {
     }
     if (age < 18) {
       return NextResponse.json(
-        { error: "Underage registration is not permitted. You must be at least 18 years old to register on DAMII Arena." },
+        { error: "Underage registration is not permitted. You must be at least 18 years old to participate on DAMII Arena." },
         { status: 400 },
       );
     }
 
-    // Validate username uniqueness if changed
-    if (username && username.trim()) {
-      const cleanUsername = username.trim();
-      const existingWithUsername = await dbRepository.getUserByUsername(cleanUsername);
-      if (existingWithUsername && existingWithUsername.id !== user.id) {
-        return NextResponse.json(
-          { error: `Username '${cleanUsername}' is already taken. Please choose another.` },
-          { status: 409 },
-        );
-      }
+    if (age > 120) {
+      return NextResponse.json(
+        { error: "Please enter a valid date of birth." },
+        { status: 400 },
+      );
+    }
 
-      // Also check platform profiles table for uniqueness
-      const existingProfile = await dbRepository.findProfileByUsername(cleanUsername);
-      if (existingProfile && existingProfile.token !== userId) {
-        return NextResponse.json(
-          { error: `Username '${cleanUsername}' is already taken. Please choose another.` },
-          { status: 409 },
-        );
-      }
+    // Validate that if a username is submitted, it cannot overwrite or mismatch the generated fruit-with-numbers gamer tag
+    const FRUIT_GAMER_TAG_REGEX = /^[A-Z][a-z]+[0-9]{3,}$/i;
+    const finalUsername = user.username || (username ? String(username).trim() : "");
+
+    if (username && user.username && String(username).trim() !== user.username) {
+      return NextResponse.json(
+        { error: "Gamer Tag is uneditable and permanently assigned upon phone verification." },
+        { status: 400 },
+      );
+    }
+
+    if (finalUsername && !FRUIT_GAMER_TAG_REGEX.test(finalUsername) && !user.username) {
+      return NextResponse.json(
+        { error: "Gamer Tag must follow the fruit+number format (e.g. Lemon264, Apple743)." },
+        { status: 400 },
+      );
     }
 
     const now = new Date().toISOString();
 
-    // Update user record - momoNumber is strictly locked to the verified phone number
+    // Update user record - momoNumber is strictly locked to the verified phone number, username is preserved
     const updatedUser = await dbRepository.saveUser({
       id: user.id,
       phoneNumber: user.phoneNumber,
-      fullName: fullName !== undefined ? String(fullName).trim() : user.fullName,
-      email: email !== undefined ? String(email).trim() : user.email,
-      ghanaCardNumber: ghanaCardNumber !== undefined ? String(ghanaCardNumber).trim() : user.ghanaCardNumber,
+      fullName: cleanFullName,
+      email: cleanEmail || null,
+      ghanaCardNumber: cleanGhanaCard || null,
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth).toISOString() : user.dateOfBirth,
-      gender: gender !== undefined ? String(gender).trim() : user.gender,
+      gender: gender !== undefined ? String(gender).trim() : (user.gender || "male"),
       avatarUrl: avatarUrl !== undefined ? String(avatarUrl).trim() : user.avatarUrl,
-      region: region !== undefined ? String(region).trim() : user.region,
+      region: region !== undefined ? String(region).trim() : (user.region || "Greater Accra"),
       city: city !== undefined ? String(city).trim() : user.city,
       address: address !== undefined ? String(address).trim() : user.address,
       momoNumber: user.phoneNumber, // Strictly locked to verified phone number
       momoNetwork: momoNetwork !== undefined ? String(momoNetwork).trim() : (user.momoNetwork || "MTN"),
-      username: username !== undefined ? String(username).trim() : user.username,
+      username: user.username || finalUsername,
       referralCode: referralCode !== undefined ? String(referralCode).trim() : user.referralCode,
       profileCompletedAt: now,
     });
 
-    // Also sync username and profile data into profiles table
-    const profile = await dbRepository.getProfile(userId);
-    if (profile) {
+    // Also sync username, phone, and password into profiles table
+    let profile = await dbRepository.getProfile(userId);
+    if (!profile) {
+      profile = await dbRepository.createRegisteredProfile(
+        userId,
+        updatedUser.username || `player_${userId.slice(-6)}`,
+        cleanPassword ? securityService.hashPassword(cleanPassword).hash : "registered_player",
+        updatedUser.phoneNumber,
+        updatedUser.role === "admin" ? "admin" : "user",
+        cleanPassword ? securityService.hashPassword(cleanPassword).salt : undefined,
+      );
+    } else {
       if (updatedUser.username) {
         profile.username = updatedUser.username;
       }
       if (updatedUser.phoneNumber) {
         profile.phoneNumber = updatedUser.phoneNumber;
       }
+      if (cleanPassword) {
+        const { hash, salt } = securityService.hashPassword(cleanPassword);
+        profile.passcode = hash;
+        profile.passwordSalt = salt;
+      }
       await dbRepository.saveProfile(profile);
     }
 
     return NextResponse.json({
       success: true,
-      message: "Profile completed successfully",
+      message: "Profile saved successfully",
       user: updatedUser,
       profileCompleted: true,
     });

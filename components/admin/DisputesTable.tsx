@@ -63,8 +63,8 @@ export function DisputesTable({ rooms, onInspectRoom }: DisputesTableProps) {
                 </td>
               </tr>
             ) : (
-              rooms.map((r) => (
-                <tr key={r.code} className="hover:bg-[#0c3b2e]/50">
+              rooms.map((r, idx) => (
+                <tr key={`${r.code || "room"}-${idx}`} className="hover:bg-[#0c3b2e]/50">
                   <td className="py-3 px-3 font-mono font-bold text-[#d6a735]">{r.code}</td>
                   <td className="py-3 px-3">
                     <div className="font-semibold text-[#f5efdf]">

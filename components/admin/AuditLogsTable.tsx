@@ -39,8 +39,8 @@ export function AuditLogsTable({ logs }: AuditLogsTableProps) {
                 </td>
               </tr>
             ) : (
-              logs.map((l) => (
-                <tr key={l.id} className="hover:bg-[#0c3b2e]/50">
+              logs.map((l, idx) => (
+                <tr key={`${l.id || "log"}-${idx}`} className="hover:bg-[#0c3b2e]/50">
                   <td className="py-2.5 px-3 font-mono text-[11px] text-slate-200 font-semibold">
                     {new Date(l.createdAt).toLocaleString()}
                   </td>

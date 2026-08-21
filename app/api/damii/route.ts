@@ -4,6 +4,7 @@ import { dbRepository } from "@/lib/db-client";
 import { walletService } from "@/lib/wallet-service";
 import { timerService } from "@/lib/timer-service";
 import { leagueService } from "@/lib/league-service";
+import { presenceService } from "@/lib/presence-service";
 import { Room, GameMode, Player, MoveLogEntry } from "@/lib/types";
 
 const cleanName = (value: unknown) => String(value ?? "").trim().replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 20);
@@ -69,9 +70,15 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
 
   if (searchParams.get("lobby") === "1") {
+    const rawToken = cleanToken(searchParams.get("token"));
+    const username = cleanName(searchParams.get("username"));
+    if (rawToken || username) {
+      presenceService.recordPresence(rawToken, username);
+    }
+
     const [rawRooms, leaderboard, leagues] = await Promise.all([
       dbRepository.listRooms(30),
-      dbRepository.getLeaderboard(20),
+      dbRepository.getLeaderboard(50),
       leagueService.listLeagues(),
     ]);
 
@@ -84,16 +91,41 @@ export async function GET(req: NextRequest) {
       return r.status !== "cancelled";
     });
 
+    const nonPlayerRoles = new Set(["admin", "super_admin", "organizer", "facilitator", "treasurer"]);
+    const mappedLeaderboard = leaderboard
+      .filter((p) => !nonPlayerRoles.has(p.role) && p.status !== "banned")
+      .map((p) => {
+        const presence = presenceService.getPresence(p.token, p.username);
+        return {
+          ...p,
+          isOnline: presence.isOnline,
+          presenceStatus: presence.presenceStatus,
+          lastSeenAt: presence.lastSeenAt,
+        };
+      });
+
     return NextResponse.json({
       activeRooms: validRooms,
-      leaderboard,
+      leaderboard: mappedLeaderboard,
       leagues,
     });
   }
 
   if (searchParams.get("leaderboard") === "1") {
-    const leaderboard = await dbRepository.getLeaderboard(20);
-    return NextResponse.json({ leaderboard });
+    const leaderboard = await dbRepository.getLeaderboard(50);
+    const nonPlayerRoles = new Set(["admin", "super_admin", "organizer", "facilitator", "treasurer"]);
+    const mappedLeaderboard = leaderboard
+      .filter((p) => !nonPlayerRoles.has(p.role) && p.status !== "banned")
+      .map((p) => {
+        const presence = presenceService.getPresence(p.token, p.username);
+        return {
+          ...p,
+          isOnline: presence.isOnline,
+          presenceStatus: presence.presenceStatus,
+          lastSeenAt: presence.lastSeenAt,
+        };
+      });
+    return NextResponse.json({ leaderboard: mappedLeaderboard });
   }
 
   const code = cleanCode(searchParams.get("code"));
@@ -102,6 +134,7 @@ export async function GET(req: NextRequest) {
   if (rawToken) {
     const session = await dbRepository.getSession(rawToken);
     if (session) token = session.userId;
+    presenceService.recordPresence(token, undefined, code || null);
   }
 
   if (!code) {
@@ -178,6 +211,10 @@ export async function POST(req: NextRequest) {
     const { token: resolvedToken, profile: resolvedProfile } = await resolvePlayerToken(rawToken, username);
     const token = resolvedToken || rawToken;
     const existingProfile = resolvedProfile || (await dbRepository.getProfile(token));
+
+    if (token) {
+      presenceService.recordPresence(token, username || existingProfile?.username, body.code || null);
+    }
 
     if (existingProfile && existingProfile.status === "banned") {
       return NextResponse.json({ error: "Account is banned. Please contact admin support." }, { status: 403 });
