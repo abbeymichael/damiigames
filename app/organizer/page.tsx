@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { SharedHeader } from "@/components/SharedHeader";
 import { Footer } from "@/components/Footer";
 import { OrganizerApplicationForm } from "@/components/organizer/OrganizerApplicationForm";
+import { OrganizerPerformanceAnalytics } from "@/components/organizer/OrganizerPerformanceAnalytics";
 import {
   Trophy,
   Plus,
@@ -116,7 +117,7 @@ export default function OrganizerPage() {
   } | null>(null);
 
   // UI Navigation Tabs
-  const [activeTab, setActiveTab] = useState<"tournaments" | "create" | "manage">("tournaments");
+  const [activeTab, setActiveTab] = useState<"tournaments" | "analytics" | "create" | "manage">("tournaments");
   const [manageSubTab, setManageSubTab] = useState<"overview" | "participants" | "fixtures" | "bracket" | "prizes">("overview");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -1298,6 +1299,17 @@ export default function OrganizerPage() {
                 </button>
 
                 <button
+                  onClick={() => setActiveTab("analytics")}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                    activeTab === "analytics"
+                      ? "bg-[#d6a735] text-[#06261f] shadow-md"
+                      : "text-[#a3b8b0] hover:text-white"
+                  }`}
+                >
+                  <TrendingUp size={16} /> Performance Analytics
+                </button>
+
+                <button
                   onClick={() => setActiveTab("create")}
                   className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
                     activeTab === "create"
@@ -1438,6 +1450,21 @@ export default function OrganizerPage() {
                   </div>
                 )}
               </div>
+            )}
+
+            {/* TAB: PERFORMANCE ANALYTICS */}
+            {activeTab === "analytics" && (
+              <OrganizerPerformanceAnalytics
+                leagues={leagues}
+                currentUserId={token}
+                currentUsername={username}
+                onSelectLeague={(id) => {
+                  setSelectedLeagueId(id);
+                  setActiveTab("manage");
+                  setManageSubTab("overview");
+                }}
+                onCreateTournament={() => setActiveTab("create")}
+              />
             )}
 
             {/* TAB 2: CREATE TOURNAMENT WIZARD */}
