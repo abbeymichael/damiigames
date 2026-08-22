@@ -555,11 +555,11 @@ export default function ArenaPage() {
       } else if (botParam === "1" || botParam === "true" || modeParam === "vs_cpu" || modeParam === "bot") {
         setMode("local");
         setSubMode("vs_cpu");
-        setLocalGameStarted(true);
+        setShowPregameModal(true);
       } else if (modeParam === "local" || modeParam === "pass_play") {
         setMode("local");
         setSubMode("pass_play");
-        setLocalGameStarted(true);
+        setShowPregameModal(true);
       }
     }
 
@@ -1384,7 +1384,11 @@ export default function ArenaPage() {
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
               <button
                 type="button"
-                onClick={() => startBotMatch("medium")}
+                onClick={() => {
+                  setMode("local");
+                  setSubMode("vs_cpu");
+                  setShowPregameModal(true);
+                }}
                 className="flex-1 sm:flex-none px-4 py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#d6a735]/20 transition-all hover:scale-[1.02]"
               >
                 <Bot size={16} />
@@ -2809,22 +2813,43 @@ export default function ArenaPage() {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-semibold text-[#cbd5e1] mb-1">
-                      AI Bot Difficulty
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {(["easy", "medium", "hard"] as const).map((lvl) => (
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-[11px] font-semibold text-[#cbd5e1]">
+                        AI Bot Difficulty
+                      </label>
+                      <span className="text-[10px] text-[#d6a735] font-bold">
+                        {cpuDifficulty === "easy"
+                          ? "Casual Bot (Beginner)"
+                          : cpuDifficulty === "medium"
+                          ? "Tactical AI (Intermediate)"
+                          : "Grandmaster (Pro FMJD)"}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {(
+                        [
+                          { key: "easy", label: "Casual Bot", desc: "Forgiving pace & simple captures" },
+                          { key: "medium", label: "Tactical AI", desc: "Balanced positional tactics" },
+                          { key: "hard", label: "Grandmaster", desc: "Ruthless multi-hop calculation" },
+                        ] as const
+                      ).map(({ key, label, desc }) => (
                         <button
-                          key={lvl}
+                          key={key}
                           type="button"
-                          onClick={() => setCpuDifficulty(lvl)}
-                          className={`py-2 text-xs font-bold capitalize rounded-lg border transition-all ${
-                            cpuDifficulty === lvl
-                              ? "bg-[#d6a735]/20 border-[#d6a735] text-[#d6a735]"
-                              : "bg-[#06261f] border-[#184d3c] text-[#cbd5e1] hover:text-white"
+                          onClick={() => setCpuDifficulty(key)}
+                          className={`p-2.5 text-left rounded-xl border transition-all ${
+                            cpuDifficulty === key
+                              ? "bg-[#d6a735]/20 border-[#d6a735] text-[#d6a735] shadow-sm ring-1 ring-[#d6a735]/50"
+                              : "bg-[#06261f] border-[#184d3c] text-[#cbd5e1] hover:text-white hover:border-[#22634f]"
                           }`}
                         >
-                          {lvl === "easy" ? "Casual Bot" : lvl === "medium" ? "Tactical AI" : "Grandmaster"}
+                          <div className="text-xs font-bold flex items-center justify-between">
+                            <span>{label}</span>
+                            {cpuDifficulty === key && <span className="text-[10px]">●</span>}
+                          </div>
+                          <div className="text-[10px] opacity-75 mt-0.5 leading-tight">
+                            {desc}
+                          </div>
                         </button>
                       ))}
                     </div>
@@ -3042,7 +3067,13 @@ export default function ArenaPage() {
                 className="px-6 py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-extrabold rounded-xl text-xs transition-all shadow-lg shadow-[#d6a735]/20 flex items-center gap-2"
               >
                 <Play size={14} fill="currentColor" />
-                <span>Launch Match Now</span>
+                <span>
+                  {mode === "online"
+                    ? "Enter Arena Room"
+                    : subMode === "vs_cpu"
+                    ? `Launch Bot Match (${cpuDifficulty === "easy" ? "Casual Bot" : cpuDifficulty === "medium" ? "Tactical AI" : "Grandmaster"})`
+                    : "Launch Pass & Play"}
+                </span>
               </button>
             </div>
           </div>
