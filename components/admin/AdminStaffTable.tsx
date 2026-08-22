@@ -464,3 +464,5 @@ export function AdminStaffTable({
     </div>
   );
 }
+
+export default AdminStaffTable;

@@ -5,6 +5,7 @@ import { SharedHeader } from "@/components/SharedHeader";
 import { Footer } from "@/components/Footer";
 import { OrganizerApplicationForm } from "@/components/organizer/OrganizerApplicationForm";
 import { OrganizerPerformanceAnalytics } from "@/components/organizer/OrganizerPerformanceAnalytics";
+import { BatchFixtureScheduler } from "@/components/organizer/BatchFixtureScheduler";
 import {
   Trophy,
   Plus,
@@ -1966,71 +1967,24 @@ export default function OrganizerPage() {
                 {/* SUB-TAB: FIXTURES & SCHEDULING CONTROL CENTER */}
                 {manageSubTab === "fixtures" && (
                   <div className="space-y-8">
-                    {/* Control Panels Grid */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                      {/* 1. Cycle / Round Bulk Scheduler */}
-                      <div className="p-6 bg-[#06261f] border border-[#184d3c] rounded-3xl space-y-4 shadow-xl">
-                        <div className="flex items-center gap-2 text-[#d6a735]">
-                          <Calendar size={18} />
-                          <h3 className="font-bold text-sm text-[#f5efdf]">Cycle &amp; Round Scheduler</h3>
-                        </div>
-                        <p className="text-xs text-[#a3b8b0]">
-                          Set specific start dates &amp; times for matches in each cycle. Winner automatically moves to next round.
-                        </p>
+                    {/* 1. Automated Batch Fixture Scheduler Utility */}
+                    {activeLeagueDetails && (
+                      <BatchFixtureScheduler
+                        league={activeLeagueDetails.league}
+                        matches={activeLeagueDetails.matches}
+                        token={token}
+                        onScheduleApplied={() => {
+                          if (selectedLeagueId) loadLeagueDetails(selectedLeagueId);
+                        }}
+                        busy={busy}
+                        setBusy={setBusy}
+                        setError={setError}
+                        setSuccess={setSuccess}
+                      />
+                    )}
 
-                        <div className="space-y-3 text-xs">
-                          <div>
-                            <label className="block text-[#a3b8b0] mb-1 font-bold">Select Cycle / Round</label>
-                            <select
-                              value={scheduleRoundNumber}
-                              onChange={(e) => setScheduleRoundNumber(Number(e.target.value))}
-                              className="w-full px-3 py-2 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none"
-                            >
-                              {Array.from(new Set(activeLeagueDetails?.matches.map((m) => m.round) || [1])).map((r) => (
-                                <option key={r} value={r}>
-                                  Round / Cycle {r} ({activeLeagueDetails?.matches.filter((m) => m.round === r).length} Matches)
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="block text-[#a3b8b0] mb-1 font-bold">Start Date &amp; Time</label>
-                            <input
-                              type="datetime-local"
-                              value={scheduleRoundStartTime}
-                              onChange={(e) => setScheduleRoundStartTime(e.target.value)}
-                              className="w-full px-3 py-2 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[#a3b8b0] mb-1 font-bold">Match Spacing / Break</label>
-                            <select
-                              value={scheduleRoundInterval}
-                              onChange={(e) => setScheduleRoundInterval(Number(e.target.value))}
-                              className="w-full px-3 py-2 bg-[#081c15] border border-[#114232] rounded-xl text-[#f5efdf] text-xs focus:outline-none"
-                            >
-                              <option value={0}>Simultaneous (All at once)</option>
-                              <option value={15}>+15 mins staggered</option>
-                              <option value={20}>+20 mins staggered</option>
-                              <option value={30}>+30 mins staggered</option>
-                              <option value={45}>+45 mins staggered</option>
-                              <option value={60}>+60 mins staggered</option>
-                            </select>
-                          </div>
-
-                          <button
-                            type="button"
-                            disabled={busy || !scheduleRoundStartTime}
-                            onClick={handleScheduleRound}
-                            className="w-full py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
-                          >
-                            <Timer size={14} /> Apply Schedule to Round {scheduleRoundNumber}
-                          </button>
-                        </div>
-                      </div>
-
+                    {/* Quick Adjustment Tools: Delay Round & Broadcast Announcements */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       {/* 2. Delay / Push Round */}
                       <div className="p-6 bg-[#06261f] border border-[#184d3c] rounded-3xl space-y-4 shadow-xl">
                         <div className="flex items-center gap-2 text-amber-400">

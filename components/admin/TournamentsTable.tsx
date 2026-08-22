@@ -192,3 +192,5 @@ export function TournamentsTable({
     </section>
   );
 }
+
+export default TournamentsTable;

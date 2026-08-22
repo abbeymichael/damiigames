@@ -324,3 +324,5 @@ export function TournamentRequestsTable({
     </div>
   );
 }
+
+export default TournamentRequestsTable;

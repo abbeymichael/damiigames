@@ -223,3 +223,5 @@ export function AdminRolesTable({
     </div>
   );
 }
+
+export default AdminRolesTable;

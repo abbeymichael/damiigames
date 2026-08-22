@@ -189,19 +189,47 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, match });
     }
 
-    if (action === "schedule_round") {
-      const { leagueId, round, startDateTimeIso, matchDurationMinutes, breakMinutes, staggerMatches } = body;
-      if (!leagueId || !round || !startDateTimeIso) {
+    if (action === "schedule_round" || action === "batch_schedule_round") {
+      const {
+        leagueId,
+        round,
+        startDateTimeIso,
+        intervalMinutes,
+        matchDurationMinutes,
+        concurrentBoards,
+        breakMinutes,
+        staggerMatches,
+        overwriteExisting,
+        matchIds,
+      } = body;
+      if (!leagueId || round === undefined || !startDateTimeIso) {
         return NextResponse.json({ error: "League ID, Round, and Start Date Time required" }, { status: 400 });
       }
 
-      const matches = await leagueService.scheduleRound(token, String(leagueId), Number(round), {
+      const calculatedInterval = intervalMinutes !== undefined
+        ? Number(intervalMinutes)
+        : (staggerMatches ? (Number(matchDurationMinutes) || 20) : 0);
+
+      const result = await leagueService.batchScheduleRound(token, String(leagueId), {
+        round: Number(round),
         startDateTimeIso: String(startDateTimeIso),
-        matchDurationMinutes: Number(matchDurationMinutes) || 20,
-        breakMinutes: Number(breakMinutes) || 5,
-        staggerMatches: Boolean(staggerMatches),
+        intervalMinutes: calculatedInterval,
+        concurrentBoards: Number(concurrentBoards) || 1,
+        breakMinutes: Number(breakMinutes) || 0,
+        overwriteExisting: overwriteExisting !== undefined ? Boolean(overwriteExisting) : true,
+        matchIds: Array.isArray(matchIds) ? matchIds.map(String) : undefined,
       });
-      return NextResponse.json({ success: true, matches });
+      return NextResponse.json({ success: true, ...result });
+    }
+
+    if (action === "clear_round_schedule") {
+      const { leagueId, round } = body;
+      if (!leagueId) {
+        return NextResponse.json({ error: "League ID required" }, { status: 400 });
+      }
+
+      const result = await leagueService.clearRoundSchedule(token, String(leagueId), Number(round) || 0);
+      return NextResponse.json({ success: true, ...result });
     }
 
     if (action === "delay_round") {

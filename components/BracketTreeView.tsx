@@ -537,3 +537,5 @@ export function BracketTreeView({
     </div>
   );
 }
+
+export default BracketTreeView;

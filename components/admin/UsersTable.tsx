@@ -332,3 +332,5 @@ export function UsersTable({
   );
 }
 
+export default UsersTable;
+

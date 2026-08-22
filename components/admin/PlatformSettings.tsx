@@ -1057,3 +1057,5 @@ export function PlatformSettings({
     </div>
   );
 }
+
+export default PlatformSettings;

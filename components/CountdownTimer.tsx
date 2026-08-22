@@ -104,3 +104,5 @@ export function CountdownTimer({
     </span>
   );
 }
+
+export default CountdownTimer;

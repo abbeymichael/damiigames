@@ -101,3 +101,5 @@ export function DisputesTable({ rooms, onInspectRoom }: DisputesTableProps) {
     </section>
   );
 }
+
+export default DisputesTable;

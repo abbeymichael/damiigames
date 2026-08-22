@@ -1012,3 +1012,5 @@ export function GameLimitsTable({ token, adminSecret }: GameLimitsTableProps) {
   );
 }
 
+export default GameLimitsTable;
+

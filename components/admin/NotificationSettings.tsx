@@ -2029,3 +2029,5 @@ export function NotificationSettings({ token, adminSecret }: NotificationSetting
     </div>
   );
 }
+
+export default NotificationSettings;

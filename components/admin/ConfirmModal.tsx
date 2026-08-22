@@ -110,3 +110,5 @@ export function ConfirmModal({
     </div>
   );
 }
+
+export default ConfirmModal;

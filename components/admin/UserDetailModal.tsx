@@ -1025,3 +1025,5 @@ export function UserDetailModal({
     </div>
   );
 }
+
+export default UserDetailModal;

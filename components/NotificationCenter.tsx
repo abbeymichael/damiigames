@@ -49,7 +49,7 @@ export function NotificationCenter({ userToken, username }: NotificationCenterPr
   // Track known notification IDs to detect fresh incoming ones for audio chime & toast banner
   const prevNotificationIdsRef = useRef<Set<string>>(new Set());
   const initialLoadDoneRef = useRef(false);
-  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Initialize sound mute state from soundService
   useEffect(() => {
@@ -762,3 +762,5 @@ export function NotificationCenter({ userToken, username }: NotificationCenterPr
     </>
   );
 }
+
+export default NotificationCenter;

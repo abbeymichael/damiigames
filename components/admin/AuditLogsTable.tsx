@@ -59,3 +59,5 @@ export function AuditLogsTable({ logs }: AuditLogsTableProps) {
     </section>
   );
 }
+
+export default AuditLogsTable;

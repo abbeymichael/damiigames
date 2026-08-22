@@ -1421,8 +1421,36 @@ export const leagueService = {
     options: {
       startDateTimeIso: string;
       matchDurationMinutes?: number;
+      intervalMinutes?: number;
+      concurrentBoards?: number;
       breakMinutes?: number;
       staggerMatches?: boolean;
+      overwriteExisting?: boolean;
+    }
+  ) {
+    const interval = options.intervalMinutes ?? (options.staggerMatches ? (options.matchDurationMinutes || 20) : 0);
+    const res = await this.batchScheduleRound(facilitatorOrAdminToken, leagueId, {
+      round,
+      startDateTimeIso: options.startDateTimeIso,
+      intervalMinutes: interval,
+      concurrentBoards: options.concurrentBoards ?? 1,
+      breakMinutes: options.breakMinutes ?? 5,
+      overwriteExisting: options.overwriteExisting ?? true,
+    });
+    return res.matches;
+  },
+
+  async batchScheduleRound(
+    facilitatorOrAdminToken: string,
+    leagueId: string,
+    options: {
+      round: number;
+      startDateTimeIso: string;
+      intervalMinutes: number;
+      concurrentBoards?: number;
+      breakMinutes?: number;
+      overwriteExisting?: boolean;
+      matchIds?: string[];
     }
   ) {
     const profile = await dbRepository.getProfile(facilitatorOrAdminToken);
@@ -1438,52 +1466,147 @@ export const leagueService = {
       profile.role === "facilitator" ||
       league.facilitatorToken === facilitatorOrAdminToken;
 
-    if (!isStaff) throw new Error("Only tournament organizers or administrators can schedule rounds");
+    if (!isStaff) throw new Error("Only tournament organizers or administrators can batch schedule matches");
 
     const allMatches = await dbRepository.getLeagueMatches(leagueId);
-    const roundMatches = allMatches.filter((m) => m.round === round);
-    if (roundMatches.length === 0) throw new Error(`No matches found in Round ${round}`);
+    let targetMatches = options.round > 0
+      ? allMatches.filter((m) => m.round === options.round)
+      : allMatches;
+
+    if (Array.isArray(options.matchIds) && options.matchIds.length > 0) {
+      const idSet = new Set(options.matchIds);
+      targetMatches = targetMatches.filter((m) => idSet.has(m.id));
+    }
+
+    if (options.overwriteExisting === false) {
+      targetMatches = targetMatches.filter((m) => !m.scheduledTime);
+    }
+
+    // Sort by matchNumber for clean deterministic wave order
+    targetMatches.sort((a, b) => a.matchNumber - b.matchNumber);
+
+    if (targetMatches.length === 0) {
+      throw new Error("No eligible matches found to schedule with the specified criteria");
+    }
 
     const baseStartTime = new Date(options.startDateTimeIso).getTime();
-    const durationMs = (options.matchDurationMinutes || 20) * 60 * 1000;
-    const breakMs = (options.breakMinutes || 5) * 60 * 1000;
-    const stagger = Boolean(options.staggerMatches);
+    if (isNaN(baseStartTime)) {
+      throw new Error("Invalid start date and time format");
+    }
+
+    const intervalMs = Math.max(0, options.intervalMinutes || 0) * 60 * 1000;
+    const breakMs = Math.max(0, options.breakMinutes || 0) * 60 * 1000;
+    const boards = Math.max(1, options.concurrentBoards || 1);
 
     const updatedMatches: LeagueMatch[] = [];
-    for (let i = 0; i < roundMatches.length; i++) {
-      const match = roundMatches[i];
-      const matchStartMs = stagger ? baseStartTime + i * (durationMs + breakMs) : baseStartTime;
-      const scheduledTimeIso = new Date(matchStartMs).toISOString();
+    const scheduledDetails: Array<{ matchId: string; scheduledTime: string; boardNumber: number }> = [];
 
+    for (let i = 0; i < targetMatches.length; i++) {
+      const match = targetMatches[i];
+      const waveIndex = Math.floor(i / boards);
+      const boardNumber = (i % boards) + 1;
+      const matchStartMs = intervalMs === 0
+        ? baseStartTime
+        : baseStartTime + waveIndex * (intervalMs + breakMs);
+
+      const scheduledTimeIso = new Date(matchStartMs).toISOString();
       match.scheduledTime = scheduledTimeIso;
       await dbRepository.saveLeagueMatch(match);
       updatedMatches.push(match);
+      scheduledDetails.push({
+        matchId: match.id,
+        scheduledTime: scheduledTimeIso,
+        boardNumber,
+      });
 
-      if (match.player1Token) {
-        notificationService.sendNotification({
-          userToken: match.player1Token,
-          username: match.player1Name,
-          type: "tournament_match",
-          title: `⏰ Round ${round} Fixture Scheduled`,
-          message: `Your match vs ${match.player2Name || "Opponent"} in ${league.title} is set for ${new Date(scheduledTimeIso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`,
-          link: `/leagues`,
-          actionLabel: "View Match",
-        }).catch(() => {});
-      }
-      if (match.player2Token) {
-        notificationService.sendNotification({
-          userToken: match.player2Token,
-          username: match.player2Name,
-          type: "tournament_match",
-          title: `⏰ Round ${round} Fixture Scheduled`,
-          message: `Your match vs ${match.player1Name || "Opponent"} in ${league.title} is set for ${new Date(scheduledTimeIso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`,
-          link: `/leagues`,
-          actionLabel: "View Match",
-        }).catch(() => {});
+      // Send live notifications to players if match is pending/active
+      if (match.status !== "completed") {
+        const timeFormatted = new Date(scheduledTimeIso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const dateFormatted = new Date(scheduledTimeIso).toLocaleDateString([], { month: "short", day: "numeric" });
+
+        if (match.player1Token) {
+          notificationService.sendNotification({
+            userToken: match.player1Token,
+            username: match.player1Name,
+            type: "tournament_match",
+            title: `⏰ Match Fixture Set: Round ${match.round} #${match.matchNumber}`,
+            message: `Your match vs ${match.player2Name || "Opponent"} in ${league.title} is scheduled for ${dateFormatted} at ${timeFormatted} (Board #${boardNumber}).`,
+            link: `/leagues`,
+            actionLabel: "View Fixture",
+            actionPayload: { leagueId: league.id, matchId: match.id, round: match.round },
+          }).catch(() => {});
+        }
+        if (match.player2Token) {
+          notificationService.sendNotification({
+            userToken: match.player2Token,
+            username: match.player2Name,
+            type: "tournament_match",
+            title: `⏰ Match Fixture Set: Round ${match.round} #${match.matchNumber}`,
+            message: `Your match vs ${match.player1Name || "Opponent"} in ${league.title} is scheduled for ${dateFormatted} at ${timeFormatted} (Board #${boardNumber}).`,
+            link: `/leagues`,
+            actionLabel: "View Fixture",
+            actionPayload: { leagueId: league.id, matchId: match.id, round: match.round },
+          }).catch(() => {});
+        }
       }
     }
 
-    return updatedMatches;
+    const firstTimeIso = scheduledDetails[0]?.scheduledTime || options.startDateTimeIso;
+    const lastTimeIso = scheduledDetails[scheduledDetails.length - 1]?.scheduledTime || options.startDateTimeIso;
+
+    return {
+      success: true,
+      count: updatedMatches.length,
+      matches: updatedMatches,
+      summary: {
+        round: options.round,
+        totalScheduled: updatedMatches.length,
+        firstMatchTime: firstTimeIso,
+        lastMatchTime: lastTimeIso,
+        intervalMinutes: options.intervalMinutes,
+        concurrentBoards: boards,
+        breakMinutes: options.breakMinutes || 0,
+      },
+    };
+  },
+
+  async clearRoundSchedule(
+    facilitatorOrAdminToken: string,
+    leagueId: string,
+    round: number
+  ) {
+    const profile = await dbRepository.getProfile(facilitatorOrAdminToken);
+    if (!profile) throw new Error("Unauthorized profile");
+
+    const league = await dbRepository.getLeague(leagueId);
+    if (!league) throw new Error("League not found");
+
+    const isStaff =
+      profile.role === "admin" ||
+      profile.role === "super_admin" ||
+      profile.role === "organizer" ||
+      profile.role === "facilitator" ||
+      league.facilitatorToken === facilitatorOrAdminToken;
+
+    if (!isStaff) throw new Error("Only tournament organizers or administrators can clear round fixtures");
+
+    const allMatches = await dbRepository.getLeagueMatches(leagueId);
+    const targetMatches = round > 0
+      ? allMatches.filter((m) => m.round === round && m.status !== "completed")
+      : allMatches.filter((m) => m.status !== "completed");
+
+    const cleared: LeagueMatch[] = [];
+    for (const match of targetMatches) {
+      match.scheduledTime = undefined;
+      await dbRepository.saveLeagueMatch(match);
+      cleared.push(match);
+    }
+
+    return {
+      success: true,
+      clearedCount: cleared.length,
+      matches: cleared,
+    };
   },
 
   async delayRound(

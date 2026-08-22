@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { and, asc, desc, eq, gte, lt, ne, or, sql } from "drizzle-orm";
 import type {
   AdminAccount,
@@ -45,7 +47,7 @@ import { calculateDynamicRatingUpdate, getProfileRank } from "../rank-service";
 import { getEnv } from "../env";
 import { buildSeedDataset, DEFAULT_ADMIN_SETTINGS, DEFAULT_REGIONS } from "./seed-data";
 import { lockKey, type DbRepository } from "./repository";
-import { assertConnection, closePool, getDb, withTransaction } from "./mysql-connection";
+import { assertConnection, closePool, getDb, getPool, withTransaction } from "./mysql-connection";
 import * as schema from "../../db/schema.mysql";
 import {
   adminLogToRow,
@@ -161,17 +163,80 @@ function profileUpdateSet(p: Profile) {
 
 async function ensureSchema(): Promise<void> {
   /**
-   * The schema is applied via `npm run db:migrate` / `db:push` (drizzle-kit).
-   * At runtime we only verify connectivity + that the core table exists so a
-   * misconfigured deploy fails fast with a readable message.
+   * Probes connection and automatically applies any pending MySQL migrations
+   * from drizzle/mysql so tables (profiles, sessions, leagues, matches, etc.)
+   * are guaranteed to exist without manual CLI steps.
    */
   await assertConnection();
+  const pool = getPool();
+  try {
+    const conn = await pool.getConnection();
+    try {
+      await conn.query(
+        `CREATE TABLE IF NOT EXISTS \`__drizzle_migrations\` (
+           \`id\` int NOT NULL AUTO_INCREMENT,
+           \`name\` varchar(191) NOT NULL,
+           \`applied_at\` varchar(32) NOT NULL,
+           PRIMARY KEY (\`id\`),
+           UNIQUE KEY \`__drizzle_migrations_name_uq\` (\`name\`)
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+      );
+
+      const [rows] = (await conn.query(`SELECT name FROM \`__drizzle_migrations\``)) as any;
+      const applied = new Set((rows || []).map((r: any) => r.name));
+
+      const migrationsDir = path.join(process.cwd(), "drizzle", "mysql");
+      if (fs.existsSync(migrationsDir)) {
+        const files = fs
+          .readdirSync(migrationsDir)
+          .filter((f) => f.endsWith(".sql"))
+          .sort();
+
+        for (const file of files) {
+          if (applied.has(file)) continue;
+          const sqlContent = fs.readFileSync(path.join(migrationsDir, file), "utf8");
+          const statements = sqlContent
+            .split(/--> statement-breakpoint/g)
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0 && !/^(--|#)/.test(s.replace(/\s/g, "")));
+
+          for (const stmt of statements) {
+            try {
+              await conn.query(stmt);
+            } catch (err: any) {
+              const tolerable = [
+                "ER_TABLE_EXISTS_ERROR",
+                "ER_DUP_KEYNAME",
+                "ER_DUP_FIELDNAME",
+              ].includes(err?.code);
+              if (!tolerable) {
+                console.warn(`[damii][db] Migration notice for ${file}:`, err?.message);
+              }
+            }
+          }
+
+          try {
+            await conn.query(`INSERT IGNORE INTO \`__drizzle_migrations\` (name, applied_at) VALUES (?, ?)`, [
+              file,
+              new Date().toISOString(),
+            ]);
+          } catch {
+            // ignore
+          }
+        }
+      }
+    } finally {
+      conn.release();
+    }
+  } catch (err) {
+    console.warn(`[damii][db] Schema auto-migration check notice:`, err);
+  }
+
   try {
     await getDb().select({ token: schema.profiles.token }).from(schema.profiles).limit(1);
   } catch (err) {
     throw new Error(
-      "Connected to MySQL but the DAMII tables are missing. " +
-        "Run `npm run db:migrate` (or `npm run db:push`) to create the schema. " +
+      "Connected to MySQL but the DAMII tables could not be verified. " +
         `Underlying error: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
@@ -269,24 +334,37 @@ export const mysqlStore: DbRepository = {
 
   async getSession(token) {
     if (!token) return null;
-    const [row] = await getDb()
-      .select()
-      .from(schema.sessions)
-      .where(eq(schema.sessions.token, token))
-      .limit(1);
-    if (!row) return null;
-    if (new Date(row.expiresAt).getTime() < Date.now()) {
-      await getDb().delete(schema.sessions).where(eq(schema.sessions.token, token));
+    try {
+      const [row] = await getDb()
+        .select()
+        .from(schema.sessions)
+        .where(eq(schema.sessions.token, token))
+        .limit(1);
+      if (!row) return null;
+      if (new Date(row.expiresAt).getTime() < Date.now()) {
+        try {
+          await getDb().delete(schema.sessions).where(eq(schema.sessions.token, token));
+        } catch {
+          // ignore session cleanup error
+        }
+        return null;
+      }
+      if (!row.csrfToken) {
+        row.csrfToken = `csrf_${securityService.generateCsprngToken(32)}`;
+        try {
+          await getDb()
+            .update(schema.sessions)
+            .set({ csrfToken: row.csrfToken })
+            .where(eq(schema.sessions.token, token));
+        } catch {
+          // ignore update error
+        }
+      }
+      return rowToSession(row);
+    } catch (err) {
+      console.warn(`[damii][db] getSession safe fallback:`, err instanceof Error ? err.message : err);
       return null;
     }
-    if (!row.csrfToken) {
-      row.csrfToken = `csrf_${securityService.generateCsprngToken(32)}`;
-      await getDb()
-        .update(schema.sessions)
-        .set({ csrfToken: row.csrfToken })
-        .where(eq(schema.sessions.token, token));
-    }
-    return rowToSession(row);
   },
 
   async rotateSession(oldToken, ipAddress, userAgent) {

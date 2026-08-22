@@ -867,3 +867,5 @@ export function OrganizerApplicationDetailModal({
     </div>
   );
 }
+
+export default OrganizerApplicationDetailModal;

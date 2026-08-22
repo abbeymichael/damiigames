@@ -433,3 +433,5 @@ export function PolicyPageView({ initialSlug }: PolicyPageViewProps) {
     </div>
   );
 }
+
+export default PolicyPageView;

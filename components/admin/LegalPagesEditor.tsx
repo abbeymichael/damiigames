@@ -749,3 +749,5 @@ export function LegalPagesEditor({ token }: LegalPagesEditorProps) {
     </div>
   );
 }
+
+export default LegalPagesEditor;

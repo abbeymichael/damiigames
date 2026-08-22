@@ -827,3 +827,5 @@ export function OrganizerApplicationForm({
     </div>
   );
 }
+
+export default OrganizerApplicationForm;

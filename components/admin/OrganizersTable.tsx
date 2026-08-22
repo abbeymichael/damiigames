@@ -370,3 +370,5 @@ export function OrganizersTable({
     </section>
   );
 }
+
+export default OrganizersTable;

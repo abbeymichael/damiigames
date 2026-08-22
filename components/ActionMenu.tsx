@@ -67,3 +67,5 @@ export function ActionMenu({ items }: { items: ActionMenuItem[] }) {
     </div>
   );
 }
+
+export default ActionMenu;

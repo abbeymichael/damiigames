@@ -549,3 +549,5 @@ export function LedgerTable({
     </div>
   );
 }
+
+export default LedgerTable;

@@ -339,3 +339,5 @@ export function GamesCatalogTable({
     </div>
   );
 }
+
+export default GamesCatalogTable;

@@ -283,6 +283,7 @@ export default function ArenaPage() {
   const [rotated, setRotated] = useState(false);
   const [captures, setCaptures] = useState<Record<Player, number>>({ white: 0, black: 0 });
   const [localMoves, setLocalMoves] = useState<MoveLogEntry[]>([]);
+  const [localGameStarted, setLocalGameStarted] = useState(false);
 
   const [token, setToken] = useState("");
   const [username, setUsername] = useState("");
@@ -409,9 +410,30 @@ export default function ArenaPage() {
 
   const hasActiveGame = useMemo(() => {
     if (mode === "online" && room) return true;
-    if (mode === "local" && (localMoves.length > 0 || winner)) return true;
+    if (mode === "local" && (localGameStarted || localMoves.length > 0 || winner)) return true;
     return false;
-  }, [mode, room, localMoves.length, winner]);
+  }, [mode, room, localGameStarted, localMoves.length, winner]);
+
+  function startBotMatch(difficulty: "easy" | "medium" | "hard" = cpuDifficulty) {
+    setCpuDifficulty(difficulty);
+    setMode("local");
+    setSubMode("vs_cpu");
+    setRoom(null);
+    setLocalGameStarted(true);
+    resetLocalMatch();
+    setShowPregameModal(false);
+    setShowSettings(false);
+  }
+
+  function startLocalPassAndPlay() {
+    setMode("local");
+    setSubMode("pass_play");
+    setRoom(null);
+    setLocalGameStarted(true);
+    resetLocalMatch();
+    setShowPregameModal(false);
+    setShowSettings(false);
+  }
 
   const toggleFocusMode = () => {
     const next = !focusMode;
@@ -520,14 +542,24 @@ export default function ArenaPage() {
       }
     }
 
-    // Check URL search params for direct 1-on-1 invite
+    // Check URL search params for direct 1-on-1 invite or vs bot
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const joinParam = params.get("join");
+      const botParam = params.get("bot");
+      const modeParam = params.get("mode");
       if (joinParam) {
         setJoinCode(joinParam.toUpperCase());
         setMode("online");
         setShowPregameModal(true);
+      } else if (botParam === "1" || botParam === "true" || modeParam === "vs_cpu" || modeParam === "bot") {
+        setMode("local");
+        setSubMode("vs_cpu");
+        setLocalGameStarted(true);
+      } else if (modeParam === "local" || modeParam === "pass_play") {
+        setMode("local");
+        setSubMode("pass_play");
+        setLocalGameStarted(true);
       }
     }
 
@@ -637,7 +669,7 @@ export default function ArenaPage() {
 
   // Auto CPU move trigger for simulation mode
   useEffect(() => {
-    if (mode !== "local" || subMode !== "vs_cpu" || winner || !token) {
+    if (mode !== "local" || subMode !== "vs_cpu" || winner) {
       setIsCpuThinking(false);
       return;
     }
@@ -947,10 +979,8 @@ export default function ArenaPage() {
   function handleSquare(square: number) {
     if (winner) return;
 
-    if (mode === "local" && subMode === "vs_cpu" && !token) {
-      window.dispatchEvent(new CustomEvent("damii-open-auth"));
-      setMessage("🔒 Sign in or create an account to challenge the Bot AI.");
-      setShowPregameModal(true);
+    if (mode === "local" && subMode === "vs_cpu" && turn === "black") {
+      // Bot turn is in progress
       return;
     }
 
@@ -1138,56 +1168,6 @@ export default function ArenaPage() {
 
   const isAdmin = profile?.role === "admin" || profile?.role === "super_admin";
 
-  if (isAdmin) {
-    return (
-      <main className="app-shell flex flex-col min-h-screen">
-        <SharedHeader />
-        <div className="flex-1 flex items-center justify-center p-4 sm:p-6">
-          <div className="max-w-lg w-full bg-[#06261f] border border-red-500/40 rounded-3xl p-6 sm:p-8 text-center shadow-2xl space-y-5">
-            <div className="w-16 h-16 rounded-2xl bg-red-950/80 border border-red-500/50 flex items-center justify-center mx-auto text-red-400 shadow-inner">
-              <ShieldAlert size={34} />
-            </div>
-            <div>
-              <span className="text-[11px] font-black uppercase tracking-widest text-red-400 bg-red-950/60 px-3 py-1 rounded-full border border-red-500/30">
-                Fair-Play & Governance Policy
-              </span>
-              <h1 className="text-xl sm:text-2xl font-black text-[#f5efdf] mt-3 font-serif">
-                Arena Off-Limits to Administrators
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
-                Administrator accounts operate strictly as platform regulators, tournament bracket managers, and dispute arbitrators.
-              </p>
-              <div className="text-xs text-amber-300/90 mt-3 font-medium bg-[#081c15] p-3.5 rounded-xl border border-[#114232] text-left space-y-1.5">
-                <div className="flex items-center gap-1.5 font-bold text-amber-400">
-                  <Lock size={13} className="shrink-0" />
-                  <span>Zero Conflict of Interest Mandate:</span>
-                </div>
-                <p className="text-[11px] text-slate-300">
-                  To ensure complete competitive fairness, administrators cannot create games, join rooms, place wagers, or make moves in the Arena.
-                </p>
-              </div>
-            </div>
-
-            <div className="pt-2 flex flex-col sm:flex-row gap-2.5 justify-center">
-              <NavLink
-                href="/admin"
-                className="px-5 py-2.5 rounded-xl bg-red-900/80 hover:bg-red-800 text-red-100 border border-red-500/50 text-xs font-black flex items-center justify-center gap-2 transition-all shadow-md"
-              >
-                <Shield size={16} /> Admin Control Center
-              </NavLink>
-              <NavLink
-                href="/leagues"
-                className="px-5 py-2.5 rounded-xl bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] text-xs font-bold flex items-center justify-center gap-2 transition-all"
-              >
-                <Trophy size={16} className="text-[#d6a735]" /> View Tournaments
-              </NavLink>
-            </div>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
   return (
     <main className="app-shell flex flex-col min-h-screen">
       <SharedHeader />
@@ -1271,6 +1251,7 @@ export default function ArenaPage() {
                   setMode("local");
                   setWinner(null);
                   setLocalMoves([]);
+                  setLocalGameStarted(false);
                 }}
                 className="px-2.5 sm:px-3 py-1.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] border border-[#184d3c] rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 transition-all"
                 title="Return to Arena Lobby"
@@ -1401,19 +1382,27 @@ export default function ArenaPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
+              <button
+                type="button"
+                onClick={() => startBotMatch("medium")}
+                className="flex-1 sm:flex-none px-4 py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#d6a735]/20 transition-all hover:scale-[1.02]"
+              >
+                <Bot size={16} />
+                <span>Play Vs Bot AI</span>
+              </button>
               {profile?.role !== "admin" && profile?.role !== "super_admin" && (
                 <button
                   type="button"
                   onClick={() => setShowPregameModal(true)}
-                  className="flex-1 sm:flex-none px-4 py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#d6a735]/20 transition-all hover:scale-[1.02]"
+                  className="flex-1 sm:flex-none px-4 py-2.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all"
                 >
-                  <Swords size={16} />
-                  <span>Create / Join Match</span>
+                  <Swords size={16} className="text-[#d6a735]" />
+                  <span>Match Setup</span>
                 </button>
               )}
               <a
                 href="/leagues"
-                className="flex-1 sm:flex-none px-4 py-2.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all"
+                className="flex-1 sm:flex-none px-4 py-2.5 bg-[#081c15] hover:bg-[#0c3b2e] text-[#f5efdf] border border-[#184d3c] font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all"
               >
                 <Trophy size={15} className="text-[#d6a735]" />
                 <span>Tournaments</span>
@@ -2183,6 +2172,7 @@ export default function ArenaPage() {
                       <button
                         type="button"
                         onClick={() => {
+                          setLocalGameStarted(true);
                           resetLocalMatch();
                           setShowPregameModal(true);
                         }}
@@ -2192,10 +2182,25 @@ export default function ArenaPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={resetLocalMatch}
+                        onClick={() => {
+                          setLocalGameStarted(true);
+                          resetLocalMatch();
+                        }}
                         className="w-full sm:w-auto px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-slate-700 transition-colors"
                       >
                         <RotateCcw size={16} /> Rematch (Same Settings)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRoom(null);
+                          setWinner(null);
+                          setLocalMoves([]);
+                          setLocalGameStarted(false);
+                        }}
+                        className="w-full sm:w-auto px-4 py-2.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-[#184d3c] transition-colors"
+                      >
+                        <Gamepad2 size={16} /> Return to Lobby
                       </button>
                     </>
                   ) : (
@@ -2773,67 +2778,79 @@ export default function ArenaPage() {
 
               {mode === "local" && subMode === "vs_cpu" && (
                 <div className="space-y-4 p-4 bg-[#0c3b2e]/60 border border-[#184d3c] rounded-xl">
-                  <h4 className="text-xs font-bold text-[#f5efdf] flex items-center gap-2">
-                    <Bot size={15} className="text-[#d6a735]" />
-                    Computer AI Simulation Setup
-                  </h4>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-[#f5efdf] flex items-center gap-2">
+                      <Bot size={15} className="text-[#d6a735]" />
+                      Computer AI Simulation Setup
+                    </h4>
+                    {token && profile ? (
+                      <span className="text-[10px] text-emerald-400 font-bold px-2 py-0.5 bg-emerald-950/80 border border-emerald-500/30 rounded-full">
+                        ● Signed In: {profile.username || username} ({profile.rating} ELO)
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-amber-300 font-semibold px-2 py-0.5 bg-amber-950/60 border border-amber-500/30 rounded-full">
+                        ⚡ Instant Practice Mode
+                      </span>
+                    )}
+                  </div>
 
-                  {!token ? (
-                    <div className="p-3.5 bg-amber-950/80 border border-amber-500/50 rounded-xl space-y-2 text-center text-amber-200">
-                      <div className="flex items-center justify-center gap-2 font-bold text-xs">
-                        <Bot size={16} className="text-[#d6a735]" />
-                        <span>Authentication Required for Bot Play</span>
-                      </div>
-                      <p className="text-[11px] text-amber-200/90 leading-tight">
-                        Guests can play local Pass & Play freely. To challenge the Bot AI and track your ELO rating, please sign in or register an account.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => window.dispatchEvent(new CustomEvent("damii-open-auth"))}
-                        className="w-full py-2 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black text-xs rounded-lg transition-colors shadow-md"
-                      >
-                        Sign In / Register
-                      </button>
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#d6a735] uppercase mb-1">
+                      Your Player Name (White)
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={20}
+                      value={localWhiteName}
+                      onChange={(e) => setLocalWhiteName(e.target.value)}
+                      placeholder="Your Name"
+                      className="w-full px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#cbd5e1] mb-1">
+                      AI Bot Difficulty
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(["easy", "medium", "hard"] as const).map((lvl) => (
+                        <button
+                          key={lvl}
+                          type="button"
+                          onClick={() => setCpuDifficulty(lvl)}
+                          className={`py-2 text-xs font-bold capitalize rounded-lg border transition-all ${
+                            cpuDifficulty === lvl
+                              ? "bg-[#d6a735]/20 border-[#d6a735] text-[#d6a735]"
+                              : "bg-[#06261f] border-[#184d3c] text-[#cbd5e1] hover:text-white"
+                          }`}
+                        >
+                          {lvl === "easy" ? "Casual Bot" : lvl === "medium" ? "Tactical AI" : "Grandmaster"}
+                        </button>
+                      ))}
                     </div>
-                  ) : (
-                    <>
-                      <div>
-                        <label className="block text-[11px] font-bold text-[#d6a735] uppercase mb-1">
-                          Your Player Name (Player 1)
-                        </label>
-                        <input
-                          type="text"
-                          maxLength={20}
-                          value={localWhiteName}
-                          onChange={(e) => setLocalWhiteName(e.target.value)}
-                          placeholder="Your Name"
-                          className="w-full px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
-                        />
-                      </div>
+                  </div>
 
-                      <div>
-                        <label className="block text-[11px] font-semibold text-[#cbd5e1] mb-1">
-                          AI Bot Level
-                        </label>
-                        <div className="grid grid-cols-3 gap-2">
-                          {(["easy", "medium", "hard"] as const).map((lvl) => (
-                            <button
-                              key={lvl}
-                              type="button"
-                              onClick={() => setCpuDifficulty(lvl)}
-                              className={`py-2 text-xs font-bold capitalize rounded-lg border transition-all ${
-                                cpuDifficulty === lvl
-                                  ? "bg-[#d6a735]/20 border-[#d6a735] text-[#d6a735]"
-                                  : "bg-[#06261f] border-[#184d3c] text-[#cbd5e1] hover:text-white"
-                              }`}
-                            >
-                              {lvl === "easy" ? "Casual Bot" : lvl === "medium" ? "Tactical AI" : "Grandmaster"}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  )}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#cbd5e1] mb-1">
+                      Turn Time Limit
+                    </label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[30, 60, 90, 0].map((seconds) => (
+                        <button
+                          key={seconds}
+                          type="button"
+                          onClick={() => setTurnTimerLimit(seconds)}
+                          className={`py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                            turnTimerLimit === seconds
+                              ? "bg-[#d6a735]/20 border-[#d6a735] text-[#d6a735]"
+                              : "bg-[#06261f] border-[#184d3c] text-[#cbd5e1] hover:text-white"
+                          }`}
+                        >
+                          {seconds === 0 ? "Unlimited" : `${seconds}s`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -3018,11 +3035,7 @@ export default function ArenaPage() {
                     setShowPregameModal(false);
                     return;
                   }
-                  if (mode === "local" && subMode === "vs_cpu" && !token) {
-                    window.dispatchEvent(new CustomEvent("damii-open-auth"));
-                    setOnlineError("Authentication Required: Please sign in or register to play against the Bot AI.");
-                    return;
-                  }
+                  setLocalGameStarted(true);
                   resetLocalMatch();
                   setShowPregameModal(false);
                 }}

@@ -1080,3 +1080,5 @@ export const OrganizerPerformanceAnalytics: React.FC<OrganizerPerformanceAnalyti
     </div>
   );
 };
+
+export default OrganizerPerformanceAnalytics;

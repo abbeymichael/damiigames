@@ -100,3 +100,5 @@ export function AdminTable<T>({
     </div>
   );
 }
+
+export default AdminTable;
