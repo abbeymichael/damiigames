@@ -568,6 +568,49 @@ export default function ArenaPage() {
     };
   }, []);
 
+  // Prevent indiscriminate pinch-zoom, double-tap zoom, and layout scaling shifts on mobile during gameplay
+  useEffect(() => {
+    const handleGesture = (e: Event) => {
+      e.preventDefault();
+    };
+
+    let lastTapTime = 0;
+    const handleTouchEnd = (e: TouchEvent) => {
+      const now = Date.now();
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest(".board-touch-contain, .square, .piece, .board-wrap")) {
+        if (now - lastTapTime <= 320) {
+          // Prevent synthetic double-tap zoom on board elements
+          e.preventDefault();
+        }
+      }
+      lastTapTime = now;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        const target = e.target as HTMLElement | null;
+        if (target && target.closest(".board-touch-contain, .board-wrap")) {
+          e.preventDefault();
+        }
+      }
+    };
+
+    document.addEventListener("gesturestart", handleGesture, { passive: false });
+    document.addEventListener("gesturechange", handleGesture, { passive: false });
+    document.addEventListener("gestureend", handleGesture, { passive: false });
+    document.addEventListener("touchend", handleTouchEnd, { passive: false });
+    document.addEventListener("touchmove", handleTouchMove, { passive: false });
+
+    return () => {
+      document.removeEventListener("gesturestart", handleGesture);
+      document.removeEventListener("gesturechange", handleGesture);
+      document.removeEventListener("gestureend", handleGesture);
+      document.removeEventListener("touchend", handleTouchEnd);
+      document.removeEventListener("touchmove", handleTouchMove);
+    };
+  }, []);
+
   // Poll lobby data when in Lobby view (no active game/room)
   useEffect(() => {
     const fetchLobbyData = async () => {
@@ -2234,12 +2277,8 @@ export default function ArenaPage() {
             ) : (
               /* Active 10x10 Board Container with Touch Prevention & Adaptive Zoom */
               <div
-                className={`p-1.5 sm:p-3 ${activeBoardConfig.wrapBg} border-2 ${activeBoardConfig.wrapBorder} rounded-xl shadow-inner relative transition-colors duration-300 board-touch-contain`}
-                onTouchStart={(e) => {
-                  if (e.touches.length > 1) {
-                    e.preventDefault();
-                  }
-                }}
+                className={`p-1.5 sm:p-3 ${activeBoardConfig.wrapBg} border-2 ${activeBoardConfig.wrapBorder} rounded-xl shadow-inner relative transition-colors duration-300 board-touch-contain select-none`}
+                style={{ touchAction: "none", overscrollBehavior: "none" }}
               >
                 {/* King Promotion Event Banner Toast */}
                 {promotedKingEffect && (
@@ -2250,7 +2289,7 @@ export default function ArenaPage() {
                 )}
 
                 {/* Adaptive Board Zoom Toolbar */}
-                <div className="flex items-center justify-between mb-2 px-1 text-xs">
+                <div className="flex items-center justify-between mb-2 px-1 text-xs select-none">
                   <div className="flex items-center gap-1.5 text-[#f5efdf]">
                     <Maximize2 size={13} className="text-[#d6a735]" />
                     <span className="font-bold text-[10px] sm:text-xs">Adaptive Board Zoom:</span>
@@ -2273,17 +2312,25 @@ export default function ArenaPage() {
                   </div>
                 </div>
 
-                {/* Scrollable Viewport for Adaptive Zoomed Board */}
-                <div className="w-full overflow-x-auto overflow-y-hidden rounded pb-1 scrollbar-thin touch-none">
+                {/* Viewport for Adaptive Zoomed Board */}
+                <div
+                  className={`w-full rounded pb-1 scrollbar-thin ${
+                    boardZoom > 1 ? "overflow-x-auto overflow-y-hidden" : "overflow-hidden"
+                  }`}
+                  style={{ touchAction: boardZoom > 1 ? "pan-x" : "none", overscrollBehavior: "none" }}
+                >
                   <div
                     className="aspect-square grid grid-cols-10 grid-rows-10 border-2 border-amber-500/50 rounded overflow-hidden shadow-2xl transition-colors duration-200 origin-top-left touch-none select-none"
                     style={{
                       width: `${boardZoom * 100}%`,
                       minWidth: `${boardZoom * 100}%`,
+                      maxWidth: boardZoom === 1 ? "100%" : undefined,
                       display: "grid",
                       gridTemplateColumns: "repeat(10, minmax(0, 1fr))",
                       gridTemplateRows: "repeat(10, minmax(0, 1fr))",
                       backgroundColor: activeBoardConfig.boardBg,
+                      touchAction: boardZoom > 1 ? "pan-x" : "none",
+                      overscrollBehavior: "none",
                     }}
                     role="grid"
                     aria-label="DAMII 10x10 board"
@@ -2302,12 +2349,13 @@ export default function ArenaPage() {
                       return (
                         <button
                           key={square}
-                          className={`square relative grid place-items-center p-0 border-0 transition-colors select-none touch-manipulation ${
+                          className={`square relative grid place-items-center p-0 border-0 transition-colors select-none touch-none ${
                             selected === square ? "selected" : ""
                           } ${isDestination ? "destination" : ""} ${
                             isLastSource ? "last-move-source" : ""
                           } ${isLastTarget ? "last-move-target" : ""}`}
                           style={{
+                            touchAction: "none",
                             backgroundColor: playable
                               ? (row + col) % 4 === 1 || (row + col) % 4 === 3
                                 ? activeBoardConfig.playableBg
