@@ -70,6 +70,7 @@ import {
   Gamepad2,
   Users,
   TrendingUp,
+  Sliders,
 } from "lucide-react";
 
 type Mode = "local" | "online";
@@ -301,6 +302,7 @@ export default function ArenaPage() {
   const [showPregameModal, setShowPregameModal] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<"themes" | "audio" | "rules" | "display">("themes");
   const [showHistory, setShowHistory] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showDisputeModal, setShowDisputeModal] = useState(false);
@@ -1301,9 +1303,9 @@ export default function ArenaPage() {
 
       {/* Arena Screen Control Toolbar */}
       <div className="w-full max-w-6xl mx-auto px-2 sm:px-4 py-2 sm:py-3 border border-[#184d3c] bg-[#06261f] text-[#f5efdf] rounded-2xl shadow-xl mt-2 sm:mt-3 mb-2">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2">
           {/* Active Mode & Player Profile Indicator */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none max-w-full shrink">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none max-w-full shrink">
             {mode === "local" ? (
               <span className="px-2.5 py-1 bg-[#0c3b2e] border border-[#184d3c] text-[#f5efdf] rounded-full text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 shrink-0">
                 {subMode === "vs_cpu" ? (
@@ -1360,13 +1362,13 @@ export default function ArenaPage() {
           </div>
 
           {/* Action Toolbar Buttons */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 justify-between sm:justify-end">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {profile?.role !== "admin" && profile?.role !== "super_admin" && (
               <button
                 onClick={() => setShowPregameModal(true)}
-                className="flex-1 sm:flex-none px-2.5 sm:px-3 py-1.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 transition-all shadow-md shadow-[#d6a735]/10"
+                className="px-3 py-1.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-md shadow-[#d6a735]/15 active:scale-95"
               >
-                <Swords size={13} />
+                <Swords size={14} />
                 <span>{hasActiveGame ? "Match Setup" : "Create Match"}</span>
               </button>
             )}
@@ -1380,25 +1382,25 @@ export default function ArenaPage() {
                   setLocalMoves([]);
                   setLocalGameStarted(false);
                 }}
-                className="px-2.5 sm:px-3 py-1.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] border border-[#184d3c] rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 transition-all"
+                className="px-2.5 sm:px-3 py-1.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] border border-[#184d3c] rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all"
                 title="Return to Arena Lobby"
               >
                 <Gamepad2 size={13} />
-                <span>Lobby</span>
+                <span className="hidden sm:inline">Lobby</span>
               </button>
             )}
 
             {hasActiveGame && (
               <button
                 onClick={() => setShowHistory((prev) => !prev)}
-                className={`flex-1 sm:flex-none px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 sm:gap-1.5 transition-all border ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 sm:gap-1.5 transition-all border ${
                   showHistory
                     ? "bg-[#d6a735] text-[#06261f] border-[#d6a735] font-bold"
                     : "bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] border-[#184d3c]"
                 }`}
               >
                 <ListOrdered size={13} />
-                <span>Move Log</span>
+                <span className="hidden sm:inline">Log</span>
                 {activeMoves.length > 0 && (
                   <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${showHistory ? "bg-[#06261f] text-[#d6a735]" : "bg-[#d6a735]/20 text-[#d6a735]"}`}>
                     {activeMoves.length}
@@ -1408,41 +1410,12 @@ export default function ArenaPage() {
             )}
 
             <button
-              onClick={() => setShowSettings((prev) => !prev)}
-              className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 sm:gap-1.5 transition-all border ${
-                showSettings
-                  ? "bg-[#d6a735] text-[#06261f] border-[#d6a735] font-bold"
-                  : "bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] border-[#184d3c]"
-              }`}
+              onClick={() => setShowSettings(true)}
+              className="p-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all border bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] border-[#184d3c]"
+              title="Arena Preferences, Themes, Audio & Rules"
             >
-              <Settings size={13} />
-              <span className="hidden sm:inline">Config</span>
-            </button>
-
-            <button
-              onClick={() => toggleSoundCat("master")}
-              title={soundSettings.master ? "Master Audio Enabled" : "Master Audio Muted"}
-              className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 sm:gap-1.5 transition-all border ${
-                soundSettings.master
-                  ? "bg-[#0c3b2e] text-[#d6a735] border-[#184d3c] hover:bg-[#144435]"
-                  : "bg-[#06261f] text-slate-500 border-[#184d3c]"
-              }`}
-            >
-              {soundSettings.master ? <Volume2 size={13} className="text-[#d6a735]" /> : <VolumeX size={13} className="text-slate-500" />}
-              <span className="hidden sm:inline">{soundSettings.master ? "Audio On" : "Muted"}</span>
-            </button>
-
-            <button
-              onClick={toggleFocusMode}
-              title={focusMode ? "Exit Arena Focus Mode" : "Enter Focus Mode (Prevents Accidental Misclicks)"}
-              className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 transition-all border ${
-                focusMode
-                  ? "bg-[#d6a735] text-[#06261f] border-[#d6a735] shadow-md shadow-[#d6a735]/20"
-                  : "bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] border-[#184d3c]"
-              }`}
-            >
-              <Eye size={13} />
-              <span className="hidden xs:inline sm:inline">{focusMode ? "Focus ON" : "Focus"}</span>
+              <Settings size={14} />
+              <span className="hidden sm:inline">Options</span>
             </button>
           </div>
         </div>
@@ -1489,72 +1462,143 @@ export default function ArenaPage() {
       {/* LOBBY VIEW vs GAME BOARD VIEW */}
       {!hasActiveGame ? (
         /* ARENA LOBBY HUB */
-        <section className="flex-1 max-w-6xl w-full mx-auto p-2 sm:p-4 space-y-4 sm:space-y-6">
-          {/* Lobby Hero & Quick Actions Banner */}
-          <div className="p-4 sm:p-6 bg-gradient-to-br from-[#06261f] via-[#0c3b2e] to-[#081c15] border-2 border-[#184d3c] rounded-2xl shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 bg-[#d6a735]/20 border border-[#d6a735]/40 text-[#d6a735] text-[10px] font-extrabold uppercase tracking-widest rounded-full flex items-center gap-1">
-                  <Radio size={12} className="animate-pulse text-emerald-400" />
-                  Live DAMII Arena
-                </span>
-                <span className="text-xs text-slate-400">10x10 Flying Kings & Compulsory Captures</span>
+        <section className="flex-1 max-w-6xl w-full mx-auto p-2 sm:p-4 space-y-4 sm:space-y-5">
+          {/* Streamlined Lobby Hero & Quick Actions Hub */}
+          <div className="p-4 sm:p-6 bg-gradient-to-br from-[#06261f] via-[#0c3b2e] to-[#081c15] border-2 border-[#184d3c] rounded-2xl shadow-xl space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 bg-[#d6a735]/20 border border-[#d6a735]/40 text-[#d6a735] text-[10px] font-extrabold uppercase tracking-widest rounded-full flex items-center gap-1">
+                    <Radio size={12} className="animate-pulse text-emerald-400" />
+                    Live Arena
+                  </span>
+                  <span className="text-xs text-slate-300">10x10 Flying Kings</span>
+                </div>
+                <h1 className="text-xl sm:text-2xl font-black text-[#f5efdf] font-serif">
+                  DAMII Matchmaking & Lobby Hub
+                </h1>
               </div>
-              <h1 className="text-xl sm:text-2xl font-black text-[#f5efdf] font-serif">
-                Arena Matchmaking & Live Hub
-              </h1>
-              <p className="text-xs text-slate-300 max-w-xl leading-relaxed">
-                Watch active games in real time, challenge online grandmasters to free or wagered matches, or enter sanctioned tournaments.
-              </p>
+
+              <a
+                href="/leagues"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#081c15] hover:bg-[#0c3b2e] text-[#d6a735] border border-[#184d3c] rounded-xl text-xs font-bold transition-colors shrink-0 self-start sm:self-auto"
+              >
+                <Trophy size={14} className="text-[#d6a735]" />
+                <span>Tournaments & Leagues</span>
+                <ChevronRight size={14} />
+              </a>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
-              <button
-                type="button"
-                onClick={() => {
-                  setMode("local");
-                  setSubMode("vs_cpu");
-                  setShowPregameModal(true);
-                }}
-                className="flex-1 sm:flex-none px-4 py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#d6a735]/20 transition-all hover:scale-[1.02]"
-              >
-                <Bot size={16} />
-                <span>Play Vs Bot AI</span>
-              </button>
-              {profile?.role !== "admin" && profile?.role !== "super_admin" && (
+            {/* Focused 3-Card Quick Action Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* Card 1: Match Setup */}
+              <div className="p-4 bg-[#06261f]/90 border border-[#184d3c] hover:border-[#d6a735]/50 rounded-xl flex flex-col justify-between gap-3 transition-colors">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 bg-[#d6a735]/15 border border-[#d6a735]/30 rounded-xl text-[#d6a735] shrink-0">
+                    <Swords size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-[#f5efdf]">Create Match</h3>
+                    <p className="text-[11px] text-slate-300 leading-snug mt-0.5">
+                      Configure Casual, Wager, AI, or Local 2-player board.
+                    </p>
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={() => setShowPregameModal(true)}
-                  className="flex-1 sm:flex-none px-4 py-2.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all"
+                  className="w-full py-2 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-md transition-all"
                 >
-                  <Swords size={16} className="text-[#d6a735]" />
-                  <span>Match Setup</span>
+                  <Swords size={14} /> Match Setup
                 </button>
-              )}
-              <a
-                href="/leagues"
-                className="flex-1 sm:flex-none px-4 py-2.5 bg-[#081c15] hover:bg-[#0c3b2e] text-[#f5efdf] border border-[#184d3c] font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all"
-              >
-                <Trophy size={15} className="text-[#d6a735]" />
-                <span>Tournaments</span>
-              </a>
+              </div>
+
+              {/* Card 2: Practice vs Bot */}
+              <div className="p-4 bg-[#06261f]/90 border border-[#184d3c] hover:border-emerald-500/50 rounded-xl flex flex-col justify-between gap-3 transition-colors">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 bg-emerald-500/15 border border-emerald-500/30 rounded-xl text-emerald-400 shrink-0">
+                    <Bot size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-[#f5efdf]">Practice vs AI</h3>
+                    <p className="text-[11px] text-slate-300 leading-snug mt-0.5">
+                      Single-player training across 3 engine difficulty tiers.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("local");
+                    setSubMode("vs_cpu");
+                    setShowPregameModal(true);
+                  }}
+                  className="w-full py-2 bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <Bot size={14} className="text-emerald-400" /> Start AI Match
+                </button>
+              </div>
+
+              {/* Card 3: Enter Room Code */}
+              <div className="p-4 bg-[#06261f]/90 border border-[#184d3c] hover:border-[#d6a735]/50 rounded-xl flex flex-col justify-between gap-3 transition-colors overflow-hidden">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 bg-[#144435] border border-[#184d3c] rounded-xl text-[#d6a735] shrink-0">
+                    <ArrowRight size={20} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-bold text-[#f5efdf]">Enter Room Code</h3>
+                    <p className="text-[11px] text-slate-300 leading-snug mt-0.5">
+                      Join a friend&apos;s private room directly with an 8-digit ticket.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-stretch w-full min-w-0 bg-[#0c3b2e] border border-[#184d3c] rounded-xl overflow-hidden focus-within:border-[#d6a735] transition-all">
+                  <input
+                    type="text"
+                    maxLength={8}
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                    placeholder="ENTER CODE"
+                    className="flex-1 min-w-0 w-full px-3 py-2 bg-transparent text-xs font-mono font-bold tracking-widest text-[#f5efdf] uppercase placeholder:text-slate-500 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    disabled={onlineBusy || !joinCode}
+                    onClick={() => {
+                      if (!token) {
+                        window.dispatchEvent(new CustomEvent("damii-open-auth"));
+                        return;
+                      }
+                      void onlineAction("join", { code: joinCode });
+                    }}
+                    className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:hover:bg-emerald-500 text-slate-950 font-black text-xs transition-all shrink-0 flex items-center justify-center gap-1 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    <span>Join</span>
+                    <ArrowRight size={13} className="shrink-0" />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Lobby Navigation Tabs */}
-          <div className="flex items-center gap-2 border-b border-[#184d3c] pb-2 overflow-x-auto scrollbar-none">
+          {/* Lobby Segmented Controller Tabs */}
+          <div className="grid grid-cols-3 gap-1 p-1 bg-[#0c3b2e] border border-[#184d3c] rounded-2xl shadow-inner">
             <button
               type="button"
               onClick={() => setLobbyTab("live")}
-              className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all shrink-0 ${
+              className={`py-2.5 px-2 sm:px-4 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 sm:gap-2 transition-all ${
                 lobbyTab === "live"
-                  ? "bg-[#d6a735] text-[#06261f] shadow-md shadow-[#d6a735]/20"
-                  : "bg-[#06261f] text-[#cbd5e1] hover:text-white border border-[#184d3c]"
+                  ? "bg-[#d6a735] text-[#06261f] shadow-md shadow-[#d6a735]/20 font-black"
+                  : "text-[#cbd5e1] hover:text-white"
               }`}
             >
-              <Gamepad2 size={14} />
-              <span>Live & Ongoing Games</span>
-              <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-black ${lobbyTab === "live" ? "bg-[#06261f] text-[#d6a735]" : "bg-[#144435] text-slate-300"}`}>
+              <Gamepad2 size={15} />
+              <span className="truncate">Live Games</span>
+              <span
+                className={`px-1.5 py-0.2 text-[10px] rounded-full font-black hidden xs:inline ${
+                  lobbyTab === "live" ? "bg-[#06261f] text-[#d6a735]" : "bg-[#144435] text-slate-300"
+                }`}
+              >
                 {lobbyRooms.length}
               </span>
             </button>
@@ -1562,15 +1606,19 @@ export default function ArenaPage() {
             <button
               type="button"
               onClick={() => setLobbyTab("players")}
-              className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all shrink-0 ${
+              className={`py-2.5 px-2 sm:px-4 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 sm:gap-2 transition-all ${
                 lobbyTab === "players"
-                  ? "bg-[#d6a735] text-[#06261f] shadow-md shadow-[#d6a735]/20"
-                  : "bg-[#06261f] text-[#cbd5e1] hover:text-white border border-[#184d3c]"
+                  ? "bg-[#d6a735] text-[#06261f] shadow-md shadow-[#d6a735]/20 font-black"
+                  : "text-[#cbd5e1] hover:text-white"
               }`}
             >
-              <Users size={14} />
-              <span>Online Players & Ranks</span>
-              <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-black ${lobbyTab === "players" ? "bg-[#06261f] text-[#d6a735]" : "bg-[#144435] text-slate-300"}`}>
+              <Users size={15} />
+              <span className="truncate">Players & Ranks</span>
+              <span
+                className={`px-1.5 py-0.2 text-[10px] rounded-full font-black hidden xs:inline ${
+                  lobbyTab === "players" ? "bg-[#06261f] text-[#d6a735]" : "bg-[#144435] text-slate-300"
+                }`}
+              >
                 {lobbyPlayers.length}
               </span>
             </button>
@@ -1578,15 +1626,19 @@ export default function ArenaPage() {
             <button
               type="button"
               onClick={() => setLobbyTab("tournaments")}
-              className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all shrink-0 ${
+              className={`py-2.5 px-2 sm:px-4 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 sm:gap-2 transition-all ${
                 lobbyTab === "tournaments"
-                  ? "bg-[#d6a735] text-[#06261f] shadow-md shadow-[#d6a735]/20"
-                  : "bg-[#06261f] text-[#cbd5e1] hover:text-white border border-[#184d3c]"
+                  ? "bg-[#d6a735] text-[#06261f] shadow-md shadow-[#d6a735]/20 font-black"
+                  : "text-[#cbd5e1] hover:text-white"
               }`}
             >
-              <Trophy size={14} />
-              <span>Active Leagues & Brackets</span>
-              <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-black ${lobbyTab === "tournaments" ? "bg-[#06261f] text-[#d6a735]" : "bg-[#144435] text-slate-300"}`}>
+              <Trophy size={15} />
+              <span className="truncate">Tournaments</span>
+              <span
+                className={`px-1.5 py-0.2 text-[10px] rounded-full font-black hidden xs:inline ${
+                  lobbyTab === "tournaments" ? "bg-[#06261f] text-[#d6a735]" : "bg-[#144435] text-slate-300"
+                }`}
+              >
                 {lobbyLeagues.length}
               </span>
             </button>
@@ -1595,24 +1647,9 @@ export default function ArenaPage() {
           {/* TAB 1: LIVE ONGOING GAMES */}
           {lobbyTab === "live" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm sm:text-base font-bold text-[#f5efdf]">Active Game Rooms</h2>
-                  <p className="text-xs text-slate-400">Spectate games in real time or jump into open rooms waiting for an opponent.</p>
-                </div>
-                {profile?.role !== "admin" && profile?.role !== "super_admin" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode("online");
-                      setShowPregameModal(true);
-                    }}
-                    className="px-3 py-1.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] border border-[#184d3c] rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all"
-                  >
-                    <Plus size={14} />
-                    <span>Host New Room</span>
-                  </button>
-                )}
+              <div>
+                <h2 className="text-sm sm:text-base font-bold text-[#f5efdf]">Active Game Rooms</h2>
+                <p className="text-xs text-slate-400">Spectate games in real time or jump into open rooms waiting for an opponent.</p>
               </div>
 
               {lobbyLoading ? (
@@ -2807,7 +2844,10 @@ export default function ArenaPage() {
 
                 <button
                   type="button"
-                  onClick={() => setShowThemeModal(true)}
+                  onClick={() => {
+                    setSettingsTab("themes");
+                    setShowSettings(true);
+                  }}
                   className="flex-1 xs:flex-initial px-2.5 py-1.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] rounded-lg text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 border border-[#184d3c] transition-colors"
                 >
                   <Palette size={13} /> Theme
@@ -2815,7 +2855,10 @@ export default function ArenaPage() {
 
                 <button
                   type="button"
-                  onClick={() => setShowGuide(true)}
+                  onClick={() => {
+                    setSettingsTab("rules");
+                    setShowSettings(true);
+                  }}
                   className="flex-1 xs:flex-initial px-2.5 py-1.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] rounded-lg text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 border border-[#184d3c] transition-colors"
                 >
                   <HelpCircle size={13} /> Rules
@@ -3030,31 +3073,31 @@ export default function ArenaPage() {
 
       {/* Mandatory / Interactive Pregame Match Setup Modal */}
       {showPregameModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
           <div className="w-full max-w-xl bg-[#06261f] border-2 border-[#d6a735] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             
             {/* Modal Header */}
-            <div className="px-6 py-4 bg-[#0c3b2e] border-b border-[#184d3c] flex items-center justify-between">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-[#0c3b2e] border-b border-[#184d3c] flex items-center justify-between">
               <div className="flex items-center gap-2.5 text-[#d6a735]">
-                <Swords size={20} />
+                <Swords size={20} className="shrink-0" />
                 <div>
-                  <h2 className="text-base font-black text-[#f5efdf] font-serif">DAMII Pregame Match Configuration</h2>
-                  <p className="text-[11px] text-[#cbd5e1]">Configure match mode and settings before launching the board.</p>
+                  <h2 className="text-sm sm:text-base font-black text-[#f5efdf] font-serif">DAMII Pregame Match Configuration</h2>
+                  <p className="text-[10px] sm:text-[11px] text-[#cbd5e1]">Configure match mode and settings before launching the board.</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowPregameModal(false)}
-                className="text-[#cbd5e1] hover:text-white p-1.5 rounded-xl hover:bg-[#144435] transition-colors"
+                className="text-[#cbd5e1] hover:text-white p-1.5 rounded-xl hover:bg-[#144435] transition-colors shrink-0"
               >
                 <X size={18} />
               </button>
             </div>
 
             {/* Modal Content Scroll Area */}
-            <div className="p-6 space-y-6 overflow-y-auto">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 overflow-y-auto">
 
               {(profile?.role === "admin" || profile?.role === "super_admin") && (
-                <div className="p-4 bg-amber-950/90 border border-amber-500/80 rounded-xl text-[#f5efdf] space-y-2 shadow-lg">
+                <div className="p-3.5 sm:p-4 bg-amber-950/90 border border-amber-500/80 rounded-xl text-[#f5efdf] space-y-2 shadow-lg">
                   <div className="flex items-center gap-2 text-[#d6a735] font-bold text-xs">
                     <ShieldAlert size={18} />
                     <span>Administrator Account (Non-Playing Facilitator)</span>
@@ -3076,21 +3119,21 @@ export default function ArenaPage() {
                 <label className="block text-xs font-bold text-[#f5efdf] uppercase tracking-wider">
                   Select Game Mode
                 </label>
-                <div className="grid grid-cols-3 gap-2 p-1 bg-[#0c3b2e] border border-[#184d3c] rounded-xl">
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2 p-1 bg-[#0c3b2e] border border-[#184d3c] rounded-xl">
                   <button
                     type="button"
                     onClick={() => {
                       setMode("local");
                       setSubMode("pass_play");
                     }}
-                    className={`py-2.5 px-3 text-xs font-bold rounded-lg flex flex-col items-center gap-1 transition-all ${
+                    className={`py-2 sm:py-2.5 px-1 sm:px-3 rounded-lg flex flex-col items-center justify-center gap-1 transition-all ${
                       mode === "local" && subMode === "pass_play"
-                        ? "bg-[#d6a735] text-[#06261f] shadow-md"
-                        : "text-[#cbd5e1] hover:text-white"
+                        ? "bg-[#d6a735] text-[#06261f] shadow-md font-black"
+                        : "text-[#cbd5e1] hover:text-white font-bold"
                     }`}
                   >
-                    <Monitor size={16} />
-                    <span>Pass & Play</span>
+                    <Monitor size={16} className="shrink-0" />
+                    <span className="text-[10px] sm:text-xs font-bold tracking-tight text-center leading-tight whitespace-nowrap">Pass & Play</span>
                   </button>
 
                   <button
@@ -3099,27 +3142,27 @@ export default function ArenaPage() {
                       setMode("local");
                       setSubMode("vs_cpu");
                     }}
-                    className={`py-2.5 px-3 text-xs font-bold rounded-lg flex flex-col items-center gap-1 transition-all ${
+                    className={`py-2 sm:py-2.5 px-1 sm:px-3 rounded-lg flex flex-col items-center justify-center gap-1 transition-all ${
                       mode === "local" && subMode === "vs_cpu"
-                        ? "bg-[#d6a735] text-[#06261f] shadow-md"
-                        : "text-[#cbd5e1] hover:text-white"
+                        ? "bg-[#d6a735] text-[#06261f] shadow-md font-black"
+                        : "text-[#cbd5e1] hover:text-white font-bold"
                     }`}
                   >
-                    <Bot size={16} />
-                    <span>Vs Bot AI</span>
+                    <Bot size={16} className="shrink-0" />
+                    <span className="text-[10px] sm:text-xs font-bold tracking-tight text-center leading-tight whitespace-nowrap">Vs Bot AI</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setMode("online")}
-                    className={`py-2.5 px-3 text-xs font-bold rounded-lg flex flex-col items-center gap-1 transition-all ${
+                    className={`py-2 sm:py-2.5 px-1 sm:px-3 rounded-lg flex flex-col items-center justify-center gap-1 transition-all ${
                       mode === "online"
-                        ? "bg-[#d6a735] text-[#06261f] shadow-md"
-                        : "text-[#cbd5e1] hover:text-white"
+                        ? "bg-[#d6a735] text-[#06261f] shadow-md font-black"
+                        : "text-[#cbd5e1] hover:text-white font-bold"
                     }`}
                   >
-                    <Globe size={16} />
-                    <span>Online 1-on-1</span>
+                    <Globe size={16} className="shrink-0" />
+                    <span className="text-[10px] sm:text-xs font-bold tracking-tight text-center leading-tight whitespace-nowrap">Online 1-on-1</span>
                   </button>
                 </div>
               </div>
@@ -3575,7 +3618,7 @@ export default function ArenaPage() {
                         </div>
                       )}
 
-                      {/* Join Room Section with Mobile Optimization */}
+                      {/* Join Room Section with Mobile & Desktop Optimization */}
                       <div className="p-3 bg-[#06261f] border border-[#184d3c] rounded-xl space-y-2">
                         <div className="flex items-center justify-between">
                           <label className="text-[11px] font-extrabold text-[#d6a735] uppercase tracking-wider flex items-center gap-1.5">
@@ -3584,24 +3627,22 @@ export default function ArenaPage() {
                           </label>
                           <span className="text-[10px] text-slate-400">8-digit Code</span>
                         </div>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <div className="relative flex-1">
-                            <input
-                              type="text"
-                              maxLength={8}
-                              value={joinCode}
-                              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                              placeholder="ENTER ROOM CODE (E.G. ABCD1234)"
-                              className="w-full px-3 py-2 bg-[#081c15] border border-[#184d3c] rounded-xl text-xs font-mono font-bold tracking-widest text-[#f5efdf] placeholder-[#63716b] uppercase focus:outline-none focus:border-[#d6a735]"
-                            />
-                          </div>
+                        <div className="flex items-stretch w-full min-w-0 bg-[#081c15] border border-[#184d3c] rounded-xl overflow-hidden focus-within:border-[#d6a735] transition-all">
+                          <input
+                            type="text"
+                            maxLength={8}
+                            value={joinCode}
+                            onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                            placeholder="ENTER ROOM CODE (E.G. ABCD1234)"
+                            className="flex-1 min-w-0 w-full px-3 py-2 bg-transparent text-xs font-mono font-bold tracking-widest text-[#f5efdf] placeholder-[#63716b] uppercase focus:outline-none"
+                          />
                           <button
                             type="button"
                             disabled={onlineBusy || !joinCode}
                             onClick={() => void onlineAction("join", { code: joinCode })}
-                            className="w-full sm:w-auto px-5 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 font-extrabold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 shrink-0"
+                            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer disabled:cursor-not-allowed"
                           >
-                            <ArrowRight size={14} />
+                            <ArrowRight size={14} className="shrink-0" />
                             <span>Join Room</span>
                           </button>
                         </div>
@@ -3687,736 +3728,428 @@ export default function ArenaPage() {
         </div>
       )}
 
-      {/* Slide-over Drawer for Match Configurations & Settings */}
+      {/* Unified Master Arena Preferences, Themes, Audio, Rules & Display Modal */}
       {showSettings && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-[#06261f] border-l-2 border-[#184d3c] h-full overflow-y-auto p-6 flex flex-col justify-between shadow-2xl animate-in slide-in-from-right duration-250">
-            <div>
-              <div className="flex items-center justify-between pb-4 mb-6 border-b border-[#184d3c]">
-                <div className="flex items-center gap-2 text-[#f5efdf]">
-                  <Settings size={20} className="text-[#d6a735]" />
-                  <h3 className="text-base font-bold font-serif">Match Settings & Config</h3>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+          onClick={() => setShowSettings(false)}
+        >
+          <section
+            className="w-full max-w-xl bg-[#06261f] border-2 border-[#184d3c] rounded-2xl p-4 sm:p-6 shadow-2xl relative space-y-4 my-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-[#184d3c]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[#d6a735]/15 border border-[#d6a735]/40 flex items-center justify-center text-[#d6a735] shrink-0">
+                  <Settings size={18} />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowSettings(false)}
-                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-[#0c3b2e] transition-colors"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="space-y-6">
                 <div>
-                  <label className="block text-xs font-bold text-[#cbd5e1] uppercase tracking-wider mb-2">
-                    Game Mode
-                  </label>
-                  <div className="grid grid-cols-2 gap-2 p-1 bg-[#0c3b2e] border border-[#184d3c] rounded-xl">
-                    <button
-                      type="button"
-                      onClick={() => switchMode("local")}
-                      className={`py-2 px-3 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
-                        mode === "local"
-                          ? "bg-[#d6a735] text-[#06261f] shadow-sm"
-                          : "text-[#cbd5e1] hover:text-white"
-                      }`}
-                    >
-                      <Monitor size={14} /> Local Device
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => switchMode("online")}
-                      className={`py-2 px-3 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
-                        mode === "online"
-                          ? "bg-[#d6a735] text-[#06261f] shadow-sm"
-                          : "text-[#cbd5e1] hover:text-white"
-                      }`}
-                    >
-                      <Globe size={14} /> Online Arena
-                    </button>
-                  </div>
+                  <h2 className="text-base sm:text-lg font-black text-[#f5efdf] font-serif">
+                    Arena Preferences & Options
+                  </h2>
+                  <p className="text-[11px] text-slate-300">
+                    Customize themes, audio feedback, rules, and focus mode
+                  </p>
                 </div>
+              </div>
+              <button
+                type="button"
+                className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-[#144435] transition-colors"
+                onClick={() => setShowSettings(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
 
-                {mode === "online" && (
-                  <div className="space-y-5 pt-2 border-t border-[#184d3c]">
-                    {onlineError && (
-                      <div className="p-3 bg-red-950/80 border border-red-800 rounded-xl text-xs text-red-300 flex items-center gap-2">
-                        <AlertTriangle size={15} className="shrink-0 text-red-400" />
-                        <span>{onlineError}</span>
-                      </div>
-                    )}
+            {/* Modal Navigation Segmented Tabs */}
+            <div className="grid grid-cols-4 gap-1 p-1 bg-[#0c3b2e] border border-[#184d3c] rounded-xl">
+              <button
+                type="button"
+                onClick={() => setSettingsTab("themes")}
+                className={`py-2 px-1 sm:px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                  settingsTab === "themes"
+                    ? "bg-[#d6a735] text-[#06261f] shadow-md shadow-[#d6a735]/20 font-black"
+                    : "text-slate-300 hover:text-white"
+                }`}
+              >
+                <Palette size={13} />
+                <span className="truncate">Themes</span>
+              </button>
 
-                    {!token ? (
-                      <div className="p-4 bg-[#0c3b2e] border border-[#d6a735]/40 rounded-2xl text-center space-y-3">
-                        <div className="flex items-center justify-center gap-2 text-amber-300 font-bold text-xs">
-                          <Lock size={15} className="text-[#d6a735]" />
-                          <span>Authentication Required</span>
-                        </div>
-                        <p className="text-xs text-[#cbd5e1] leading-relaxed">
-                          You must be signed in with a registered player account to create or join online matches.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => window.dispatchEvent(new CustomEvent("damii-open-auth"))}
-                          className="w-full py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black text-xs rounded-xl transition-all shadow-md shadow-[#d6a735]/20 flex items-center justify-center gap-2"
-                        >
-                          <User size={14} /> Sign In / Register Account
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <div>
-                          <label className="block text-xs font-bold text-[#cbd5e1] uppercase tracking-wider mb-1.5">
-                            Public Player Name
-                          </label>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              maxLength={20}
-                              value={username}
-                              onChange={(e) => setUsername(e.target.value)}
-                              placeholder="Enter display name"
-                              className="flex-1 px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] placeholder-[#63716b] focus:outline-none focus:border-[#d6a735]"
-                            />
-                            <button
-                              type="button"
-                              disabled={onlineBusy}
-                              onClick={() => void onlineAction("profile")}
-                              className="px-3 py-2 bg-[#144435] hover:bg-[#1f5e4a] text-[#f5efdf] text-xs font-bold rounded-xl border border-[#184d3c] transition-colors"
-                            >
-                              Save
-                            </button>
-                          </div>
-                        </div>
+              <button
+                type="button"
+                onClick={() => setSettingsTab("audio")}
+                className={`py-2 px-1 sm:px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                  settingsTab === "audio"
+                    ? "bg-[#d6a735] text-[#06261f] shadow-md shadow-[#d6a735]/20 font-black"
+                    : "text-slate-300 hover:text-white"
+                }`}
+              >
+                <Volume2 size={13} />
+                <span className="truncate">Audio</span>
+              </button>
 
-                        <div className="space-y-3 p-4 bg-[#0c3b2e]/60 border border-[#184d3c] rounded-2xl">
-                          <h4 className="text-xs font-bold text-[#f5efdf] flex items-center gap-1.5">
-                            <Plus size={14} className="text-[#d6a735]" /> Create Online Room
-                          </h4>
+              <button
+                type="button"
+                onClick={() => setSettingsTab("rules")}
+                className={`py-2 px-1 sm:px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                  settingsTab === "rules"
+                    ? "bg-[#d6a735] text-[#06261f] shadow-md shadow-[#d6a735]/20 font-black"
+                    : "text-slate-300 hover:text-white"
+                }`}
+              >
+                <HelpCircle size={13} />
+                <span className="truncate">Rules</span>
+              </button>
 
-                          <div>
-                            <label className="block text-[11px] font-bold text-[#cbd5e1] uppercase tracking-wider mb-1.5">
-                              Match Type & Stakes
-                            </label>
-                            <div className="grid grid-cols-2 gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setRoomMode("casual")}
-                                className={`p-2.5 rounded-xl border text-left flex items-center gap-2 transition-all ${
-                                  roomMode === "casual"
-                                    ? "bg-emerald-950/80 border-emerald-500 text-emerald-200 ring-1 ring-emerald-500/40"
-                                    : "bg-[#06261f] border-[#184d3c] text-slate-400 hover:border-slate-600 hover:text-slate-200"
-                                }`}
-                              >
-                                <div
-                                  className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
-                                    roomMode === "casual" ? "border-emerald-400 bg-emerald-400" : "border-slate-500"
-                                  }`}
-                                >
-                                  {roomMode === "casual" && <div className="w-1.5 h-1.5 rounded-full bg-[#06261f]" />}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="text-xs font-bold text-[#f5efdf]">Casual (Free)</div>
-                                  <div className="text-[10px] text-slate-400 truncate">No stake</div>
-                                </div>
-                              </button>
+              <button
+                type="button"
+                onClick={() => setSettingsTab("display")}
+                className={`py-2 px-1 sm:px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                  settingsTab === "display"
+                    ? "bg-[#d6a735] text-[#06261f] shadow-md shadow-[#d6a735]/20 font-black"
+                    : "text-slate-300 hover:text-white"
+                }`}
+              >
+                <Sliders size={13} />
+                <span className="truncate">Display</span>
+              </button>
+            </div>
 
-                              <button
-                                type="button"
-                                onClick={() => setRoomMode("wager")}
-                                className={`p-2.5 rounded-xl border text-left flex items-center gap-2 transition-all ${
-                                  roomMode === "wager"
-                                    ? "bg-amber-950/70 border-amber-400 text-amber-200 ring-1 ring-amber-400/40"
-                                    : "bg-[#06261f] border-[#184d3c] text-slate-400 hover:border-slate-600 hover:text-slate-200"
-                                }`}
-                              >
-                                <div
-                                  className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
-                                    roomMode === "wager" ? "border-amber-400 bg-amber-400" : "border-slate-500"
-                                  }`}
-                                >
-                                  {roomMode === "wager" && <div className="w-1.5 h-1.5 rounded-full bg-[#06261f]" />}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="text-xs font-bold text-amber-300">Wager</div>
-                                  <div className="text-[10px] text-slate-400 truncate">Escrow Pot</div>
-                                </div>
-                              </button>
-                            </div>
-                          </div>
-
-                          {roomMode === "wager" && (
-                            <div className="pt-2 border-t border-[#184d3c] space-y-1.5">
-                              <div className="flex items-center justify-between">
-                                <label className="block text-[11px] font-medium text-[#cbd5e1]">
-                                  Wager Stake (GH₵ per player)
-                                </label>
-                                <span className="text-[10px] text-slate-400">
-                                  Bal: <strong className="text-emerald-400">GH₵ {Math.max(Number(profile?.points ?? 0), Number(profile?.marbles ?? 0)).toFixed(2)}</strong>
-                                </span>
-                              </div>
-                              <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#d6a735]">
-                                  GH₵
-                                </span>
-                                <input
-                                  type="number"
-                                  min={5}
-                                  step={5}
-                                  value={wagerInput}
-                                  onChange={(e) => setWagerInput(Math.max(1, Number(e.target.value)))}
-                                  className="w-full pl-11 pr-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs font-bold text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
-                                />
-                              </div>
-                            </div>
-                          )}
-
-                          <button
-                            type="button"
-                            disabled={onlineBusy}
-                            onClick={() =>
-                              void onlineAction("create", {
-                                mode: roomMode,
-                                wagerAmount: roomMode === "wager" ? wagerInput : 0,
-                              })
-                            }
-                            className="w-full py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-extrabold rounded-xl text-xs transition-all shadow-md shadow-[#d6a735]/15 flex items-center justify-center gap-1.5"
-                          >
-                            <Plus size={15} /> Create {roomMode === "wager" ? `GH₵ ${wagerInput} Wager` : "Casual"} Room
-                          </button>
-                        </div>
-
-                        <div className="space-y-2 p-3.5 bg-[#0c3b2e]/60 border border-[#184d3c] rounded-2xl">
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-xs font-bold text-[#f5efdf] flex items-center gap-1.5">
-                              <ArrowRight size={14} className="text-[#d6a735]" /> Join Private Room
-                            </h4>
-                            <span className="text-[10px] text-slate-400">8-digit Code</span>
-                          </div>
-                          <div className="flex flex-col sm:flex-row gap-2">
-                            <input
-                              type="text"
-                              maxLength={8}
-                              value={joinCode}
-                              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                              placeholder="ENTER ROOM CODE"
-                              className="w-full sm:flex-1 px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs font-mono font-bold tracking-widest text-[#f5efdf] placeholder-[#63716b] uppercase focus:outline-none focus:border-[#d6a735]"
-                            />
-                            <button
-                              type="button"
-                              disabled={onlineBusy || !joinCode}
-                              onClick={() => void onlineAction("join", { code: joinCode })}
-                              className="w-full sm:w-auto px-5 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-1 shrink-0"
-                            >
-                              <ArrowRight size={14} /> Join
-                            </button>
-                          </div>
-                        </div>
-                      </>
-                    )}
-
-                    {room && (
-                      <div className="p-4 bg-[#06261f]/80 border border-[#184d3c] rounded-2xl space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold tracking-wider text-[#d6a735] uppercase">
-                            ACTIVE ROOM TICKET
-                          </span>
-                          <span className="text-xs font-bold text-[#f5efdf]">
-                            Role: {room.role === "white" ? "Player 1" : room.role === "black" ? "Player 2" : "Spectator"}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between bg-[#0c3b2e] p-2.5 rounded-xl border border-[#184d3c]">
-                          <strong className="text-lg font-mono font-black tracking-widest text-[#d6a735]">
-                            {room.code}
-                          </strong>
-                          <button
-                            type="button"
-                            onClick={copyRoomCode}
-                            className="px-2.5 py-1 bg-[#144435] hover:bg-[#1f5e4a] text-[#f5efdf] rounded-lg text-xs font-bold flex items-center gap-1 border border-[#184d3c] transition-colors"
-                          >
-                            {copiedCode ? <Check size={13} /> : <Copy size={13} />}
-                            {copiedCode ? "Copied" : "Copy Code"}
-                          </button>
-                        </div>
-                        <p className="text-xs text-slate-300 leading-relaxed">
-                          {room.status === "waiting"
-                            ? "Share code with opponent to start."
-                            : `${room.hostName} vs ${room.guestName}`}
-                          {room.mode === "wager" && ` · Pot: GH₵ ${(room.wagerAmount * 2).toFixed(2)}`}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Granular Audio Settings Panel */}
-                <div className="pt-4 border-t border-slate-800 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                      <Volume2 size={15} className="text-amber-400" /> Granular Audio Controls
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => toggleSoundCat("master")}
-                      className={`px-2.5 py-1 text-[11px] font-extrabold rounded-lg border transition-all ${
-                        soundSettings.master
-                          ? "bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30"
-                          : "bg-slate-800 text-slate-500 border-slate-700 hover:bg-slate-700"
-                      }`}
-                    >
-                      Master: {soundSettings.master ? "ON" : "MUTED"}
-                    </button>
-                  </div>
-
+            {/* TAB CONTENT: THEMES */}
+            {settingsTab === "themes" && (
+              <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-1 scrollbar-thin">
+                {/* Board Theme Selection */}
+                <div className="space-y-2">
+                  <h3 className="text-xs font-bold text-[#d6a735] uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles size={13} /> Select Board Theme
+                  </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {/* Piece Movement */}
-                    <button
-                      type="button"
-                      onClick={() => toggleSoundCat("move")}
-                      className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition-colors ${
-                        soundSettings.master && soundSettings.move
-                          ? "bg-slate-900 border-slate-700 text-slate-200 hover:border-slate-600"
-                          : "bg-slate-950/60 border-slate-800 text-slate-500"
-                      }`}
-                    >
-                      <div>
-                        <strong className="block text-xs font-bold">Piece Movement</strong>
-                        <span className="text-[10px] text-slate-400">Tactile timber placement</span>
-                      </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                        soundSettings.master && soundSettings.move ? "bg-amber-400/20 text-amber-300" : "bg-slate-800 text-slate-600"
-                      }`}>
-                        {soundSettings.master && soundSettings.move ? "ON" : "OFF"}
-                      </span>
-                    </button>
-
-                    {/* Captures & Jumps */}
-                    <button
-                      type="button"
-                      onClick={() => toggleSoundCat("capture")}
-                      className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition-colors ${
-                        soundSettings.master && soundSettings.capture
-                          ? "bg-slate-900 border-slate-700 text-slate-200 hover:border-slate-600"
-                          : "bg-slate-950/60 border-slate-800 text-slate-500"
-                      }`}
-                    >
-                      <div>
-                        <strong className="block text-xs font-bold">Captures & Jumps</strong>
-                        <span className="text-[10px] text-slate-400">Crisp marble clack sound</span>
-                      </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                        soundSettings.master && soundSettings.capture ? "bg-amber-400/20 text-amber-300" : "bg-slate-800 text-slate-600"
-                      }`}>
-                        {soundSettings.master && soundSettings.capture ? "ON" : "OFF"}
-                      </span>
-                    </button>
-
-                    {/* Victory & Kings */}
-                    <button
-                      type="button"
-                      onClick={() => toggleSoundCat("win")}
-                      className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition-colors ${
-                        soundSettings.master && soundSettings.win
-                          ? "bg-slate-900 border-slate-700 text-slate-200 hover:border-slate-600"
-                          : "bg-slate-950/60 border-slate-800 text-slate-500"
-                      }`}
-                    >
-                      <div>
-                        <strong className="block text-xs font-bold">King & Victory Fanfare</strong>
-                        <span className="text-[10px] text-slate-400">Promotions & match wins</span>
-                      </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                        soundSettings.master && soundSettings.win ? "bg-amber-400/20 text-amber-300" : "bg-slate-800 text-slate-600"
-                      }`}>
-                        {soundSettings.master && soundSettings.win ? "ON" : "OFF"}
-                      </span>
-                    </button>
-
-                    {/* UI Clicks & Alerts */}
-                    <button
-                      type="button"
-                      onClick={() => toggleSoundCat("ui")}
-                      className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition-colors ${
-                        soundSettings.master && soundSettings.ui
-                          ? "bg-slate-900 border-slate-700 text-slate-200 hover:border-slate-600"
-                          : "bg-slate-950/60 border-slate-800 text-slate-500"
-                      }`}
-                    >
-                      <div>
-                        <strong className="block text-xs font-bold">UI Clicks & Alerts</strong>
-                        <span className="text-[10px] text-slate-400">Piece selection & warnings</span>
-                      </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                        soundSettings.master && soundSettings.ui ? "bg-amber-400/20 text-amber-300" : "bg-slate-800 text-slate-600"
-                      }`}>
-                        {soundSettings.master && soundSettings.ui ? "ON" : "OFF"}
-                      </span>
-                    </button>
-                  </div>
-
-                  {/* Sound Preview Buttons */}
-                  <div className="flex items-center gap-1.5 pt-1">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase">Test Sound:</span>
-                    <button
-                      type="button"
-                      onClick={() => soundService.playMove()}
-                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] font-bold text-slate-300 rounded border border-slate-800 transition-colors"
-                    >
-                      🔊 Move
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => soundService.playCapture()}
-                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] font-bold text-slate-300 rounded border border-slate-800 transition-colors"
-                    >
-                      💥 Capture
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => soundService.playKingPromotion()}
-                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] font-bold text-slate-300 rounded border border-slate-800 transition-colors"
-                    >
-                      👑 King
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => soundService.playVictory()}
-                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-[10px] font-bold text-slate-300 rounded border border-slate-800 transition-colors"
-                    >
-                      🏆 Victory
-                    </button>
+                    {(Object.keys(BOARD_THEME_STYLES) as BoardThemeKey[]).map((key) => {
+                      const cfg = BOARD_THEME_STYLES[key];
+                      const isSelected = boardTheme === key;
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => saveCustomTheme(key, marbleTheme)}
+                          className={`p-2.5 rounded-xl text-left border transition-all flex items-start gap-2.5 ${
+                            isSelected
+                              ? "bg-[#0c3b2e] border-[#d6a735] ring-2 ring-[#d6a735]/30"
+                              : "bg-[#0c3b2e]/50 border-[#184d3c] hover:border-[#22634d] hover:bg-[#0c3b2e]/80"
+                          }`}
+                        >
+                          <div className="w-8 h-8 rounded-lg overflow-hidden grid grid-cols-2 grid-rows-2 border border-[#184d3c] shrink-0 shadow-sm">
+                            <div style={{ backgroundColor: cfg.restBg }} />
+                            <div style={{ backgroundColor: cfg.playableBg }} />
+                            <div style={{ backgroundColor: cfg.playableAltBg }} />
+                            <div style={{ backgroundColor: cfg.restBg }} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between">
+                              <strong className="text-xs font-bold text-[#f5efdf]">{cfg.name}</strong>
+                              {isSelected && <Check size={13} className="text-[#d6a735]" />}
+                            </div>
+                            <p className="text-[10px] text-slate-300 leading-snug mt-0.5 line-clamp-1">
+                              {cfg.description}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Granular Motion & Visual Controls */}
-                <div className="pt-4 border-t border-slate-800 space-y-2">
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                    <Sparkles size={15} className="text-amber-400" /> Motion & Visual Effects
-                  </label>
+                {/* Marble Style Selection */}
+                <div className="space-y-2 pt-2 border-t border-[#184d3c]">
+                  <h3 className="text-xs font-bold text-[#d6a735] uppercase tracking-wider flex items-center gap-1.5">
+                    <Target size={13} /> Select Marble Style
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {(Object.keys(MARBLE_THEME_STYLES) as MarbleThemeKey[]).map((key) => {
+                      const cfg = MARBLE_THEME_STYLES[key];
+                      const isSelected = marbleTheme === key;
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => saveCustomTheme(boardTheme, key)}
+                          className={`p-2.5 rounded-xl text-left border transition-all flex items-start gap-2.5 ${
+                            isSelected
+                              ? "bg-[#0c3b2e] border-[#d6a735] ring-2 ring-[#d6a735]/30"
+                              : "bg-[#0c3b2e]/50 border-[#184d3c] hover:border-[#22634d] hover:bg-[#0c3b2e]/80"
+                          }`}
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-[#06261f] border border-[#184d3c] flex items-center justify-center gap-1 shrink-0">
+                            <span className="w-3 h-3 rounded-full border shadow" style={cfg.whiteStyle} />
+                            <span className="w-3 h-3 rounded-full border shadow" style={cfg.blackStyle} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between">
+                              <strong className="text-xs font-bold text-[#f5efdf]">{cfg.name}</strong>
+                              {isSelected && <Check size={13} className="text-[#d6a735]" />}
+                            </div>
+                            <p className="text-[10px] text-slate-300 leading-snug mt-0.5 line-clamp-1">
+                              {cfg.description}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
+                {/* Move Animation */}
+                <div className="p-3 bg-[#0c3b2e] border border-[#184d3c] rounded-xl flex items-center justify-between gap-3">
+                  <div className="space-y-0.5 min-w-0">
+                    <span className="text-xs font-bold text-[#f5efdf] flex items-center gap-1.5">
+                      <Sparkles size={13} className="text-[#d6a735]" /> Smooth Move Animations
+                    </span>
+                    <p className="text-[10px] text-slate-300">
+                      Glides marbles smoothly across the 10x10 board.
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => togglePieceAnimation(!animatePieces)}
-                    className="w-full p-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between text-xs transition-colors"
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${
+                      animatePieces ? "bg-[#d6a735]" : "bg-[#06261f]"
+                    }`}
                   >
-                    <div className="flex items-center gap-2.5">
-                      <Sparkles size={18} className={animatePieces ? "text-amber-400 shrink-0" : "text-slate-600 shrink-0"} />
-                      <div className="text-left">
-                        <strong className="block text-slate-100 font-bold">
-                          Piece Move Animation
-                        </strong>
-                        <span className="text-[10px] text-slate-400">
-                          Smoothly slide pieces across board squares on every move
-                        </span>
-                      </div>
-                    </div>
                     <span
-                      className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full ${
-                        animatePieces
-                          ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                          : "bg-slate-800 text-slate-500"
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-[#06261f] shadow transition duration-200 ${
+                        animatePieces ? "translate-x-4" : "translate-x-0"
                       }`}
-                    >
-                      {animatePieces ? "ANIMATED" : "INSTANT"}
+                    />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: AUDIO */}
+            {settingsTab === "audio" && (
+              <div className="space-y-3.5 max-h-[55vh] overflow-y-auto pr-1 scrollbar-thin">
+                <div className="flex items-center justify-between p-3 bg-[#0c3b2e] border border-[#184d3c] rounded-xl">
+                  <div>
+                    <strong className="text-xs font-bold text-[#f5efdf] block">Master Audio</strong>
+                    <span className="text-[10px] text-slate-300">Toggle all sound effects</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleSoundCat("master")}
+                    className={`px-3 py-1.5 text-xs font-extrabold rounded-lg border transition-all ${
+                      soundSettings.master
+                        ? "bg-[#d6a735] text-[#06261f] border-[#d6a735]"
+                        : "bg-[#06261f] text-slate-400 border-[#184d3c]"
+                    }`}
+                  >
+                    {soundSettings.master ? "AUDIO ON" : "MUTED"}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleSoundCat("move")}
+                    className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition-colors ${
+                      soundSettings.master && soundSettings.move
+                        ? "bg-[#0c3b2e] border-[#184d3c] text-[#f5efdf]"
+                        : "bg-[#06261f] border-[#184d3c] text-slate-500"
+                    }`}
+                  >
+                    <div>
+                      <strong className="block text-xs font-bold">Piece Movement</strong>
+                      <span className="text-[10px] text-slate-400">Tactile placement</span>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                      soundSettings.master && soundSettings.move ? "bg-[#d6a735]/20 text-[#d6a735]" : "bg-[#06261f] text-slate-500"
+                    }`}>
+                      {soundSettings.master && soundSettings.move ? "ON" : "OFF"}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => toggleSoundCat("capture")}
+                    className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition-colors ${
+                      soundSettings.master && soundSettings.capture
+                        ? "bg-[#0c3b2e] border-[#184d3c] text-[#f5efdf]"
+                        : "bg-[#06261f] border-[#184d3c] text-slate-500"
+                    }`}
+                  >
+                    <div>
+                      <strong className="block text-xs font-bold">Captures & Jumps</strong>
+                      <span className="text-[10px] text-slate-400">Marble clack sound</span>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                      soundSettings.master && soundSettings.capture ? "bg-[#d6a735]/20 text-[#d6a735]" : "bg-[#06261f] text-slate-500"
+                    }`}>
+                      {soundSettings.master && soundSettings.capture ? "ON" : "OFF"}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => toggleSoundCat("win")}
+                    className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition-colors ${
+                      soundSettings.master && soundSettings.win
+                        ? "bg-[#0c3b2e] border-[#184d3c] text-[#f5efdf]"
+                        : "bg-[#06261f] border-[#184d3c] text-slate-500"
+                    }`}
+                  >
+                    <div>
+                      <strong className="block text-xs font-bold">King & Victory</strong>
+                      <span className="text-[10px] text-slate-400">Fanfare alerts</span>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                      soundSettings.master && soundSettings.win ? "bg-[#d6a735]/20 text-[#d6a735]" : "bg-[#06261f] text-slate-500"
+                    }`}>
+                      {soundSettings.master && soundSettings.win ? "ON" : "OFF"}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => toggleSoundCat("ui")}
+                    className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition-colors ${
+                      soundSettings.master && soundSettings.ui
+                        ? "bg-[#0c3b2e] border-[#184d3c] text-[#f5efdf]"
+                        : "bg-[#06261f] border-[#184d3c] text-slate-500"
+                    }`}
+                  >
+                    <div>
+                      <strong className="block text-xs font-bold">UI Clicks & Alerts</strong>
+                      <span className="text-[10px] text-slate-400">Interaction feedback</span>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                      soundSettings.master && soundSettings.ui ? "bg-[#d6a735]/20 text-[#d6a735]" : "bg-[#06261f] text-slate-500"
+                    }`}>
+                      {soundSettings.master && soundSettings.ui ? "ON" : "OFF"}
                     </span>
                   </button>
                 </div>
 
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#184d3c]">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Test Audio:</span>
+                  <button
+                    type="button"
+                    onClick={() => soundService.playMove()}
+                    className="px-2.5 py-1 bg-[#0c3b2e] hover:bg-[#144435] text-[10px] font-bold text-[#f5efdf] rounded-lg border border-[#184d3c] transition-colors"
+                  >
+                    🔊 Move
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => soundService.playCapture()}
+                    className="px-2.5 py-1 bg-[#0c3b2e] hover:bg-[#144435] text-[10px] font-bold text-[#f5efdf] rounded-lg border border-[#184d3c] transition-colors"
+                  >
+                    💥 Capture
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => soundService.playKingPromotion()}
+                    className="px-2.5 py-1 bg-[#0c3b2e] hover:bg-[#144435] text-[10px] font-bold text-[#f5efdf] rounded-lg border border-[#184d3c] transition-colors"
+                  >
+                    👑 King
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => soundService.playVictory()}
+                    className="px-2.5 py-1 bg-[#0c3b2e] hover:bg-[#144435] text-[10px] font-bold text-[#f5efdf] rounded-lg border border-[#184d3c] transition-colors"
+                  >
+                    🏆 Victory
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: RULES & TUTORIAL */}
+            {settingsTab === "rules" && (
+              <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1 scrollbar-thin text-xs text-[#cbd5e1] leading-relaxed">
+                <ol className="space-y-2.5 list-decimal list-inside">
+                  <li>
+                    <strong className="text-[#f5efdf]">10x10 Board & Diagonal Moves.</strong> White pieces move first. Men advance diagonally one square at a time onto dark squares.
+                  </li>
+                  <li>
+                    <strong className="text-[#f5efdf]">Compulsory Captures.</strong> If an opposing piece is adjacent with an empty landing square behind it, jumping is mandatory. Backward capture jumps with regular men are legal!
+                  </li>
+                  <li>
+                    <strong className="text-[#f5efdf]">Maximum Chain Continuations.</strong> If the capturing piece has further jumps available after landing, the multi-jump must be completed in the same turn.
+                  </li>
+                  <li>
+                    <strong className="text-[#f5efdf]">Flying Kings.</strong> Reaching the opponent&apos;s baseline crowns the piece into a Flying King, capable of traversing long diagonals and jumping from any distance.
+                  </li>
+                  <li>
+                    <strong className="text-[#f5efdf]">Victory.</strong> Capture all opponent pieces or leave them with no legal moves to win.
+                  </li>
+                </ol>
+                <div className="p-3 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#d6a735] text-xs flex items-center gap-2">
+                  <ShieldCheck size={16} className="shrink-0 text-[#d6a735]" />
+                  <span>Fair play verified by server with deterministic move state.</span>
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: DISPLAY & FOCUS */}
+            {settingsTab === "display" && (
+              <div className="space-y-3.5 max-h-[55vh] overflow-y-auto pr-1 scrollbar-thin">
+                <div className="p-3.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl flex items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-bold text-[#f5efdf] flex items-center gap-1.5">
+                      <Eye size={13} className="text-[#d6a735]" /> Arena Focus Mode
+                    </span>
+                    <p className="text-[10px] text-slate-300">
+                      Dims secondary UI to prevent accidental misclicks during matches.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleFocusMode}
+                    className={`px-3 py-1.5 text-xs font-extrabold rounded-lg border transition-all ${
+                      focusMode
+                        ? "bg-[#d6a735] text-[#06261f] border-[#d6a735]"
+                        : "bg-[#06261f] text-slate-400 border-[#184d3c]"
+                    }`}
+                  >
+                    {focusMode ? "FOCUS ACTIVE" : "FOCUS OFF"}
+                  </button>
+                </div>
+
                 {profile && (
-                  <div className="pt-4 border-t border-slate-800 space-y-2">
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  <div className="p-3.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl space-y-2">
+                    <span className="text-xs font-bold text-[#f5efdf] uppercase tracking-wider block">
                       Account Ledger
-                    </label>
+                    </span>
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
-                        <small className="block text-[10px] text-slate-500 font-bold uppercase">Points</small>
+                      <div className="p-2.5 bg-[#06261f] border border-[#184d3c] rounded-lg">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Points</span>
                         <strong className="text-sm font-bold text-sky-400 flex items-center gap-1">
                           <Zap size={14} /> {profile.points}
                         </strong>
                       </div>
-                      <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
-                        <small className="block text-[10px] text-slate-500 font-bold uppercase">Rating</small>
-                        <strong className="text-sm font-bold text-amber-400 flex items-center gap-1">
-                          <Award size={14} /> {profile.rating} ELO
+                      <div className="p-2.5 bg-[#06261f] border border-[#184d3c] rounded-lg">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block">ELO Rating</span>
+                        <strong className="text-sm font-bold text-[#d6a735] flex items-center gap-1">
+                          <Award size={14} /> {profile.rating}
                         </strong>
                       </div>
                     </div>
                   </div>
                 )}
               </div>
-            </div>
+            )}
 
-            <div className="pt-4 border-t border-slate-800">
+            {/* Footer */}
+            <div className="pt-3 border-t border-[#184d3c]">
               <button
                 type="button"
                 onClick={() => setShowSettings(false)}
-                className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs transition-colors"
+                className="w-full py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-xs transition-all shadow-md"
               >
-                Close Settings
+                Done
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tutorial / Rules Overlay */}
-      {showGuide && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
-          onClick={() => setShowGuide(false)}
-        >
-          <section
-            className="w-full max-w-lg bg-[#06261f] border-2 border-[#d6a735] rounded-2xl p-6 shadow-2xl relative space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="absolute top-4 right-4 text-[#cbd5e1] hover:text-white p-1 rounded-lg hover:bg-[#144435] transition-colors"
-              onClick={() => setShowGuide(false)}
-            >
-              <X size={20} />
-            </button>
-            <div className="flex items-center gap-2 text-[#d6a735]">
-              <HelpCircle size={20} />
-              <h2 className="text-lg font-bold text-[#f5efdf] font-serif">DAMII Rules & Tutorial</h2>
-            </div>
-            <ol className="space-y-2.5 text-xs text-[#cbd5e1] list-decimal list-inside leading-relaxed">
-              <li>
-                <strong className="text-[#f5efdf]">Move diagonally.</strong> Player 1 moves first. Select a highlighted piece then a highlighted destination square.
-              </li>
-              <li>
-                <strong className="text-[#f5efdf]">Compulsory captures.</strong> Jump over an opponent into an empty square. If a jump is available, you MUST capture.
-              </li>
-              <li>
-                <strong className="text-[#f5efdf]">Multiple jumps.</strong> If the same piece can capture again, you must continue jumping.
-              </li>
-              <li>
-                <strong className="text-[#f5efdf]">Flying Kings.</strong> Reach the opponent&apos;s back row to promote to a King capable of flying across long diagonals.
-              </li>
-              <li>
-                <strong className="text-[#f5efdf]">Match Victory.</strong> Capture all enemy pieces or block them from making legal moves.
-              </li>
-            </ol>
-            <div className="p-3 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#d6a735] text-xs flex items-center gap-2">
-              <ShieldCheck size={16} className="shrink-0 text-[#d6a735]" />
-              <span>
-                Server validates all moves, turn clocks, and wagers automatically.
-              </span>
-            </div>
-            <button
-              type="button"
-              className="w-full py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold rounded-xl text-xs transition-all"
-              onClick={() => setShowGuide(false)}
-            >
-              Got it, back to the game
-            </button>
-          </section>
-        </div>
-      )}
-
-      {/* Device Board & Marble Customizer Modal */}
-      {showThemeModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
-          onClick={() => setShowThemeModal(false)}
-        >
-          <section
-            className="w-full max-w-xl bg-[#06261f] border-2 border-[#d6a735] rounded-2xl p-6 shadow-2xl relative space-y-5 my-8"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="absolute top-4 right-4 text-[#cbd5e1] hover:text-white p-1 rounded-lg hover:bg-[#144435] transition-colors"
-              onClick={() => setShowThemeModal(false)}
-            >
-              <X size={20} />
-            </button>
-
-            <div className="flex items-center gap-3 border-b border-[#184d3c] pb-4">
-              <div className="w-10 h-10 rounded-xl bg-[#d6a735]/15 border border-[#d6a735]/40 flex items-center justify-center text-[#d6a735] shrink-0">
-                <Palette size={22} />
-              </div>
-              <div>
-                <h2 className="text-lg font-extrabold text-[#f5efdf] font-serif flex items-center gap-2">
-                  Device Theme & Style Customizer
-                </h2>
-                <p className="text-xs text-[#cbd5e1]">
-                  Customized per-device preferences saved locally to your browser.
-                </p>
-              </div>
-            </div>
-
-            {/* Board Theme Selection */}
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold text-[#d6a735] uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles size={14} /> Select Board Grid Theme
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {(Object.keys(BOARD_THEME_STYLES) as BoardThemeKey[]).map((key) => {
-                  const cfg = BOARD_THEME_STYLES[key];
-                  const isSelected = boardTheme === key;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => saveCustomTheme(key, marbleTheme)}
-                      className={`p-3 rounded-xl text-left border transition-all flex items-start gap-3 ${
-                        isSelected
-                          ? "bg-[#0c3b2e] border-[#d6a735] ring-2 ring-[#d6a735]/30"
-                          : "bg-[#0c3b2e]/50 border-[#184d3c] hover:border-[#22634d] hover:bg-[#0c3b2e]/80"
-                      }`}
-                    >
-                      {/* Mini Board Swatch */}
-                      <div className="w-10 h-10 rounded-lg overflow-hidden grid grid-cols-2 grid-rows-2 border border-[#184d3c] shrink-0 shadow-md">
-                        <div style={{ backgroundColor: cfg.restBg }} />
-                        <div style={{ backgroundColor: cfg.playableBg }} />
-                        <div style={{ backgroundColor: cfg.playableAltBg }} />
-                        <div style={{ backgroundColor: cfg.restBg }} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between">
-                          <strong className="text-xs font-bold text-[#f5efdf]">{cfg.name}</strong>
-                          {isSelected && <Check size={14} className="text-[#d6a735]" />}
-                        </div>
-                        <p className="text-[10px] text-[#cbd5e1] leading-snug mt-0.5 line-clamp-2">
-                          {cfg.description}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Marble Style Selection */}
-            <div className="space-y-3 pt-2">
-              <h3 className="text-xs font-bold text-[#d6a735] uppercase tracking-wider flex items-center gap-1.5">
-                <Target size={14} /> Select Marble Piece Style
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {(Object.keys(MARBLE_THEME_STYLES) as MarbleThemeKey[]).map((key) => {
-                  const cfg = MARBLE_THEME_STYLES[key];
-                  const isSelected = marbleTheme === key;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => saveCustomTheme(boardTheme, key)}
-                      className={`p-3 rounded-xl text-left border transition-all flex items-start gap-3 ${
-                        isSelected
-                          ? "bg-[#0c3b2e] border-[#d6a735] ring-2 ring-[#d6a735]/30"
-                          : "bg-[#0c3b2e]/50 border-[#184d3c] hover:border-[#22634d] hover:bg-[#0c3b2e]/80"
-                      }`}
-                    >
-                      {/* Mini Marble Swatch */}
-                      <div className="w-10 h-10 rounded-lg bg-[#06261f] border border-[#184d3c] flex items-center justify-center gap-1 shrink-0">
-                        <span
-                          className="w-4 h-4 rounded-full border shadow"
-                          style={cfg.whiteStyle}
-                        />
-                        <span
-                          className="w-4 h-4 rounded-full border shadow"
-                          style={cfg.blackStyle}
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between">
-                          <strong className="text-xs font-bold text-[#f5efdf]">{cfg.name}</strong>
-                          {isSelected && <Check size={14} className="text-[#d6a735]" />}
-                        </div>
-                        <p className="text-[10px] text-[#cbd5e1] leading-snug mt-0.5 line-clamp-2">
-                          {cfg.description}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Smooth Piece Motion Animation Toggle */}
-            <div className="pt-2">
-              <div className="flex items-center justify-between p-3.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl gap-3">
-                <div className="space-y-0.5 min-w-0">
-                  <span className="text-xs font-bold text-[#f5efdf] flex items-center gap-1.5">
-                    <Sparkles size={14} className="text-[#d6a735] shrink-0" /> Smooth Piece Move Animations
-                  </span>
-                  <p className="text-[10px] text-[#cbd5e1] leading-tight">
-                    Animates marbles smoothly with CSS transition spring-pop effects when moves occur.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => togglePieceAnimation(!animatePieces)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    animatePieces ? "bg-[#d6a735]" : "bg-[#06261f]"
-                  }`}
-                  role="switch"
-                  aria-checked={animatePieces}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-[#06261f] shadow-lg ring-0 transition duration-200 ease-in-out ${
-                      animatePieces ? "translate-x-5" : "translate-x-0"
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
-
-            {/* Live Mini Preview Box */}
-            <div className="p-3.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl space-y-2">
-              <div className="flex items-center justify-between text-[11px] font-bold text-[#f5efdf]">
-                <span>Active Preview on Your Device</span>
-                <span className="text-emerald-400 font-mono text-[10px]">Saved to localStorage</span>
-              </div>
-              <div className="flex items-center justify-center gap-4 py-2">
-                <div
-                  className="w-20 h-20 rounded-xl border border-[#d6a735]/40 p-1 grid grid-cols-3 grid-rows-3 shadow-lg"
-                  style={{ backgroundColor: activeBoardConfig.boardBg }}
-                >
-                  {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => {
-                    const isPlayable = i % 2 === 1;
-                    return (
-                      <div
-                        key={i}
-                        className="rounded-sm flex items-center justify-center"
-                        style={{
-                          backgroundColor: isPlayable
-                            ? activeBoardConfig.playableBg
-                            : activeBoardConfig.restBg,
-                        }}
-                      >
-                        {i === 1 && (
-                          <span
-                            className="w-3.5 h-3.5 rounded-full border shadow-sm"
-                            style={activeMarbleConfig.whiteStyle}
-                          />
-                        )}
-                        {i === 7 && (
-                          <span
-                            className="w-3.5 h-3.5 rounded-full border shadow-sm"
-                            style={activeMarbleConfig.blackStyle}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="text-left space-y-1 text-xs">
-                  <p className="text-[#f5efdf] font-bold">{activeBoardConfig.name}</p>
-                  <p className="text-[#cbd5e1] text-[11px]">{activeMarbleConfig.name}</p>
-                  <p className="text-[#d6a735] text-[10px] italic">Applies immediately to your board view</p>
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              className="w-full py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-extrabold rounded-xl text-xs transition-all shadow-lg"
-              onClick={() => setShowThemeModal(false)}
-            >
-              Done & Continue Playing
-            </button>
           </section>
         </div>
       )}
