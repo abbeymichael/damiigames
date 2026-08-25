@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminService } from "@/lib/admin-service";
 import { leagueService } from "@/lib/league-service";
+import { walletService } from "@/lib/wallet-service";
 import { dbRepository } from "@/lib/db-client";
 import { attachAuthCookies } from "@/lib/auth-guard";
 import { hasPermission } from "@/lib/permissions";
@@ -305,6 +306,45 @@ export async function POST(req: NextRequest) {
         String(reference || ""),
         String(reason || "")
       );
+      return NextResponse.json({ success: true, ...res });
+    }
+
+    if (action === "get_paystack_balance") {
+      const res = await walletService.getPaystackBalance();
+      return NextResponse.json({ success: true, ...res });
+    }
+
+    if (action === "process_payout" || action === "process_withdrawal") {
+      const { transactionId, txId, reference } = body;
+      const target = transactionId || txId || reference;
+      if (!target) return NextResponse.json({ error: "Transaction ID or reference required" }, { status: 400 });
+      const res = await walletService.processWithdrawalPayout(String(target), token);
+      return NextResponse.json({ success: true, ...res });
+    }
+
+    if (action === "reject_withdrawal") {
+      const { transactionId, txId, reference, reason } = body;
+      const target = transactionId || txId || reference;
+      if (!target) return NextResponse.json({ error: "Transaction ID or reference required" }, { status: 400 });
+      if (!reason || !String(reason).trim()) {
+        return NextResponse.json({ error: "Rejection reason required for audit trail" }, { status: 400 });
+      }
+      const res = await walletService.rejectWithdrawal(String(target), token, String(reason).trim());
+      return NextResponse.json({ success: true, ...res });
+    }
+
+    if (action === "batch_process_payouts") {
+      const { transactionIds, txIds } = body;
+      const list = Array.isArray(transactionIds) ? transactionIds : Array.isArray(txIds) ? txIds : [];
+      if (list.length === 0) return NextResponse.json({ error: "Array of transaction IDs required" }, { status: 400 });
+      const res = await walletService.batchProcessWithdrawals(list.map(String), token);
+      return NextResponse.json({ success: true, ...res });
+    }
+
+    if (action === "verify_deposit" || action === "verify_paystack_deposit") {
+      const { reference } = body;
+      if (!reference) return NextResponse.json({ error: "Reference required" }, { status: 400 });
+      const res = await walletService.verifyAndCreditPaystack(String(reference));
       return NextResponse.json({ success: true, ...res });
     }
 

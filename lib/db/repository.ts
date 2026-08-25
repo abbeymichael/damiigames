@@ -121,6 +121,7 @@ export interface DbRepository {
   // --- Wallet ---
   createTransaction(tx: WalletTransaction): Promise<WalletTransaction>;
   getTransaction(id: string): Promise<WalletTransaction | null>;
+  getTransactionByReference(reference: string): Promise<WalletTransaction | null>;
   updateTransaction(id: string, updates: Partial<WalletTransaction>): Promise<WalletTransaction | null>;
   getUserTransactions(token: string, limit?: number): Promise<WalletTransaction[]>;
   getAllTransactions(limit?: number): Promise<WalletTransaction[]>;

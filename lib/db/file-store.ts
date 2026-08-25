@@ -587,6 +587,13 @@ export const fileStore: any = {
     return found ? { ...found } : null;
   },
 
+  async getTransactionByReference(reference: string) {
+    for (const tx of data().transactions.values()) {
+      if (tx.reference === reference) return { ...tx };
+    }
+    return null;
+  },
+
   async updateTransaction(id: string, updates: Partial<WalletTransaction>) {
     return lockKey(`tx:${id}`, async () => {
       const existing = data().transactions.get(id);

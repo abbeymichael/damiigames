@@ -305,6 +305,423 @@ export const walletService = {
     return { reference: ref, pointsDeducted: ghsValue, ghsValue, targetMomoNumber, targetProvider };
   },
 
+  // --- Paystack Transfers & Payout Methods ---
+  getPaystackBankCode(provider?: string): string {
+    const p = String(provider || "").toUpperCase().trim();
+    if (p.includes("VOD") || p.includes("TELECEL")) return "VOD";
+    if (p.includes("TIGO") || p.includes("AIRTEL") || p.includes("ATL")) return "ATL";
+    return "MTN";
+  },
+
+  async getPaystackBalance() {
+    const secretKey = (process.env.PAYSTACK_SECRET_KEY || "").trim();
+    if (!secretKey) {
+      return { configured: false, balances: [], ghsBalance: 0, message: "PAYSTACK_SECRET_KEY not configured" };
+    }
+
+    try {
+      const res = await fetch("https://api.paystack.co/balance", {
+        headers: { Authorization: `Bearer ${secretKey}` },
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.status) {
+        return { configured: true, balances: [], ghsBalance: 0, error: json?.message || `HTTP ${res.status} from Paystack` };
+      }
+
+      const rawBalances = Array.isArray(json.data) ? json.data : [];
+      const balances = rawBalances.map((b: any) => ({
+        currency: b.currency,
+        balancePesewas: b.balance,
+        balanceGhs: b.currency === "GHS" ? Number((b.balance / 100).toFixed(2)) : b.balance,
+      }));
+
+      const ghsBalance = balances.find((b: any) => b.currency === "GHS")?.balanceGhs ?? 0;
+
+      return { configured: true, balances, ghsBalance, raw: json.data };
+    } catch (err) {
+      return { configured: true, balances: [], ghsBalance: 0, error: err instanceof Error ? err.message : "Network error" };
+    }
+  },
+
+  async createTransferRecipient(name: string, accountNumber: string, bankCode: string, currency = "GHS") {
+    const secretKey = (process.env.PAYSTACK_SECRET_KEY || "").trim();
+    if (!secretKey) throw new Error("PAYSTACK_SECRET_KEY is not configured on the server.");
+
+    const cleanBankCode = this.getPaystackBankCode(bankCode);
+    const cleanAccount = accountNumber.trim().replace(/^\+233/, "0").replace(/^233/, "0");
+
+    const res = await fetch("https://api.paystack.co/transferrecipient", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        type: "mobile_money",
+        name: name || "Mobile Money Beneficiary",
+        account_number: cleanAccount,
+        bank_code: cleanBankCode,
+        currency: currency || "GHS",
+      }),
+    });
+
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.status || !json?.data?.recipient_code) {
+      const msg = json?.message || `Paystack transfer recipient creation failed (HTTP ${res.status})`;
+      throw new Error(msg);
+    }
+
+    return {
+      recipientCode: json.data.recipient_code as string,
+      recipientId: json.data.id,
+      details: json.data.details,
+      data: json.data,
+    };
+  },
+
+  async initiatePaystackTransfer(recipientCode: string, amountGhs: number, reference: string, reason: string) {
+    const secretKey = (process.env.PAYSTACK_SECRET_KEY || "").trim();
+    if (!secretKey) throw new Error("PAYSTACK_SECRET_KEY is not configured on the server.");
+
+    const amountPesewas = Math.round(amountGhs * 100);
+    if (amountPesewas <= 0) throw new Error("Invalid transfer amount in GHS");
+
+    const res = await fetch("https://api.paystack.co/transfer", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        source: "balance",
+        amount: amountPesewas,
+        recipient: recipientCode,
+        reference: reference,
+        reason: reason || "DAMII Platform Cashout",
+      }),
+    });
+
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.status) {
+      const msg = json?.message || `Paystack transfer initiation failed (HTTP ${res.status})`;
+      throw new Error(msg);
+    }
+
+    return {
+      success: true,
+      transferCode: json.data?.transfer_code as string,
+      transferId: json.data?.id as number,
+      status: (json.data?.status || "pending") as "pending" | "processing" | "success" | "failed",
+      data: json.data,
+    };
+  },
+
+  async verifyPaystackTransfer(reference: string) {
+    const secretKey = (process.env.PAYSTACK_SECRET_KEY || "").trim();
+    if (!secretKey) throw new Error("PAYSTACK_SECRET_KEY is not configured on the server.");
+
+    const res = await fetch(`https://api.paystack.co/transfer/verify/${encodeURIComponent(reference)}`, {
+      headers: { Authorization: `Bearer ${secretKey}` },
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.status) {
+      throw new Error(json?.message || `Failed to verify transfer with Paystack (HTTP ${res.status})`);
+    }
+    return json.data;
+  },
+
+  async processWithdrawalPayout(txIdOrRef: string, adminToken?: string) {
+    let tx = await dbRepository.getTransaction(txIdOrRef);
+    if (!tx) {
+      tx = await dbRepository.getTransactionByReference(txIdOrRef);
+    }
+    if (!tx) {
+      const all = await dbRepository.getAllTransactions(500);
+      tx = all.find((t) => t.id === txIdOrRef || t.reference === txIdOrRef) || null;
+    }
+
+    if (!tx) throw new Error("Withdrawal transaction not found.");
+    if (tx.type !== "withdrawal") throw new Error("Transaction is not a withdrawal request.");
+    if (tx.status === "completed") throw new Error("Withdrawal has already been completed and paid out.");
+
+    const profile = await dbRepository.getProfile(tx.userToken);
+    let meta: Record<string, any> = {};
+    try {
+      meta = tx.metaJson ? JSON.parse(tx.metaJson) : {};
+    } catch {
+      meta = {};
+    }
+
+    const momoNumber = meta.momoNumber || profile?.phoneNumber;
+    const momoProvider = meta.momoProvider || "MTN";
+    const amountGhs = Math.abs(tx.amount);
+
+    if (!momoNumber) {
+      throw new Error("No destination Mobile Money phone number found for this withdrawal request.");
+    }
+
+    // 1. Create recipient code if not already saved
+    let recipientCode = meta.recipientCode;
+    if (!recipientCode) {
+      const recipientName = profile?.fullName || profile?.username || "DAMII Player";
+      const recipientRes = await this.createTransferRecipient(recipientName, momoNumber, momoProvider);
+      recipientCode = recipientRes.recipientCode;
+      meta.recipientCode = recipientCode;
+    }
+
+    // 2. Initiate Paystack Transfer
+    const transferRef = tx.reference.startsWith("TRANSFER-") ? tx.reference : `TRANSFER-${tx.reference}`;
+    const transferReason = `DAMII Cashout: @${profile?.username || "player"} (${momoNumber})`;
+
+    const transferRes = await this.initiatePaystackTransfer(recipientCode, amountGhs, transferRef, transferReason);
+
+    // 3. Update Transaction Metadata & Status
+    meta.transferCode = transferRes.transferCode;
+    meta.transferId = transferRes.transferId;
+    meta.transferStatus = transferRes.status;
+    meta.payoutInitiatedAt = new Date().toISOString();
+    meta.processedByAdmin = adminToken || "system";
+
+    tx.status = transferRes.status === "success" ? "completed" : "pending";
+    tx.metaJson = JSON.stringify(meta);
+
+    await dbRepository.createTransaction(tx);
+
+    // Log admin audit action
+    if (adminToken) {
+      const caller = await dbRepository.getProfile(adminToken);
+      await dbRepository.createAdminLog({
+        id: `adminlog-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+        adminToken,
+        adminName: caller?.username || "Admin",
+        action: "PROCESS_PAYSTACK_PAYOUT",
+        target: tx.id,
+        detailsJson: JSON.stringify({
+          reference: tx.reference,
+          amountGhs,
+          momoNumber,
+          momoProvider,
+          transferCode: transferRes.transferCode,
+          status: transferRes.status,
+        }),
+        createdAt: new Date().toISOString(),
+      }).catch(() => {});
+    }
+
+    // Notify user that payout is dispatched
+    notificationService.sendNotification({
+      userToken: tx.userToken,
+      type: "account_alert",
+      title: "🚀 Mobile Money Transfer Dispatched",
+      message: `Your withdrawal of GH₵ ${amountGhs.toFixed(2)} to ${momoProvider} (${momoNumber}) has been submitted to Paystack. Funds will arrive in your wallet shortly.`,
+      link: "/wallet",
+      actionLabel: "View Wallet",
+    }).catch(() => {});
+
+    return {
+      success: true,
+      transaction: tx,
+      transfer: transferRes,
+      message: `Transfer of GH₵ ${amountGhs.toFixed(2)} dispatched to ${momoProvider} (${momoNumber}) via Paystack. Status: ${transferRes.status.toUpperCase()}`,
+    };
+  },
+
+  async rejectWithdrawal(txIdOrRef: string, adminToken: string, reason: string) {
+    let tx = await dbRepository.getTransaction(txIdOrRef);
+    if (!tx) {
+      tx = await dbRepository.getTransactionByReference(txIdOrRef);
+    }
+    if (!tx) {
+      const all = await dbRepository.getAllTransactions(500);
+      tx = all.find((t) => t.id === txIdOrRef || t.reference === txIdOrRef) || null;
+    }
+
+    if (!tx) throw new Error("Withdrawal transaction not found.");
+    if (tx.type !== "withdrawal") throw new Error("Transaction is not a withdrawal request.");
+    if (tx.status === "completed") throw new Error("Cannot reject an already completed withdrawal.");
+    if (tx.status === "failed") throw new Error("This withdrawal has already been rejected and refunded.");
+
+    const refundAmount = Math.abs(tx.amount);
+    let meta: Record<string, any> = {};
+    try {
+      meta = tx.metaJson ? JSON.parse(tx.metaJson) : {};
+    } catch {
+      meta = {};
+    }
+
+    meta.rejectionReason = reason;
+    meta.rejectedAt = new Date().toISOString();
+    meta.rejectedBy = adminToken;
+
+    tx.status = "failed";
+    tx.metaJson = JSON.stringify(meta);
+
+    // Save updated transaction
+    await dbRepository.createTransaction(tx);
+
+    // Refund points to user balance
+    await dbRepository.updateProfileBalance(tx.userToken, refundAmount);
+
+    // Record ledger entry for refund
+    await dbRepository.writeLedger([
+      {
+        userId: tx.userToken,
+        accountType: "available",
+        entryType: "withdrawal_refund",
+        amount: String(refundAmount),
+        referenceType: "withdrawal_rejection",
+        referenceId: tx.reference,
+      },
+    ]).catch(() => []);
+
+    // Log admin audit action
+    const caller = await dbRepository.getProfile(adminToken);
+    await dbRepository.createAdminLog({
+      id: `adminlog-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+      adminToken,
+      adminName: caller?.username || "Admin",
+      action: "REJECT_WITHDRAWAL",
+      target: tx.id,
+      detailsJson: JSON.stringify({
+        reference: tx.reference,
+        amountGhs: refundAmount,
+        reason,
+      }),
+      createdAt: new Date().toISOString(),
+    }).catch(() => {});
+
+    // Notify user of rejection and refund
+    notificationService.sendNotification({
+      userToken: tx.userToken,
+      type: "account_alert",
+      title: "⚠️ Withdrawal Request Declined",
+      message: `Your withdrawal of GH₵ ${refundAmount.toFixed(2)} was declined and refunded to your wallet balance. Reason: ${reason}`,
+      link: "/wallet",
+      actionLabel: "View Wallet",
+    }).catch(() => {});
+
+    return {
+      success: true,
+      transaction: tx,
+      refundAmount,
+      message: `Withdrawal rejected and GH₵ ${refundAmount.toFixed(2)} refunded to user balance.`,
+    };
+  },
+
+  async batchProcessWithdrawals(txIds: string[], adminToken?: string) {
+    const results: Array<{ id: string; success: boolean; error?: string; message?: string }> = [];
+
+    for (const id of txIds) {
+      try {
+        const res = await this.processWithdrawalPayout(id, adminToken);
+        results.push({ id, success: true, message: res.message });
+      } catch (err) {
+        results.push({ id, success: false, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+
+    return {
+      total: txIds.length,
+      successful: results.filter((r) => r.success).length,
+      failed: results.filter((r) => !r.success).length,
+      results,
+    };
+  },
+
+  async handleTransferWebhook(event: { event: string; data: any }) {
+    const eventType = String(event.event || "").toLowerCase();
+    const data = event.data || {};
+    const ref = data.reference;
+    const transferCode = data.transfer_code;
+
+    // Look for matching withdrawal transaction
+    let tx: WalletTransaction | null = null;
+    if (ref) {
+      tx = await dbRepository.getTransactionByReference(ref);
+      if (!tx && ref.startsWith("TRANSFER-")) {
+        tx = await dbRepository.getTransactionByReference(ref.replace(/^TRANSFER-/, ""));
+      }
+    }
+
+    if (!tx) {
+      const all = await dbRepository.getAllTransactions(500);
+      tx = all.find((t) => {
+        if (t.reference === ref || (ref && t.reference === ref.replace(/^TRANSFER-/, ""))) return true;
+        try {
+          const meta = t.metaJson ? JSON.parse(t.metaJson) : {};
+          if (transferCode && meta.transferCode === transferCode) return true;
+        } catch {}
+        return false;
+      }) || null;
+    }
+
+    if (!tx) {
+      return { success: false, message: "Transaction not found for transfer webhook" };
+    }
+
+    let meta: Record<string, any> = {};
+    try {
+      meta = tx.metaJson ? JSON.parse(tx.metaJson) : {};
+    } catch {}
+
+    const amountGhs = Math.abs(tx.amount);
+
+    if (eventType === "transfer.success") {
+      tx.status = "completed";
+      meta.transferCompletedAt = new Date().toISOString();
+      meta.transferStatus = "success";
+      tx.metaJson = JSON.stringify(meta);
+      await dbRepository.createTransaction(tx);
+
+      notificationService.sendNotification({
+        userToken: tx.userToken,
+        type: "account_alert",
+        title: "✅ Mobile Money Cashout Completed",
+        message: `GH₵ ${amountGhs.toFixed(2)} has been successfully transferred to your Mobile Money account.`,
+        link: "/wallet",
+        actionLabel: "View Balance",
+      }).catch(() => {});
+
+      return { success: true, status: "completed", tx };
+    } else if (eventType === "transfer.failed" || eventType === "transfer.reversed") {
+      if (tx.status !== "failed") {
+        tx.status = "failed";
+        meta.transferFailedAt = new Date().toISOString();
+        meta.transferStatus = eventType === "transfer.reversed" ? "reversed" : "failed";
+        meta.failureReason = data.gateway_response || data.reason || "Paystack transfer failed";
+        tx.metaJson = JSON.stringify(meta);
+        await dbRepository.createTransaction(tx);
+
+        // Refund user balance
+        await dbRepository.updateProfileBalance(tx.userToken, amountGhs);
+
+        // Write ledger refund
+        await dbRepository.writeLedger([
+          {
+            userId: tx.userToken,
+            accountType: "available",
+            entryType: "withdrawal_refund",
+            amount: String(amountGhs),
+            referenceType: "paystack_transfer_failure",
+            referenceId: tx.reference,
+          },
+        ]).catch(() => []);
+
+        notificationService.sendNotification({
+          userToken: tx.userToken,
+          type: "account_alert",
+          title: "❌ Cashout Transfer Failed & Refunded",
+          message: `Your transfer of GH₵ ${amountGhs.toFixed(2)} could not be processed by the mobile network and was refunded to your wallet. Reason: ${meta.failureReason}`,
+          link: "/wallet",
+          actionLabel: "View Wallet",
+        }).catch(() => {});
+      }
+      return { success: true, status: "failed_and_refunded", tx };
+    }
+
+    return { success: true, message: `Ignored unhandled transfer event: ${eventType}` };
+  },
+
   // --- Wager Escrow Locking & Payouts ---
   async lockWagerEscrow(roomCode: string, wagerAmount: number, player1Token: string, player2Token: string): Promise<WagerEscrow> {
     const p1 = await dbRepository.getProfile(player1Token);

@@ -622,6 +622,12 @@ export const memoryStore: DbRepository = {
     return found ? { ...found } : null;
   },
 
+  async getTransactionByReference(reference: string) {
+    const data = getMemoryData();
+    const found = data.walletTransactions.find((t) => t.reference === reference);
+    return found ? { ...found } : null;
+  },
+
   async updateTransaction(id: string, updates: Partial<WalletTransaction>) {
     const data = getMemoryData();
     const idx = data.walletTransactions.findIndex((t) => t.id === id);

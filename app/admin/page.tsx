@@ -34,6 +34,7 @@ import {
   Minus,
   ArrowUpRight,
   ArrowDownRight,
+  ArrowDownLeft,
   FileText,
   UserCog,
   Scale,
@@ -73,6 +74,8 @@ import { UsersTable } from "@/components/admin/UsersTable";
 import { UserDetailModal } from "@/components/admin/UserDetailModal";
 import { TournamentsTable } from "@/components/admin/TournamentsTable";
 import { LedgerTable } from "@/components/admin/LedgerTable";
+import { DepositsTable } from "@/components/admin/DepositsTable";
+import { WithdrawalsTable } from "@/components/admin/WithdrawalsTable";
 import { OrganizersTable } from "@/components/admin/OrganizersTable";
 import { OrganizerApplicationDetailModal } from "@/components/admin/OrganizerApplicationDetailModal";
 import { DisputesTable } from "@/components/admin/DisputesTable";
@@ -330,6 +333,8 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { key: "tournaments", label: "Tournaments", icon: Trophy, permission: "tournaments.manage" },
       { key: "games", label: "Game Catalog", icon: Gamepad2, permission: "games.manage" },
+      { key: "deposits", label: "Deposits", icon: ArrowDownLeft, permission: "wallet.view" },
+      { key: "withdrawals", label: "Withdrawals & Payouts", icon: ArrowUpRight, permission: "wallet.view", badgeKey: "pendingWithdrawals" },
       { key: "wallet", label: "Financial Ledger", icon: Wallet, permission: "wallet.view" },
       { key: "communications", label: "Communications", icon: MessageSquare, permission: "system.sms_email" },
       { key: "limits", label: "Game Limits & Escrow", icon: SlidersHorizontal, permission: "limits.manage" },
@@ -1717,6 +1722,8 @@ export default function AdminPage() {
                                   ? openDisputesCount
                                   : item.badgeKey === "pendingTournamentRequests"
                                   ? (metrics?.tournamentRequests?.filter((r) => r.status === "pending").length || 0)
+                                  : item.badgeKey === "pendingWithdrawals"
+                                  ? (metrics?.transactions?.filter((t) => t.type === "withdrawal" && t.status === "pending").length || 0)
                                   : 0;
 
                               return (
@@ -1829,6 +1836,8 @@ export default function AdminPage() {
                                 ? openDisputesCount
                                 : item.badgeKey === "pendingTournamentRequests"
                                 ? (metrics?.tournamentRequests?.filter((r) => r.status === "pending").length || 0)
+                                : item.badgeKey === "pendingWithdrawals"
+                                ? (metrics?.transactions?.filter((t) => t.type === "withdrawal" && t.status === "pending").length || 0)
                                 : 0;
 
                             return (
@@ -2042,6 +2051,31 @@ export default function AdminPage() {
                 games={metrics?.games || []}
                 token={token}
                 adminSecret={adminSecret}
+                onRefresh={refreshAdminData}
+              />
+            )}
+
+            {/* TAB: DEPOSITS */}
+            {activeTab === "deposits" && (
+              <DepositsTable
+                transactions={metrics?.transactions || []}
+                users={metrics?.allUsers || []}
+                token={token}
+                adminSecret={adminSecret}
+                busy={busy}
+                onRefresh={refreshAdminData}
+                onManualCredit={() => setAddLedgerModalOpen(true)}
+              />
+            )}
+
+            {/* TAB: WITHDRAWALS & PAYOUTS */}
+            {activeTab === "withdrawals" && (
+              <WithdrawalsTable
+                transactions={metrics?.transactions || []}
+                users={metrics?.allUsers || []}
+                token={token}
+                adminSecret={adminSecret}
+                busy={busy}
                 onRefresh={refreshAdminData}
               />
             )}

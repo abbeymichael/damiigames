@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
+import bcrypt from "bcryptjs";
 
 // Security Core Utilities for DAMII
-// Handles password hashing, CSPRNG tokens, rate limiting, HMAC validation, timing-safe comparison, and input sanitization.
+// Handles bcrypt password hashing, CSPRNG tokens, rate limiting, HMAC validation, timing-safe comparison, and input sanitization.
 
 export interface RateLimitEntry {
   count: number;
@@ -38,33 +39,47 @@ export const securityService = {
   },
 
   /**
-   * Hashes a password or passcode using PBKDF2 with SHA-256 and a random salt
+   * Hashes a password or passcode using bcrypt with salt rounds = 10
    */
   hashPassword(password: string): { hash: string; salt: string } {
-    const salt = crypto.randomBytes(16).toString("hex");
-    const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, "sha256").toString("hex");
+    const salt = bcrypt.genSaltSync(10);
+    const hash = bcrypt.hashSync(password, salt);
     return { hash, salt };
   },
 
   /**
-   * Verifies a password against a stored PBKDF2 hash and salt
+   * Verifies a password against a stored bcrypt hash or PBKDF2 hash
    */
-  verifyPassword(password: string, storedHash: string, salt: string): boolean {
-    if (!password || !storedHash || !salt) return false;
-    const computedHash = crypto.pbkdf2Sync(password, salt, 10000, 64, "sha256").toString("hex");
-    return this.timingSafeCompare(computedHash, storedHash);
+  verifyPassword(password: string, storedHash: string, salt?: string): boolean {
+    if (!password || !storedHash) return false;
+
+    // Standard bcrypt hash ($2a$, $2b$, or $2y$)
+    if (storedHash.startsWith("$2a$") || storedHash.startsWith("$2b$") || storedHash.startsWith("$2y$")) {
+      try {
+        return bcrypt.compareSync(password, storedHash);
+      } catch {
+        return false;
+      }
+    }
+
+    // PBKDF2 SHA-256 fallback for existing salted hashes
+    if (salt) {
+      const computedHash = crypto.pbkdf2Sync(password, salt, 10000, 64, "sha256").toString("hex");
+      if (this.timingSafeCompare(computedHash, storedHash)) {
+        return true;
+      }
+    }
+
+    // Fallback timing-safe comparison for legacy plaintext entries
+    return this.timingSafeCompare(password, storedHash);
   },
 
   /**
-   * Legacy passcode hash helper (supports plaintext fallback for legacy seeded users)
+   * Passcode hash verification helper with bcrypt support and backward-compatible fallbacks
    */
   hashOrVerifyPasscode(inputPasscode: string, storedPasscodeHash?: string, storedSalt?: string): boolean {
     if (!storedPasscodeHash || !inputPasscode) return false;
-    if (storedSalt) {
-      return this.verifyPassword(inputPasscode, storedPasscodeHash, storedSalt);
-    }
-    // Fallback constant-time compare for legacy un-salted passcodes
-    return this.timingSafeCompare(inputPasscode, storedPasscodeHash);
+    return this.verifyPassword(inputPasscode, storedPasscodeHash, storedSalt);
   },
 
   /**

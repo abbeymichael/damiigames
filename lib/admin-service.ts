@@ -66,7 +66,7 @@ export const adminService = {
       throw new Error(`Admin account '${cleanUsername}' not found.`);
     }
 
-    // Verify passcode/password using PBKDF2
+    // Verify passcode/password using bcrypt (with legacy/salted fallback)
     const isValidPasscode = securityService.hashOrVerifyPasscode(passcode.trim(), profile.passcode, profile.passwordSalt);
     if (!isValidPasscode && !isSecretProvided) {
       throw new Error(`Invalid credentials for admin user '${cleanUsername}'`);

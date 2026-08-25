@@ -892,6 +892,15 @@ export const mysqlStore: DbRepository = {
     return row ? rowToTransaction(row) : null;
   },
 
+  async getTransactionByReference(reference: string) {
+    const [row] = await getDb()
+      .select()
+      .from(schema.walletTransactions)
+      .where(eq(schema.walletTransactions.reference, reference))
+      .limit(1);
+    return row ? rowToTransaction(row) : null;
+  },
+
   async updateTransaction(id: string, updates: Partial<WalletTransaction>) {
     const existing = await this.getTransaction(id);
     if (!existing) return null;

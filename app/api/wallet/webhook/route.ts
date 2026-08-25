@@ -31,6 +31,12 @@ export async function POST(req: NextRequest) {
       if (reference) {
         await walletService.verifyAndCreditPaystack(reference);
       }
+    } else if (
+      eventType === "transfer.success" ||
+      eventType === "transfer.failed" ||
+      eventType === "transfer.reversed"
+    ) {
+      await walletService.handleTransferWebhook(event);
     }
 
     return NextResponse.json({ status: "success", received: true });
