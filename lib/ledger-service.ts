@@ -473,6 +473,11 @@ export const ledgerService = {
 
     // 1. Disburse prizes to winners according to placements
     for (const p of placements) {
+      const entry = entries.find((e) => e.userId === p.userId);
+      if (!entry) {
+        throw new Error(`Security violation: User ${p.userId} is not an enrolled entrant in tournament ${tournamentId}`);
+      }
+
       const prizeConfig = prizes.find((prz) => prz.placement === p.placement);
       if (!prizeConfig) continue;
 
@@ -499,10 +504,7 @@ export const ledgerService = {
       }
 
       // Record final placement in entry row
-      const entry = entries.find((e) => e.userId === p.userId);
-      if (entry) {
-        await dbRepository.updateTournamentEntryPlacement(entry.id, p.placement);
-      }
+      await dbRepository.updateTournamentEntryPlacement(entry.id, p.placement);
     }
 
     // 2. Release accumulated entry fees to the organizer

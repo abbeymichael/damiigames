@@ -1961,6 +1961,20 @@ export const leagueService = {
     thirdPlaceToken?: string | null,
     unawardedReason?: string
   ) {
+    // Validate that any awarded token is an enrolled participant in this league
+    const participants = await dbRepository.getLeagueParticipants(league.id);
+    const validTokens = new Set(participants.filter((p) => p.status !== "rejected").map((p) => p.userToken));
+
+    if (winnerToken && !validTokens.has(winnerToken)) {
+      throw new Error(`Security violation: Winner token (${winnerToken}) is not an enrolled participant in tournament '${league.title}'`);
+    }
+    if (runnerUpToken && !validTokens.has(runnerUpToken)) {
+      throw new Error(`Security violation: Runner-up token (${runnerUpToken}) is not an enrolled participant in tournament '${league.title}'`);
+    }
+    if (thirdPlaceToken && !validTokens.has(thirdPlaceToken)) {
+      throw new Error(`Security violation: 3rd-place token (${thirdPlaceToken}) is not an enrolled participant in tournament '${league.title}'`);
+    }
+
     const winnerProfile = winnerToken ? await dbRepository.getProfile(winnerToken) : null;
     const runnerUpProfile = runnerUpToken ? await dbRepository.getProfile(runnerUpToken) : null;
     const thirdPlaceProfile = thirdPlaceToken ? await dbRepository.getProfile(thirdPlaceToken) : null;
