@@ -273,7 +273,7 @@ export default function ArenaPage() {
   // Dynamic Player Names
   const [localWhiteName, setLocalWhiteName] = useState<string>("Kwame (Player 1)");
   const [localBlackName, setLocalBlackName] = useState<string>("Ama (Player 2)");
-  const [cpuDifficulty, setCpuDifficulty] = useState<"easy" | "medium" | "hard">("medium");
+  const [cpuDifficulty, setCpuDifficulty] = useState<"easy" | "medium" | "hard">("easy");
   const [turnTimerLimit, setTurnTimerLimit] = useState<number>(60);
   const [isCpuThinking, setIsCpuThinking] = useState(false);
 
@@ -420,6 +420,11 @@ export default function ArenaPage() {
   }, [mode, room, localGameStarted, localMoves.length, winner]);
 
   function startBotMatch(difficulty: "easy" | "medium" | "hard" = cpuDifficulty) {
+    if ((difficulty === "medium" || difficulty === "hard") && (!token || !profile)) {
+      window.dispatchEvent(new CustomEvent("damii-open-auth"));
+      setMessage(`🔒 ${difficulty === "medium" ? "Tactical AI" : "Grandmaster"} requires a registered player account. Please sign in or create an account.`);
+      return;
+    }
     setCpuDifficulty(difficulty);
     setMode("local");
     setSubMode("vs_cpu");
@@ -927,7 +932,10 @@ export default function ArenaPage() {
       localStorage.setItem("damii-player-name", username.trim());
       const response = await fetch("/api/damii", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ action, token, username: username.trim(), ...extra }),
       });
       const data = await response.json();
@@ -3217,39 +3225,63 @@ export default function ArenaPage() {
                       </label>
                       <span className="text-[10px] text-[#d6a735] font-bold">
                         {cpuDifficulty === "easy"
-                          ? "Casual Bot (Beginner)"
+                          ? "Casual Bot (Beginner · Free Guest Play)"
                           : cpuDifficulty === "medium"
-                          ? "Tactical AI (Intermediate)"
-                          : "Grandmaster (Pro FMJD)"}
+                          ? "Tactical AI (Intermediate · Player Account)"
+                          : "Grandmaster (Pro FMJD · Player Account)"}
                       </span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       {(
                         [
-                          { key: "easy", label: "Casual Bot", desc: "Forgiving pace & simple captures" },
-                          { key: "medium", label: "Tactical AI", desc: "Balanced positional tactics" },
-                          { key: "hard", label: "Grandmaster", desc: "Ruthless multi-hop calculation" },
+                          { key: "easy", label: "Casual Bot", desc: "Free guest play · Forgiving pace & captures", isFree: true },
+                          { key: "medium", label: "Tactical AI", desc: "Positional tactics · Account required", isFree: false },
+                          { key: "hard", label: "Grandmaster", desc: "Ruthless calculation · Account required", isFree: false },
                         ] as const
-                      ).map(({ key, label, desc }) => (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => setCpuDifficulty(key)}
-                          className={`p-2.5 text-left rounded-xl border transition-all ${
-                            cpuDifficulty === key
-                              ? "bg-[#d6a735]/20 border-[#d6a735] text-[#d6a735] shadow-sm ring-1 ring-[#d6a735]/50"
-                              : "bg-[#06261f] border-[#184d3c] text-[#cbd5e1] hover:text-white hover:border-[#22634f]"
-                          }`}
-                        >
-                          <div className="text-xs font-bold flex items-center justify-between">
-                            <span>{label}</span>
-                            {cpuDifficulty === key && <span className="text-[10px]">●</span>}
-                          </div>
-                          <div className="text-[10px] opacity-75 mt-0.5 leading-tight">
-                            {desc}
-                          </div>
-                        </button>
-                      ))}
+                      ).map(({ key, label, desc, isFree }) => {
+                        const requiresAccount = !isFree && (!token || !profile);
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => {
+                              if (requiresAccount) {
+                                window.dispatchEvent(new CustomEvent("damii-open-auth"));
+                                setMessage("🔒 " + label + " requires a registered player account. Sign in or register to unlock.");
+                                return;
+                              }
+                              setCpuDifficulty(key);
+                            }}
+                            className={`p-2.5 text-left rounded-xl border transition-all relative ${
+                              cpuDifficulty === key
+                                ? "bg-[#d6a735]/20 border-[#d6a735] text-[#d6a735] shadow-sm ring-1 ring-[#d6a735]/50"
+                                : requiresAccount
+                                ? "bg-[#041a15] border-[#184d3c]/70 text-slate-400 hover:text-[#f5efdf] hover:border-[#d6a735]/40"
+                                : "bg-[#06261f] border-[#184d3c] text-[#cbd5e1] hover:text-white hover:border-[#22634f]"
+                            }`}
+                          >
+                            <div className="text-xs font-bold flex items-center justify-between">
+                              <span className="flex items-center gap-1">
+                                {label}
+                                {requiresAccount && <Lock size={11} className="text-amber-400 shrink-0" />}
+                              </span>
+                              {cpuDifficulty === key && <span className="text-[10px]">●</span>}
+                              {requiresAccount ? (
+                                <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded font-normal">
+                                  Sign In
+                                </span>
+                              ) : isFree ? (
+                                <span className="text-[9px] px-1.5 py-0.5 bg-emerald-950 text-emerald-300 border border-emerald-500/30 rounded font-normal">
+                                  Free
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="text-[10px] opacity-75 mt-0.5 leading-tight">
+                              {requiresAccount ? "Requires player account" : desc}
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -3503,18 +3535,29 @@ export default function ArenaPage() {
                     setShowPregameModal(false);
                     return;
                   }
+                  if (subMode === "vs_cpu" && (cpuDifficulty === "medium" || cpuDifficulty === "hard") && (!token || !profile)) {
+                    window.dispatchEvent(new CustomEvent("damii-open-auth"));
+                    setMessage(`🔒 ${cpuDifficulty === "medium" ? "Tactical AI" : "Grandmaster"} requires a registered player account. Sign in or register to unlock.`);
+                    return;
+                  }
                   setLocalGameStarted(true);
                   resetLocalMatch();
                   setShowPregameModal(false);
                 }}
                 className="px-6 py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-extrabold rounded-xl text-xs transition-all shadow-lg shadow-[#d6a735]/20 flex items-center gap-2"
               >
-                <Play size={14} fill="currentColor" />
+                {subMode === "vs_cpu" && (cpuDifficulty === "medium" || cpuDifficulty === "hard") && (!token || !profile) ? (
+                  <Lock size={14} />
+                ) : (
+                  <Play size={14} fill="currentColor" />
+                )}
                 <span>
                   {mode === "online"
                     ? "Enter Arena Room"
                     : subMode === "vs_cpu"
-                    ? `Launch Bot Match (${cpuDifficulty === "easy" ? "Casual Bot" : cpuDifficulty === "medium" ? "Tactical AI" : "Grandmaster"})`
+                    ? (cpuDifficulty === "medium" || cpuDifficulty === "hard") && (!token || !profile)
+                      ? `Sign In to Play ${cpuDifficulty === "medium" ? "Tactical AI" : "Grandmaster"}`
+                      : `Launch Bot Match (${cpuDifficulty === "easy" ? "Casual Bot" : cpuDifficulty === "medium" ? "Tactical AI" : "Grandmaster"})`
                     : "Launch Pass & Play"}
                 </span>
               </button>
@@ -4315,27 +4358,32 @@ export default function ArenaPage() {
                 </span>
               </div>
 
-              {challengeToAccept.mode === "wager" && (
-                <div className="pt-2 border-t border-[#184d3c] space-y-1.5 text-[11px]">
-                  <div className="flex justify-between text-slate-300">
-                    <span>Entry Stake (Marbles):</span>
-                    <strong className="text-[#d6a735]">GH₵ {Number(challengeToAccept.wagerAmount).toFixed(2)}</strong>
+              {challengeToAccept.mode === "wager" && (() => {
+                const userAvailableBal = Math.max(Number(profile?.points ?? 0), Number(profile?.marbles ?? 0));
+                const isInsufficient = userAvailableBal < Number(challengeToAccept.wagerAmount);
+                return (
+                  <div className="pt-2 border-t border-[#184d3c] space-y-1.5 text-[11px]">
+                    <div className="flex justify-between text-slate-300">
+                      <span>Entry Stake (Wager):</span>
+                      <strong className="text-[#d6a735]">GH₵ {Number(challengeToAccept.wagerAmount).toFixed(2)}</strong>
+                    </div>
+                    <div className="flex justify-between text-slate-300">
+                      <span>Total Winner Pot:</span>
+                      <strong className="text-emerald-400">GH₵ {(Number(challengeToAccept.wagerAmount) * 2).toFixed(2)}</strong>
+                    </div>
+                    <div className="flex justify-between text-[10px] text-slate-400">
+                      <span>Your Current Balance:</span>
+                      <span className="font-semibold text-slate-200">GH₵ {userAvailableBal.toFixed(2)}</span>
+                    </div>
+                    {isInsufficient && (
+                      <div className="p-2 rounded-lg bg-red-950/70 border border-red-800/80 text-[11px] text-red-300 flex items-center gap-1.5">
+                        <AlertTriangle size={13} className="shrink-0 text-red-400" />
+                        <span>Insufficient balance (GH₵ {userAvailableBal.toFixed(2)}) for this GH₵ {Number(challengeToAccept.wagerAmount).toFixed(2)} wager. Please top up your wallet.</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex justify-between text-slate-300">
-                    <span>Total Winner Pot:</span>
-                    <strong className="text-emerald-400">GH₵ {(Number(challengeToAccept.wagerAmount) * 2).toFixed(2)}</strong>
-                  </div>
-                  <div className="flex justify-between text-[10px] text-slate-400">
-                    <span>Your Current Balance:</span>
-                    <span>GH₵ {Number(profile?.marblesBalance || 0).toFixed(2)}</span>
-                  </div>
-                  {Number(profile?.marblesBalance || 0) < Number(challengeToAccept.wagerAmount) && (
-                    <p className="text-[11px] text-red-400 font-bold pt-1">
-                      ⚠️ Insufficient balance to match this wager. Please top up your wallet.
-                    </p>
-                  )}
-                </div>
-              )}
+                );
+              })()}
             </div>
 
             <p className="text-[11px] text-slate-300 leading-relaxed">
@@ -4352,7 +4400,11 @@ export default function ArenaPage() {
               </button>
               <button
                 type="button"
-                disabled={onlineBusy || (challengeToAccept.mode === "wager" && Number(profile?.marblesBalance || 0) < Number(challengeToAccept.wagerAmount))}
+                disabled={
+                  onlineBusy ||
+                  (challengeToAccept.mode === "wager" &&
+                    Math.max(Number(profile?.points ?? 0), Number(profile?.marbles ?? 0)) < Number(challengeToAccept.wagerAmount))
+                }
                 onClick={async () => {
                   const targetCode = challengeToAccept.code;
                   setChallengeToAccept(null);

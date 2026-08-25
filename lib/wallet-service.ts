@@ -10,10 +10,13 @@ export const walletService = {
   async getBalance(token: string) {
     const profile = await dbRepository.getProfile(token);
     if (!profile) {
-      return { points: 0, rating: 1000, username: "", role: "user", phoneNumber: "", wins: 0, losses: 0, draws: 0 };
+      return { points: 0, marbles: 0, marblesBalance: 0, rating: 1000, username: "", role: "user", phoneNumber: "", wins: 0, losses: 0, draws: 0 };
     }
+    const bal = Math.max(profile.points ?? 0, profile.marbles ?? 0);
     return {
-      points: profile.points,
+      points: profile.points ?? 0,
+      marbles: profile.marbles ?? 0,
+      marblesBalance: bal,
       rating: profile.rating,
       username: profile.username,
       role: profile.role,
@@ -961,8 +964,8 @@ export const walletService = {
       const p1Balance = Math.max(p1?.marbles ?? 0, p1?.points ?? 0);
       const p2Balance = Math.max(p2?.marbles ?? 0, p2?.points ?? 0);
 
-      if (!p1 || p1Balance < wagerAmount) throw new Error(`Host has insufficient Marbles for GH₵ ${wagerAmount} Wager`);
-      if (!p2 || p2Balance < wagerAmount) throw new Error(`Guest has insufficient Marbles for GH₵ ${wagerAmount} Wager`);
+      if (!p1 || p1Balance < wagerAmount) throw new Error(`Host has insufficient balance for GH₵ ${wagerAmount} Wager (Available: GH₵ ${p1Balance.toFixed(2)})`);
+      if (!p2 || p2Balance < wagerAmount) throw new Error(`Guest has insufficient balance for GH₵ ${wagerAmount} Wager (Available: GH₵ ${p2Balance.toFixed(2)})`);
 
       // Deduct wager balance from both players (prioritizing marbles or points)
       let p1Deducted = false;

@@ -269,8 +269,12 @@ export async function POST(req: NextRequest) {
 
       if (mode === "wager" && wagerAmount > 0) {
         const profile = await dbRepository.getProfile(token);
-        if (!profile || (profile.points || 0) < wagerAmount) {
-          return NextResponse.json({ error: `Insufficient Points balance for GH₵ ${wagerAmount} (${wagerAmount} Points) Wager` }, { status: 400 });
+        const availableBalance = Math.max(Number(profile?.points ?? 0), Number(profile?.marbles ?? 0));
+        if (!profile || availableBalance < wagerAmount) {
+          return NextResponse.json(
+            { error: `Insufficient balance for GH₵ ${wagerAmount} Wager (Available: GH₵ ${availableBalance.toFixed(2)})` },
+            { status: 400 }
+          );
         }
       }
 
@@ -389,13 +393,19 @@ export async function POST(req: NextRequest) {
       if (room.mode === "wager" && room.wagerAmount > 0) {
         const guestProfile = await dbRepository.getProfile(token);
         const hostProfile = await dbRepository.getProfile(room.hostToken);
-        const guestPoints = guestProfile?.points ?? 0;
-        const hostPoints = hostProfile?.points ?? 0;
-        if (guestPoints < room.wagerAmount) {
-          return NextResponse.json({ error: `Insufficient Points. You need GH₵ ${room.wagerAmount} (${room.wagerAmount} Points) to accept this wager challenge.` }, { status: 400 });
+        const guestBalance = Math.max(Number(guestProfile?.points ?? 0), Number(guestProfile?.marbles ?? 0));
+        const hostBalance = Math.max(Number(hostProfile?.points ?? 0), Number(hostProfile?.marbles ?? 0));
+        if (guestBalance < room.wagerAmount) {
+          return NextResponse.json(
+            { error: `Insufficient balance. You need GH₵ ${room.wagerAmount} to accept this wager challenge (Available: GH₵ ${guestBalance.toFixed(2)}).` },
+            { status: 400 }
+          );
         }
-        if (hostPoints < room.wagerAmount) {
-          return NextResponse.json({ error: `Host has insufficient Points balance for this wager match.` }, { status: 400 });
+        if (hostBalance < room.wagerAmount) {
+          return NextResponse.json(
+            { error: `Host has insufficient balance for this wager match (Host available: GH₵ ${hostBalance.toFixed(2)}).` },
+            { status: 400 }
+          );
         }
       }
 
@@ -822,12 +832,12 @@ export async function POST(req: NextRequest) {
       if (room.mode === "wager" && room.wagerAmount > 0 && room.guestToken) {
         const hostProfile = await dbRepository.getProfile(room.hostToken);
         const guestProfile = await dbRepository.getProfile(room.guestToken);
-        const hostPoints = hostProfile?.points ?? 0;
-        const guestPoints = guestProfile?.points ?? 0;
+        const hostBalance = Math.max(Number(hostProfile?.points ?? 0), Number(hostProfile?.marbles ?? 0));
+        const guestBalance = Math.max(Number(guestProfile?.points ?? 0), Number(guestProfile?.marbles ?? 0));
 
-        if (hostPoints < room.wagerAmount || guestPoints < room.wagerAmount) {
+        if (hostBalance < room.wagerAmount || guestBalance < room.wagerAmount) {
           return NextResponse.json(
-            { error: "Insufficient Points for rematch wager. Both players must have at least GH₵ " + room.wagerAmount + " Points." },
+            { error: `Insufficient balance for rematch wager. Both players must have at least GH₵ ${room.wagerAmount} (Host: GH₵ ${hostBalance.toFixed(2)}, Guest: GH₵ ${guestBalance.toFixed(2)}).` },
             { status: 400 }
           );
         }
