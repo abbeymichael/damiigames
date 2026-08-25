@@ -421,7 +421,7 @@ export const users = mysqlTable("users", {
   ghanaCardNumber: varchar("ghana_card_number", { length: 32 }),
   dateOfBirth: timestamp("date_of_birth"),
   gender: varchar("gender", { length: 16 }),
-  avatarUrl: varchar("avatar_url", { length: 255 }),
+  avatarUrl: text("avatar_url"),
   region: varchar("region", { length: 64 }),
   city: varchar("city", { length: 64 }),
   address: varchar("address", { length: 255 }),

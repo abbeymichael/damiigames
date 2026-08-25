@@ -40,8 +40,24 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  let user = await dbRepository.getUserById(userToken);
+  if (!user && profile.phoneNumber) {
+    user = await dbRepository.getUserByPhone(profile.phoneNumber);
+  }
+
+  const sanitized = sanitizeProfileResponse(profile);
+  if (user) {
+    sanitized.avatarUrl = user.avatarUrl || sanitized.avatarUrl || null;
+    sanitized.fullName = user.fullName || sanitized.fullName;
+    sanitized.email = user.email || sanitized.email;
+    sanitized.region = user.region || sanitized.region;
+    sanitized.city = user.city || sanitized.city;
+    sanitized.phoneVerifiedAt = user.phoneVerifiedAt ? user.phoneVerifiedAt.toString() : (profile.phoneNumber ? new Date().toISOString() : null);
+  }
+
   const res = NextResponse.json({
-    profile: sanitizeProfileResponse(profile),
+    profile: sanitized,
+    user: user || null,
     sessionToken: session ? session.token : undefined,
     csrfToken: session?.csrfToken,
   });
@@ -134,29 +150,132 @@ export async function POST(req: NextRequest) {
       const session = await dbRepository.getSession(activeToken);
       const targetToken = session ? session.userId : activeToken;
 
-      let passwordHash: string | undefined = undefined;
-      let passwordSalt: string | undefined = undefined;
-
-      if (passcode && passcode.length >= 3) {
-        const hashed = securityService.hashPassword(passcode);
-        passwordHash = hashed.hash;
-        passwordSalt = hashed.salt;
-      }
-
       const existingProfile = await dbRepository.getProfile(targetToken);
       if (!existingProfile) {
         return NextResponse.json({ error: "Profile not found" }, { status: 404 });
       }
 
-      if (username) existingProfile.username = username;
-      if (phoneNumber) existingProfile.phoneNumber = phoneNumber;
-      if (passwordHash && passwordSalt) {
-        existingProfile.passcode = passwordHash;
-        existingProfile.passwordSalt = passwordSalt;
+      let user = await dbRepository.getUserById(targetToken);
+      if (!user && existingProfile.phoneNumber) {
+        user = await dbRepository.getUserByPhone(existingProfile.phoneNumber);
+      }
+
+      // Check if phone number is locked (verified)
+      const isPhoneVerified = Boolean(user?.phoneVerifiedAt || existingProfile.phoneNumber);
+      const requestedPhone = body.phoneNumber !== undefined ? cleanStr(body.phoneNumber || body.phone) : undefined;
+      if (requestedPhone && requestedPhone !== existingProfile.phoneNumber && requestedPhone !== user?.phoneNumber) {
+        if (isPhoneVerified) {
+          return NextResponse.json(
+            { error: "Verified phone numbers cannot be changed for anti-fraud and security reasons." },
+            { status: 400 }
+          );
+        }
+      }
+
+      // Validate username length & uniqueness if username is being changed
+      const requestedUsername = body.username !== undefined ? String(body.username).trim() : undefined;
+      if (requestedUsername && requestedUsername !== existingProfile.username) {
+        // Length check (3 - 25 characters)
+        if (requestedUsername.length < 3 || requestedUsername.length > 25) {
+          return NextResponse.json(
+            { error: "Username must be between 3 and 25 characters." },
+            { status: 400 }
+          );
+        }
+        // Format check: letters, numbers, underscores, and hyphens
+        if (!/^[a-zA-Z0-9_-]+$/.test(requestedUsername)) {
+          return NextResponse.json(
+            { error: "Username can only contain letters, numbers, underscores, and hyphens." },
+            { status: 400 }
+          );
+        }
+        // Case-insensitive uniqueness check against profiles
+        const existingWithUsername = await dbRepository.findProfileByUsername(requestedUsername);
+        if (existingWithUsername && existingWithUsername.token !== existingProfile.token) {
+          return NextResponse.json(
+            { error: `Username "${requestedUsername}" is already taken. Please choose another username.` },
+            { status: 400 }
+          );
+        }
+        // Case-insensitive uniqueness check against users
+        const existingUserWithUsername = await dbRepository.getUserByUsername(requestedUsername);
+        if (existingUserWithUsername && existingUserWithUsername.id !== targetToken) {
+          return NextResponse.json(
+            { error: `Username "${requestedUsername}" is already taken. Please choose another username.` },
+            { status: 400 }
+          );
+        }
+
+        existingProfile.username = requestedUsername;
+      }
+
+      // Update avatarUrl if provided
+      const requestedAvatar = body.avatarUrl !== undefined ? String(body.avatarUrl).trim() : undefined;
+      if (requestedAvatar !== undefined) {
+        existingProfile.avatarUrl = requestedAvatar || null;
+      }
+
+      // Update full profile fields if provided
+      if (body.fullName !== undefined) existingProfile.fullName = String(body.fullName).trim();
+      if (body.email !== undefined) existingProfile.email = String(body.email).trim();
+      if (body.region !== undefined) existingProfile.region = String(body.region).trim();
+      if (body.city !== undefined) existingProfile.city = String(body.city).trim();
+
+      if (!isPhoneVerified && requestedPhone) {
+        existingProfile.phoneNumber = requestedPhone;
+      }
+
+      // Passcode update
+      if (passcode && passcode.length >= 3) {
+        const hashed = securityService.hashPassword(passcode);
+        existingProfile.passcode = hashed.hash;
+        existingProfile.passwordSalt = hashed.salt;
       }
 
       const updated = await dbRepository.saveProfile(existingProfile);
-      return NextResponse.json({ success: true, profile: sanitizeProfileResponse(updated) });
+
+      // Also sync user record in users table
+      if (user) {
+        user.username = existingProfile.username;
+        if (existingProfile.avatarUrl !== undefined) user.avatarUrl = existingProfile.avatarUrl;
+        if (body.fullName !== undefined) user.fullName = String(body.fullName).trim();
+        if (body.email !== undefined) user.email = String(body.email).trim();
+        if (body.region !== undefined) user.region = String(body.region).trim();
+        if (body.city !== undefined) user.city = String(body.city).trim();
+        if (body.address !== undefined) user.address = String(body.address).trim();
+        if (body.gender !== undefined) user.gender = String(body.gender).trim();
+        if (body.dateOfBirth !== undefined && body.dateOfBirth) user.dateOfBirth = new Date(body.dateOfBirth).toISOString();
+        if (body.momoNetwork !== undefined) user.momoNetwork = String(body.momoNetwork).trim();
+        await dbRepository.saveUser(user);
+      } else {
+        user = await dbRepository.saveUser({
+          id: targetToken,
+          phoneNumber: existingProfile.phoneNumber || `usr_${targetToken.slice(-6)}`,
+          phoneVerifiedAt: existingProfile.phoneNumber ? new Date().toISOString() : null,
+          username: existingProfile.username,
+          fullName: existingProfile.fullName || null,
+          email: existingProfile.email || null,
+          avatarUrl: existingProfile.avatarUrl || null,
+          region: existingProfile.region || null,
+          city: existingProfile.city || null,
+          role: existingProfile.role === "admin" || existingProfile.role === "super_admin" ? "admin" : existingProfile.role === "organizer" ? "organizer" : "player",
+          createdAt: existingProfile.createdAt || new Date().toISOString(),
+        });
+      }
+
+      const sanitized = sanitizeProfileResponse(updated);
+      sanitized.avatarUrl = user.avatarUrl || sanitized.avatarUrl || null;
+      sanitized.fullName = user.fullName || sanitized.fullName;
+      sanitized.email = user.email || sanitized.email;
+      sanitized.region = user.region || sanitized.region;
+      sanitized.city = user.city || sanitized.city;
+
+      return NextResponse.json({
+        success: true,
+        message: "Profile updated successfully",
+        profile: sanitized,
+        user,
+      });
     }
 
     // 4. LOGOUT

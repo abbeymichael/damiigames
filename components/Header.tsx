@@ -46,11 +46,16 @@ import {
   Coins,
   Copy,
   EyeOff,
+  Upload,
+  Image as ImageIcon,
+  Camera,
+  Trash2,
 } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { getProfileRank } from "@/lib/rank-service";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { NavLink, safeNavigate } from "@/components/NavLink";
+import { SYSTEM_AVATARS, validateAvatarFile, resizeImageToDataUrl } from "@/lib/avatars";
 import {
   saveSessionToken,
   rotateSessionToken,
@@ -219,13 +224,39 @@ export function Header() {
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
+  // Full User & Profile State
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [gender, setGender] = useState("male");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [region, setRegion] = useState("Greater Accra");
+  const [city, setCity] = useState("Accra");
+  const [address, setAddress] = useState("");
+  const [momoNetwork, setMomoNetwork] = useState("MTN");
+  const [isPhoneVerified, setIsPhoneVerified] = useState(false);
+
   // Profile Edit modal state
   const [editUsername, setEditUsername] = useState("");
+  const [editFullName, setEditFullName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [editAvatarUrl, setEditAvatarUrl] = useState<string | null>(null);
+  const [editGender, setEditGender] = useState("male");
+  const [editDob, setEditDob] = useState("");
+  const [editRegion, setEditRegion] = useState("Greater Accra");
+  const [editCity, setEditCity] = useState("Accra");
+  const [editAddress, setEditAddress] = useState("");
+  const [editMomoNetwork, setEditMomoNetwork] = useState("MTN");
   const [editPasscode, setEditPasscode] = useState("");
+  const [editActiveTab, setEditActiveTab] = useState<"identity" | "personal" | "security">("identity");
+  const [avatarTab, setAvatarTab] = useState<"presets" | "upload">("presets");
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [avatarUploadError, setAvatarUploadError] = useState("");
   const [editError, setEditError] = useState("");
   const [editSuccess, setEditSuccess] = useState("");
   const [isEditLoading, setIsEditLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const fetchNotifications = useCallback((token: string) => {
     fetch(`/api/notifications?token=${encodeURIComponent(token)}`)
@@ -254,10 +285,45 @@ export function Header() {
           if (parsed.role) setRole(parsed.role);
           if (parsed.username) setUsername(parsed.username);
           if (parsed.points !== undefined) setPoints(parsed.points);
+          if (parsed.avatarUrl !== undefined) setAvatarUrl(parsed.avatarUrl);
         } catch {
           // ignore parsing error
         }
       }
+
+      fetch(`/api/auth`, { headers: getAuthHeaders() })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.profile) {
+            if (data.profile.avatarUrl !== undefined) setAvatarUrl(data.profile.avatarUrl);
+            if (data.profile.username) setUsername(data.profile.username);
+            if (data.profile.phoneNumber !== undefined) setPhoneNumber(data.profile.phoneNumber);
+            if (data.profile.points !== undefined) setPoints(data.profile.points);
+            if (data.profile.role) setRole(data.profile.role);
+            if (data.profile.rating !== undefined) setRating(data.profile.rating);
+            if (data.profile.wins !== undefined) setWins(data.profile.wins);
+            if (data.profile.losses !== undefined) setLosses(data.profile.losses);
+            if (data.profile.draws !== undefined) setDraws(data.profile.draws);
+            if (data.profile.winStreak !== undefined) setWinStreak(data.profile.winStreak);
+            if (data.profile.bestStreak !== undefined) setBestStreak(data.profile.bestStreak);
+            if (data.profile.matchesLast7Days !== undefined) setMatchesLast7Days(data.profile.matchesLast7Days);
+            if (data.profile.opponentRatingAvg !== undefined) setOpponentRatingAvg(data.profile.opponentRatingAvg);
+          }
+          if (data.user) {
+            if (data.user.avatarUrl !== undefined) setAvatarUrl(data.user.avatarUrl);
+            if (data.user.fullName) setFullName(data.user.fullName);
+            if (data.user.email) setEmail(data.user.email);
+            if (data.user.phoneNumber) setPhoneNumber(data.user.phoneNumber);
+            if (data.user.isPhoneVerified !== undefined) setIsPhoneVerified(Boolean(data.user.isPhoneVerified));
+            if (data.user.gender) setGender(data.user.gender);
+            if (data.user.dateOfBirth) setDateOfBirth(data.user.dateOfBirth);
+            if (data.user.region) setRegion(data.user.region);
+            if (data.user.city) setCity(data.user.city);
+            if (data.user.address) setAddress(data.user.address);
+            if (data.user.momoNetwork) setMomoNetwork(data.user.momoNetwork);
+          }
+        })
+        .catch(() => undefined);
 
       fetch(`/api/wallet?token=${encodeURIComponent(token)}`)
         .then((res) => res.json())
@@ -318,6 +384,10 @@ export function Header() {
       setRole("guest");
       setRating(1000);
       setPhoneNumber("");
+      setAvatarUrl(null);
+      setFullName("");
+      setEmail("");
+      setIsPhoneVerified(false);
       setWins(0);
       setLosses(0);
       setDraws(0);
@@ -326,6 +396,77 @@ export function Header() {
       setOrganizationName("");
     }
   }, [fetchNotifications]);
+
+  const openEditProfileModal = useCallback(async () => {
+    setEditUsername(username);
+    setEditFullName(fullName);
+    setEditEmail(email);
+    setEditPhone(phoneNumber || "");
+    setEditAvatarUrl(avatarUrl);
+    setEditGender(gender || "male");
+    setEditDob(dateOfBirth ? dateOfBirth.split("T")[0] : "");
+    setEditRegion(region || "Greater Accra");
+    setEditCity(city || "Accra");
+    setEditAddress(address || "");
+    setEditMomoNetwork(momoNetwork || "MTN");
+    setEditPasscode("");
+    setEditError("");
+    setEditSuccess("");
+    setAvatarUploadError("");
+    setEditActiveTab("identity");
+    setAvatarTab("presets");
+    setIsProfileDropdownOpen(false);
+    setIsEditProfileOpen(true);
+
+    const token = localStorage.getItem("damii-player-token");
+    if (token) {
+      try {
+        const res = await fetch("/api/auth", { headers: getAuthHeaders() });
+        const data = await res.json();
+        if (data.profile) {
+          if (data.profile.username) setEditUsername(data.profile.username);
+          if (data.profile.avatarUrl !== undefined) setEditAvatarUrl(data.profile.avatarUrl);
+        }
+        if (data.user) {
+          if (data.user.fullName) setEditFullName(data.user.fullName);
+          if (data.user.email) setEditEmail(data.user.email);
+          if (data.user.phoneNumber) setEditPhone(data.user.phoneNumber);
+          if (data.user.avatarUrl !== undefined) setEditAvatarUrl(data.user.avatarUrl);
+          if (data.user.isPhoneVerified !== undefined) setIsPhoneVerified(Boolean(data.user.isPhoneVerified));
+          if (data.user.gender) setEditGender(data.user.gender);
+          if (data.user.dateOfBirth) setEditDob(data.user.dateOfBirth.split("T")[0]);
+          if (data.user.region) setEditRegion(data.user.region);
+          if (data.user.city) setEditCity(data.user.city);
+          if (data.user.address) setEditAddress(data.user.address);
+          if (data.user.momoNetwork) setEditMomoNetwork(data.user.momoNetwork);
+        }
+      } catch {
+        // preserve current values
+      }
+    }
+  }, [username, fullName, email, phoneNumber, avatarUrl, gender, dateOfBirth, region, city, address, momoNetwork]);
+
+  const handleAvatarFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAvatarUploadError("");
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateAvatarFile(file);
+    if (!validation.valid) {
+      setAvatarUploadError(validation.error || "Invalid image file");
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    try {
+      const resized = await resizeImageToDataUrl(file, 200, 0.85);
+      setEditAvatarUrl(resized);
+    } catch (err) {
+      setAvatarUploadError(err instanceof Error ? err.message : "Failed to process image");
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
 
   useEffect(() => {
     try {
@@ -717,8 +858,19 @@ export function Header() {
     setEditError("");
     setEditSuccess("");
 
-    if (!editUsername.trim()) {
+    const cleanUser = editUsername.trim();
+    if (!cleanUser) {
       setEditError("Username cannot be empty.");
+      return;
+    }
+
+    if (cleanUser.length < 3 || cleanUser.length > 25) {
+      setEditError("Username must be between 3 and 25 characters.");
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_-]+$/.test(cleanUser)) {
+      setEditError("Username can only contain letters, numbers, underscores, and hyphens.");
       return;
     }
 
@@ -733,8 +885,17 @@ export function Header() {
         body: JSON.stringify({
           action: "update_profile",
           token: userToken,
-          username: editUsername.trim(),
-          phoneNumber: editPhone.trim(),
+          username: cleanUser,
+          fullName: editFullName.trim() || undefined,
+          email: editEmail.trim() || undefined,
+          avatarUrl: editAvatarUrl || undefined,
+          phoneNumber: !isPhoneVerified && editPhone.trim() ? editPhone.trim() : undefined,
+          gender: editGender || undefined,
+          dateOfBirth: editDob ? new Date(editDob).toISOString() : undefined,
+          region: editRegion || undefined,
+          city: editCity.trim() || undefined,
+          address: editAddress.trim() || undefined,
+          momoNetwork: editMomoNetwork || undefined,
           passcode: editPasscode.trim() || undefined,
         }),
       });
@@ -748,9 +909,46 @@ export function Header() {
       }
 
       setEditSuccess("Profile updated successfully!");
-      localStorage.setItem("damii-player-name", data.profile.username);
-      setUsername(data.profile.username);
-      setPhoneNumber(data.profile.phoneNumber || "");
+
+      if (data.profile?.username) {
+        localStorage.setItem("damii-player-name", data.profile.username);
+        setUsername(data.profile.username);
+      }
+      if (data.profile?.avatarUrl !== undefined) {
+        setAvatarUrl(data.profile.avatarUrl);
+      }
+      if (data.user?.avatarUrl !== undefined) {
+        setAvatarUrl(data.user.avatarUrl);
+      }
+      if (data.profile?.phoneNumber) {
+        setPhoneNumber(data.profile.phoneNumber);
+      }
+      if (data.user) {
+        setFullName(data.user.fullName || "");
+        setEmail(data.user.email || "");
+        setGender(data.user.gender || "male");
+        setDateOfBirth(data.user.dateOfBirth || "");
+        setRegion(data.user.region || "Greater Accra");
+        setCity(data.user.city || "Accra");
+        setAddress(data.user.address || "");
+        setMomoNetwork(data.user.momoNetwork || "MTN");
+        if (data.user.isPhoneVerified !== undefined) {
+          setIsPhoneVerified(Boolean(data.user.isPhoneVerified));
+        }
+      }
+
+      // Update cached user object in localStorage
+      try {
+        const currentAuth = localStorage.getItem("damii-auth-user");
+        const parsed = currentAuth ? JSON.parse(currentAuth) : {};
+        if (data.profile?.username) parsed.username = data.profile.username;
+        if (data.user?.avatarUrl || data.profile?.avatarUrl) {
+          parsed.avatarUrl = data.user?.avatarUrl || data.profile?.avatarUrl;
+        }
+        localStorage.setItem("damii-auth-user", JSON.stringify(parsed));
+      } catch {
+        // ignore
+      }
 
       window.dispatchEvent(new Event("damii-auth-changed"));
 
@@ -946,8 +1144,12 @@ export function Header() {
                           className={`shrink-0 flex items-center gap-1.5 border p-1 rounded-full hover:scale-105 transition-all cursor-pointer shadow-sm ${pillBorder}`}
                           title={username || "User Account & Settings Menu"}
                         >
-                          <span className={`w-7 h-7 rounded-full font-black flex items-center justify-center text-xs border shadow-inner ${avatarBg}`}>
-                            {initialLetter}
+                          <span className={`w-7 h-7 rounded-full font-black flex items-center justify-center text-xs border overflow-hidden shadow-inner ${avatarBg}`}>
+                            {avatarUrl ? (
+                              <img src={avatarUrl} alt={username} className="w-full h-full object-cover rounded-full" />
+                            ) : (
+                              initialLetter
+                            )}
                           </span>
                           <ChevronDown
                             size={14}
@@ -965,8 +1167,12 @@ export function Header() {
                             {isAdmin && (
                               <>
                                 <div className="p-3 bg-gradient-to-br from-red-950/90 to-[#081c15] rounded-xl border border-red-600/50 flex items-center gap-3 shadow-md">
-                                  <div className="w-11 h-11 rounded-xl bg-red-600 text-white font-black flex items-center justify-center text-lg shadow-lg shrink-0">
-                                    <ShieldAlert size={22} />
+                                  <div className="w-11 h-11 rounded-xl bg-red-600 text-white font-black flex items-center justify-center text-lg shadow-lg shrink-0 overflow-hidden">
+                                    {avatarUrl ? (
+                                      <img src={avatarUrl} alt={username} className="w-full h-full object-cover rounded-xl" />
+                                    ) : (
+                                      <ShieldAlert size={22} />
+                                    )}
                                   </div>
                                   <div className="min-w-0 flex-1">
                                     <strong className="block text-sm font-black text-[#f5efdf] truncate">
@@ -1052,16 +1258,8 @@ export function Header() {
 
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      setEditUsername(username);
-                                      setEditPhone(phoneNumber || "");
-                                      setEditPasscode("");
-                                      setEditError("");
-                                      setEditSuccess("");
-                                      setIsProfileDropdownOpen(false);
-                                      setIsEditProfileOpen(true);
-                                    }}
-                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                    onClick={openEditProfileModal}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors cursor-pointer"
                                   >
                                     <span className="flex items-center gap-2">
                                       <UserCog size={15} className="text-red-400" /> Edit Admin Profile & Credentials
@@ -1076,8 +1274,12 @@ export function Header() {
                             {!isAdmin && isOrganizer && (
                               <>
                                 <div className="p-3 bg-gradient-to-br from-amber-950/90 to-[#081c15] rounded-xl border border-amber-500/50 flex items-center gap-3 shadow-md">
-                                  <div className="w-11 h-11 rounded-xl bg-[#d6a735] text-[#06261f] font-black flex items-center justify-center text-lg shadow-lg shrink-0">
-                                    <Crown size={22} />
+                                  <div className="w-11 h-11 rounded-xl bg-[#d6a735] text-[#06261f] font-black flex items-center justify-center text-lg shadow-lg shrink-0 overflow-hidden">
+                                    {avatarUrl ? (
+                                      <img src={avatarUrl} alt={username} className="w-full h-full object-cover rounded-xl" />
+                                    ) : (
+                                      <Crown size={22} />
+                                    )}
                                   </div>
                                   <div className="min-w-0 flex-1">
                                     <strong className="block text-sm font-black text-[#f5efdf] truncate">
@@ -1166,16 +1368,8 @@ export function Header() {
 
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      setEditUsername(username);
-                                      setEditPhone(phoneNumber || "");
-                                      setEditPasscode("");
-                                      setEditError("");
-                                      setEditSuccess("");
-                                      setIsProfileDropdownOpen(false);
-                                      setIsEditProfileOpen(true);
-                                    }}
-                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                    onClick={openEditProfileModal}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors cursor-pointer"
                                   >
                                     <span className="flex items-center gap-2">
                                       <UserCog size={15} className="text-amber-400" /> Edit Organizer Profile & MoMo
@@ -1190,8 +1384,12 @@ export function Header() {
                             {!isAdmin && !isOrganizer && isFacilitator && (
                               <>
                                 <div className="p-3 bg-gradient-to-br from-cyan-950/90 to-[#081c15] rounded-xl border border-cyan-500/50 flex items-center gap-3 shadow-md">
-                                  <div className="w-11 h-11 rounded-xl bg-cyan-600 text-white font-black flex items-center justify-center text-lg shadow-lg shrink-0">
-                                    <Scale size={22} />
+                                  <div className="w-11 h-11 rounded-xl bg-cyan-600 text-white font-black flex items-center justify-center text-lg shadow-lg shrink-0 overflow-hidden">
+                                    {avatarUrl ? (
+                                      <img src={avatarUrl} alt={username} className="w-full h-full object-cover rounded-xl" />
+                                    ) : (
+                                      <Scale size={22} />
+                                    )}
                                   </div>
                                   <div className="min-w-0 flex-1">
                                     <strong className="block text-sm font-black text-[#f5efdf] truncate">
@@ -1277,16 +1475,8 @@ export function Header() {
 
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      setEditUsername(username);
-                                      setEditPhone(phoneNumber || "");
-                                      setEditPasscode("");
-                                      setEditError("");
-                                      setEditSuccess("");
-                                      setIsProfileDropdownOpen(false);
-                                      setIsEditProfileOpen(true);
-                                    }}
-                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                    onClick={openEditProfileModal}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors cursor-pointer"
                                   >
                                     <span className="flex items-center gap-2">
                                       <UserCog size={15} className="text-cyan-400" /> Edit Profile & Phone
@@ -1302,8 +1492,12 @@ export function Header() {
                               <>
                                 {/* Profile Card Header */}
                                 <div className="p-3 bg-[#0c3b2e] rounded-xl border border-[#d6a735]/30 flex items-center gap-3">
-                                  <div className="w-10 h-10 rounded-full bg-[#d6a735] text-[#06261f] font-black flex items-center justify-center text-base shadow-md shrink-0">
-                                    {username ? username[0].toUpperCase() : "U"}
+                                  <div className="w-10 h-10 rounded-full bg-[#d6a735] text-[#06261f] font-black flex items-center justify-center text-base shadow-md shrink-0 overflow-hidden">
+                                    {avatarUrl ? (
+                                      <img src={avatarUrl} alt={username} className="w-full h-full object-cover rounded-full" />
+                                    ) : (
+                                      username ? username[0].toUpperCase() : "U"
+                                    )}
                                   </div>
                                   <div className="min-w-0 flex-1">
                                     <strong className="block text-sm font-black text-[#f5efdf] truncate">
@@ -1443,16 +1637,8 @@ export function Header() {
 
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      setEditUsername(username);
-                                      setEditPhone(phoneNumber || "");
-                                      setEditPasscode("");
-                                      setEditError("");
-                                      setEditSuccess("");
-                                      setIsProfileDropdownOpen(false);
-                                      setIsEditProfileOpen(true);
-                                    }}
-                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors"
+                                    onClick={openEditProfileModal}
+                                    className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#0c3b2e]/80 hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] flex items-center justify-between transition-colors cursor-pointer"
                                   >
                                     <span className="flex items-center gap-2">
                                       <UserCog size={15} className="text-[#d6a735]" /> Edit Profile & Phone
@@ -1504,15 +1690,8 @@ export function Header() {
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
-                onClick={() => {
-                  setEditUsername(username);
-                  setEditPhone(phoneNumber || "");
-                  setEditPasscode("");
-                  setEditError("");
-                  setEditSuccess("");
-                  setIsEditProfileOpen(true);
-                }}
-                className={`w-7 h-7 rounded-full font-black flex items-center justify-center text-xs border shadow-sm shrink-0 transition-transform active:scale-95 cursor-pointer ${
+                onClick={openEditProfileModal}
+                className={`w-7 h-7 rounded-full font-black flex items-center justify-center text-xs border shadow-sm shrink-0 transition-transform active:scale-95 cursor-pointer overflow-hidden ${
                   isAdmin 
                     ? "bg-red-500/20 text-red-400 border-red-500/50" 
                     : isOrganizer
@@ -1523,7 +1702,11 @@ export function Header() {
                 }`}
                 title={username || "Click to Edit Profile"}
               >
-                {(username || "U")[0].toUpperCase()}
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt={username} className="w-full h-full object-cover rounded-full" />
+                ) : (
+                  (username || "U")[0].toUpperCase()
+                )}
               </button>
               {!isAdmin && (
                 <span className="points-badge text-[11px] py-1 px-2 font-black shrink-0 flex items-center gap-1">
@@ -1625,8 +1808,18 @@ export function Header() {
                       <div className={`p-3.5 rounded-2xl border shadow-md space-y-2.5 ${cardBg}`}>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3 min-w-0">
-                            <span className={`w-10 h-10 rounded-xl font-black flex items-center justify-center text-sm border shrink-0 shadow-sm ${avatarStyle}`}>
-                              {isAdmin ? <ShieldAlert size={18} /> : isOrganizer ? <Crown size={18} /> : isFacilitator ? <Scale size={18} /> : (username ? username[0].toUpperCase() : "P")}
+                            <span className={`w-10 h-10 rounded-xl font-black flex items-center justify-center text-sm border shrink-0 shadow-sm overflow-hidden ${avatarStyle}`}>
+                              {avatarUrl ? (
+                                <img src={avatarUrl} alt={username} className="w-full h-full object-cover rounded-xl" />
+                              ) : isAdmin ? (
+                                <ShieldAlert size={18} />
+                              ) : isOrganizer ? (
+                                <Crown size={18} />
+                              ) : isFacilitator ? (
+                                <Scale size={18} />
+                              ) : (
+                                username ? username[0].toUpperCase() : "P"
+                              )}
                             </span>
                             <div className="min-w-0 flex-1">
                               <strong className="block text-sm font-black text-[#f5efdf] truncate">
@@ -1673,17 +1866,12 @@ export function Header() {
                           <button
                             type="button"
                             onClick={() => {
-                              setEditUsername(username);
-                              setEditPhone(phoneNumber || "");
-                              setEditPasscode("");
-                              setEditError("");
-                              setEditSuccess("");
                               setIsMobileMenuOpen(false);
-                              setIsEditProfileOpen(true);
+                              openEditProfileModal();
                             }}
-                            className={`hover:underline font-bold text-[10px] uppercase ${isAdmin ? "text-red-300" : isOrganizer ? "text-amber-300" : isFacilitator ? "text-cyan-300" : "text-[#d6a735]"}`}
+                            className={`hover:underline font-bold text-[10px] uppercase flex items-center gap-1 cursor-pointer ${isAdmin ? "text-red-300" : isOrganizer ? "text-amber-300" : isFacilitator ? "text-cyan-300" : "text-[#d6a735]"}`}
                           >
-                            Edit Profile
+                            <UserCog size={12} /> Edit Profile
                           </button>
                         </div>
                       </div>
@@ -2259,23 +2447,24 @@ export function Header() {
                         <span className="flex items-center gap-1">
                           <Sparkles size={12} className="text-[#d6a735]" /> Gamer Tag / Username *
                         </span>
-                        <span className="text-[10px] bg-[#0c3b2e] text-[#d6a735] px-1.5 py-0.5 rounded font-mono font-bold border border-[#184d3c] flex items-center gap-1">
-                          <Lock size={10} /> Read-only
+                        <span className="text-[10px] text-[#d6a735] font-mono font-bold">
+                          3–25 chars
                         </span>
                       </label>
                       <div className="relative">
                         <input
                           type="text"
-                          readOnly
-                          disabled
                           required
-                          value={profUsername || "Assigning..."}
+                          minLength={3}
+                          maxLength={25}
+                          value={profUsername}
+                          onChange={(e) => setProfUsername(e.target.value)}
                           placeholder="e.g. lemon264"
-                          className="w-full px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-[#d6a735] font-mono font-bold text-xs cursor-not-allowed select-none opacity-90"
+                          className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#d6a735] font-mono font-bold text-xs focus:outline-none focus:border-[#d6a735]"
                         />
                       </div>
                       <small className="block text-[10px] text-slate-400 mt-1">
-                        Permanently generated fruit tag assigned to your account.
+                        Auto-assigned gamer tag. You can customize it now or in your profile anytime.
                       </small>
                     </div>
 
@@ -2459,133 +2648,506 @@ export function Header() {
         </div>
       )}
 
-      {/* Edit Profile Modal */}
+      {/* Comprehensive Edit Profile Modal */}
       {isEditProfileOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-[#06261f] border border-[#d6a735]/40 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-[#f5efdf]">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#0c3b2e] bg-[#0c3b2e]/60">
-              <div className="flex items-center gap-2">
-                <UserCog className="text-[#d6a735]" size={20} />
-                <h3 className="text-lg font-black font-serif text-[#f5efdf]">
-                  Edit Profile Details
-                </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+          <div className="w-full max-w-2xl bg-[#06261f] border border-[#d6a735]/40 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-[#f5efdf] my-auto flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-[#0c3b2e] bg-[#0c3b2e]/80 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-[#d6a735]/20 text-[#d6a735] border border-[#d6a735]/40">
+                  <UserCog size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black font-serif text-[#f5efdf]">
+                    Edit Player Profile
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Manage your player avatar, gaming tag, MoMo details, and account security.
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsEditProfileOpen(false)}
-                className="text-slate-400 hover:text-slate-100 transition-colors"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-[#0c3b2e] transition-colors cursor-pointer"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleEditProfileSubmit} className="p-6 space-y-4">
+            {/* Modal Navigation Tabs */}
+            <div className="flex border-b border-[#0c3b2e] bg-[#041a15] px-4 sm:px-6 gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setEditActiveTab("identity")}
+                className={`py-3 px-3 sm:px-4 text-xs font-black border-b-2 flex items-center gap-1.5 transition-all cursor-pointer ${
+                  editActiveTab === "identity"
+                    ? "border-[#d6a735] text-[#d6a735] bg-[#0c3b2e]/40"
+                    : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-[#0c3b2e]/20"
+                }`}
+              >
+                <Sparkles size={14} /> Avatar &amp; Identity
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditActiveTab("personal")}
+                className={`py-3 px-3 sm:px-4 text-xs font-black border-b-2 flex items-center gap-1.5 transition-all cursor-pointer ${
+                  editActiveTab === "personal"
+                    ? "border-[#d6a735] text-[#d6a735] bg-[#0c3b2e]/40"
+                    : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-[#0c3b2e]/20"
+                }`}
+              >
+                <Phone size={14} /> Personal &amp; MoMo
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditActiveTab("security")}
+                className={`py-3 px-3 sm:px-4 text-xs font-black border-b-2 flex items-center gap-1.5 transition-all cursor-pointer ${
+                  editActiveTab === "security"
+                    ? "border-[#d6a735] text-[#d6a735] bg-[#0c3b2e]/40"
+                    : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-[#0c3b2e]/20"
+                }`}
+              >
+                <Shield size={14} /> Security &amp; Sessions
+              </button>
+            </div>
+
+            <form onSubmit={handleEditProfileSubmit} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
+              {/* Feedback messages */}
               {editError && (
-                <div className="p-3 bg-red-950/80 border border-red-800 rounded-xl text-red-200 text-xs flex items-center gap-2">
+                <div className="p-3 bg-red-950/90 border border-red-800 rounded-xl text-red-200 text-xs flex items-center gap-2 animate-in fade-in">
                   <AlertCircle size={16} className="shrink-0 text-red-400" />
                   <span>{editError}</span>
                 </div>
               )}
 
               {editSuccess && (
-                <div className="p-3 bg-emerald-950/80 border border-emerald-800 rounded-xl text-emerald-200 text-xs flex items-center gap-2">
+                <div className="p-3 bg-emerald-950/90 border border-emerald-800 rounded-xl text-emerald-200 text-xs flex items-center gap-2 animate-in fade-in">
                   <CheckCircle2 size={16} className="shrink-0 text-emerald-400" />
                   <span>{editSuccess}</span>
                 </div>
               )}
 
-              <div>
-                <label className="block text-xs font-bold text-[#f5efdf] mb-1.5">
-                  Username
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={editUsername}
-                  onChange={(e) => setEditUsername(e.target.value)}
-                  placeholder="Update username"
-                  className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-sm focus:outline-none focus:border-[#d6a735] transition-colors"
-                />
-              </div>
+              {/* TAB 1: IDENTITY & AVATAR */}
+              {editActiveTab === "identity" && (
+                <div className="space-y-4">
+                  {/* Avatar Picker Section */}
+                  <div className="p-4 bg-[#0c3b2e]/60 border border-[#184d3c] rounded-2xl space-y-3.5">
+                    <label className="block text-xs font-bold text-[#d6a735] uppercase tracking-wider flex items-center gap-1.5">
+                      <ImageIcon size={14} /> Player Avatar &amp; Profile Picture
+                    </label>
 
-              <div>
-                <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center gap-1">
-                  <Phone size={13} className="text-[#d6a735]" /> Phone Number (Mobile Money)
-                </label>
-                <input
-                  type="tel"
-                  value={editPhone}
-                  onChange={(e) => setEditPhone(e.target.value)}
-                  placeholder="e.g. 0241234567 or +233241234567"
-                  className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-sm focus:outline-none focus:border-[#d6a735] transition-colors"
-                />
-                <small className="block text-[10px] text-slate-400 mt-1">
-                  Used for Mobile Money payouts &amp; wager victory settlements.
-                </small>
-              </div>
+                    {avatarUploadError && (
+                      <div className="p-2.5 bg-red-950/80 border border-red-800 rounded-xl text-red-200 text-xs flex items-center gap-2">
+                        <AlertCircle size={14} className="text-red-400 shrink-0" />
+                        <span>{avatarUploadError}</span>
+                      </div>
+                    )}
 
-              <div>
-                <label className="block text-xs font-bold text-[#f5efdf] mb-1.5">
-                  New Passcode / PIN <span className="text-[10px] text-slate-400 font-normal">(Leave blank to keep current)</span>
-                </label>
-                <input
-                  type="password"
-                  value={editPasscode}
-                  onChange={(e) => setEditPasscode(e.target.value)}
-                  placeholder="Enter new secret passcode"
-                  className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-sm focus:outline-none focus:border-[#d6a735] transition-colors"
-                />
-              </div>
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                      {/* Avatar Preview */}
+                      <div className="relative group shrink-0">
+                        <div className="w-20 h-20 rounded-2xl bg-[#06261f] border-2 border-[#d6a735] flex items-center justify-center text-2xl font-black text-[#d6a735] overflow-hidden shadow-xl">
+                          {editAvatarUrl ? (
+                            <img src={editAvatarUrl} alt="Avatar preview" className="w-full h-full object-cover" />
+                          ) : (
+                            (editUsername || username || "U")[0].toUpperCase()
+                          )}
+                        </div>
+                        {editAvatarUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setEditAvatarUrl(null)}
+                            title="Remove avatar"
+                            className="absolute -top-2 -right-2 p-1 bg-red-600 hover:bg-red-500 text-white rounded-full shadow-md transition-transform hover:scale-110 cursor-pointer"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
 
-              <button
-                type="submit"
-                disabled={isEditLoading}
-                className="w-full py-3 bg-[#d6a735] hover:bg-[#b88c24] disabled:opacity-50 text-[#06261f] font-black rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2"
-              >
-                {isEditLoading ? "Saving Changes..." : "Save Profile Changes"}
-              </button>
+                      <div className="space-y-2 flex-1 text-center sm:text-left">
+                        <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+                            onChange={handleAvatarFileUpload}
+                            className="hidden"
+                          />
+                          <button
+                            type="button"
+                            disabled={isUploadingAvatar}
+                            onClick={() => fileInputRef.current?.click()}
+                            className="px-3.5 py-1.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] text-xs font-black rounded-xl transition-all shadow flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          >
+                            <Upload size={13} /> {isUploadingAvatar ? "Processing..." : "Upload Custom Image"}
+                          </button>
+                          {editAvatarUrl && (
+                            <button
+                              type="button"
+                              onClick={() => setEditAvatarUrl(null)}
+                              className="px-3 py-1.5 bg-red-950/70 hover:bg-red-900 border border-red-800 text-red-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+                            >
+                              <Trash2 size={12} /> Clear Avatar
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-relaxed">
+                          Supported formats: JPG, PNG, WebP, GIF (Max 2MB). Images are cropped into a crisp square automatically.
+                        </p>
+                      </div>
+                    </div>
 
-              {/* Session Security Section */}
-              <div className="pt-4 border-t border-[#0c3b2e] space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#d6a735] flex items-center gap-1.5">
-                    <Shield size={14} /> Session Security &amp; Tokens
-                  </span>
-                  <span className="text-[10px] text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800 font-mono">
-                    CSRF Protected
-                  </span>
+                    {/* Preset Avatars Carousel / Grid */}
+                    <div className="pt-2 border-t border-[#184d3c]/80 space-y-2">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-slate-300 font-bold">Or pick a Default Grandmaster Avatar:</span>
+                        <span className="text-[10px] text-[#d6a735] font-mono">{SYSTEM_AVATARS.length} Available</span>
+                      </div>
+                      <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+                        {SYSTEM_AVATARS.map((item) => {
+                          const isSelected = editAvatarUrl === item.url;
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => {
+                                setEditAvatarUrl(item.url);
+                                setAvatarUploadError("");
+                              }}
+                              className={`group relative p-1 rounded-xl border transition-all cursor-pointer flex flex-col items-center gap-1 ${
+                                isSelected
+                                  ? "bg-[#d6a735]/20 border-[#d6a735] scale-105 shadow-md shadow-[#d6a735]/10"
+                                  : "bg-[#06261f] border-[#184d3c] hover:border-slate-400 hover:bg-[#0c3b2e]"
+                              }`}
+                              title={item.name}
+                            >
+                              <div className="w-10 h-10 rounded-lg overflow-hidden border border-[#184d3c] shadow-inner bg-[#06261f]">
+                                <img src={item.url} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                              </div>
+                              <span className="text-[8px] font-bold text-slate-300 truncate w-full text-center">
+                                {item.name.split(" ")[0]}
+                              </span>
+                              {isSelected && (
+                                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#d6a735] text-[#06261f] flex items-center justify-center shadow-sm">
+                                  <CheckCircle2 size={10} />
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Gamer Tag & Full Legal Name */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center justify-between">
+                        <span className="flex items-center gap-1">
+                          <Sparkles size={13} className="text-[#d6a735]" /> Gamer Tag / Username *
+                        </span>
+                        <span className="text-[10px] text-[#d6a735] font-mono font-bold">
+                          3–25 chars
+                        </span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        minLength={3}
+                        maxLength={25}
+                        value={editUsername}
+                        onChange={(e) => setEditUsername(e.target.value)}
+                        placeholder="e.g. Kwame_Grandmaster"
+                        className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-sm font-mono focus:outline-none focus:border-[#d6a735] transition-colors"
+                      />
+                      <small className="block text-[10px] text-slate-400 mt-1">
+                        Unique handle visible in tournament matches, chat, and leaderboards.
+                      </small>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center gap-1">
+                        <UserCheck size={13} className="text-[#d6a735]" /> Full Legal Name
+                      </label>
+                      <input
+                        type="text"
+                        value={editFullName}
+                        onChange={(e) => setEditFullName(e.target.value)}
+                        placeholder="e.g. Kwame Mensah"
+                        className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-sm focus:outline-none focus:border-[#d6a735] transition-colors"
+                      />
+                      <small className="block text-[10px] text-slate-400 mt-1">
+                        Used for identity verification on prize cashouts.
+                      </small>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-[11px] text-slate-400">
-                  Manage active sessions, rotate session keys, or revoke access on lost/other devices.
-                </p>
+              )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                  <button
-                    type="button"
-                    disabled={isEditLoading}
-                    onClick={handleRotateSession}
-                    className="w-full py-2 px-3 bg-[#0c3b2e] hover:bg-[#114232] border border-[#184d3c] text-[#f5efdf] text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5"
-                  >
-                    <Zap size={13} className="text-[#d6a735]" /> Rotate Session Token
-                  </button>
+              {/* TAB 2: PERSONAL & MOMO */}
+              {editActiveTab === "personal" && (
+                <div className="space-y-4">
+                  {/* Phone & MoMo Network Section with Immutable Verified Phone Notice */}
+                  <div className="p-4 bg-[#0c3b2e]/60 border border-[#184d3c] rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-bold text-[#d6a735] uppercase tracking-wider flex items-center gap-1.5">
+                        <Phone size={14} /> Mobile Money &amp; Withdrawal Account
+                      </label>
+                      {isPhoneVerified ? (
+                        <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black rounded-full flex items-center gap-1">
+                          <CheckCircle2 size={11} className="text-emerald-400" /> Phone Verified &amp; Locked
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-black rounded-full flex items-center gap-1">
+                          <AlertCircle size={11} className="text-amber-400" /> Unverified
+                        </span>
+                      )}
+                    </div>
 
-                  <button
-                    type="button"
-                    disabled={isEditLoading}
-                    onClick={() => handleRevokeSessions(true)}
-                    className="w-full py-2 px-3 bg-amber-950/60 hover:bg-amber-900/80 border border-amber-800/80 text-amber-200 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5"
-                  >
-                    <LogOut size={13} className="text-amber-400" /> Revoke Other Devices
-                  </button>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center justify-between">
+                          <span>Phone Number *</span>
+                          {isPhoneVerified && (
+                            <span className="text-[10px] text-emerald-400 flex items-center gap-0.5 font-bold">
+                              <Lock size={10} /> Immutable
+                            </span>
+                          )}
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="tel"
+                            readOnly={isPhoneVerified}
+                            disabled={isPhoneVerified}
+                            value={editPhone}
+                            onChange={(e) => setEditPhone(e.target.value)}
+                            placeholder="e.g. 0241234567"
+                            className={`w-full px-3.5 py-2.5 rounded-xl text-sm transition-colors ${
+                              isPhoneVerified
+                                ? "bg-[#06261f] border border-[#184d3c] text-emerald-300 font-mono font-bold cursor-not-allowed select-none opacity-90"
+                                : "bg-[#0c3b2e] border border-[#184d3c] text-[#f5efdf] placeholder-slate-500 focus:outline-none focus:border-[#d6a735]"
+                            }`}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-[#f5efdf] mb-1.5">
+                          MoMo Network Provider
+                        </label>
+                        <select
+                          value={editMomoNetwork}
+                          onChange={(e) => setEditMomoNetwork(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-sm focus:outline-none focus:border-[#d6a735]"
+                        >
+                          <option value="MTN">MTN Mobile Money</option>
+                          <option value="Telecel">Telecel Cash (Vodafone)</option>
+                          <option value="AT">AT Money (AirtelTigo)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {isPhoneVerified ? (
+                      <div className="p-2.5 bg-emerald-950/60 border border-emerald-800/60 rounded-xl text-[11px] text-emerald-200/90 leading-relaxed flex items-start gap-2">
+                        <ShieldCheck size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                        <span>
+                          <strong>Security Policy:</strong> A verified phone number cannot be modified. During wallet withdrawals and tournament prize settlements, funds will strictly and automatically be paid out to this Mobile Money line.
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 bg-amber-950/60 border border-amber-800/60 rounded-xl text-[11px] text-amber-200/90 leading-relaxed flex items-start gap-2">
+                        <AlertCircle size={16} className="text-amber-400 shrink-0 mt-0.5" />
+                        <span>
+                          Your phone number is currently unverified. Enter your accurate 10-digit Ghana MoMo number so it can be verified for seamless cashouts.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Email & Date of Birth & Gender */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-1">
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center gap-1">
+                        <Mail size={13} className="text-[#d6a735]" /> Email Address
+                      </label>
+                      <input
+                        type="email"
+                        value={editEmail}
+                        onChange={(e) => setEditEmail(e.target.value)}
+                        placeholder="player@damii.com"
+                        className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-sm focus:outline-none focus:border-[#d6a735]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center gap-1">
+                        <Calendar size={13} className="text-[#d6a735]" /> Date of Birth <span className="text-[10px] text-amber-400">(18+)</span>
+                      </label>
+                      <input
+                        type="date"
+                        max={new Date(Date.now() - 18 * 365.25 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}
+                        value={editDob}
+                        onChange={(e) => setEditDob(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-sm focus:outline-none focus:border-[#d6a735]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1.5">
+                        Gender
+                      </label>
+                      <select
+                        value={editGender}
+                        onChange={(e) => setEditGender(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-sm focus:outline-none focus:border-[#d6a735]"
+                      >
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other / Rather not say</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Region, City & Address */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center gap-1">
+                        <MapPin size={13} className="text-[#d6a735]" /> Region (Ghana)
+                      </label>
+                      <select
+                        value={editRegion}
+                        onChange={(e) => setEditRegion(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-sm focus:outline-none focus:border-[#d6a735]"
+                      >
+                        {regionsList.map((r) => (
+                          <option key={r.id} value={r.name}>
+                            {r.name} Region
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#f5efdf] mb-1.5">
+                        City / Town
+                      </label>
+                      <input
+                        type="text"
+                        value={editCity}
+                        onChange={(e) => setEditCity(e.target.value)}
+                        placeholder="e.g. Accra / Kumasi"
+                        className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-sm focus:outline-none focus:border-[#d6a735]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#f5efdf] mb-1.5">
+                      Residential Address / Landmark
+                    </label>
+                    <input
+                      type="text"
+                      value={editAddress}
+                      onChange={(e) => setEditAddress(e.target.value)}
+                      placeholder="e.g. House 42, Spintex Road, Accra"
+                      className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-sm focus:outline-none focus:border-[#d6a735]"
+                    />
+                  </div>
                 </div>
+              )}
 
+              {/* TAB 3: SECURITY & SESSIONS */}
+              {editActiveTab === "security" && (
+                <div className="space-y-4">
+                  {/* Change Passcode */}
+                  <div className="p-4 bg-[#0c3b2e]/60 border border-[#184d3c] rounded-2xl space-y-2.5">
+                    <label className="block text-xs font-bold text-[#d6a735] uppercase tracking-wider flex items-center gap-1.5">
+                      <KeyRound size={14} /> Change Security Passcode / PIN
+                    </label>
+                    <p className="text-[11px] text-slate-400">
+                      Leave blank to keep your current secret credentials. Enter at least 6 characters to update.
+                    </p>
+                    <input
+                      type="password"
+                      value={editPasscode}
+                      onChange={(e) => setEditPasscode(e.target.value)}
+                      placeholder="Enter new secure passcode or PIN"
+                      className="w-full px-3.5 py-2.5 bg-[#06261f] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-sm focus:outline-none focus:border-[#d6a735] transition-colors"
+                    />
+                  </div>
+
+                  {/* Session Security Section */}
+                  <div className="p-4 bg-[#0c3b2e]/60 border border-[#184d3c] rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[#d6a735] flex items-center gap-1.5 uppercase tracking-wider">
+                        <Shield size={14} /> Session Security &amp; Token Rotation
+                      </span>
+                      <span className="text-[10px] text-emerald-400 bg-emerald-950/80 px-2.5 py-0.5 rounded-full border border-emerald-800 font-mono font-bold">
+                        CSRF Protected
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Rotate active session tokens if you suspect compromised credentials, or revoke all active sessions across other devices.
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                      <button
+                        type="button"
+                        disabled={isEditLoading}
+                        onClick={handleRotateSession}
+                        className="py-2.5 px-3.5 bg-[#06261f] hover:bg-[#114232] border border-[#184d3c] text-[#f5efdf] text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Zap size={13} className="text-[#d6a735]" /> Rotate Session Token
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isEditLoading}
+                        onClick={() => handleRevokeSessions(true)}
+                        className="py-2.5 px-3.5 bg-amber-950/60 hover:bg-amber-900/80 border border-amber-800/80 text-amber-200 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <LogOut size={13} className="text-amber-400" /> Revoke Other Devices
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isEditLoading}
+                      onClick={() => handleRevokeSessions(false)}
+                      className="w-full py-2.5 px-3.5 bg-red-950/80 hover:bg-red-900 border border-red-800 text-red-200 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <X size={13} className="text-red-400" /> Revoke All Sessions &amp; Sign Out
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Sticky Bottom Actions */}
+              <div className="pt-4 border-t border-[#0c3b2e] flex flex-col sm:flex-row items-center justify-end gap-2.5">
                 <button
                   type="button"
-                  disabled={isEditLoading}
-                  onClick={() => handleRevokeSessions(false)}
-                  className="w-full py-2 px-3 bg-red-950/80 hover:bg-red-900 border border-red-800 text-red-200 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5"
+                  onClick={() => setIsEditProfileOpen(false)}
+                  className="w-full sm:w-auto px-4 py-2.5 bg-[#0c3b2e] hover:bg-[#144435] text-slate-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
                 >
-                  <X size={13} className="text-red-400" /> Revoke All Sessions &amp; Sign Out
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isEditLoading}
+                  className="w-full sm:w-auto px-6 py-2.5 bg-[#d6a735] hover:bg-[#b88c24] disabled:opacity-50 text-[#06261f] font-black rounded-xl text-xs sm:text-sm transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {isEditLoading ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" /> Saving Changes...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={15} /> Save Profile Changes
+                    </>
+                  )}
                 </button>
               </div>
             </form>

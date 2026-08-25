@@ -188,27 +188,50 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate that if a username is submitted, it cannot overwrite or mismatch the generated fruit-with-numbers gamer tag
-    const FRUIT_GAMER_TAG_REGEX = /^[A-Z][a-z]+[0-9]{3,}$/i;
-    const finalUsername = user.username || (username ? String(username).trim() : "");
+    // Validate username with length check & uniqueness check (allows editing)
+    let finalUsername = user.username || "";
+    const cleanUsernameInput = username !== undefined ? String(username).trim() : "";
 
-    if (username && user.username && String(username).trim() !== user.username) {
-      return NextResponse.json(
-        { error: "Gamer Tag is uneditable and permanently assigned upon phone verification." },
-        { status: 400 },
-      );
-    }
-
-    if (finalUsername && !FRUIT_GAMER_TAG_REGEX.test(finalUsername) && !user.username) {
-      return NextResponse.json(
-        { error: "Gamer Tag must follow the fruit+number format (e.g. Lemon264, Apple743)." },
-        { status: 400 },
-      );
+    if (cleanUsernameInput) {
+      // Length check (3 - 25 characters)
+      if (cleanUsernameInput.length < 3 || cleanUsernameInput.length > 25) {
+        return NextResponse.json(
+          { error: "Username must be between 3 and 25 characters." },
+          { status: 400 },
+        );
+      }
+      // Character format check
+      if (!/^[a-zA-Z0-9_-]+$/.test(cleanUsernameInput)) {
+        return NextResponse.json(
+          { error: "Username can only contain letters, numbers, underscores, and hyphens." },
+          { status: 400 },
+        );
+      }
+      // Uniqueness check if different from current username
+      if (cleanUsernameInput !== user.username) {
+        const existingWithUsername = await dbRepository.findProfileByUsername(cleanUsernameInput);
+        if (existingWithUsername && existingWithUsername.token !== userId) {
+          return NextResponse.json(
+            { error: `Username "${cleanUsernameInput}" is already taken. Please choose another username.` },
+            { status: 400 },
+          );
+        }
+        const existingUserWithUsername = await dbRepository.getUserByUsername(cleanUsernameInput);
+        if (existingUserWithUsername && existingUserWithUsername.id !== userId) {
+          return NextResponse.json(
+            { error: `Username "${cleanUsernameInput}" is already taken. Please choose another username.` },
+            { status: 400 },
+          );
+        }
+      }
+      finalUsername = cleanUsernameInput;
+    } else if (!finalUsername) {
+      finalUsername = `Player_${userId.slice(-6)}`;
     }
 
     const now = new Date().toISOString();
 
-    // Update user record - momoNumber is strictly locked to the verified phone number, username is preserved
+    // Update user record - momoNumber is strictly locked to the verified phone number, username is updated
     const updatedUser = await dbRepository.saveUser({
       id: user.id,
       phoneNumber: user.phoneNumber,
@@ -223,12 +246,12 @@ export async function POST(req: NextRequest) {
       address: address !== undefined ? String(address).trim() : user.address,
       momoNumber: user.phoneNumber, // Strictly locked to verified phone number
       momoNetwork: momoNetwork !== undefined ? String(momoNetwork).trim() : (user.momoNetwork || "MTN"),
-      username: user.username || finalUsername,
+      username: finalUsername,
       referralCode: referralCode !== undefined ? String(referralCode).trim() : user.referralCode,
       profileCompletedAt: now,
     });
 
-    // Also sync username, phone, and password into profiles table
+    // Also sync username, phone, avatar, and password into profiles table
     let profile = await dbRepository.getProfile(userId);
     if (!profile) {
       profile = await dbRepository.createRegisteredProfile(
@@ -239,12 +262,19 @@ export async function POST(req: NextRequest) {
         updatedUser.role === "admin" ? "admin" : "user",
         cleanPassword ? securityService.hashPassword(cleanPassword).salt : undefined,
       );
+      if (updatedUser.avatarUrl) {
+        profile.avatarUrl = updatedUser.avatarUrl;
+        await dbRepository.saveProfile(profile);
+      }
     } else {
       if (updatedUser.username) {
         profile.username = updatedUser.username;
       }
       if (updatedUser.phoneNumber) {
         profile.phoneNumber = updatedUser.phoneNumber;
+      }
+      if (updatedUser.avatarUrl !== undefined) {
+        profile.avatarUrl = updatedUser.avatarUrl;
       }
       if (cleanPassword) {
         const { hash, salt } = securityService.hashPassword(cleanPassword);

@@ -36,7 +36,13 @@ const PRESET_AMOUNTS = [10, 20, 50, 100, 200, 500];
 
 export default function WalletPage() {
   const [token, setToken] = useState<string | null>(null);
-  const [balance, setBalance] = useState({ points: 0, rating: 1000, username: "", role: "user" });
+  const [balance, setBalance] = useState<{
+    points: number;
+    rating: number;
+    username: string;
+    role: string;
+    phoneNumber?: string;
+  }>({ points: 0, rating: 1000, username: "", role: "user" });
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [activeTab, setActiveTab] = useState<"deposit" | "withdraw" | "history" | "security">("deposit");
 
@@ -282,7 +288,8 @@ export default function WalletPage() {
       return;
     }
 
-    if (!momoNumber.trim() || momoNumber.replace(/\D/g, "").length < 9) {
+    const targetMomoNumber = (balance.phoneNumber || momoNumber).trim();
+    if (!targetMomoNumber || targetMomoNumber.replace(/\D/g, "").length < 9) {
       setError("Please provide a valid 10-digit Mobile Money phone number.");
       return;
     }
@@ -298,13 +305,13 @@ export default function WalletPage() {
           action: "withdraw",
           token: activeTok,
           amountGhs: withdrawAmount,
-          momoNumber: momoNumber.trim(),
+          momoNumber: targetMomoNumber,
           momoProvider,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Redemption request failed");
-      setMessage(`Redemption request of ${data.ghsValue} Marbles (GH₵ ${data.ghsValue}.00) submitted to ${momoProvider} (${momoNumber}). Reference: ${data.reference}`);
+      setMessage(`Redemption request of ${data.ghsValue} Marbles (GH₵ ${data.ghsValue}.00) submitted to ${momoProvider} (${targetMomoNumber}). Reference: ${data.reference}`);
       loadWalletData(activeTok);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Redemption error");
@@ -969,17 +976,36 @@ export default function WalletPage() {
                           </div>
 
                           <div className="space-y-2">
-                            <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider">
-                              MoMo Phone Number
-                            </label>
+                            <div className="flex items-center justify-between">
+                              <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider">
+                                MoMo Phone Number
+                              </label>
+                              {balance.phoneNumber && (
+                                <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                                  <ShieldCheck size={12} /> Verified &amp; Locked
+                                </span>
+                              )}
+                            </div>
                             <input
                               type="tel"
-                              value={momoNumber}
-                              onChange={(e) => setMomoNumber(e.target.value)}
+                              value={balance.phoneNumber || momoNumber}
+                              onChange={(e) => {
+                                if (!balance.phoneNumber) {
+                                  setMomoNumber(e.target.value);
+                                }
+                              }}
+                              disabled={Boolean(balance.phoneNumber)}
                               placeholder="0244123456"
-                              className="w-full bg-[#041c17] border border-[#1a5e48] focus:border-[#d6a735] text-[#f5efdf] text-sm rounded-2xl px-4 py-3.5 focus:outline-none font-mono font-bold placeholder:text-slate-600"
+                              className={`w-full bg-[#041c17] border border-[#1a5e48] text-[#f5efdf] text-sm rounded-2xl px-4 py-3.5 font-mono font-bold placeholder:text-slate-600 ${
+                                balance.phoneNumber ? "opacity-80 cursor-not-allowed border-emerald-500/40 bg-emerald-950/20" : "focus:border-[#d6a735] focus:outline-none"
+                              }`}
                               required
                             />
+                            <small className="block text-[10px] text-slate-400">
+                              {balance.phoneNumber
+                                ? "🔒 For fraud protection & account security, withdrawals are strictly disbursed to your verified phone number."
+                                : "Enter the Mobile Money phone number to receive your funds."}
+                            </small>
                           </div>
                         </div>
 

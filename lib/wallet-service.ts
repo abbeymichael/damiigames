@@ -213,11 +213,27 @@ export const walletService = {
     });
   },
 
-  async requestWithdrawal(userToken: string, amountGhs: number, momoNumber: string, momoProvider: string) {
+  async requestWithdrawal(userToken: string, amountGhs: number, momoNumber?: string, momoProvider?: string) {
     if (amountGhs <= 0) throw new Error("Withdrawal amount must be greater than zero GHS");
     const profile = await dbRepository.getProfile(userToken);
     if (!profile) throw new Error("User profile not found. Please log in first.");
     if (profile.status === "banned") throw new Error("Account is banned. Please contact support.");
+
+    // Retrieve user record to get verified phone number
+    let user = await dbRepository.getUserById(userToken);
+    if (!user && profile.phoneNumber) {
+      user = await dbRepository.getUserByPhone(profile.phoneNumber);
+    }
+
+    // Determine verified phone number strictly from account
+    const verifiedPhone = (user?.phoneVerifiedAt ? user.phoneNumber : null) || user?.phoneNumber || profile.phoneNumber;
+    if (!verifiedPhone) {
+      throw new Error("Withdrawals require a verified phone number on your account. Please complete phone verification in your profile before requesting a cashout.");
+    }
+
+    // Strictly withdraw to the account's verified phone number only
+    const targetMomoNumber = verifiedPhone;
+    const targetProvider = momoProvider || user?.momoNetwork || "MTN";
 
     const settings = await dbRepository.getAdminSettings();
     const minWd = settings.minWithdrawalGhs ?? 10;
@@ -261,7 +277,7 @@ export const walletService = {
       amount: -ghsValue,
       reference: ref,
       status: "pending",
-      metaJson: JSON.stringify({ momoNumber, momoProvider, ghsValue }),
+      metaJson: JSON.stringify({ momoNumber: targetMomoNumber, momoProvider: targetProvider, ghsValue }),
       createdAt: new Date().toISOString(),
     };
     await dbRepository.createTransaction(tx);
@@ -281,12 +297,12 @@ export const walletService = {
       userToken,
       type: "account_alert",
       title: "💸 Cashout Request Submitted",
-      message: `Your withdrawal request of GH₵ ${ghsValue.toFixed(2)} to ${momoProvider} (${momoNumber}) has been queued for disbursement.`,
+      message: `Your withdrawal request of GH₵ ${ghsValue.toFixed(2)} to ${targetProvider} (${targetMomoNumber}) has been queued for disbursement.`,
       link: "/wallet",
       actionLabel: "View Wallet",
     }).catch(() => {});
 
-    return { reference: ref, pointsDeducted: ghsValue, ghsValue };
+    return { reference: ref, pointsDeducted: ghsValue, ghsValue, targetMomoNumber, targetProvider };
   },
 
   // --- Wager Escrow Locking & Payouts ---

@@ -144,6 +144,7 @@ export type Profile = {
   username: string;
   fullName?: string;
   email?: string;
+  avatarUrl?: string | null;
   phoneNumber?: string;
   region?: string;
   city?: string;

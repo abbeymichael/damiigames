@@ -617,7 +617,7 @@ export function userToRow(u: Partial<User> & { id: string; phoneNumber: string }
     ghanaCardNumber: u.ghanaCardNumber ? u.ghanaCardNumber.slice(0, 32) : null,
     dateOfBirth: u.dateOfBirth ? new Date(u.dateOfBirth) : null,
     gender: u.gender ? u.gender.slice(0, 16) : null,
-    avatarUrl: u.avatarUrl ? u.avatarUrl.slice(0, 255) : null,
+    avatarUrl: u.avatarUrl ? u.avatarUrl : null,
     region: u.region ? u.region.slice(0, 64) : null,
     city: u.city ? u.city.slice(0, 64) : null,
     address: u.address ? u.address.slice(0, 255) : null,
