@@ -16,14 +16,10 @@ import { notificationService } from "./notification-service";
 import { hasPermission } from "./permissions";
 
 export const adminService = {
-  async verifyAdminAccessAsync(token: string, secretKeyInput?: string): Promise<boolean> {
-    const envSecret = process.env.ADMIN_SECRET_KEY;
-    if (secretKeyInput && envSecret && envSecret.trim().length >= 8 && securityService.timingSafeCompare(secretKeyInput, envSecret)) {
-      return true;
-    }
+  async verifyAdminAccessAsync(token: string): Promise<boolean> {
     if (!token || typeof token !== "string" || token.trim().length === 0) return false;
 
-    // Strict cryptographic session verification (no fallback to raw token/userId)
+    // Strict cryptographic session verification (no fallback to raw token/userId or static secret)
     const session = await dbRepository.getSession(token.trim());
     if (!session || !session.userId) return false;
 
@@ -43,11 +39,11 @@ export const adminService = {
     return null;
   },
 
-  async verifyAdminAccess(token: string, secretKeyInput?: string): Promise<boolean> {
-    return this.verifyAdminAccessAsync(token, secretKeyInput);
+  async verifyAdminAccess(token: string): Promise<boolean> {
+    return this.verifyAdminAccessAsync(token);
   },
 
-  async adminLogin(username: string, passcode: string, secret?: string) {
+  async adminLogin(username: string, passcode: string) {
     if (!username || username.trim().length < 2) {
       throw new Error("Admin username is required (minimum 2 characters)");
     }
@@ -59,21 +55,18 @@ export const adminService = {
     const cleanUsername = username.trim();
     const profile = await dbRepository.findProfileByUsername(cleanUsername);
 
-    const envSecret = process.env.ADMIN_SECRET_KEY;
-    const isSecretProvided = Boolean(secret && envSecret && securityService.timingSafeCompare(secret, envSecret));
-
     if (!profile) {
       throw new Error(`Admin account '${cleanUsername}' not found.`);
     }
 
     // Verify passcode/password using bcrypt (with legacy/salted fallback)
     const isValidPasscode = securityService.hashOrVerifyPasscode(passcode.trim(), profile.passcode, profile.passwordSalt);
-    if (!isValidPasscode && !isSecretProvided) {
+    if (!isValidPasscode) {
       throw new Error(`Invalid credentials for admin user '${cleanUsername}'`);
     }
 
     // Verify administrative privileges
-    if (!["super_admin", "admin", "treasurer", "facilitator"].includes(profile.role) && !isSecretProvided) {
+    if (!["super_admin", "admin", "treasurer", "facilitator"].includes(profile.role)) {
       throw new Error(`Account '${cleanUsername}' does not have administrative privileges.`);
     }
 

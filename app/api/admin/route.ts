@@ -12,9 +12,8 @@ const cleanToken = (v: unknown) => String(v ?? "").trim().slice(0, 80);
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const token = cleanToken(searchParams.get("token"));
-  const secret = searchParams.get("secret") || undefined;
 
-  if (!(await adminService.verifyAdminAccessAsync(token, secret))) {
+  if (!(await adminService.verifyAdminAccessAsync(token))) {
     return NextResponse.json({ error: "Unauthorized admin access" }, { status: 403 });
   }
 
@@ -34,11 +33,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const action = String(body.action ?? "").trim().toLowerCase();
     const token = cleanToken(body.token);
-    const secret = body.secret ? String(body.secret) : undefined;
 
     if (action === "admin_login" || action === "login") {
       const { username, passcode } = body;
-      const res = await adminService.adminLogin(String(username || ""), String(passcode || ""), secret);
+      const res = await adminService.adminLogin(String(username || ""), String(passcode || ""));
       const metrics = await adminService.getSystemMetrics(res.token);
       const nextRes = NextResponse.json({
         success: true,
@@ -51,7 +49,7 @@ export async function POST(req: NextRequest) {
       return nextRes;
     }
 
-    if (!(await adminService.verifyAdminAccessAsync(token, secret))) {
+    if (!(await adminService.verifyAdminAccessAsync(token))) {
       return NextResponse.json({ error: "Unauthorized admin access" }, { status: 403 });
     }
 

@@ -38,7 +38,6 @@ interface PlatformSettingsProps {
 
 export function PlatformSettings({
   token,
-  adminSecret,
   initialSettings,
   onSettingsUpdated,
 }: PlatformSettingsProps) {
@@ -127,7 +126,6 @@ export function PlatformSettings({
         body: JSON.stringify({
           action: "update_settings",
           token,
-          secret: adminSecret,
           wagerFeePercent,
           tournamentFeePercent,
           pointsPerGhsBuy,
@@ -174,7 +172,7 @@ export function PlatformSettings({
       const res = await fetch("/api/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "purge_expired_rooms", token, secret: adminSecret }),
+        body: JSON.stringify({ action: "purge_expired_rooms", token }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to purge rooms");
@@ -194,7 +192,7 @@ export function PlatformSettings({
       const res = await fetch("/api/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "reconcile_all_balances", token, secret: adminSecret }),
+        body: JSON.stringify({ action: "reconcile_all_balances", token }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Audit failed");
@@ -216,7 +214,7 @@ export function PlatformSettings({
       const res = await fetch("/api/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "system_diagnostics", token, secret: adminSecret }),
+        body: JSON.stringify({ action: "system_diagnostics", token }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Diagnostics query failed");
@@ -235,7 +233,7 @@ export function PlatformSettings({
       const res = await fetch("/api/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "export_system_snapshot", token, secret: adminSecret }),
+        body: JSON.stringify({ action: "export_system_snapshot", token }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Export failed");
@@ -376,7 +374,7 @@ export function PlatformSettings({
 
       {/* NOTIFICATION PROVIDERS & MODES SECTION */}
       {activeSection === "notifications" ? (
-        <NotificationSettings token={token} adminSecret={adminSecret} />
+        <NotificationSettings token={token} />
       ) : (
         /* FORM CONTAINER FOR PLATFORM SETTINGS */
         <form onSubmit={handleSaveSettings} className="space-y-6">
