@@ -1147,7 +1147,15 @@ export const memoryStore: DbRepository = {
   async writeLedger(entries) {
     const data = getMemoryData();
     const created: LedgerEntry[] = [];
+    const transactionGroupId = `tx-group-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     for (const item of entries) {
+      const userEntries = data.ledgerEntries.filter(
+        (e) => e.userId === item.userId && e.accountType === item.accountType
+      );
+      const lastEntry = userEntries[userEntries.length - 1];
+      const previousBalance = lastEntry ? Number(lastEntry.balanceAfter || 0) : 0;
+      const newBalance = previousBalance + Number(item.amount);
+
       const entry: LedgerEntry = {
         id: `ledger-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         userId: item.userId,
@@ -1155,11 +1163,12 @@ export const memoryStore: DbRepository = {
         entryType: item.entryType || "deposit",
         currency: item.currency || "GHS",
         amount: String(item.amount),
-        direction: item.direction,
-        balanceBefore: "0",
-        balanceAfter: String(item.amount),
+        direction: Number(item.amount) >= 0 ? "credit" : "debit",
+        balanceBefore: previousBalance.toFixed(2),
+        balanceAfter: newBalance.toFixed(2),
         referenceType: item.referenceType,
         referenceId: item.referenceId,
+        transactionGroupId,
         metadataJson: item.metadataJson || "{}",
         recordedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),

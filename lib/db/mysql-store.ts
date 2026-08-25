@@ -1760,8 +1760,25 @@ export const mysqlStore: DbRepository = {
     if (entries.length === 0) return [];
 
     const results: LedgerEntry[] = [];
+    const transactionGroupId = crypto.randomUUID();
     await withTransaction(async () => {
       for (const e of entries) {
+        const [last] = await getDb()
+          .select({ balanceAfter: schema.ledgerEntries.balanceAfter })
+          .from(schema.ledgerEntries)
+          .where(
+            and(
+              eq(schema.ledgerEntries.userId, e.userId),
+              eq(schema.ledgerEntries.accountType, e.accountType)
+            )
+          )
+          .orderBy(desc(schema.ledgerEntries.createdAt))
+          .limit(1)
+          .for("update");
+
+        const previousBalance = last ? Number(last.balanceAfter) : 0;
+        const newBalance = previousBalance + Number(e.amount);
+
         const id = crypto.randomUUID();
         const le: LedgerEntry = {
           id,
@@ -1771,6 +1788,8 @@ export const mysqlStore: DbRepository = {
           amount: String(e.amount),
           referenceType: e.referenceType,
           referenceId: e.referenceId,
+          transactionGroupId,
+          balanceAfter: newBalance.toFixed(2),
           createdAt: new Date(),
         };
         const row = ledgerEntryToRow(le);

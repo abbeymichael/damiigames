@@ -1,18 +1,6 @@
-import * as schema from "./schema";
+import { getDb, type DamiiDb } from "@/lib/db/mysql-connection";
+import * as schema from "./schema.mysql";
 
-export function getDb() {
-  let env: Record<string, unknown> | null = null;
-  try {
-    // @ts-ignore
-    env = require("cloudflare:workers")?.env;
-  } catch {}
-
-  if (!env || !env.DB) {
-    throw new Error(
-      "Cloudflare D1 binding `DB` is unavailable."
-    );
-  }
-
-  // @ts-ignore
-  return drizzle(env.DB, { schema });
-}
+export { getDb, schema };
+export type { DamiiDb };
+export default getDb;

@@ -1464,6 +1464,16 @@ export const adminService = {
     if (tx.type === "withdrawal" && oldStatus === "pending" && newStatus === "failed") {
       const refundPoints = Math.abs(tx.amount);
       await dbRepository.updateProfileBalance(tx.userToken, refundPoints);
+      await dbRepository.writeLedger([
+        {
+          userId: tx.userToken,
+          accountType: "available",
+          entryType: "adjustment",
+          amount: String(refundPoints),
+          referenceType: "withdrawal_refund",
+          referenceId: tx.reference || tx.id,
+        },
+      ]).catch(() => []);
     }
 
     await this.logAdminAction(
@@ -1565,6 +1575,24 @@ export const adminService = {
           metaJson: JSON.stringify({ leagueId: league.id, title: league.title }),
           createdAt: new Date().toISOString(),
         });
+        await dbRepository.writeLedger([
+          {
+            userId: league.organizerToken || "platform-treasury",
+            accountType: "escrow",
+            entryType: "prize_disbursement",
+            amount: String(-league.prizePoolPoints),
+            referenceType: "league",
+            referenceId: league.id,
+          },
+          {
+            userId: prizeWinnerToken,
+            accountType: "available",
+            entryType: "prize_disbursement",
+            amount: String(league.prizePoolPoints),
+            referenceType: "league",
+            referenceId: league.id,
+          },
+        ]).catch(() => []);
       }
 
       await this.logAdminAction(
@@ -1581,6 +1609,7 @@ export const adminService = {
       await dbRepository.saveLeague(league);
 
       // Refund entry fee points to all approved participants
+      const refundPostings: { userId: string; accountType: "available" | "escrow"; entryType: string; amount: string; referenceType: string; referenceId: string }[] = [];
       for (const p of participants) {
         if (p.status !== "rejected" && league.entryFeePoints > 0) {
           await dbRepository.updateProfileBalance(p.userToken, league.entryFeePoints);
@@ -1595,7 +1624,28 @@ export const adminService = {
             metaJson: JSON.stringify({ leagueId: league.id, title: league.title }),
             createdAt: new Date().toISOString(),
           });
+          refundPostings.push(
+            {
+              userId: p.userToken,
+              accountType: "escrow",
+              entryType: "entry_fee_refund",
+              amount: String(-league.entryFeePoints),
+              referenceType: "league",
+              referenceId: league.id,
+            },
+            {
+              userId: p.userToken,
+              accountType: "available",
+              entryType: "entry_fee_refund",
+              amount: String(league.entryFeePoints),
+              referenceType: "league",
+              referenceId: league.id,
+            }
+          );
         }
+      }
+      if (refundPostings.length > 0) {
+        await dbRepository.writeLedger(refundPostings).catch(() => []);
       }
 
       await this.logAdminAction(

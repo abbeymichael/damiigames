@@ -577,7 +577,7 @@ export const leagueService = {
         if (cancellationFee > 0) {
           await dbRepository.createTransaction({
             id: `tx-league-cancel-fee-${Date.now()}`,
-            userToken: "system-house",
+            userToken: "platform-treasury",
             type: "platform_fee",
             currency: "points",
             amount: cancellationFee,
@@ -586,6 +586,33 @@ export const leagueService = {
             metaJson: JSON.stringify({ note: "5% Facilitator tournament cancellation fee", cancellationFeePercent, totalPrize: league.prizePoolPoints }),
             createdAt: now,
           });
+
+          await dbRepository.writeLedger([
+            {
+              userId: league.facilitatorToken,
+              accountType: "escrow",
+              entryType: "league_fee",
+              amount: String(-league.prizePoolPoints),
+              referenceType: "league",
+              referenceId: league.id,
+            },
+            {
+              userId: league.facilitatorToken,
+              accountType: "available",
+              entryType: "league_fee",
+              amount: String(facilitatorRefund),
+              referenceType: "league",
+              referenceId: league.id,
+            },
+            {
+              userId: "platform-treasury",
+              accountType: "available",
+              entryType: "platform_fee",
+              amount: String(cancellationFee),
+              referenceType: "league",
+              referenceId: league.id,
+            },
+          ]).catch(() => []);
         }
       } else {
         // Full 100% refund of prize pool (below minimum viable quorum or admin cancelled)
@@ -601,6 +628,25 @@ export const leagueService = {
           metaJson: JSON.stringify({ note: `100% Prize pool refund (waived cancellation fee - quorum not met): ${reason || "Cancelled"}` }),
           createdAt: now,
         });
+
+        await dbRepository.writeLedger([
+          {
+            userId: league.facilitatorToken,
+            accountType: "escrow",
+            entryType: "league_fee",
+            amount: String(-league.prizePoolPoints),
+            referenceType: "league",
+            referenceId: league.id,
+          },
+          {
+            userId: league.facilitatorToken,
+            accountType: "available",
+            entryType: "league_fee",
+            amount: String(league.prizePoolPoints),
+            referenceType: "league",
+            referenceId: league.id,
+          },
+        ]).catch(() => []);
       }
     }
 
@@ -755,7 +801,7 @@ export const leagueService = {
       if (platformFee > 0) {
         await dbRepository.createTransaction({
           id: `tx-league-commence-fee-${Date.now()}`,
-          userToken: "system-house",
+          userToken: "platform-treasury",
           type: "platform_fee",
           currency: "points",
           amount: platformFee,
@@ -764,6 +810,17 @@ export const leagueService = {
           metaJson: JSON.stringify({ note: "10% Platform fee charged upon tournament commencement", totalPrize: league.prizePoolPoints, tournamentFeePercent }),
           createdAt: new Date().toISOString(),
         });
+
+        await dbRepository.writeLedger([
+          {
+            userId: "platform-treasury",
+            accountType: "available",
+            entryType: "platform_fee",
+            amount: String(platformFee),
+            referenceType: "league",
+            referenceId: league.id,
+          },
+        ]).catch(() => []);
       }
       league.platformFeeCharged = true;
     }
@@ -1934,7 +1991,7 @@ export const leagueService = {
       if (!league.platformFeeCharged && platformFee > 0) {
         await dbRepository.createTransaction({
           id: `tx-league-fee-${Date.now()}`,
-          userToken: "system-house",
+          userToken: "platform-treasury",
           type: "platform_fee",
           currency: "points",
           amount: platformFee,
@@ -1966,7 +2023,7 @@ export const leagueService = {
         // Unawarded 1st place returned to platform reward pool
         await dbRepository.createTransaction({
           id: `tx-league-unawarded-1st-${Date.now()}`,
-          userToken: "system-house",
+          userToken: "platform-treasury",
           type: "platform_fee",
           currency: "points",
           amount: firstAmount,
@@ -1996,7 +2053,7 @@ export const leagueService = {
         // Unawarded 2nd place returned to platform reward pool
         await dbRepository.createTransaction({
           id: `tx-league-unawarded-2nd-${Date.now()}`,
-          userToken: "system-house",
+          userToken: "platform-treasury",
           type: "platform_fee",
           currency: "points",
           amount: secondAmount,
@@ -2026,7 +2083,7 @@ export const leagueService = {
         // Unawarded 3rd place returned to platform reward pool
         await dbRepository.createTransaction({
           id: `tx-league-unawarded-3rd-${Date.now()}`,
-          userToken: "system-house",
+          userToken: "platform-treasury",
           type: "platform_fee",
           currency: "points",
           amount: thirdAmount,
@@ -2036,6 +2093,72 @@ export const leagueService = {
           createdAt: new Date().toISOString(),
         });
       }
+
+      // Double-entry ledger settlement:
+      // Escrow liability reduction (-totalPrize), platform commission credit (+platformFee), and winners/pool credits
+      await dbRepository.writeLedger([
+        {
+          userId: league.facilitatorToken || "platform-treasury",
+          accountType: "escrow",
+          entryType: "league_prize",
+          amount: String(-totalPrize),
+          referenceType: "league",
+          referenceId: league.id,
+        },
+        ...(platformFee > 0 && !league.platformFeeCharged ? [{
+          userId: "platform-treasury",
+          accountType: "available" as const,
+          entryType: "platform_fee" as const,
+          amount: String(platformFee),
+          referenceType: "league",
+          referenceId: league.id,
+        }] : []),
+        ...(winnerToken && firstAmount > 0 ? [{
+          userId: winnerToken,
+          accountType: "available" as const,
+          entryType: "league_prize" as const,
+          amount: String(firstAmount),
+          referenceType: "league",
+          referenceId: league.id,
+        }] : firstAmount > 0 ? [{
+          userId: "platform-treasury",
+          accountType: "available" as const,
+          entryType: "platform_fee" as const,
+          amount: String(firstAmount),
+          referenceType: "league",
+          referenceId: league.id,
+        }] : []),
+        ...(runnerUpToken && secondAmount > 0 ? [{
+          userId: runnerUpToken,
+          accountType: "available" as const,
+          entryType: "league_prize" as const,
+          amount: String(secondAmount),
+          referenceType: "league",
+          referenceId: league.id,
+        }] : secondAmount > 0 ? [{
+          userId: "platform-treasury",
+          accountType: "available" as const,
+          entryType: "platform_fee" as const,
+          amount: String(secondAmount),
+          referenceType: "league",
+          referenceId: league.id,
+        }] : []),
+        ...(thirdPlaceToken && thirdAmount > 0 ? [{
+          userId: thirdPlaceToken,
+          accountType: "available" as const,
+          entryType: "league_prize" as const,
+          amount: String(thirdAmount),
+          referenceType: "league",
+          referenceId: league.id,
+        }] : thirdAmount > 0 ? [{
+          userId: "platform-treasury",
+          accountType: "available" as const,
+          entryType: "platform_fee" as const,
+          amount: String(thirdAmount),
+          referenceType: "league",
+          referenceId: league.id,
+        }] : []),
+      ]).catch(() => []);
     }
   },
 };
