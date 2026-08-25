@@ -27,9 +27,11 @@ import type {
   SystemSettingEntry,
   Tournament,
   TournamentActionRequest,
+  TournamentCustomConstraints,
   TournamentEntry,
   TournamentEscrowStatus,
   TournamentPrize,
+  TournamentRuleVariations,
   User,
   WagerEscrow,
   WalletTransaction,
@@ -388,6 +390,23 @@ export function escrowToRow(e: WagerEscrow): EscrowRow {
 const DEFAULT_PRIZE_DISTRIBUTION: PrizeDistribution = { first: 60, second: 30, third: 10 };
 
 export function rowToLeague(row: LeagueRow): League {
+  let rulesNotes = orUndefined(row.rulesNotes);
+  let ruleVariations: TournamentRuleVariations | undefined = undefined;
+  let customConstraints: TournamentCustomConstraints | undefined = undefined;
+
+  if (rulesNotes && rulesNotes.trim().startsWith("{") && rulesNotes.trim().endsWith("}")) {
+    try {
+      const parsed = JSON.parse(rulesNotes);
+      if (parsed && typeof parsed === "object" && ("notes" in parsed || "ruleVariations" in parsed || "customConstraints" in parsed)) {
+        rulesNotes = parsed.notes || undefined;
+        ruleVariations = parsed.ruleVariations || undefined;
+        customConstraints = parsed.customConstraints || undefined;
+      }
+    } catch {
+      // Use raw string as fallback
+    }
+  }
+
   return {
     id: row.id,
     title: row.title,
@@ -416,13 +435,24 @@ export function rowToLeague(row: LeagueRow): League {
     turnTimerSeconds: row.turnTimerSeconds,
     roundsCount: row.roundsCount,
     prizeDistribution: parseJson<PrizeDistribution>(row.prizeDistributionJson, DEFAULT_PRIZE_DISTRIBUTION),
-    rulesNotes: orUndefined(row.rulesNotes),
+    rulesNotes,
+    ruleVariations,
+    customConstraints,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
 }
 
 export function leagueToRow(l: League): LeagueRow {
+  let rulesNotesRaw: string | null = l.rulesNotes ? l.rulesNotes : null;
+  if (l.ruleVariations || l.customConstraints) {
+    rulesNotesRaw = JSON.stringify({
+      notes: l.rulesNotes || "",
+      ruleVariations: l.ruleVariations,
+      customConstraints: l.customConstraints,
+    });
+  }
+
   return {
     id: l.id,
     title: l.title.slice(0, 191),
@@ -450,8 +480,8 @@ export function leagueToRow(l: League): LeagueRow {
     gameDays: clamp(l.gameDays, 191),
     turnTimerSeconds: l.turnTimerSeconds ?? 60,
     roundsCount: l.roundsCount ?? 0,
-    prizeDistributionJson: JSON.stringify(l.prizeDistribution || DEFAULT_PRIZE_DISTRIBUTION),
-    rulesNotes: orNull(l.rulesNotes),
+    prizeDistributionJson: JSON.stringify(l.prizeDistribution ?? DEFAULT_PRIZE_DISTRIBUTION),
+    rulesNotes: rulesNotesRaw,
     createdAt: l.createdAt,
     updatedAt: l.updatedAt,
   };

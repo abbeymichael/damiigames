@@ -334,6 +334,31 @@ export type PrizeDistribution = {
   third: number; // Percentage e.g. 20%
 };
 
+export type CaptureRuleVariation = "standard_compulsory" | "maximum_quantity" | "free_choice";
+export type FlyingKingVariation = "unlimited_diagonal" | "restricted_steps" | "classic_single";
+export type PromotionVariation = "immediate" | "next_turn";
+export type SeriesFormatVariation = "bo1" | "bo3" | "bo5";
+
+export interface TournamentRuleVariations {
+  captureRule?: CaptureRuleVariation;
+  flyingKings?: FlyingKingVariation;
+  kingCapturePromotion?: PromotionVariation;
+  backwardMenCapture?: boolean;
+  allowDrawOffer?: boolean;
+  repetitionDrawLimit?: number;
+  matchSeries?: SeriesFormatVariation;
+}
+
+export interface TournamentCustomConstraints {
+  minRatingRequired?: number;
+  maxRatingCap?: number;
+  checkInWindowMinutes?: number;
+  disconnectionGraceSeconds?: number;
+  matchTimeCapMinutes?: number;
+  allowSpectators?: boolean;
+  organizerDirectives?: string;
+}
+
 export type League = {
   id: string;
   title: string;
@@ -366,6 +391,8 @@ export type League = {
   roundsCount?: number;
   prizeDistribution?: PrizeDistribution;
   rulesNotes?: string;
+  ruleVariations?: TournamentRuleVariations;
+  customConstraints?: TournamentCustomConstraints;
   createdAt: string;
   updatedAt: string;
 };

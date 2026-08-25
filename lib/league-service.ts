@@ -1,5 +1,13 @@
 import { dbRepository } from "./db-client";
-import { League, LeagueMatch, LeagueParticipant, TournamentFormat, PrizeDistribution } from "./types";
+import {
+  League,
+  LeagueMatch,
+  LeagueParticipant,
+  TournamentFormat,
+  PrizeDistribution,
+  TournamentRuleVariations,
+  TournamentCustomConstraints,
+} from "./types";
 import { notificationService } from "./notification-service";
 import { createBoard } from "./damii-rules";
 
@@ -38,6 +46,8 @@ export const leagueService = {
       minParticipants?: number;
       prizeDistribution?: PrizeDistribution;
       rulesNotes?: string;
+      ruleVariations?: TournamentRuleVariations;
+      customConstraints?: TournamentCustomConstraints;
     }
   ): Promise<League> {
     const profile = await dbRepository.getProfile(facilitatorToken);
@@ -110,6 +120,8 @@ export const leagueService = {
       roundsCount: 0,
       prizeDistribution: defaultDistribution,
       rulesNotes: options?.rulesNotes || "Standard 10x10 Damii rules apply. Turn clock strictly enforced.",
+      ruleVariations: options?.ruleVariations,
+      customConstraints: options?.customConstraints,
       createdAt: now,
       updatedAt: now,
     };
@@ -160,6 +172,8 @@ export const leagueService = {
     if (updates.scheduleTime) league.scheduleTime = updates.scheduleTime;
     if (updates.gameDays) league.gameDays = updates.gameDays;
     if (updates.rulesNotes !== undefined) league.rulesNotes = updates.rulesNotes;
+    if (updates.ruleVariations !== undefined) league.ruleVariations = updates.ruleVariations;
+    if (updates.customConstraints !== undefined) league.customConstraints = updates.customConstraints;
     if (updates.turnTimerSeconds) league.turnTimerSeconds = updates.turnTimerSeconds;
     if (updates.isPrivate !== undefined) league.isPrivate = updates.isPrivate;
     if (updates.inviteCode !== undefined) league.inviteCode = updates.inviteCode.toUpperCase();
@@ -187,6 +201,18 @@ export const leagueService = {
 
     if (profile.role === "admin" || profile.role === "super_admin") {
       throw new Error("Administrator accounts serve as league facilitators and regulators. Admin accounts cannot register or compete as tournament players.");
+    }
+
+    // Check custom tournament rating constraints
+    if (league.customConstraints?.minRatingRequired && (profile.rating || 1000) < league.customConstraints.minRatingRequired) {
+      throw new Error(
+        `Rating requirement not met. Minimum rating required is ${league.customConstraints.minRatingRequired} DPI (Your rating: ${profile.rating || 1000} DPI).`
+      );
+    }
+    if (league.customConstraints?.maxRatingCap && (profile.rating || 1000) > league.customConstraints.maxRatingCap) {
+      throw new Error(
+        `Rating cap exceeded. Maximum rating allowed is ${league.customConstraints.maxRatingCap} DPI (Your rating: ${profile.rating || 1000} DPI).`
+      );
     }
 
     if (league.entryFeePoints > 0 && profile.points < league.entryFeePoints) {

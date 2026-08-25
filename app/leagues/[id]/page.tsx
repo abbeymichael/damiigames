@@ -994,20 +994,66 @@ export default function TournamentDetailPage() {
               <h3 className="text-sm font-bold text-[#d6a735] uppercase tracking-wider flex items-center gap-2">
                 <Shield size={16} /> Tournament Rules &amp; Regulations
               </h3>
+
+              {/* Specific Rule Variations Highlights */}
+              <div className="grid grid-cols-2 gap-2 p-3 bg-[#081c15] border border-[#184d3c] rounded-2xl text-[11px]">
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Capture Rule:</span>
+                  <span className="text-[#f5efdf] font-semibold">
+                    {league.ruleVariations?.captureRule === "maximum_quantity"
+                      ? "Majority (Max Count)"
+                      : league.ruleVariations?.captureRule === "free_choice"
+                      ? "Free Strategic Choice"
+                      : "Standard Compulsory"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Flying Kings:</span>
+                  <span className="text-[#f5efdf] font-semibold">
+                    {league.ruleVariations?.flyingKings === "restricted_steps"
+                      ? "3-Step Range"
+                      : league.ruleVariations?.flyingKings === "classic_single"
+                      ? "Single Step"
+                      : "Unlimited Diagonals"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Match Series:</span>
+                  <span className="text-[#d6a735] font-semibold">
+                    {league.ruleVariations?.matchSeries === "bo3"
+                      ? "Best of 3 Games"
+                      : league.ruleVariations?.matchSeries === "bo5"
+                      ? "Best of 5 Games"
+                      : "Single Game (Sudden Death)"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Rating Limits:</span>
+                  <span className="text-cyan-300 font-semibold">
+                    {league.customConstraints?.minRatingRequired || league.customConstraints?.maxRatingCap
+                      ? `${league.customConstraints.minRatingRequired || 0} - ${league.customConstraints.maxRatingCap || "∞"} DPI`
+                      : "Open (All Ratings)"}
+                  </span>
+                </div>
+              </div>
+
               <ul className="space-y-2.5 text-xs text-slate-300 leading-relaxed list-disc list-inside">
                 <li>Standard 10x10 Damii rules apply with compulsory multi-hop captures.</li>
                 <li>Flying kings can move and capture across open diagonal paths.</li>
                 <li>Turn clock is set to <strong>{league.turnTimerSeconds || 60} seconds</strong> per move.</li>
-                <li>Players who disconnect have a 45-second grace window to reconnect before forfeit.</li>
+                <li>
+                  Players who disconnect have a{" "}
+                  <strong>{league.customConstraints?.disconnectionGraceSeconds || 45}s grace window</strong> to reconnect before forfeit.
+                </li>
                 <li>Disputes can be submitted to tournament referees and administrators for arbitration.</li>
               </ul>
-              {league.rulesNotes && (
+              {(league.customConstraints?.organizerDirectives || league.rulesNotes) && (
                 <div className="pt-3 border-t border-[#184d3c]">
                   <small className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Special Organizer Notes:
+                    Special Organizer Notes &amp; Directives:
                   </small>
-                  <p className="text-xs text-slate-300 bg-[#081c15] p-3 rounded-xl border border-[#184d3c]">
-                    {league.rulesNotes}
+                  <p className="text-xs text-slate-300 bg-[#081c15] p-3 rounded-xl border border-[#184d3c] whitespace-pre-line">
+                    {league.customConstraints?.organizerDirectives || league.rulesNotes}
                   </p>
                 </div>
               )}

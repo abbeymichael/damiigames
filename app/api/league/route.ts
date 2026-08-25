@@ -62,6 +62,8 @@ export async function POST(req: NextRequest) {
         turnTimerSeconds,
         prizeDistribution,
         rulesNotes,
+        ruleVariations,
+        customConstraints,
       } = body;
 
       if (!title) return NextResponse.json({ error: "League title required" }, { status: 400 });
@@ -85,6 +87,8 @@ export async function POST(req: NextRequest) {
           turnTimerSeconds: Number(turnTimerSeconds) || 60,
           prizeDistribution,
           rulesNotes: rulesNotes ? String(rulesNotes) : undefined,
+          ruleVariations: ruleVariations && typeof ruleVariations === "object" ? ruleVariations : undefined,
+          customConstraints: customConstraints && typeof customConstraints === "object" ? customConstraints : undefined,
         }
       );
       return NextResponse.json({ league });

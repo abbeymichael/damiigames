@@ -67,9 +67,12 @@ import type {
   TournamentFormat,
   PrizeDistribution,
   OrganizerProfile,
+  TournamentRuleVariations,
+  TournamentCustomConstraints,
 } from "@/lib/types";
 import { BracketTreeView } from "@/components/BracketTreeView";
 import { CountdownTimer } from "@/components/CountdownTimer";
+import { TournamentRulesVariationForm } from "@/components/organizer/TournamentRulesVariationForm";
 import { getAuthHeaders, saveSessionToken } from "@/lib/client-auth";
 
 export default function OrganizerPage() {
@@ -168,6 +171,26 @@ export default function OrganizerPage() {
   const [prize1st, setPrize1st] = useState(60);
   const [prize2nd, setPrize2nd] = useState(30);
   const [prize3rd, setPrize3rd] = useState(10);
+
+  // Tournament Rule Variations & Custom Constraints
+  const [ruleVariations, setRuleVariations] = useState<TournamentRuleVariations>({
+    captureRule: "standard_compulsory",
+    flyingKings: "unlimited_diagonal",
+    kingCapturePromotion: "immediate",
+    backwardMenCapture: true,
+    allowDrawOffer: true,
+    repetitionDrawLimit: 3,
+    matchSeries: "bo1",
+  });
+  const [customConstraints, setCustomConstraints] = useState<TournamentCustomConstraints>({
+    minRatingRequired: 0,
+    maxRatingCap: 0,
+    checkInWindowMinutes: 15,
+    disconnectionGraceSeconds: 45,
+    matchTimeCapMinutes: 0,
+    allowSpectators: true,
+    organizerDirectives: "",
+  });
 
   // Manual Player Add form
   const [manualPlayerName, setManualPlayerName] = useState("");
@@ -546,6 +569,8 @@ export default function OrganizerPage() {
             third: Number(prize3rd) || 10,
           },
           rulesNotes: rulesNotes.trim() || "Standard 10x10 Damii rules apply.",
+          ruleVariations,
+          customConstraints,
         }),
       });
 
@@ -1663,6 +1688,16 @@ export default function OrganizerPage() {
                       </label>
                     </div>
                   </div>
+
+                  {/* TOURNAMENT RULE VARIATIONS & CUSTOM CONSTRAINTS FORM */}
+                  <TournamentRulesVariationForm
+                    ruleVariations={ruleVariations}
+                    setRuleVariations={setRuleVariations}
+                    customConstraints={customConstraints}
+                    setCustomConstraints={setCustomConstraints}
+                    rulesNotes={rulesNotes}
+                    setRulesNotes={setRulesNotes}
+                  />
                 </div>
 
                 <button
@@ -1830,12 +1865,44 @@ export default function OrganizerPage() {
                         </div>
                       )}
 
-                      <div className="space-y-2">
-                        <h4 className="text-xs font-bold text-[#d6a735] uppercase">
-                          Tournament Rules & Special Instructions
-                        </h4>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-bold text-[#d6a735] uppercase flex items-center gap-1.5">
+                            <Sliders size={14} /> Tournament Rules &amp; Custom Constraints
+                          </h4>
+                          <span className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
+                            Active Ruleset
+                          </span>
+                        </div>
+
+                        {/* Rules Pill Badges */}
+                        <div className="flex flex-wrap gap-2">
+                          <span className="px-2.5 py-1 bg-[#081c15] border border-[#114232] rounded-lg text-[11px] font-bold text-[#f5efdf]">
+                            Capture: {selectedLeague.ruleVariations?.captureRule === "maximum_quantity" ? "Majority (Max Count)" : selectedLeague.ruleVariations?.captureRule === "free_choice" ? "Free Choice" : "Standard Compulsory"}
+                          </span>
+                          <span className="px-2.5 py-1 bg-[#081c15] border border-[#114232] rounded-lg text-[11px] font-bold text-[#f5efdf]">
+                            Kings: {selectedLeague.ruleVariations?.flyingKings === "restricted_steps" ? "3-Step Range" : selectedLeague.ruleVariations?.flyingKings === "classic_single" ? "Single Step" : "Unlimited Diagonals"}
+                          </span>
+                          <span className="px-2.5 py-1 bg-[#081c15] border border-[#114232] rounded-lg text-[11px] font-bold text-[#d6a735]">
+                            Series: {(selectedLeague.ruleVariations?.matchSeries || "bo1").toUpperCase()}
+                          </span>
+                          {selectedLeague.customConstraints?.minRatingRequired ? (
+                            <span className="px-2.5 py-1 bg-[#081c15] border border-cyan-800/60 rounded-lg text-[11px] font-bold text-cyan-300">
+                              Min {selectedLeague.customConstraints.minRatingRequired} DPI
+                            </span>
+                          ) : null}
+                          {selectedLeague.customConstraints?.maxRatingCap ? (
+                            <span className="px-2.5 py-1 bg-[#081c15] border border-amber-800/60 rounded-lg text-[11px] font-bold text-amber-300">
+                              Max {selectedLeague.customConstraints.maxRatingCap} DPI Cap
+                            </span>
+                          ) : null}
+                          <span className="px-2.5 py-1 bg-[#081c15] border border-[#114232] rounded-lg text-[11px] font-bold text-[#a3b8b0]">
+                            Grace: {selectedLeague.customConstraints?.disconnectionGraceSeconds || 45}s
+                          </span>
+                        </div>
+
                         <div className="p-4 bg-[#081c15] border border-[#114232] rounded-2xl text-xs text-[#f5efdf] leading-relaxed whitespace-pre-line">
-                          {selectedLeague.rulesNotes || "Standard 10x10 Damii rules apply."}
+                          {selectedLeague.customConstraints?.organizerDirectives || selectedLeague.rulesNotes || "Standard 10x10 Damii rules apply."}
                         </div>
                       </div>
                     </div>
@@ -1866,6 +1933,14 @@ export default function OrganizerPage() {
                         <div className="flex justify-between py-1.5 border-b border-[#114232]">
                           <span className="text-[#a3b8b0]">Turn Clock</span>
                           <span className="text-[#f5efdf] font-bold">{selectedLeague.turnTimerSeconds || 60}s / move</span>
+                        </div>
+                        <div className="flex justify-between py-1.5 border-b border-[#114232]">
+                          <span className="text-[#a3b8b0]">Rating Eligibility</span>
+                          <span className="text-cyan-300 font-bold">
+                            {selectedLeague.customConstraints?.minRatingRequired || selectedLeague.customConstraints?.maxRatingCap
+                              ? `${selectedLeague.customConstraints.minRatingRequired || 0} - ${selectedLeague.customConstraints.maxRatingCap || "∞"} DPI`
+                              : "Open (All Ratings)"}
+                          </span>
                         </div>
                         <div className="flex justify-between py-1.5 border-b border-[#114232]">
                           <span className="text-[#a3b8b0]">Private Code</span>
