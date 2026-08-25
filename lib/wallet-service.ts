@@ -213,41 +213,150 @@ export const walletService = {
     });
   },
 
+  /**
+   * Validates and formats a Ghanaian Mobile Money phone number.
+   * Accepts:
+   *  - 10-digit national numbers: 024XXXXXXX, 054XXXXXXX, 020XXXXXXX, 050XXXXXXX, 026XXXXXXX, 027XXXXXXX, 056XXXXXXX, etc.
+   *  - International numbers: +23324XXXXXXX, 23324XXXXXXX, 0023324XXXXXXX
+   * Normalizes to:
+   *  - nationalFormat: "024XXXXXXX" (Required for Paystack Mobile Money transfers)
+   *  - internationalFormat: "+23324XXXXXXX"
+   *  - detectedProvider: "MTN" | "Telecel" | "AT"
+   */
+  validateAndFormatMomoPhone(
+    rawPhone: string,
+    provider?: string
+  ): {
+    isValid: boolean;
+    nationalFormat: string;
+    internationalFormat: string;
+    detectedProvider: string;
+    error?: string;
+  } {
+    if (!rawPhone || typeof rawPhone !== "string") {
+      return {
+        isValid: false,
+        nationalFormat: "",
+        internationalFormat: "",
+        detectedProvider: "MTN",
+        error: "Mobile Money phone number is required.",
+      };
+    }
+
+    // Strip spaces, hyphens, brackets, dots, and common separators
+    let clean = rawPhone.replace(/[\s\-\(\)\.]/g, "").trim();
+
+    // Standardize international prefix +233 / 233 / 00233 to national 0
+    if (clean.startsWith("+233")) {
+      clean = "0" + clean.slice(4);
+    } else if (clean.startsWith("00233")) {
+      clean = "0" + clean.slice(5);
+    } else if (clean.startsWith("233") && clean.length === 12) {
+      clean = "0" + clean.slice(3);
+    }
+
+    // Must be exactly 10 digits starting with 0
+    const ghanaMobileRegex = /^0(20|50|24|25|53|54|55|59|26|27|56|57)[0-9]{7}$/;
+    const genericGhanaRegex = /^0[235][0-9]{8}$/;
+
+    if (!genericGhanaRegex.test(clean) || clean.length !== 10) {
+      return {
+        isValid: false,
+        nationalFormat: "",
+        internationalFormat: "",
+        detectedProvider: "MTN",
+        error: `Invalid Ghana Mobile Money phone number format ("${rawPhone}"). Phone must be a valid 10-digit Ghana mobile number (e.g. 024XXXXXXX, 020XXXXXXX, 026XXXXXXX) or international (+233) format.`,
+      };
+    }
+
+    // Determine telecom carrier from 3-digit national prefix
+    const prefix = clean.slice(0, 3);
+    let detectedProvider = "MTN";
+
+    if (["024", "025", "053", "054", "055", "059"].includes(prefix)) {
+      detectedProvider = "MTN";
+    } else if (["020", "050"].includes(prefix)) {
+      detectedProvider = "Telecel";
+    } else if (["026", "027", "056", "057"].includes(prefix)) {
+      detectedProvider = "AT";
+    }
+
+    // If an explicit provider was supplied, ensure compatibility or note discrepancy
+    if (provider) {
+      const pUpper = provider.toUpperCase().trim();
+      if ((pUpper.includes("VOD") || pUpper.includes("TELECEL")) && detectedProvider !== "Telecel") {
+        return {
+          isValid: false,
+          nationalFormat: clean,
+          internationalFormat: `+233${clean.slice(1)}`,
+          detectedProvider,
+          error: `Phone prefix "${prefix}" belongs to ${detectedProvider}, but Telecel/Vodafone Cash was specified as the destination network.`,
+        };
+      }
+      if ((pUpper.includes("TIGO") || pUpper.includes("AIRTEL") || pUpper.includes("ATL") || pUpper === "AT") && detectedProvider !== "AT") {
+        return {
+          isValid: false,
+          nationalFormat: clean,
+          internationalFormat: `+233${clean.slice(1)}`,
+          detectedProvider,
+          error: `Phone prefix "${prefix}" belongs to ${detectedProvider}, but AT (AirtelTigo) Money was specified as the destination network.`,
+        };
+      }
+      if (pUpper.includes("MTN") && detectedProvider !== "MTN") {
+        return {
+          isValid: false,
+          nationalFormat: clean,
+          internationalFormat: `+233${clean.slice(1)}`,
+          detectedProvider,
+          error: `Phone prefix "${prefix}" belongs to ${detectedProvider}, but MTN Mobile Money was specified as the destination network.`,
+        };
+      }
+    }
+
+    return {
+      isValid: true,
+      nationalFormat: clean,
+      internationalFormat: `+233${clean.slice(1)}`,
+      detectedProvider,
+    };
+  },
+
   async requestWithdrawal(userToken: string, amountGhs: number, momoNumber?: string, momoProvider?: string) {
-    if (amountGhs <= 0) throw new Error("Withdrawal amount must be greater than zero GHS");
+    if (amountGhs <= 0 || isNaN(amountGhs)) {
+      throw new Error("Withdrawal amount must be a positive number greater than zero GHS");
+    }
     const profile = await dbRepository.getProfile(userToken);
     if (!profile) throw new Error("User profile not found. Please log in first.");
-    if (profile.status === "banned") throw new Error("Account is banned. Please contact support.");
-
-    // Retrieve user record to get verified phone number
-    let user = await dbRepository.getUserById(userToken);
-    if (!user && profile.phoneNumber) {
-      user = await dbRepository.getUserByPhone(profile.phoneNumber);
-    }
-
-    // Determine verified phone number strictly from account
-    const verifiedPhone = (user?.phoneVerifiedAt ? user.phoneNumber : null) || user?.phoneNumber || profile.phoneNumber;
-    if (!verifiedPhone) {
-      throw new Error("Withdrawals require a verified phone number on your account. Please complete phone verification in your profile before requesting a cashout.");
-    }
-
-    // Strictly withdraw to the account's verified phone number only
-    const targetMomoNumber = verifiedPhone;
-    const targetProvider = momoProvider || user?.momoNetwork || "MTN";
+    if (profile.status === "banned") throw new Error("Account is suspended. Please contact platform support.");
 
     const settings = await dbRepository.getAdminSettings();
+
+    // Check emergency cashout lockout
+    if (settings.disableWithdrawals) {
+      throw new Error("Withdrawals are temporarily paused for platform system maintenance. Please try again later.");
+    }
+
+    // 1. Available Balance Validation
+    const availableBalance = Number(profile.points ?? 0);
+    if (availableBalance < amountGhs) {
+      throw new Error(
+        `Insufficient available balance. You have GH₵ ${availableBalance.toFixed(2)} available, which cannot cover the requested withdrawal of GH₵ ${amountGhs.toFixed(2)}.`
+      );
+    }
+
+    // 2. Minimum & Maximum Per-Transaction Limit Validations
     const minWd = settings.minWithdrawalGhs ?? 10;
     const maxWd = settings.maxWithdrawalGhs ?? 2000;
     const maxDailyWd = settings.maxDailyWithdrawalGhs ?? 5000;
 
     if (amountGhs < minWd) {
-      throw new Error(`Withdrawal amount (GH₵ ${amountGhs}) is below the minimum withdrawal limit of GH₵ ${minWd}`);
+      throw new Error(`Withdrawal amount (GH₵ ${amountGhs.toFixed(2)}) is below the minimum allowed withdrawal limit of GH₵ ${minWd.toFixed(2)}.`);
     }
     if (amountGhs > maxWd) {
-      throw new Error(`Withdrawal amount (GH₵ ${amountGhs}) exceeds the maximum single withdrawal limit of GH₵ ${maxWd.toLocaleString()}`);
+      throw new Error(`Withdrawal amount (GH₵ ${amountGhs.toFixed(2)}) exceeds the maximum single-transaction limit of GH₵ ${maxWd.toLocaleString()}.`);
     }
 
-    // Daily withdrawal aggregate limit check
+    // 3. 24-Hour Daily Aggregate Limit Validation
     const userTxs = await dbRepository.getUserTransactions(userToken, 200);
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const recent24hWithdrawals = userTxs
@@ -255,17 +364,35 @@ export const walletService = {
       .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
     if (recent24hWithdrawals + amountGhs > maxDailyWd) {
-      const remainingLimit = Math.max(0, maxDailyWd - recent24hWithdrawals);
+      const remainingDailyLimit = Math.max(0, maxDailyWd - recent24hWithdrawals);
       throw new Error(
-        `24-hour withdrawal limit of GH₵ ${maxDailyWd.toLocaleString()} reached. You have requested GH₵ ${recent24hWithdrawals.toLocaleString()} in the last 24h (Remaining limit: GH₵ ${remainingLimit.toLocaleString()})`
+        `24-hour daily withdrawal limit of GH₵ ${maxDailyWd.toLocaleString()} reached. You have requested GH₵ ${recent24hWithdrawals.toFixed(2)} in the last 24h. Remaining available limit: GH₵ ${remainingDailyLimit.toFixed(2)}.`
       );
     }
 
-    if (profile.points < amountGhs) throw new Error(`Insufficient wallet balance. You have GH₵ ${profile.points}`);
+    // 4. Mobile Money Phone Number & Provider Validation
+    let user = await dbRepository.getUserById(userToken);
+    if (!user && profile.phoneNumber) {
+      user = await dbRepository.getUserByPhone(profile.phoneNumber);
+    }
 
+    const candidatePhone = momoNumber || (user?.phoneVerifiedAt ? user.phoneNumber : null) || user?.phoneNumber || profile.phoneNumber;
+    if (!candidatePhone) {
+      throw new Error("Withdrawals require a verified Mobile Money phone number. Please provide or verify your mobile number.");
+    }
+
+    const candidateProvider = momoProvider || user?.momoNetwork || "MTN";
+    const phoneCheck = this.validateAndFormatMomoPhone(candidatePhone, candidateProvider);
+
+    if (!phoneCheck.isValid) {
+      throw new Error(phoneCheck.error || "Invalid Mobile Money phone number format.");
+    }
+
+    const targetMomoNumber = phoneCheck.nationalFormat;
+    const targetProvider = phoneCheck.detectedProvider || candidateProvider;
     const ghsValue = Number(amountGhs.toFixed(2));
 
-    // Deduct wallet balance
+    // Deduct wallet balance immediately upon valid request submission
     await dbRepository.updateProfileBalance(userToken, -ghsValue);
 
     const ref = `WITHDRAW-${Date.now()}-${securityService.generateCsprngToken(4).toUpperCase()}`;
@@ -277,7 +404,13 @@ export const walletService = {
       amount: -ghsValue,
       reference: ref,
       status: "pending",
-      metaJson: JSON.stringify({ momoNumber: targetMomoNumber, momoProvider: targetProvider, ghsValue }),
+      metaJson: JSON.stringify({
+        momoNumber: targetMomoNumber,
+        momoPhoneInternational: phoneCheck.internationalFormat,
+        momoProvider: targetProvider,
+        ghsValue,
+        requestedAt: new Date().toISOString(),
+      }),
       createdAt: new Date().toISOString(),
     };
     await dbRepository.createTransaction(tx);
@@ -302,7 +435,13 @@ export const walletService = {
       actionLabel: "View Wallet",
     }).catch(() => {});
 
-    return { reference: ref, pointsDeducted: ghsValue, ghsValue, targetMomoNumber, targetProvider };
+    return {
+      reference: ref,
+      pointsDeducted: ghsValue,
+      ghsValue,
+      targetMomoNumber,
+      targetProvider,
+    };
   },
 
   // --- Paystack Transfers & Payout Methods ---
@@ -347,8 +486,14 @@ export const walletService = {
     const secretKey = (process.env.PAYSTACK_SECRET_KEY || "").trim();
     if (!secretKey) throw new Error("PAYSTACK_SECRET_KEY is not configured on the server.");
 
-    const cleanBankCode = this.getPaystackBankCode(bankCode);
-    const cleanAccount = accountNumber.trim().replace(/^\+233/, "0").replace(/^233/, "0");
+    // Validate and format Mobile Money phone number
+    const phoneCheck = this.validateAndFormatMomoPhone(accountNumber, bankCode);
+    if (!phoneCheck.isValid) {
+      throw new Error(phoneCheck.error || `Invalid Mobile Money account number ("${accountNumber}")`);
+    }
+
+    const cleanBankCode = this.getPaystackBankCode(phoneCheck.detectedProvider || bankCode);
+    const cleanAccount = phoneCheck.nationalFormat;
 
     const res = await fetch("https://api.paystack.co/transferrecipient", {
       method: "POST",
@@ -376,6 +521,8 @@ export const walletService = {
       recipientId: json.data.id,
       details: json.data.details,
       data: json.data,
+      formattedPhone: cleanAccount,
+      detectedProvider: phoneCheck.detectedProvider,
     };
   },
 
@@ -443,6 +590,7 @@ export const walletService = {
     if (!tx) throw new Error("Withdrawal transaction not found.");
     if (tx.type !== "withdrawal") throw new Error("Transaction is not a withdrawal request.");
     if (tx.status === "completed") throw new Error("Withdrawal has already been completed and paid out.");
+    if (tx.status === "failed") throw new Error("Cannot disburse a failed or refunded withdrawal.");
 
     const profile = await dbRepository.getProfile(tx.userToken);
     let meta: Record<string, any> = {};
@@ -452,30 +600,64 @@ export const walletService = {
       meta = {};
     }
 
-    const momoNumber = meta.momoNumber || profile?.phoneNumber;
+    const rawMomoNumber = meta.momoNumber || profile?.phoneNumber;
     const momoProvider = meta.momoProvider || "MTN";
     const amountGhs = Math.abs(tx.amount);
 
-    if (!momoNumber) {
+    if (!rawMomoNumber) {
       throw new Error("No destination Mobile Money phone number found for this withdrawal request.");
     }
 
-    // 1. Create recipient code if not already saved
+    // 1. Phone number validation and format verification before payout
+    const phoneCheck = this.validateAndFormatMomoPhone(rawMomoNumber, momoProvider);
+    if (!phoneCheck.isValid) {
+      throw new Error(`Payout aborted: Invalid Mobile Money phone number format ("${rawMomoNumber}"). ${phoneCheck.error || ""}`);
+    }
+
+    const momoNumber = phoneCheck.nationalFormat;
+    const targetProvider = phoneCheck.detectedProvider || momoProvider;
+
+    // 2. Admin settings limit compliance check
+    const settings = await dbRepository.getAdminSettings();
+    const minWd = settings.minWithdrawalGhs ?? 10;
+    const maxWd = settings.maxWithdrawalGhs ?? 2000;
+
+    if (amountGhs < minWd) {
+      throw new Error(`Withdrawal amount (GH₵ ${amountGhs.toFixed(2)}) is below the platform minimum limit of GH₵ ${minWd.toFixed(2)}.`);
+    }
+    if (amountGhs > maxWd) {
+      throw new Error(`Withdrawal amount (GH₵ ${amountGhs.toFixed(2)}) exceeds the platform maximum single-transaction limit of GH₵ ${maxWd.toLocaleString()}.`);
+    }
+
+    // 3. Float Balance Verification (if Paystack secret key is configured)
+    const secretKey = (process.env.PAYSTACK_SECRET_KEY || "").trim();
+    if (secretKey) {
+      const balanceInfo = await this.getPaystackBalance();
+      if (balanceInfo.configured && !balanceInfo.error && balanceInfo.ghsBalance < amountGhs) {
+        throw new Error(
+          `Insufficient Paystack float balance (Available: GH₵ ${balanceInfo.ghsBalance.toFixed(2)}, Required: GH₵ ${amountGhs.toFixed(2)}). Please top up your Paystack balance to disburse this transfer.`
+        );
+      }
+    }
+
+    // 4. Create recipient code if not already saved
     let recipientCode = meta.recipientCode;
     if (!recipientCode) {
       const recipientName = profile?.fullName || profile?.username || "DAMII Player";
-      const recipientRes = await this.createTransferRecipient(recipientName, momoNumber, momoProvider);
+      const recipientRes = await this.createTransferRecipient(recipientName, momoNumber, targetProvider);
       recipientCode = recipientRes.recipientCode;
       meta.recipientCode = recipientCode;
     }
 
-    // 2. Initiate Paystack Transfer
+    // 5. Initiate Paystack Transfer
     const transferRef = tx.reference.startsWith("TRANSFER-") ? tx.reference : `TRANSFER-${tx.reference}`;
     const transferReason = `DAMII Cashout: @${profile?.username || "player"} (${momoNumber})`;
 
     const transferRes = await this.initiatePaystackTransfer(recipientCode, amountGhs, transferRef, transferReason);
 
-    // 3. Update Transaction Metadata & Status
+    // 6. Update Transaction Metadata & Status
+    meta.momoNumber = momoNumber;
+    meta.momoProvider = targetProvider;
     meta.transferCode = transferRes.transferCode;
     meta.transferId = transferRes.transferId;
     meta.transferStatus = transferRes.status;
@@ -500,7 +682,7 @@ export const walletService = {
           reference: tx.reference,
           amountGhs,
           momoNumber,
-          momoProvider,
+          momoProvider: targetProvider,
           transferCode: transferRes.transferCode,
           status: transferRes.status,
         }),
@@ -513,7 +695,7 @@ export const walletService = {
       userToken: tx.userToken,
       type: "account_alert",
       title: "🚀 Mobile Money Transfer Dispatched",
-      message: `Your withdrawal of GH₵ ${amountGhs.toFixed(2)} to ${momoProvider} (${momoNumber}) has been submitted to Paystack. Funds will arrive in your wallet shortly.`,
+      message: `Your withdrawal of GH₵ ${amountGhs.toFixed(2)} to ${targetProvider} (${momoNumber}) has been submitted to Paystack. Funds will arrive in your wallet shortly.`,
       link: "/wallet",
       actionLabel: "View Wallet",
     }).catch(() => {});
@@ -522,7 +704,7 @@ export const walletService = {
       success: true,
       transaction: tx,
       transfer: transferRes,
-      message: `Transfer of GH₵ ${amountGhs.toFixed(2)} dispatched to ${momoProvider} (${momoNumber}) via Paystack. Status: ${transferRes.status.toUpperCase()}`,
+      message: `Transfer of GH₵ ${amountGhs.toFixed(2)} dispatched to ${targetProvider} (${momoNumber}) via Paystack. Status: ${transferRes.status.toUpperCase()}`,
     };
   },
 
