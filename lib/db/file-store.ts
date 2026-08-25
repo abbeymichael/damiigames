@@ -309,12 +309,21 @@ export const fileStore: any = {
     return lockKey(`profile:${token}`, async () => {
       const now = new Date().toISOString();
       const role: Role = explicitRole && VALID_ROLES.includes(explicitRole) ? explicitRole : "user";
+      
+      let finalPasscode = passcode;
+      let finalSalt = passwordSalt;
+      if (passcode && !passwordSalt) {
+        const hashed = securityService.hashPassword(passcode);
+        finalPasscode = hashed.hash;
+        finalSalt = hashed.salt;
+      }
+
       const p: Profile = {
         token,
         username: username.trim(),
         phoneNumber: phoneNumber?.trim() || undefined,
-        passcode,
-        passwordSalt,
+        passcode: finalPasscode,
+        passwordSalt: finalSalt,
         rating: 1000,
         marbles: 0,
         points: 0,
@@ -343,8 +352,16 @@ export const fileStore: any = {
       if (!p) return null;
       if (updates.username?.trim()) p.username = updates.username.trim();
       if (updates.phoneNumber !== undefined) p.phoneNumber = updates.phoneNumber.trim();
-      if (updates.passcode?.trim()) p.passcode = updates.passcode.trim();
-      if (updates.passwordSalt !== undefined) p.passwordSalt = updates.passwordSalt;
+      if (updates.passcode?.trim()) {
+        if (updates.passwordSalt) {
+          p.passcode = updates.passcode.trim();
+          p.passwordSalt = updates.passwordSalt;
+        } else {
+          const hashed = securityService.hashPassword(updates.passcode.trim());
+          p.passcode = hashed.hash;
+          p.passwordSalt = hashed.salt;
+        }
+      }
       p.updatedAt = new Date().toISOString();
       data().profiles.set(token, p);
       data().saveToDisk();
@@ -355,22 +372,23 @@ export const fileStore: any = {
   async upsertProfile(token, username, explicitRole) {
     return lockKey(`profile:${token}`, async () => {
       const now = new Date().toISOString();
-      const cleanUsername = username.trim();
+      const cleanUsername = username.trim() || `Player_${token.slice(-4)}`;
       let p = data().profiles.get(token);
+
       if (!p) {
+        // Disambiguate if username is taken by another profile
         const lower = cleanUsername.toLowerCase();
+        let uniqueUsername = cleanUsername;
         for (const prof of data().profiles.values()) {
-          if (prof.username.trim().toLowerCase() === lower) {
-            p = prof;
+          if (prof.username.trim().toLowerCase() === lower && prof.token !== token) {
+            uniqueUsername = `${cleanUsername}_${Math.floor(100 + Math.random() * 900)}`;
             break;
           }
         }
-      }
 
-      if (!p) {
         p = {
           token,
-          username: cleanUsername,
+          username: uniqueUsername,
           rating: 1000,
           marbles: 0,
           points: 0,

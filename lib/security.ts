@@ -128,4 +128,37 @@ export const securityService = {
       .replace(/<[^>]+>/g, "")
       .slice(0, 1000);
   },
+
+  /**
+   * Strips sensitive cryptographic credentials (passcode, salt) from a user profile object
+   */
+  sanitizeProfile<T extends Record<string, unknown>>(profile: T | null | undefined): T | null {
+    if (!profile) return null;
+    const copy = { ...profile };
+    delete copy.passcode;
+    delete copy.passwordSalt;
+    return copy;
+  },
+
+  /**
+   * Strips all private identification (passcode, salt, phone, email, private tokens) for public display (e.g. Leaderboard)
+   */
+  sanitizePublicProfile<T extends Record<string, unknown>>(profile: T | null | undefined): Record<string, unknown> | null {
+    if (!profile) return null;
+    return {
+      username: profile.username || "Player",
+      rating: profile.rating ?? 1000,
+      points: profile.points ?? 0,
+      marbles: profile.marbles ?? 0,
+      wins: profile.wins ?? 0,
+      losses: profile.losses ?? 0,
+      draws: profile.draws ?? 0,
+      winStreak: profile.winStreak ?? 0,
+      bestStreak: profile.bestStreak ?? 0,
+      avatarUrl: profile.avatarUrl || null,
+      role: profile.role || "user",
+      status: profile.status || "active",
+      createdAt: profile.createdAt,
+    };
+  },
 };

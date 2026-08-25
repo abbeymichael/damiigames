@@ -33,6 +33,7 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { ActionMenu } from "@/components/ActionMenu";
+import { AuditTrailView } from "@/components/admin/AuditTrailView";
 import type {
   LedgerEntry,
   SystemFundsReport,
@@ -84,7 +85,7 @@ export function LedgerTable({
   onUpdateTransactionStatus,
   onVoidTransaction,
 }: LedgerTableProps) {
-  const [viewMode, setViewMode] = useState<"overview" | "coa" | "treasury" | "ledger" | "transactions">("overview");
+  const [viewMode, setViewMode] = useState<"overview" | "coa" | "treasury" | "audit" | "ledger" | "transactions">("overview");
   const [fundFilter, setFundFilter] = useState<SystemFundType | "all">("all");
   const [accountClassFilter, setAccountClassFilter] = useState<AccountClass | "all">("all");
   const [ledgerSearch, setLedgerSearch] = useState("");
@@ -192,6 +193,18 @@ export function LedgerTable({
           </button>
           <button
             type="button"
+            id="tab-btn-audit"
+            onClick={() => setViewMode("audit")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+              viewMode === "audit"
+                ? "bg-[#d6a735] text-[#06261f] shadow-md font-black"
+                : "text-slate-300 hover:text-white hover:bg-[#0c3b2e]"
+            }`}
+          >
+            <Scale size={14} /> Two-Sided Audit Trail
+          </button>
+          <button
+            type="button"
             id="tab-btn-ledger"
             onClick={() => setViewMode("ledger")}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
@@ -200,7 +213,7 @@ export function LedgerTable({
                 : "text-slate-300 hover:text-white hover:bg-[#0c3b2e]"
             }`}
           >
-            <Scale size={14} /> Double-Entry Postings ({filteredLedger.length})
+            <ShieldCheck size={14} /> Double-Entry Postings ({filteredLedger.length})
           </button>
           <button
             type="button"
@@ -303,6 +316,14 @@ export function LedgerTable({
                   GH₵ {systemFunds.discrepancyAmount.toFixed(2)}
                 </span>
               </div>
+              <button
+                type="button"
+                id="btn-overview-to-audit"
+                onClick={() => setViewMode("audit")}
+                className="px-3 py-1.5 bg-[#0c3b2e] hover:bg-[#114232] text-[#d6a735] border border-[#d6a735]/40 rounded-lg font-sans font-bold text-xs flex items-center gap-1.5 transition-colors"
+              >
+                <Scale size={13} /> Two-Sided Audit
+              </button>
             </div>
           </div>
 
@@ -888,7 +909,23 @@ export function LedgerTable({
         </div>
       )}
 
-      {/* VIEW 4: DOUBLE-ENTRY POSTINGS LEDGER */}
+      {/* VIEW 4: ENHANCED TWO-SIDED AUDIT TRAIL */}
+      {viewMode === "audit" && (
+        <AuditTrailView
+          ledgerEntries={ledgerEntries}
+          systemFunds={systemFunds}
+          chartOfAccounts={chartOfAccounts}
+          treasuryDetails={treasuryDetails}
+          onDrillDownToAccount={(code) => {
+            setCoaSearch(code);
+            setViewMode("coa");
+          }}
+          onRefresh={onRefresh}
+          busy={busy}
+        />
+      )}
+
+      {/* VIEW 5: DOUBLE-ENTRY POSTINGS LEDGER */}
       {viewMode === "ledger" && (
         <div className="space-y-3" id="view-double-entry-ledger">
           {/* Controls & Search */}

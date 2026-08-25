@@ -657,6 +657,34 @@ export async function getChartOfAccountsReport(): Promise<ChartOfAccountsReport>
   // Get system funds report to anchor current live balances
   const fundsReport = await getSystemFundsReport();
 
+  // Compute actual match vs tournament escrow balances from latest entry snapshot
+  let matchEscrowBalance = 0;
+  let tournamentEscrowBalance = 0;
+
+  for (const entry of allEntries) {
+    if (entry.accountType === "escrow") {
+      const isTourn =
+        entry.referenceType === "league" ||
+        entry.referenceType === "tournament" ||
+        entry.referenceId?.startsWith("league-") ||
+        entry.entryType.includes("prize") ||
+        entry.entryType.includes("entry_fee");
+      const amt = Number(entry.amount || 0);
+      if (isTourn) {
+        tournamentEscrowBalance += amt;
+      } else {
+        matchEscrowBalance += amt;
+      }
+    }
+  }
+
+  // Ensure non-negative escrow balances
+  matchEscrowBalance = Math.max(0, Number(matchEscrowBalance.toFixed(2)));
+  tournamentEscrowBalance = Math.max(0, Number(tournamentEscrowBalance.toFixed(2)));
+  if (matchEscrowBalance + tournamentEscrowBalance === 0 && fundsReport.totalEscrowLocked > 0) {
+    matchEscrowBalance = fundsReport.totalEscrowLocked;
+  }
+
   // Compute calculated balance for each account according to its normal balance type
   const accounts: ChartOfAccount[] = CANONICAL_CHART_OF_ACCOUNTS.map((canonical) => {
     const stats = accountStats.get(canonical.code) || {
@@ -674,23 +702,26 @@ export async function getChartOfAccountsReport(): Promise<ChartOfAccountsReport>
     } else if (canonical.code === "1030") {
       liveBalance = fundsReport.totalEscrowLocked;
     } else if (canonical.code === "2020") {
-      liveBalance = Number((fundsReport.totalEscrowLocked * 0.65).toFixed(2));
+      liveBalance = matchEscrowBalance;
     } else if (canonical.code === "2030") {
-      liveBalance = Number((fundsReport.totalEscrowLocked * 0.35).toFixed(2));
+      liveBalance = tournamentEscrowBalance;
+    } else if (canonical.code === "4010") {
+      liveBalance = Math.max(0, stats.totalCredits - stats.totalDebits);
+      if (liveBalance === 0 && fundsReport.platformFeeFund.totalInflow > 0 && stats.entryCount === 0) {
+        liveBalance = fundsReport.platformFeeFund.totalInflow;
+      }
+    } else if (canonical.code === "4020") {
+      liveBalance = Math.max(0, stats.totalCredits - stats.totalDebits);
+    } else if (canonical.code === "4030") {
+      liveBalance = Math.max(0, stats.totalCredits - stats.totalDebits);
+    } else if (canonical.code === "5010") {
+      liveBalance = Math.max(0, stats.totalDebits - stats.totalCredits);
+    } else if (canonical.code === "5020") {
+      liveBalance = Math.max(0, stats.totalDebits - stats.totalCredits);
+    } else if (canonical.code === "3020") {
+      liveBalance = Math.max(0, stats.totalCredits - stats.totalDebits);
     } else if (canonical.code === "3010") {
       liveBalance = fundsReport.totalPlatformFeesEarned;
-    } else if (canonical.code === "3020") {
-      liveBalance = Number((fundsReport.totalPlatformFeesEarned * 0.15).toFixed(2));
-    } else if (canonical.code === "4010") {
-      liveBalance = Number((fundsReport.platformFeeFund.totalInflow * 0.70).toFixed(2));
-    } else if (canonical.code === "4020") {
-      liveBalance = Number((fundsReport.platformFeeFund.totalInflow * 0.25).toFixed(2));
-    } else if (canonical.code === "4030") {
-      liveBalance = Number((fundsReport.platformFeeFund.totalInflow * 0.05).toFixed(2));
-    } else if (canonical.code === "5010") {
-      liveBalance = Number((fundsReport.totalDeposits * 0.0195).toFixed(2));
-    } else if (canonical.code === "5020") {
-      liveBalance = Number((fundsReport.platformFeeFund.totalOutflow).toFixed(2));
     } else {
       liveBalance =
         canonical.normalBalance === "debit"

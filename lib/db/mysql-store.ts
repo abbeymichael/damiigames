@@ -490,12 +490,21 @@ export const mysqlStore: DbRepository = {
   async createRegisteredProfile(token, username, passcode, phoneNumber, explicitRole, passwordSalt) {
     const now = new Date().toISOString();
     const role: Role = explicitRole && VALID_ROLES.includes(explicitRole) ? explicitRole : "user";
+    
+    let finalPasscode = passcode;
+    let finalSalt = passwordSalt;
+    if (passcode && !passwordSalt) {
+      const hashed = securityService.hashPassword(passcode);
+      finalPasscode = hashed.hash;
+      finalSalt = hashed.salt;
+    }
+
     const p: Profile = {
       token,
       username: username.trim(),
       phoneNumber: phoneNumber?.trim() || undefined,
-      passcode,
-      passwordSalt,
+      passcode: finalPasscode,
+      passwordSalt: finalSalt,
       rating: 1000,
       marbles: 0,
       points: 0,
@@ -521,8 +530,16 @@ export const mysqlStore: DbRepository = {
     if (!p) return null;
     if (updates.username?.trim()) p.username = updates.username.trim();
     if (updates.phoneNumber !== undefined) p.phoneNumber = updates.phoneNumber.trim();
-    if (updates.passcode?.trim()) p.passcode = updates.passcode.trim();
-    if (updates.passwordSalt !== undefined) p.passwordSalt = updates.passwordSalt;
+    if (updates.passcode?.trim()) {
+      if (updates.passwordSalt) {
+        p.passcode = updates.passcode.trim();
+        p.passwordSalt = updates.passwordSalt;
+      } else {
+        const hashed = securityService.hashPassword(updates.passcode.trim());
+        p.passcode = hashed.hash;
+        p.passwordSalt = hashed.salt;
+      }
+    }
     p.updatedAt = new Date().toISOString();
     await getDb()
       .update(schema.profiles)
@@ -532,7 +549,7 @@ export const mysqlStore: DbRepository = {
   },
 
   async upsertProfile(token, username, explicitRole) {
-    const cleanUsername = username.trim();
+    const cleanUsername = username.trim() || `Player_${token.slice(-4)}`;
     const existing = await mysqlStore.getProfile(token);
     const now = new Date().toISOString();
 
@@ -547,21 +564,16 @@ export const mysqlStore: DbRepository = {
       return existing;
     }
 
-    // Check if profile exists by username (case-insensitive) to prevent duplicate key constraint failure
+    // Check if username is already taken by another account
+    let uniqueUsername = cleanUsername;
     const existingByUsername = await mysqlStore.findProfileByUsername(cleanUsername);
-    if (existingByUsername) {
-      if (explicitRole && VALID_ROLES.includes(explicitRole)) existingByUsername.role = explicitRole;
-      existingByUsername.updatedAt = now;
-      await getDb()
-        .update(schema.profiles)
-        .set(profileUpdateSet(existingByUsername))
-        .where(eq(schema.profiles.token, existingByUsername.token));
-      return existingByUsername;
+    if (existingByUsername && existingByUsername.token !== token) {
+      uniqueUsername = `${cleanUsername}_${Math.floor(100 + Math.random() * 900)}`;
     }
 
     const p: Profile = {
       token,
-      username: cleanUsername,
+      username: uniqueUsername,
       rating: 1000,
       marbles: 0,
       points: 0,

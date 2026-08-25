@@ -5,7 +5,8 @@ import { walletService } from "@/lib/wallet-service";
 import { timerService } from "@/lib/timer-service";
 import { leagueService } from "@/lib/league-service";
 import { presenceService } from "@/lib/presence-service";
-import { Room, GameMode, Player, MoveLogEntry } from "@/lib/types";
+import { securityService } from "@/lib/security";
+import { Room, GameMode, Player, MoveLogEntry, Profile } from "@/lib/types";
 
 const cleanName = (value: unknown) => String(value ?? "").trim().replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 20);
 const cleanToken = (value: unknown) => String(value ?? "").trim().slice(0, 80);
@@ -60,14 +61,8 @@ function formatRoomResponse(room: Room, token: string) {
 async function resolvePlayerToken(rawToken: string, username?: string): Promise<{ token: string; profile: Profile | null }> {
   if (!rawToken) return { token: "", profile: null };
   const session = await dbRepository.getSession(rawToken);
-  let resolvedToken = session ? session.userId : rawToken;
-  let profile = await dbRepository.getProfile(resolvedToken);
-  if (!profile && username) {
-    profile = await dbRepository.findProfileByUsername(username);
-    if (profile) {
-      resolvedToken = profile.token;
-    }
-  }
+  const resolvedToken = session ? session.userId : rawToken;
+  const profile = await dbRepository.getProfile(resolvedToken);
   return { token: resolvedToken, profile };
 }
 
@@ -107,8 +102,9 @@ export async function GET(req: NextRequest) {
       .filter((p) => !nonPlayerRoles.has(p.role) && p.status !== "banned")
       .map((p) => {
         const presence = presenceService.getPresence(p.token, p.username);
+        const sanitized = securityService.sanitizePublicProfile(p);
         return {
-          ...p,
+          ...sanitized,
           isOnline: presence.isOnline,
           presenceStatus: presence.presenceStatus,
           lastSeenAt: presence.lastSeenAt,
@@ -129,8 +125,9 @@ export async function GET(req: NextRequest) {
       .filter((p) => !nonPlayerRoles.has(p.role) && p.status !== "banned")
       .map((p) => {
         const presence = presenceService.getPresence(p.token, p.username);
+        const sanitized = securityService.sanitizePublicProfile(p);
         return {
-          ...p,
+          ...sanitized,
           isOnline: presence.isOnline,
           presenceStatus: presence.presenceStatus,
           lastSeenAt: presence.lastSeenAt,
@@ -251,7 +248,7 @@ export async function POST(req: NextRequest) {
     if (action === "profile") {
       if (!username) return NextResponse.json({ error: "Username required" }, { status: 400 });
       const profile = await dbRepository.upsertProfile(token, username);
-      return NextResponse.json({ profile });
+      return NextResponse.json({ profile: securityService.sanitizeProfile(profile) });
     }
 
     if (action === "create") {
@@ -339,7 +336,7 @@ export async function POST(req: NextRequest) {
 
       await dbRepository.saveRoom(room);
       const profile = await dbRepository.getProfile(token);
-      return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
     }
 
     if (action === "join" || action === "accept") {
@@ -363,7 +360,7 @@ export async function POST(req: NextRequest) {
 
       if (room.hostToken === token) {
         const profile = await dbRepository.getProfile(token);
-        return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+        return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
       }
 
       if (room.guestToken && room.guestToken !== token) {
@@ -428,7 +425,7 @@ export async function POST(req: NextRequest) {
 
       await dbRepository.saveRoom(room);
       const profile = await dbRepository.getProfile(token);
-      return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
     }
 
     if (action === "ready") {
@@ -472,7 +469,7 @@ export async function POST(req: NextRequest) {
 
       await dbRepository.saveRoom(room);
       const profile = await dbRepository.getProfile(token);
-      return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
     }
 
     if (action === "leave_room") {
@@ -494,7 +491,7 @@ export async function POST(req: NextRequest) {
       }
 
       const profile = await dbRepository.getProfile(token);
-      return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
     }
 
     if (action === "move") {
@@ -567,7 +564,7 @@ export async function POST(req: NextRequest) {
       }
 
       const profile = await dbRepository.getProfile(token);
-      return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
     }
 
     if (action === "heartbeat") {
@@ -588,7 +585,7 @@ export async function POST(req: NextRequest) {
       }
 
       const profile = await dbRepository.getProfile(token);
-      return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
     }
 
     if (action === "disconnect") {
@@ -619,7 +616,7 @@ export async function POST(req: NextRequest) {
       }
 
       const profile = await dbRepository.getProfile(token);
-      return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
     }
 
     if (action === "offer_draw") {
@@ -636,7 +633,7 @@ export async function POST(req: NextRequest) {
       await dbRepository.saveRoom(room);
 
       const profile = await dbRepository.getProfile(token);
-      return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
     }
 
     if (action === "accept_draw") {
@@ -660,7 +657,7 @@ export async function POST(req: NextRequest) {
 
       await applyGameFinishEffects(room);
       const profile = await dbRepository.getProfile(token);
-      return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
     }
 
     if (action === "decline_draw") {
@@ -674,7 +671,7 @@ export async function POST(req: NextRequest) {
       await dbRepository.saveRoom(room);
 
       const profile = await dbRepository.getProfile(token);
-      return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
     }
 
     if (action === "claim_timeout_win") {
@@ -699,7 +696,7 @@ export async function POST(req: NextRequest) {
 
           await applyGameFinishEffects(room);
           const profile = await dbRepository.getProfile(token);
-          return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+          return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
         }
         return NextResponse.json({
           error: `Opponent is still within the 90s grace reconnection period (${timerService.DISCONNECT_GRACE_PERIOD_SECONDS - elapsed}s remaining).`,
@@ -715,7 +712,7 @@ export async function POST(req: NextRequest) {
 
         await applyGameFinishEffects(room);
         const profile = await dbRepository.getProfile(token);
-        return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+        return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
       }
 
       return NextResponse.json({ error: "Opponent has not timed out or disconnected beyond the allowed limit." }, { status: 400 });
@@ -739,7 +736,7 @@ export async function POST(req: NextRequest) {
         const profile = await dbRepository.getProfile(token);
         return NextResponse.json({
           room: formatRoomResponse(room, token),
-          profile,
+          profile: securityService.sanitizeProfile(profile),
           message: "Unjoined room cancelled immediately without penalty.",
         });
       }
@@ -779,7 +776,7 @@ export async function POST(req: NextRequest) {
       }
 
       const profile = await dbRepository.getProfile(token);
-      return NextResponse.json({ room: formatRoomResponse(room, token), profile, message: "Match placed under review. Preserving all move logs and connection records." });
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile), message: "Match placed under review. Preserving all move logs and connection records." });
     }
 
     if (action === "forfeit") {
@@ -798,7 +795,7 @@ export async function POST(req: NextRequest) {
 
       await applyGameFinishEffects(room);
       const profile = await dbRepository.getProfile(token);
-      return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
     }
 
     if (action === "rematch") {
@@ -819,7 +816,7 @@ export async function POST(req: NextRequest) {
 
       await dbRepository.saveRoom(room);
       const profile = await dbRepository.getProfile(token);
-      return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });

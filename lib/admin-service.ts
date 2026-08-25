@@ -18,19 +18,29 @@ import { hasPermission } from "./permissions";
 export const adminService = {
   async verifyAdminAccessAsync(token: string, secretKeyInput?: string): Promise<boolean> {
     const envSecret = process.env.ADMIN_SECRET_KEY;
-    if (secretKeyInput && envSecret && securityService.timingSafeCompare(secretKeyInput, envSecret)) {
+    if (secretKeyInput && envSecret && envSecret.trim().length >= 8 && securityService.timingSafeCompare(secretKeyInput, envSecret)) {
       return true;
     }
-    if (!token) return false;
+    if (!token || typeof token !== "string" || token.trim().length === 0) return false;
 
-    // Check session or direct token
-    const session = await dbRepository.getSession(token);
-    const userId = session ? session.userId : token;
+    // Strict cryptographic session verification (no fallback to raw token/userId)
+    const session = await dbRepository.getSession(token.trim());
+    if (!session || !session.userId) return false;
 
-    const profile = await dbRepository.getProfile(userId);
+    const profile = await dbRepository.getProfile(session.userId);
     if (!profile || profile.status === "banned") return false;
 
-    return ["super_admin", "admin", "treasurer", "facilitator"].includes(profile.role);
+    const validRoles = ["super_admin", "admin", "treasurer", "facilitator"];
+    return validRoles.includes(profile.role) && validRoles.includes(session.role);
+  },
+
+  async resolveAdminProfile(token: string) {
+    if (!token || typeof token !== "string") return null;
+    const session = await dbRepository.getSession(token.trim());
+    if (session?.userId) {
+      return dbRepository.getProfile(session.userId);
+    }
+    return null;
   },
 
   async verifyAdminAccess(token: string, secretKeyInput?: string): Promise<boolean> {
@@ -75,7 +85,7 @@ export const adminService = {
       loginTime: new Date().toISOString(),
     });
 
-    return { token: session.token, csrfToken: session.csrfToken, profile };
+    return { token: session.token, csrfToken: session.csrfToken, profile: securityService.sanitizeProfile(profile) };
   },
 
   async seedInitialData() {
@@ -95,7 +105,6 @@ export const adminService = {
         token: p.token,
         points: p.points,
         marbles: p.marbles,
-        passcode: p.passcode || "123456",
       })),
     };
   },
@@ -113,7 +122,9 @@ export const adminService = {
     const existing = await dbRepository.findProfileByUsername(cleanUsername);
     if (existing) {
       existing.role = newRole;
-      existing.passcode = newAdminPasscode.trim();
+      const { hash, salt } = securityService.hashPassword(newAdminPasscode.trim());
+      existing.passcode = hash;
+      existing.passwordSalt = salt;
       existing.updatedAt = new Date().toISOString();
       await dbRepository.upsertProfile(existing.token, existing.username, newRole);
 
@@ -125,11 +136,12 @@ export const adminService = {
         existing.username,
         { role: newRole }
       );
-      return existing;
+      return securityService.sanitizeProfile(existing);
     }
 
     const token = `${newRole}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const newAdmin = await dbRepository.createRegisteredProfile(token, cleanUsername, newAdminPasscode.trim(), undefined, newRole);
+    const { hash, salt } = securityService.hashPassword(newAdminPasscode.trim());
+    const newAdmin = await dbRepository.createRegisteredProfile(token, cleanUsername, hash, undefined, newRole, salt);
     await dbRepository.upsertProfile(token, cleanUsername, newRole);
 
     const callerProfile = await dbRepository.getProfile(adminToken);
@@ -141,7 +153,7 @@ export const adminService = {
       { role: newRole }
     );
 
-    return newAdmin;
+    return securityService.sanitizeProfile(newAdmin);
   },
 
   async logAdminAction(
@@ -335,8 +347,8 @@ export const adminService = {
       resolvedDisputesVolume,
       totalEscrowProcessed,
       dailyActivity,
-      leaderboard,
-      allUsers,
+      leaderboard: leaderboard.map((p) => securityService.sanitizeProfile(p)).filter(Boolean),
+      allUsers: allUsers.map((p) => securityService.sanitizeProfile(p)).filter(Boolean),
       settings,
       recentRooms: roomsWithMoves.slice(0, 100),
       recentTransactions: transactions.slice(0, 100),
@@ -1554,6 +1566,14 @@ export const adminService = {
       const prizeWinnerToken = winnerToken || league.winnerToken;
       if (!prizeWinnerToken) throw new Error("Winner token required for prize pool disbursal");
 
+      // Verify that the prizeWinnerToken is actually enrolled in this tournament
+      const isEnrolled = participants.some((p) => p.userToken === prizeWinnerToken && p.status !== "rejected");
+      if (!isEnrolled) {
+        throw new Error(
+          `Security violation: User token (${prizeWinnerToken}) is not an enrolled participant in tournament '${league.title}'. Prize pool escrow can only be disbursed to authorized participants.`
+        );
+      }
+
       const winnerProfile = await dbRepository.getProfile(prizeWinnerToken);
       if (!winnerProfile) throw new Error("Winner profile not found");
 
@@ -1701,6 +1721,10 @@ export const adminService = {
       }
     } else if (decision === "correct") {
       // Correct match winner
+      if (!winnerToken || (winnerToken !== room.hostToken && winnerToken !== room.guestToken)) {
+        throw new Error("Dispute correction requires winnerToken to be either the room host or room guest.");
+      }
+
       if (winnerToken === room.hostToken) {
         room.winner = "white";
       } else if (winnerToken === room.guestToken) {
@@ -2177,13 +2201,11 @@ export const adminService = {
 
   async getAdminSelfProfile(adminToken: string) {
     if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
-    const session = await dbRepository.getSession(adminToken);
-    const userId = session ? session.userId : adminToken;
-    const profile = await dbRepository.getProfile(userId);
+    const profile = await this.resolveAdminProfile(adminToken);
     if (!profile) throw new Error("Admin profile not found");
 
     const recentLogs = (await dbRepository.listAdminLogs(20)).filter(
-      (log) => log.adminToken === adminToken || log.adminName === profile.username
+      (log) => log.adminToken === adminToken || log.adminToken === profile.token || log.adminName === profile.username
     );
 
     return {
@@ -2217,9 +2239,7 @@ export const adminService = {
     }
   ) {
     if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
-    const session = await dbRepository.getSession(adminToken);
-    const userId = session ? session.userId : adminToken;
-    const profile = await dbRepository.getProfile(userId);
+    const profile = await this.resolveAdminProfile(adminToken);
     if (!profile) throw new Error("Admin profile not found");
 
     if (updates.newPasscode && updates.newPasscode.trim()) {

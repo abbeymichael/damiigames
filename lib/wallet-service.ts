@@ -418,6 +418,13 @@ export const walletService = {
     const wagerFeePercent = settings.wagerFeePercent ?? 5;
 
     if (winnerToken) {
+      // Validate that the winnerToken is strictly one of the two participants in this match escrow
+      if (winnerToken !== escrow.player1Token && winnerToken !== escrow.player2Token) {
+        throw new Error(
+          `Security violation: Winner token (${winnerToken}) is not a registered participant in escrow #${escrow.id}. Escrow funds can only be disbursed to authorized match participants.`
+        );
+      }
+
       // Calculate platform fee percentage on total pot
       const totalPot = escrow.amountPoints;
       const platformFee = Math.round((totalPot * wagerFeePercent) / 100);

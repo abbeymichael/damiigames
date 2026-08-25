@@ -343,12 +343,22 @@ export const memoryStore: DbRepository = {
     const data = getMemoryData();
     const now = new Date().toISOString();
     const role: Role = explicitRole && VALID_ROLES.includes(explicitRole) ? explicitRole : "user";
+    
+    // Automatically hash plaintext passcodes if not already hashed
+    let finalPasscode = passcode;
+    let finalSalt = passwordSalt;
+    if (passcode && !passwordSalt) {
+      const hashed = securityService.hashPassword(passcode);
+      finalPasscode = hashed.hash;
+      finalSalt = hashed.salt;
+    }
+
     const p: Profile = {
       token,
       username: username.trim(),
       phoneNumber: phoneNumber?.trim() || undefined,
-      passcode,
-      passwordSalt,
+      passcode: finalPasscode,
+      passwordSalt: finalSalt,
       rating: 1000,
       marbles: 0,
       points: 0,
@@ -375,8 +385,16 @@ export const memoryStore: DbRepository = {
     if (!p) return null;
     if (updates.username?.trim()) p.username = updates.username.trim();
     if (updates.phoneNumber !== undefined) p.phoneNumber = updates.phoneNumber.trim();
-    if (updates.passcode?.trim()) p.passcode = updates.passcode.trim();
-    if (updates.passwordSalt !== undefined) p.passwordSalt = updates.passwordSalt;
+    if (updates.passcode?.trim()) {
+      if (updates.passwordSalt) {
+        p.passcode = updates.passcode.trim();
+        p.passwordSalt = updates.passwordSalt;
+      } else {
+        const hashed = securityService.hashPassword(updates.passcode.trim());
+        p.passcode = hashed.hash;
+        p.passwordSalt = hashed.salt;
+      }
+    }
     p.updatedAt = new Date().toISOString();
     data.profiles.set(token, { ...p });
     return { ...p };
@@ -384,23 +402,24 @@ export const memoryStore: DbRepository = {
 
   async upsertProfile(token, username, explicitRole) {
     const data = getMemoryData();
-    const cleanUsername = username.trim();
-    let existing = data.profiles.get(token);
-    if (!existing) {
-      const lower = cleanUsername.toLowerCase();
-      for (const p of data.profiles.values()) {
-        if (p.username.trim().toLowerCase() === lower) {
-          existing = p;
-          break;
-        }
-      }
-    }
+    const cleanUsername = username.trim() || `Player_${token.slice(-4)}`;
+    const existing = data.profiles.get(token);
     const now = new Date().toISOString();
 
     if (!existing) {
+      // Check if username is already taken by another account
+      const lower = cleanUsername.toLowerCase();
+      let uniqueUsername = cleanUsername;
+      for (const p of data.profiles.values()) {
+        if (p.username.trim().toLowerCase() === lower && p.token !== token) {
+          uniqueUsername = `${cleanUsername}_${Math.floor(100 + Math.random() * 900)}`;
+          break;
+        }
+      }
+
       const p: Profile = {
         token,
-        username: cleanUsername,
+        username: uniqueUsername,
         rating: 1000,
         marbles: 0,
         points: 0,
@@ -422,7 +441,9 @@ export const memoryStore: DbRepository = {
     }
 
     existing.username = cleanUsername;
-    if (explicitRole && VALID_ROLES.includes(explicitRole)) existing.role = explicitRole;
+    if (explicitRole && VALID_ROLES.includes(explicitRole)) {
+      existing.role = explicitRole;
+    }
     existing.updatedAt = now;
     data.profiles.set(existing.token, { ...existing });
     return { ...existing };
@@ -1385,6 +1406,33 @@ export const memoryStore: DbRepository = {
       accountStats.set(code, stats);
     }
 
+    // Compute actual match vs tournament escrow balances from latest entry snapshot
+    let matchEscrowBalance = 0;
+    let tournamentEscrowBalance = 0;
+
+    for (const entry of allEntries) {
+      if (entry.accountType === "escrow") {
+        const isTourn =
+          entry.referenceType === "league" ||
+          entry.referenceType === "tournament" ||
+          entry.referenceId?.startsWith("league-") ||
+          entry.entryType.includes("prize") ||
+          entry.entryType.includes("entry_fee");
+        const amt = Number(entry.amount || 0);
+        if (isTourn) {
+          tournamentEscrowBalance += amt;
+        } else {
+          matchEscrowBalance += amt;
+        }
+      }
+    }
+
+    matchEscrowBalance = Math.max(0, Number(matchEscrowBalance.toFixed(2)));
+    tournamentEscrowBalance = Math.max(0, Number(tournamentEscrowBalance.toFixed(2)));
+    if (matchEscrowBalance + tournamentEscrowBalance === 0 && fundsReport.totalEscrowLocked > 0) {
+      matchEscrowBalance = fundsReport.totalEscrowLocked;
+    }
+
     const accounts: ChartOfAccount[] = CANONICAL_CHART_OF_ACCOUNTS.map((canonical) => {
       const stats = accountStats.get(canonical.code) || {
         totalDebits: 0,
@@ -1401,23 +1449,26 @@ export const memoryStore: DbRepository = {
       } else if (canonical.code === "1030") {
         liveBalance = fundsReport.totalEscrowLocked;
       } else if (canonical.code === "2020") {
-        liveBalance = Number((fundsReport.totalEscrowLocked * 0.65).toFixed(2));
+        liveBalance = matchEscrowBalance;
       } else if (canonical.code === "2030") {
-        liveBalance = Number((fundsReport.totalEscrowLocked * 0.35).toFixed(2));
+        liveBalance = tournamentEscrowBalance;
+      } else if (canonical.code === "4010") {
+        liveBalance = Math.max(0, stats.totalCredits - stats.totalDebits);
+        if (liveBalance === 0 && fundsReport.platformFeeFund.totalInflow > 0 && stats.entryCount === 0) {
+          liveBalance = fundsReport.platformFeeFund.totalInflow;
+        }
+      } else if (canonical.code === "4020") {
+        liveBalance = Math.max(0, stats.totalCredits - stats.totalDebits);
+      } else if (canonical.code === "4030") {
+        liveBalance = Math.max(0, stats.totalCredits - stats.totalDebits);
+      } else if (canonical.code === "5010") {
+        liveBalance = Math.max(0, stats.totalDebits - stats.totalCredits);
+      } else if (canonical.code === "5020") {
+        liveBalance = Math.max(0, stats.totalDebits - stats.totalCredits);
+      } else if (canonical.code === "3020") {
+        liveBalance = Math.max(0, stats.totalCredits - stats.totalDebits);
       } else if (canonical.code === "3010") {
         liveBalance = fundsReport.totalPlatformFeesEarned;
-      } else if (canonical.code === "3020") {
-        liveBalance = Number((fundsReport.totalPlatformFeesEarned * 0.15).toFixed(2));
-      } else if (canonical.code === "4010") {
-        liveBalance = Number((fundsReport.platformFeeFund.totalInflow * 0.70).toFixed(2));
-      } else if (canonical.code === "4020") {
-        liveBalance = Number((fundsReport.platformFeeFund.totalInflow * 0.25).toFixed(2));
-      } else if (canonical.code === "4030") {
-        liveBalance = Number((fundsReport.platformFeeFund.totalInflow * 0.05).toFixed(2));
-      } else if (canonical.code === "5010") {
-        liveBalance = Number((fundsReport.totalDeposits * 0.0195).toFixed(2));
-      } else if (canonical.code === "5020") {
-        liveBalance = Number((fundsReport.platformFeeFund.totalOutflow).toFixed(2));
       } else {
         liveBalance =
           canonical.normalBalance === "debit"
