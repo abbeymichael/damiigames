@@ -143,6 +143,8 @@ export const dbRepository: DbRepository = {
   listOrganizerApplicationsByUserId: withStore("listOrganizerApplicationsByUserId"),
   listOrganizerApplications: withStore("listOrganizerApplications"),
   updateOrganizerApplication: withStore("updateOrganizerApplication"),
+  deleteOrganizerApplication: withStore("deleteOrganizerApplication"),
+  deleteOrganizerProfile: withStore("deleteOrganizerProfile"),
 
   // Organizer Revocations
   createOrganizerRevocation: withStore("createOrganizerRevocation"),

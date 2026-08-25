@@ -1438,6 +1438,20 @@ export const mysqlStore: DbRepository = {
     return this.getOrganizerApplication(id);
   },
 
+  async deleteOrganizerApplication(id: string): Promise<boolean> {
+    const result = await getDb()
+      .delete(schema.organizerApplications)
+      .where(eq(schema.organizerApplications.id, id));
+    return true;
+  },
+
+  async deleteOrganizerProfile(userId: string): Promise<boolean> {
+    await getDb()
+      .delete(schema.organizerProfiles)
+      .where(eq(schema.organizerProfiles.userId, userId));
+    return true;
+  },
+
   // --- Organizer Revocations ---
   async createOrganizerRevocation(revocation: OrganizerRevocation): Promise<OrganizerRevocation> {
     const row = organizerRevocationToRow(revocation);

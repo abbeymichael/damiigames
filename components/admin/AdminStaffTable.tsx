@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { UserCheck, ShieldAlert, KeyRound, Plus, ShieldCheck, CheckSquare, Square, AlertTriangle } from "lucide-react";
+import { UserCheck, ShieldAlert, KeyRound, Plus, ShieldCheck, CheckSquare, Square, AlertTriangle, Trash2 } from "lucide-react";
 import type { AdminAccount, AppRole } from "@/lib/types";
 
 interface AdminStaffTableProps {
@@ -10,6 +10,7 @@ interface AdminStaffTableProps {
   busy: boolean;
   onRefresh: () => void;
   token: string;
+  onDeleteAdmin?: (userId: string, username: string) => void;
 }
 
 export function AdminStaffTable({
@@ -18,6 +19,7 @@ export function AdminStaffTable({
   busy,
   onRefresh,
   token,
+  onDeleteAdmin,
 }: AdminStaffTableProps) {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
@@ -240,13 +242,26 @@ export function AdminStaffTable({
                       )}
                     </td>
                     <td className="py-3 px-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenAssign(acc)}
-                        className="px-3 py-1.5 bg-[#06261f] hover:bg-[#0c3b2e] text-slate-200 hover:text-white text-xs font-semibold rounded-lg border border-[#114232] transition-colors cursor-pointer"
-                      >
-                        Manage Roles
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAssign(acc)}
+                          className="px-3 py-1.5 bg-[#06261f] hover:bg-[#0c3b2e] text-slate-200 hover:text-white text-xs font-semibold rounded-lg border border-[#114232] transition-colors cursor-pointer"
+                        >
+                          Manage Roles
+                        </button>
+                        {acc.role !== "super_admin" && acc.userId !== token && onDeleteAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => onDeleteAdmin(acc.userId, acc.username)}
+                            className="px-2.5 py-1.5 bg-red-950/60 hover:bg-red-900 text-red-300 hover:text-white text-xs font-semibold rounded-lg border border-red-800/60 transition-colors cursor-pointer flex items-center gap-1"
+                            title="Delete Admin Account"
+                          >
+                            <Trash2 size={12} />
+                            <span>Delete</span>
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

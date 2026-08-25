@@ -569,6 +569,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, adminAccounts: accounts });
     }
 
+    if (action === "delete_admin" || action === "delete_admin_account") {
+      const { targetUserId, targetToken } = body;
+      const target = targetUserId || targetToken;
+      if (!target) return NextResponse.json({ error: "targetUserId required" }, { status: 400 });
+      const res = await adminService.deleteAdminAccount(token, String(target));
+      return NextResponse.json(res);
+    }
+
     /* ------------------------------------------------------------------------- */
     /* Organizer Applications & Workflow Management (Section 5)                  */
     /* ------------------------------------------------------------------------- */
@@ -620,6 +628,14 @@ export async function POST(req: NextRequest) {
         String(reason || ""),
         tournamentHandling === "cancel_and_refund" ? "cancel_and_refund" : "reassign_to_system"
       );
+      return NextResponse.json({ success: true, ...res });
+    }
+
+    if (action === "delete_organizer" || action === "delete_organizer_application") {
+      const { targetIdentifier, applicationId, targetToken, targetUserId } = body;
+      const target = targetIdentifier || applicationId || targetToken || targetUserId;
+      if (!target) return NextResponse.json({ error: "target identifier required" }, { status: 400 });
+      const res = await adminService.deleteOrganizer(token, String(target));
       return NextResponse.json({ success: true, ...res });
     }
 

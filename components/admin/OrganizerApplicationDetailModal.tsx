@@ -23,6 +23,7 @@ import {
   Clock,
   Check,
   AlertTriangle,
+  Trash2,
 } from "lucide-react";
 import { OrganizerApplicationDetailPayload, OrganizerApplicationStatus } from "@/lib/types";
 
@@ -39,6 +40,7 @@ interface OrganizerApplicationDetailModalProps {
     reason: string,
     tournamentHandling: "reassign_to_system" | "cancel_and_refund"
   ) => Promise<void>;
+  onDelete?: (applicationId: string) => Promise<void>;
 }
 
 export function OrganizerApplicationDetailModal({
@@ -50,6 +52,7 @@ export function OrganizerApplicationDetailModal({
   onReject,
   onRequestInfo,
   onRevoke,
+  onDelete,
 }: OrganizerApplicationDetailModalProps) {
   const [activeTab, setActiveTab] = useState<"details" | "documents" | "applicant_context" | "tournaments" | "review_log">("details");
   
@@ -859,6 +862,22 @@ export function OrganizerApplicationDetailModal({
                 className="px-3.5 py-1.5 bg-[#0c3b2e] hover:bg-emerald-950 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md"
               >
                 <UserCheck size={14} /> Re-Approve Organizer
+              </button>
+            )}
+
+            {onDelete && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (confirm(`Are you sure you want to permanently delete application for '${app.organizationName || app.userId}'?`)) {
+                    await onDelete(app.id);
+                  }
+                }}
+                disabled={busy}
+                className="px-3 py-1.5 bg-red-950/60 hover:bg-red-900 text-red-300 hover:text-white border border-red-800/60 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
+                title="Delete Application"
+              >
+                <Trash2 size={13} /> Delete
               </button>
             )}
           </div>

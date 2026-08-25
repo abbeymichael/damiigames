@@ -1195,6 +1195,75 @@ export default function AdminPage() {
     });
   }
 
+  // Delete Admin Staff Account
+  function handleDeleteAdmin(targetUserId: string, username: string) {
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete Administrator Account",
+      description: `Are you sure you want to PERMANENTLY delete administrator account '${username}'?`,
+      warningNote: "This action will permanently delete the admin account profile, role assignments, and active sessions. This action cannot be undone.",
+      details: [
+        { label: "Admin Username", value: username },
+        { label: "User ID", value: targetUserId },
+      ],
+      confirmText: "Delete Administrator",
+      confirmStyle: "danger",
+      onConfirm: async () => {
+        setBusy(true); setError(""); setSuccess("");
+        try {
+          const res = await fetch("/api/admin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "delete_admin", token, targetUserId }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Failed to delete administrator account");
+          setSuccess(`Admin '${username}' deleted successfully.`);
+          refreshAdminData();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Delete admin error");
+        } finally {
+          setBusy(false);
+        }
+      },
+    });
+  }
+
+  // Delete Organizer Application / Profile
+  function handleDeleteOrganizer(identifier: string, orgName: string) {
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete Organizer Record",
+      description: `Are you sure you want to delete organizer record/application for '${orgName}'?`,
+      warningNote: "This will remove the organizer application, KYC documentation files, and organizer profile from the database.",
+      details: [
+        { label: "Organizer / Entity", value: orgName },
+        { label: "Application ID / Identifier", value: identifier },
+      ],
+      confirmText: "Delete Organizer",
+      confirmStyle: "danger",
+      onConfirm: async () => {
+        setBusy(true); setError(""); setSuccess("");
+        try {
+          const res = await fetch("/api/admin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "delete_organizer", token, targetIdentifier: identifier }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Failed to delete organizer");
+          setSuccess(`Organizer record '${orgName}' deleted successfully.`);
+          fetchOrganizersList();
+          refreshAdminData();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Delete organizer error");
+        } finally {
+          setBusy(false);
+        }
+      },
+    });
+  }
+
   // Void Transaction
   function handleVoidTransaction(txId: string) {
     setConfirmModal({
@@ -1929,6 +1998,7 @@ export default function AdminPage() {
                 onQuickReject={(id) => handleRejectOrganizerApplication(id, "Requirements not met upon administrative review")}
                 onQuickRequestInfo={(id) => handleRequestInfoOrganizerApplication(id, "Please provide updated National ID Card and proof of location documents")}
                 onQuickRevoke={(id) => handleRevokeOrganizerStatus(id, "Administrative revocation", "reassign_to_system")}
+                onDeleteApplication={handleDeleteOrganizer}
               />
             )}
 
@@ -2083,6 +2153,7 @@ export default function AdminPage() {
                 token={token}
                 adminSecret={adminSecret}
                 onRefresh={refreshAdminData}
+                onDeleteAdmin={handleDeleteAdmin}
               />
             )}
 
@@ -2903,6 +2974,10 @@ export default function AdminPage() {
         onReject={handleRejectOrganizerApplication}
         onRequestInfo={handleRequestInfoOrganizerApplication}
         onRevoke={handleRevokeOrganizerStatus}
+        onDelete={async (appId) => {
+          setIsAppDetailModalOpen(false);
+          handleDeleteOrganizer(appId, selectedAppDetail?.application.organizationName || selectedAppDetail?.applicant?.username || appId);
+        }}
       />
 
       {/* CUSTOM CONFIRMATION MODAL */}

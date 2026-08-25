@@ -182,6 +182,8 @@ export interface DbRepository {
   listOrganizerApplicationsByUserId(userId: string): Promise<OrganizerApplication[]>;
   listOrganizerApplications(status?: OrganizerApplicationStatus): Promise<OrganizerApplication[]>;
   updateOrganizerApplication(id: string, updates: Partial<OrganizerApplication>): Promise<OrganizerApplication | null>;
+  deleteOrganizerApplication(id: string): Promise<boolean>;
+  deleteOrganizerProfile?(userId: string): Promise<boolean>;
 
   // --- Organizer Revocations ---
   createOrganizerRevocation(revocation: OrganizerRevocation): Promise<OrganizerRevocation>;

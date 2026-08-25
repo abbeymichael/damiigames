@@ -30,6 +30,11 @@ export const SYSTEM_PERMISSIONS: Omit<Permission, "id">[] = [
     description: "Create, edit, resize, start brackets, or cancel tournaments directly.",
   },
   {
+    key: "tournaments.delete",
+    category: "operations",
+    description: "Permanently delete tournaments, clean up brackets, and refund active participant escrows.",
+  },
+  {
     key: "games.manage",
     category: "operations",
     description: "Create, edit, enable/disable game types in the platform catalog.",
@@ -65,9 +70,19 @@ export const SYSTEM_PERMISSIONS: Omit<Permission, "id">[] = [
     description: "Suspend or unban user and player accounts.",
   },
   {
+    key: "users.delete",
+    category: "operations",
+    description: "Permanently delete player accounts, profile data, and associated user sessions.",
+  },
+  {
     key: "organizers.revoke",
     category: "operations",
     description: "Revoke approved organizer standing and permissions.",
+  },
+  {
+    key: "organizers.delete",
+    category: "operations",
+    description: "Permanently delete organizer profiles, KYC application files, and organizer records.",
   },
 
   // ADMIN
@@ -82,6 +97,11 @@ export const SYSTEM_PERMISSIONS: Omit<Permission, "id">[] = [
     description: "Invite, create, assign roles, or deactivate admin staff accounts.",
   },
   {
+    key: "admins.delete",
+    category: "admin",
+    description: "Permanently delete administrator staff accounts and credentials.",
+  },
+  {
     key: "roles.view",
     category: "admin",
     description: "View RBAC roles and permissions assignment matrix.",
@@ -89,7 +109,12 @@ export const SYSTEM_PERMISSIONS: Omit<Permission, "id">[] = [
   {
     key: "roles.manage",
     category: "admin",
-    description: "Create and edit custom admin roles and permission matrices.",
+    description: "Create, edit, and configure custom admin roles and permission matrices.",
+  },
+  {
+    key: "roles.delete",
+    category: "admin",
+    description: "Delete custom administrative RBAC roles and permissions bindings.",
   },
 
   // SYSTEM

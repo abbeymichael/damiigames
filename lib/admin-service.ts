@@ -13,6 +13,7 @@ import {
 } from "./types";
 import { leagueService } from "./league-service";
 import { notificationService } from "./notification-service";
+import { hasPermission } from "./permissions";
 
 export const adminService = {
   async verifyAdminAccessAsync(token: string, secretKeyInput?: string): Promise<boolean> {
@@ -760,8 +761,16 @@ export const adminService = {
   async deleteRole(adminToken: string, roleId: string) {
     if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
     const adminProfile = await dbRepository.getProfile(adminToken);
+    const canDelete = (await hasPermission(adminToken, "roles.delete")) ||
+      (await hasPermission(adminToken, "roles.manage")) ||
+      adminProfile?.role === "super_admin";
+    if (!canDelete) throw new Error("Unauthorized: 'roles.delete' permission required");
+
     const role = await dbRepository.getRole(roleId);
     if (!role) throw new Error("Role not found");
+    if (role.isSystemRole) {
+      throw new Error("Cannot delete a system-level role (Super Admin)");
+    }
 
     await dbRepository.deleteRole(roleId);
     await this.logAdminAction(
@@ -772,6 +781,93 @@ export const adminService = {
       { roleId }
     );
     return { success: true, roleId };
+  },
+
+  async deleteAdminAccount(adminToken: string, targetUserId: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+    const canDelete = (await hasPermission(adminToken, "admins.delete")) ||
+      (await hasPermission(adminToken, "admins.manage")) ||
+      adminProfile?.role === "super_admin";
+    if (!canDelete) throw new Error("Unauthorized: 'admins.delete' permission required");
+
+    if (adminToken === targetUserId) {
+      throw new Error("Cannot delete your own active administrator account");
+    }
+
+    const targetProfile = await dbRepository.getProfile(targetUserId);
+    if (!targetProfile) {
+      throw new Error("Target administrator account not found");
+    }
+
+    if (targetProfile.role === "super_admin") {
+      throw new Error("Super Admin accounts cannot be deleted");
+    }
+
+    // Clean up role assignments
+    await dbRepository.setAdminUserRoleAssignments(targetUserId, [], adminProfile?.username || "Admin");
+
+    // Delete profile and sessions
+    await dbRepository.deleteProfile(targetUserId);
+
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "DELETE_ADMIN_ACCOUNT",
+      targetProfile.username,
+      { targetUserId, role: targetProfile.role }
+    );
+
+    return { success: true, deletedAdmin: targetProfile.username };
+  },
+
+  async deleteOrganizer(adminToken: string, targetIdentifier: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const adminProfile = await dbRepository.getProfile(adminToken);
+    const canDelete = (await hasPermission(adminToken, "organizers.delete")) ||
+      (await hasPermission(adminToken, "organizers.revoke")) ||
+      adminProfile?.role === "super_admin";
+    if (!canDelete) throw new Error("Unauthorized: 'organizers.delete' permission required");
+
+    let deletedCount = 0;
+    // Check if targetIdentifier is an application ID
+    const app = await dbRepository.getOrganizerApplication(targetIdentifier);
+    const targetUserId = app ? app.userId : targetIdentifier;
+
+    // Delete application by ID if found
+    if (app) {
+      await dbRepository.deleteOrganizerApplication(app.id);
+      deletedCount++;
+    }
+
+    // Also check if there are other applications for this userId
+    const userApps = await dbRepository.listOrganizerApplicationsByUserId(targetUserId).catch(() => []);
+    for (const uApp of userApps) {
+      await dbRepository.deleteOrganizerApplication(uApp.id);
+      deletedCount++;
+    }
+
+    // Delete organizer profile if available
+    if (dbRepository.deleteOrganizerProfile) {
+      await dbRepository.deleteOrganizerProfile(targetUserId);
+    }
+
+    // If profile exists and role is organizer, revert role to user
+    const targetUser = await dbRepository.getProfile(targetUserId).catch(() => null);
+    if (targetUser && targetUser.role === "organizer") {
+      targetUser.role = "user";
+      await dbRepository.saveProfile(targetUser);
+    }
+
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "DELETE_ORGANIZER",
+      targetUser?.username || targetUserId,
+      { targetIdentifier, targetUserId, deletedApplicationsCount: deletedCount }
+    );
+
+    return { success: true, targetUserId, deletedCount };
   },
 
   async assignAdminRoles(adminToken: string, targetUserId: string, roleIds: string[]) {
@@ -1664,6 +1760,15 @@ export const adminService = {
   async deleteUser(adminToken: string, targetToken: string) {
     if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
     const adminProfile = await dbRepository.getProfile(adminToken);
+    const canDelete = (await hasPermission(adminToken, "users.delete")) ||
+      (await hasPermission(adminToken, "users.suspend")) ||
+      adminProfile?.role === "super_admin";
+    if (!canDelete) throw new Error("Unauthorized: 'users.delete' permission required");
+
+    if (adminToken === targetToken) {
+      throw new Error("Cannot delete your own active account");
+    }
+
     const targetUser = await dbRepository.getProfile(targetToken);
     if (!targetUser) throw new Error("Target user profile not found");
 
@@ -1746,6 +1851,11 @@ export const adminService = {
   async deleteTournament(adminToken: string, leagueId: string) {
     if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
     const adminProfile = await dbRepository.getProfile(adminToken);
+    const canDelete = (await hasPermission(adminToken, "tournaments.delete")) ||
+      (await hasPermission(adminToken, "tournaments.manage")) ||
+      adminProfile?.role === "super_admin";
+    if (!canDelete) throw new Error("Unauthorized: 'tournaments.delete' permission required");
+
     const league = await dbRepository.getLeague(leagueId);
     if (!league) throw new Error("Tournament/League not found");
 

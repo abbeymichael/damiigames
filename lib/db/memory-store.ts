@@ -959,6 +959,16 @@ export const memoryStore: DbRepository = {
     return { ...updated };
   },
 
+  async deleteOrganizerApplication(id) {
+    const data = getMemoryData();
+    return data.organizerApplications.delete(id);
+  },
+
+  async deleteOrganizerProfile(userId) {
+    const data = getMemoryData();
+    return data.organizerProfiles.delete(userId);
+  },
+
   // --- Organizer Revocations ---
   async createOrganizerRevocation(revocation) {
     const data = getMemoryData();

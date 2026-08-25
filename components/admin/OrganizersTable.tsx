@@ -16,6 +16,7 @@ import {
   User,
   ShieldCheck,
   MapPin,
+  Trash2,
 } from "lucide-react";
 import { OrganizerApplication, OrganizerApplicationStatus } from "@/lib/types";
 
@@ -29,6 +30,7 @@ export interface OrganizersTableProps {
   onQuickReject: (applicationId: string) => void;
   onQuickRequestInfo: (applicationId: string) => void;
   onQuickRevoke: (applicationId: string) => void;
+  onDeleteApplication?: (applicationId: string, orgName: string) => void;
 }
 
 export function OrganizersTable({
@@ -41,6 +43,7 @@ export function OrganizersTable({
   onQuickReject,
   onQuickRequestInfo,
   onQuickRevoke,
+  onDeleteApplication,
 }: OrganizersTableProps) {
   const [statusFilter, setStatusFilter] = useState<"all" | OrganizerApplicationStatus>("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -357,6 +360,19 @@ export function OrganizersTable({
                           className="px-2 py-1 bg-[#041d17] hover:bg-emerald-950 text-slate-300 hover:text-emerald-300 text-[11px] rounded-lg border border-[#1a5e48]"
                         >
                           Re-Approve
+                        </button>
+                      )}
+
+                      {onDeleteApplication && (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteApplication(app.id, app.organizationName || app.userId)}
+                          disabled={busy}
+                          className="px-2 py-1 bg-red-950/60 hover:bg-red-900 text-red-300 hover:text-white text-[11px] rounded-lg border border-red-800/60 flex items-center gap-1 transition-colors"
+                          title="Delete Organizer Application"
+                        >
+                          <Trash2 size={11} />
+                          <span>Delete</span>
                         </button>
                       )}
                     </div>

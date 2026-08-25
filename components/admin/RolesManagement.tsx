@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { ShieldCheck, Plus, Edit2, Trash2, CheckCircle2, Lock, Sparkles } from "lucide-react";
 import type { AppRole, Permission } from "@/lib/types";
 import { SYSTEM_PERMISSIONS } from "@/lib/permissions-constants";
+import { ConfirmModal } from "./ConfirmModal";
 
 interface RolesManagementProps {
   roles: AppRole[];
@@ -11,6 +12,7 @@ interface RolesManagementProps {
   busy: boolean;
   onRefresh: () => void;
   token: string;
+  adminSecret?: string;
 }
 
 export function RolesManagement({
@@ -19,9 +21,11 @@ export function RolesManagement({
   busy,
   onRefresh,
   token,
+  adminSecret,
 }: RolesManagementProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<AppRole | null>(null);
+  const [roleToDelete, setRoleToDelete] = useState<AppRole | null>(null);
   const [roleName, setRoleName] = useState("");
   const [roleDescription, setRoleDescription] = useState("");
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
@@ -130,11 +134,15 @@ export function RolesManagement({
     }
   }
 
-  async function handleDeleteRole(role: AppRole) {
+  function handleDeleteRole(role: AppRole) {
     if (role.isSystemRole) return;
-    if (!confirm(`Are you sure you want to delete custom role '${role.name}'?`)) return;
+    setRoleToDelete(role);
+  }
 
+  async function executeDeleteRole(role: AppRole) {
     setActionBusy(true);
+    setError("");
+    setSuccess("");
     try {
       const res = await fetch("/api/admin", {
         method: "POST",
@@ -147,11 +155,13 @@ export function RolesManagement({
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || "Failed to delete role");
+      setSuccess(`Role '${role.name}' deleted successfully!`);
       onRefresh();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error deleting role");
+      setError(err instanceof Error ? err.message : "Error deleting role");
     } finally {
       setActionBusy(false);
+      setRoleToDelete(null);
     }
   }
 
@@ -441,6 +451,25 @@ export function RolesManagement({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Role Delete Confirmation Modal */}
+      {roleToDelete && (
+        <ConfirmModal
+          isOpen={true}
+          title="Delete Custom Role"
+          description={`Are you sure you want to PERMANENTLY delete role '${roleToDelete.name}'?`}
+          warningNote="Any admin staff assigned to this role will lose the associated permissions immediately."
+          details={[
+            { label: "Role Name", value: roleToDelete.name },
+            { label: "Role ID", value: roleToDelete.id },
+            { label: "Permissions Count", value: String(roleToDelete.permissionKeys?.length || 0) },
+          ]}
+          confirmText="Delete Role"
+          confirmStyle="danger"
+          onConfirm={() => executeDeleteRole(roleToDelete)}
+          onClose={() => setRoleToDelete(null)}
+        />
       )}
     </div>
   );
