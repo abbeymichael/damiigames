@@ -41,10 +41,11 @@ const FRUITS = [
  */
 async function generateUniqueUsername(): Promise<string> {
   for (let i = 0; i < 100; i++) {
-    const rawFruit = FRUITS[Math.floor(Math.random() * FRUITS.length)];
+    const rawFruit = FRUITS[crypto.randomInt(0, FRUITS.length)];
     const capitalizedFruit = rawFruit.charAt(0).toUpperCase() + rawFruit.slice(1);
-    const num = Math.floor(100 + Math.random() * 900); // 3-digit number (100-999)
+    const num = crypto.randomInt(100, 1000); // 3-digit number (100-999)
     const candidate = `${capitalizedFruit}${num}`;
+    if (securityService.isReservedUsername(candidate)) continue;
     const [existingProf, existingUser] = await Promise.all([
       dbRepository.findProfileByUsername(candidate),
       dbRepository.getUserByUsername(candidate),
@@ -54,9 +55,9 @@ async function generateUniqueUsername(): Promise<string> {
     }
   }
   // Fallback if collision
-  const rawFruit = FRUITS[Math.floor(Math.random() * FRUITS.length)];
+  const rawFruit = FRUITS[crypto.randomInt(0, FRUITS.length)];
   const capitalizedFruit = rawFruit.charAt(0).toUpperCase() + rawFruit.slice(1);
-  return `${capitalizedFruit}${Math.floor(100 + Math.random() * 900)}`;
+  return `${capitalizedFruit}${crypto.randomInt(100, 1000)}`;
 }
 
 export async function POST(req: NextRequest) {
@@ -150,7 +151,7 @@ export async function POST(req: NextRequest) {
         finalUsername,
         passwordHash || "temp_otp_verified",
         phoneNumber,
-        user.role === "admin" ? "admin" : "user",
+        "user",
         passwordSalt,
       );
     } else {

@@ -71,11 +71,10 @@ export function hashOtpCode(code: string): string {
 }
 
 /**
- * Generates a random 6-digit numeric OTP code
+ * Generates a random 6-digit numeric OTP code using cryptographically secure random integers
  */
 export function generateOtpCode(): string {
-  // 6-digit numeric OTP
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return String(crypto.randomInt(100000, 1000000));
 }
 
 /**
@@ -105,7 +104,7 @@ export async function sendOtpSms(
       console.log(`[damii][sms-disabled] Admin SMS is disabled. OTP for ${cleanPhone}: ${code}`);
       const mockMsgId = `mock-otp-${Date.now()}`;
       notificationService.recordDispatchedLog({
-        id: `otp-log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: `otp-log-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`,
         recipientToken: phoneNumber,
         recipientContact: cleanPhone,
         channel: "sms",
@@ -128,7 +127,7 @@ export async function sendOtpSms(
 
     // Record audit log entry in dispatchedChannelLogs
     notificationService.recordDispatchedLog({
-      id: `otp-log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: `otp-log-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`,
       recipientToken: phoneNumber,
       recipientContact: cleanPhone,
       channel: "sms",

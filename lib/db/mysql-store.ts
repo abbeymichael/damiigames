@@ -568,7 +568,7 @@ export const mysqlStore: DbRepository = {
     let uniqueUsername = cleanUsername;
     const existingByUsername = await mysqlStore.findProfileByUsername(cleanUsername);
     if (existingByUsername && existingByUsername.token !== token) {
-      uniqueUsername = `${cleanUsername}_${Math.floor(100 + Math.random() * 900)}`;
+      uniqueUsername = `${cleanUsername}_${crypto.randomInt(100, 1000)}`;
     }
 
     const p: Profile = {

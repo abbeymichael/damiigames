@@ -954,239 +954,239 @@ export const walletService = {
 
   // --- Wager Escrow Locking & Payouts ---
   async lockWagerEscrow(roomCode: string, wagerAmount: number, player1Token: string, player2Token: string): Promise<WagerEscrow> {
-    const p1 = await dbRepository.getProfile(player1Token);
-    const p2 = await dbRepository.getProfile(player2Token);
+    return dbRepository.lockKey(`room_wager:${roomCode}`, async () => {
+      const p1 = await dbRepository.getProfile(player1Token);
+      const p2 = await dbRepository.getProfile(player2Token);
 
-    const p1Balance = Math.max(p1?.marbles ?? 0, p1?.points ?? 0);
-    const p2Balance = Math.max(p2?.marbles ?? 0, p2?.points ?? 0);
+      const p1Balance = Math.max(p1?.marbles ?? 0, p1?.points ?? 0);
+      const p2Balance = Math.max(p2?.marbles ?? 0, p2?.points ?? 0);
 
-    if (!p1 || p1Balance < wagerAmount) throw new Error(`Host has insufficient Marbles for GH₵ ${wagerAmount} Wager`);
-    if (!p2 || p2Balance < wagerAmount) throw new Error(`Guest has insufficient Marbles for GH₵ ${wagerAmount} Wager`);
+      if (!p1 || p1Balance < wagerAmount) throw new Error(`Host has insufficient Marbles for GH₵ ${wagerAmount} Wager`);
+      if (!p2 || p2Balance < wagerAmount) throw new Error(`Guest has insufficient Marbles for GH₵ ${wagerAmount} Wager`);
 
-    // Deduct wager balance from both players (prioritizing marbles or points)
-    if ((p1.marbles ?? 0) >= wagerAmount) {
-      await dbRepository.updateProfileMarblesBalance(player1Token, -wagerAmount);
-    } else {
-      await dbRepository.updateProfileBalance(player1Token, -wagerAmount);
-    }
+      // Deduct wager balance from both players (prioritizing marbles or points)
+      let p1Deducted = false;
+      let p2Deducted = false;
+      try {
+        if ((p1.marbles ?? 0) >= wagerAmount) {
+          await dbRepository.updateProfileMarblesBalance(player1Token, -wagerAmount);
+        } else {
+          await dbRepository.updateProfileBalance(player1Token, -wagerAmount);
+        }
+        p1Deducted = true;
 
-    if ((p2.marbles ?? 0) >= wagerAmount) {
-      await dbRepository.updateProfileMarblesBalance(player2Token, -wagerAmount);
-    } else {
-      await dbRepository.updateProfileBalance(player2Token, -wagerAmount);
-    }
+        if ((p2.marbles ?? 0) >= wagerAmount) {
+          await dbRepository.updateProfileMarblesBalance(player2Token, -wagerAmount);
+        } else {
+          await dbRepository.updateProfileBalance(player2Token, -wagerAmount);
+        }
+        p2Deducted = true;
+      } catch (err) {
+        if (p1Deducted) await dbRepository.updateProfileBalance(player1Token, wagerAmount).catch(() => {});
+        if (p2Deducted) await dbRepository.updateProfileBalance(player2Token, wagerAmount).catch(() => {});
+        throw err;
+      }
 
-    const escrow: WagerEscrow = {
-      id: `escrow-${Date.now()}-${securityService.generateCsprngToken(4)}`,
-      roomCode,
-      amountMarbles: wagerAmount * 2,
-      amountPoints: wagerAmount * 2, // Total pot
-      player1Token,
-      player2Token,
-      lockedAt: new Date().toISOString(),
-      status: "locked",
-      winnerToken: null,
-      disbursedAt: null,
-    };
+      const escrow: WagerEscrow = {
+        id: `escrow-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+        roomCode,
+        amountMarbles: wagerAmount * 2,
+        amountPoints: wagerAmount * 2, // Total pot
+        player1Token,
+        player2Token,
+        lockedAt: new Date().toISOString(),
+        status: "locked",
+        winnerToken: null,
+        disbursedAt: null,
+      };
 
-    await dbRepository.createEscrow(escrow);
+      await dbRepository.createEscrow(escrow);
 
-    const now = new Date().toISOString();
-    await dbRepository.createTransaction({
-      id: `tx-wager-p1-${Date.now()}-${securityService.generateCsprngToken(4)}`,
-      userToken: player1Token,
-      type: "wager_lock",
-      currency: "points",
-      amount: -wagerAmount,
-      reference: escrow.id,
-      status: "completed",
-      metaJson: JSON.stringify({ roomCode }),
-      createdAt: now,
+      const now = new Date().toISOString();
+      await dbRepository.createTransaction({
+        id: `tx-wager-p1-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+        userToken: player1Token,
+        type: "wager_lock",
+        currency: "points",
+        amount: -wagerAmount,
+        reference: escrow.id,
+        status: "completed",
+        metaJson: JSON.stringify({ roomCode }),
+        createdAt: now,
+      });
+
+      await dbRepository.createTransaction({
+        id: `tx-wager-p2-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+        userToken: player2Token,
+        type: "wager_lock",
+        currency: "points",
+        amount: -wagerAmount,
+        reference: escrow.id,
+        status: "completed",
+        metaJson: JSON.stringify({ roomCode }),
+        createdAt: now,
+      });
+
+      await dbRepository.writeLedger([
+        {
+          userId: player1Token,
+          accountType: "available",
+          entryType: "wager_lock",
+          amount: String(-wagerAmount),
+          referenceType: "room",
+          referenceId: roomCode,
+        },
+        {
+          userId: player1Token,
+          accountType: "escrow",
+          entryType: "wager_lock",
+          amount: String(wagerAmount),
+          referenceType: "room",
+          referenceId: roomCode,
+        },
+        {
+          userId: player2Token,
+          accountType: "available",
+          entryType: "wager_lock",
+          amount: String(-wagerAmount),
+          referenceType: "room",
+          referenceId: roomCode,
+        },
+        {
+          userId: player2Token,
+          accountType: "escrow",
+          entryType: "wager_lock",
+          amount: String(wagerAmount),
+          referenceType: "room",
+          referenceId: roomCode,
+        },
+      ]).catch(() => []);
+
+      return escrow;
     });
-
-    await dbRepository.createTransaction({
-      id: `tx-wager-p2-${Date.now()}-${securityService.generateCsprngToken(4)}`,
-      userToken: player2Token,
-      type: "wager_lock",
-      currency: "points",
-      amount: -wagerAmount,
-      reference: escrow.id,
-      status: "completed",
-      metaJson: JSON.stringify({ roomCode }),
-      createdAt: now,
-    });
-
-    await dbRepository.writeLedger([
-      {
-        userId: player1Token,
-        accountType: "available",
-        entryType: "wager_lock",
-        amount: String(-wagerAmount),
-        referenceType: "room",
-        referenceId: roomCode,
-      },
-      {
-        userId: player1Token,
-        accountType: "escrow",
-        entryType: "wager_lock",
-        amount: String(wagerAmount),
-        referenceType: "room",
-        referenceId: roomCode,
-      },
-      {
-        userId: player2Token,
-        accountType: "available",
-        entryType: "wager_lock",
-        amount: String(-wagerAmount),
-        referenceType: "room",
-        referenceId: roomCode,
-      },
-      {
-        userId: player2Token,
-        accountType: "escrow",
-        entryType: "wager_lock",
-        amount: String(wagerAmount),
-        referenceType: "room",
-        referenceId: roomCode,
-      },
-    ]).catch(() => []);
-
-    return escrow;
   },
 
   async disburseWagerEscrow(escrowId: string, winnerToken: string | null): Promise<WagerEscrow> {
-    const escrow = await dbRepository.getEscrow(escrowId);
-    if (!escrow || escrow.status !== "locked") {
-      throw new Error("Escrow not found or already settled");
-    }
-
-    const now = new Date().toISOString();
-    const settings = await dbRepository.getAdminSettings();
-    const wagerFeePercent = settings.wagerFeePercent ?? 5;
-
-    if (winnerToken) {
-      // Validate that the winnerToken is strictly one of the two participants in this match escrow
-      if (winnerToken !== escrow.player1Token && winnerToken !== escrow.player2Token) {
-        throw new Error(
-          `Security violation: Winner token (${winnerToken}) is not a registered participant in escrow #${escrow.id}. Escrow funds can only be disbursed to authorized match participants.`
-        );
+    return dbRepository.lockKey(`wager_escrow:${escrowId}`, async () => {
+      const escrow = await dbRepository.getEscrow(escrowId);
+      if (!escrow || escrow.status !== "locked") {
+        throw new Error("Escrow not found or already settled");
       }
 
-      // Calculate platform fee percentage on total pot
-      const totalPot = escrow.amountPoints;
-      const platformFee = Math.round((totalPot * wagerFeePercent) / 100);
-      const winnerPayout = totalPot - platformFee;
+      const now = new Date().toISOString();
+      const settings = await dbRepository.getAdminSettings();
+      const wagerFeePercent = settings.wagerFeePercent ?? 5;
 
-      escrow.status = "disbursed";
-      escrow.winnerToken = winnerToken;
-      escrow.disbursedAt = now;
-      await dbRepository.saveEscrow(escrow);
+      if (winnerToken) {
+        // Validate that the winnerToken is strictly one of the two participants in this match escrow
+        if (winnerToken !== escrow.player1Token && winnerToken !== escrow.player2Token) {
+          throw new Error(
+            `Security violation: Winner token (${winnerToken}) is not a registered participant in escrow #${escrow.id}. Escrow funds can only be disbursed to authorized match participants.`
+          );
+        }
 
-      // Credit net payout to winner
-      await dbRepository.updateProfileBalance(winnerToken, winnerPayout);
+        // Calculate platform fee percentage on total pot
+        const totalPot = escrow.amountPoints;
+        const platformFee = Math.round((totalPot * wagerFeePercent) / 100);
+        const winnerPayout = totalPot - platformFee;
 
-      // Record transaction for winner
-      await dbRepository.createTransaction({
-        id: `tx-wager-win-${Date.now()}`,
-        userToken: winnerToken,
-        type: "wager_win",
-        currency: "points",
-        amount: winnerPayout,
-        reference: escrow.id,
-        status: "completed",
-        metaJson: JSON.stringify({ roomCode: escrow.roomCode, totalPot, platformFee, wagerFeePercent }),
-        createdAt: now,
-      });
+        escrow.status = "disbursed";
+        escrow.winnerToken = winnerToken;
+        escrow.disbursedAt = now;
+        await dbRepository.saveEscrow(escrow);
 
-      // Notify winner of victory and pot payout
-      notificationService.sendNotification({
-        userToken: winnerToken,
-        type: "wager_result",
-        title: "🏆 Wager Match Won!",
-        message: `Congratulations! You won GH₵ ${winnerPayout.toFixed(2)} in Room #${escrow.roomCode}.`,
-        link: "/wallet",
-        actionLabel: "View Payout",
-        actionPayload: { roomCode: escrow.roomCode, winnerPayout },
-      }).catch(() => {});
+        // Credit net payout to winner
+        await dbRepository.updateProfileBalance(winnerToken, winnerPayout);
 
-      // Record platform fee entry for system ledger
-      if (platformFee > 0) {
+        // Record transaction for winner
         await dbRepository.createTransaction({
-          id: `tx-fee-${Date.now()}`,
-          userToken: "system-house",
-          type: "platform_fee",
+          id: `tx-wager-win-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+          userToken: winnerToken,
+          type: "wager_win",
           currency: "points",
-          amount: platformFee,
+          amount: winnerPayout,
           reference: escrow.id,
           status: "completed",
-          metaJson: JSON.stringify({ roomCode: escrow.roomCode, totalPot, wagerFeePercent }),
+          metaJson: JSON.stringify({ roomCode: escrow.roomCode, totalPot, platformFee, wagerFeePercent }),
           createdAt: now,
         });
-      }
 
-      const wagerStakePerPlayer = Math.floor(escrow.amountPoints / 2);
-      await dbRepository.writeLedger([
-        {
-          userId: escrow.player1Token,
-          accountType: "escrow",
-          entryType: "wager_win",
-          amount: String(-wagerStakePerPlayer),
-          referenceType: "room",
-          referenceId: escrow.roomCode,
-        },
-        ...(escrow.player2Token ? [{
-          userId: escrow.player2Token,
-          accountType: "escrow" as const,
-          entryType: "wager_win" as const,
-          amount: String(-wagerStakePerPlayer),
-          referenceType: "room",
-          referenceId: escrow.roomCode,
-        }] : []),
-        {
-          userId: winnerToken,
-          accountType: "available",
-          entryType: "wager_win",
-          amount: String(winnerPayout),
-          referenceType: "room",
-          referenceId: escrow.roomCode,
-        },
-        ...(platformFee > 0 ? [{
-          userId: "platform-treasury",
-          accountType: "available" as const,
-          entryType: "platform_fee" as const,
-          amount: String(platformFee),
-          referenceType: "room",
-          referenceId: escrow.roomCode,
-        }] : []),
-      ]).catch(() => []);
-    } else {
-      // Refund both players full wager amount on draw
-      escrow.status = "refunded";
-      escrow.disbursedAt = now;
-      await dbRepository.saveEscrow(escrow);
+        // Notify winner of victory and pot payout
+        notificationService.sendNotification({
+          userToken: winnerToken,
+          type: "wager_result",
+          title: "🏆 Wager Match Won!",
+          message: `Congratulations! You won GH₵ ${winnerPayout.toFixed(2)} in Room #${escrow.roomCode}.`,
+          link: "/wallet",
+          actionLabel: "View Payout",
+          actionPayload: { roomCode: escrow.roomCode, winnerPayout },
+        }).catch(() => {});
 
-      const refundPerPlayer = Math.floor(escrow.amountPoints / 2);
-      await dbRepository.updateProfileBalance(escrow.player1Token, refundPerPlayer);
-      if (escrow.player2Token) {
-        await dbRepository.updateProfileBalance(escrow.player2Token, refundPerPlayer);
-      }
+        // Record platform fee entry for system ledger
+        if (platformFee > 0) {
+          await dbRepository.createTransaction({
+            id: `tx-fee-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+            userToken: "system-house",
+            type: "platform_fee",
+            currency: "points",
+            amount: platformFee,
+            reference: escrow.id,
+            status: "completed",
+            metaJson: JSON.stringify({ roomCode: escrow.roomCode, totalPot, wagerFeePercent }),
+            createdAt: now,
+          });
+        }
 
-      await dbRepository.createTransaction({
-        id: `tx-wager-ref-p1-${Date.now()}`,
-        userToken: escrow.player1Token,
-        type: "wager_refund",
-        currency: "points",
-        amount: refundPerPlayer,
-        reference: escrow.id,
-        status: "completed",
-        metaJson: JSON.stringify({ roomCode: escrow.roomCode }),
-        createdAt: now,
-      });
+        const wagerStakePerPlayer = Math.floor(escrow.amountPoints / 2);
+        await dbRepository.writeLedger([
+          {
+            userId: escrow.player1Token,
+            accountType: "escrow",
+            entryType: "wager_win",
+            amount: String(-wagerStakePerPlayer),
+            referenceType: "room",
+            referenceId: escrow.roomCode,
+          },
+          ...(escrow.player2Token ? [{
+            userId: escrow.player2Token,
+            accountType: "escrow" as const,
+            entryType: "wager_win" as const,
+            amount: String(-wagerStakePerPlayer),
+            referenceType: "room",
+            referenceId: escrow.roomCode,
+          }] : []),
+          {
+            userId: winnerToken,
+            accountType: "available",
+            entryType: "wager_win",
+            amount: String(winnerPayout),
+            referenceType: "room",
+            referenceId: escrow.roomCode,
+          },
+          ...(platformFee > 0 ? [{
+            userId: "platform-treasury",
+            accountType: "available" as const,
+            entryType: "platform_fee" as const,
+            amount: String(platformFee),
+            referenceType: "room",
+            referenceId: escrow.roomCode,
+          }] : []),
+        ]).catch(() => []);
+      } else {
+        // Refund both players full wager amount on draw
+        escrow.status = "refunded";
+        escrow.disbursedAt = now;
+        await dbRepository.saveEscrow(escrow);
 
-      if (escrow.player2Token) {
+        const refundPerPlayer = Math.floor(escrow.amountPoints / 2);
+        await dbRepository.updateProfileBalance(escrow.player1Token, refundPerPlayer);
+        if (escrow.player2Token) {
+          await dbRepository.updateProfileBalance(escrow.player2Token, refundPerPlayer);
+        }
+
         await dbRepository.createTransaction({
-          id: `tx-wager-ref-p2-${Date.now()}`,
-          userToken: escrow.player2Token,
+          id: `tx-wager-ref-p1-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+          userToken: escrow.player1Token,
           type: "wager_refund",
           currency: "points",
           amount: refundPerPlayer,
@@ -1195,67 +1195,81 @@ export const walletService = {
           metaJson: JSON.stringify({ roomCode: escrow.roomCode }),
           createdAt: now,
         });
-      }
 
-      await dbRepository.writeLedger([
-        {
-          userId: escrow.player1Token,
-          accountType: "escrow",
-          entryType: "wager_refund",
-          amount: String(-refundPerPlayer),
-          referenceType: "room",
-          referenceId: escrow.roomCode,
-        },
-        {
-          userId: escrow.player1Token,
-          accountType: "available",
-          entryType: "wager_refund",
-          amount: String(refundPerPlayer),
-          referenceType: "room",
-          referenceId: escrow.roomCode,
-        },
-        ...(escrow.player2Token ? [
+        if (escrow.player2Token) {
+          await dbRepository.createTransaction({
+            id: `tx-wager-ref-p2-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+            userToken: escrow.player2Token,
+            type: "wager_refund",
+            currency: "points",
+            amount: refundPerPlayer,
+            reference: escrow.id,
+            status: "completed",
+            metaJson: JSON.stringify({ roomCode: escrow.roomCode }),
+            createdAt: now,
+          });
+        }
+
+        await dbRepository.writeLedger([
           {
-            userId: escrow.player2Token,
-            accountType: "escrow" as const,
-            entryType: "wager_refund" as const,
+            userId: escrow.player1Token,
+            accountType: "escrow",
+            entryType: "wager_refund",
             amount: String(-refundPerPlayer),
             referenceType: "room",
             referenceId: escrow.roomCode,
           },
           {
-            userId: escrow.player2Token,
-            accountType: "available" as const,
-            entryType: "wager_refund" as const,
+            userId: escrow.player1Token,
+            accountType: "available",
+            entryType: "wager_refund",
             amount: String(refundPerPlayer),
             referenceType: "room",
             referenceId: escrow.roomCode,
           },
-        ] : []),
-      ]).catch(() => []);
+          ...(escrow.player2Token ? [
+            {
+              userId: escrow.player2Token,
+              accountType: "escrow" as const,
+              entryType: "wager_refund" as const,
+              amount: String(-refundPerPlayer),
+              referenceType: "room",
+              referenceId: escrow.roomCode,
+            },
+            {
+              userId: escrow.player2Token,
+              accountType: "available" as const,
+              entryType: "wager_refund" as const,
+              amount: String(refundPerPlayer),
+              referenceType: "room",
+              referenceId: escrow.roomCode,
+            },
+          ] : []),
+        ]).catch(() => []);
 
-      // Notify both players of draw and refunded stakes
-      notificationService.sendNotification({
-        userToken: escrow.player1Token,
-        type: "wager_result",
-        title: "🤝 Wager Match Draw",
-        message: `The match in Room #${escrow.roomCode} ended in a draw. Your stake of GH₵ ${refundPerPlayer.toFixed(2)} has been refunded.`,
-        link: "/wallet",
-        actionLabel: "View Wallet",
-      }).catch(() => {});
-
-      if (escrow.player2Token) {
+        // Notify both players of draw and refunded stakes
         notificationService.sendNotification({
-          userToken: escrow.player2Token,
+          userToken: escrow.player1Token,
           type: "wager_result",
           title: "🤝 Wager Match Draw",
           message: `The match in Room #${escrow.roomCode} ended in a draw. Your stake of GH₵ ${refundPerPlayer.toFixed(2)} has been refunded.`,
           link: "/wallet",
           actionLabel: "View Wallet",
         }).catch(() => {});
-      }
-    }
 
-    return escrow;
+        if (escrow.player2Token) {
+          notificationService.sendNotification({
+            userToken: escrow.player2Token,
+            type: "wager_result",
+            title: "🤝 Wager Match Draw",
+            message: `The match in Room #${escrow.roomCode} ended in a draw. Your stake of GH₵ ${refundPerPlayer.toFixed(2)} has been refunded.`,
+            link: "/wallet",
+            actionLabel: "View Wallet",
+          }).catch(() => {});
+        }
+      }
+
+      return escrow;
+    });
   },
 };

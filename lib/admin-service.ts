@@ -1549,130 +1549,135 @@ export const adminService = {
   ) {
     if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
 
-    const league = await dbRepository.getLeague(leagueId);
-    if (!league) throw new Error("League not found");
-
-    const adminProfile = await dbRepository.getProfile(adminToken);
-    const participants = await dbRepository.getLeagueParticipants(leagueId);
-
-    if (action === "disburse") {
-      const prizeWinnerToken = winnerToken || league.winnerToken;
-      if (!prizeWinnerToken) throw new Error("Winner token required for prize pool disbursal");
-
-      // Verify that the prizeWinnerToken is actually enrolled in this tournament
-      const isEnrolled = participants.some((p) => p.userToken === prizeWinnerToken && p.status !== "rejected");
-      if (!isEnrolled) {
-        throw new Error(
-          `Security violation: User token (${prizeWinnerToken}) is not an enrolled participant in tournament '${league.title}'. Prize pool escrow can only be disbursed to authorized participants.`
-        );
+    return dbRepository.lockKey(`league_payout:${leagueId}`, async () => {
+      const league = await dbRepository.getLeague(leagueId);
+      if (!league) throw new Error("League not found");
+      if (league.status === "completed") {
+        throw new Error(`Tournament '${league.title}' is already completed and settled.`);
       }
 
-      const winnerProfile = await dbRepository.getProfile(prizeWinnerToken);
-      if (!winnerProfile) throw new Error("Winner profile not found");
+      const adminProfile = await dbRepository.getProfile(adminToken);
+      const participants = await dbRepository.getLeagueParticipants(leagueId);
 
-      league.winnerToken = prizeWinnerToken;
-      league.winnerName = winnerProfile.username;
-      league.status = "completed";
-      await dbRepository.saveLeague(league);
+      if (action === "disburse") {
+        const prizeWinnerToken = winnerToken || league.winnerToken;
+        if (!prizeWinnerToken) throw new Error("Winner token required for prize pool disbursal");
 
-      if (league.prizePoolPoints > 0) {
-        await dbRepository.updateProfileBalance(prizeWinnerToken, league.prizePoolPoints);
-        await dbRepository.createTransaction({
-          id: `tx-league-prize-${Date.now()}`,
-          userToken: prizeWinnerToken,
-          type: "wager_win",
-          currency: "points",
-          amount: league.prizePoolPoints,
-          status: "completed",
-          reference: `TOURNAMENT_PRIZE_${league.id}`,
-          metaJson: JSON.stringify({ leagueId: league.id, title: league.title }),
-          createdAt: new Date().toISOString(),
-        });
-        await dbRepository.writeLedger([
-          {
-            userId: league.organizerToken || "platform-treasury",
-            accountType: "escrow",
-            entryType: "prize_disbursement",
-            amount: String(-league.prizePoolPoints),
-            referenceType: "league",
-            referenceId: league.id,
-          },
-          {
-            userId: prizeWinnerToken,
-            accountType: "available",
-            entryType: "prize_disbursement",
-            amount: String(league.prizePoolPoints),
-            referenceType: "league",
-            referenceId: league.id,
-          },
-        ]).catch(() => []);
-      }
+        // Verify that the prizeWinnerToken is actually enrolled in this tournament
+        const isEnrolled = participants.some((p) => p.userToken === prizeWinnerToken && p.status !== "rejected");
+        if (!isEnrolled) {
+          throw new Error(
+            `Security violation: User token (${prizeWinnerToken}) is not an enrolled participant in tournament '${league.title}'. Prize pool escrow can only be disbursed to authorized participants.`
+          );
+        }
 
-      await this.logAdminAction(
-        adminToken,
-        adminProfile?.username || "Admin",
-        "DISBURSE_TOURNAMENT_ESCROW",
-        league.id,
-        { winnerToken: prizeWinnerToken, prizePool: league.prizePoolPoints }
-      );
+        const winnerProfile = await dbRepository.getProfile(prizeWinnerToken);
+        if (!winnerProfile) throw new Error("Winner profile not found");
 
-      return { success: true, league };
-    } else if (action === "refund") {
-      league.status = "completed";
-      await dbRepository.saveLeague(league);
+        league.winnerToken = prizeWinnerToken;
+        league.winnerName = winnerProfile.username;
+        league.status = "completed";
+        await dbRepository.saveLeague(league);
 
-      // Refund entry fee points to all approved participants
-      const refundPostings: { userId: string; accountType: "available" | "escrow"; entryType: string; amount: string; referenceType: string; referenceId: string }[] = [];
-      for (const p of participants) {
-        if (p.status !== "rejected" && league.entryFeePoints > 0) {
-          await dbRepository.updateProfileBalance(p.userToken, league.entryFeePoints);
+        if (league.prizePoolPoints > 0) {
+          await dbRepository.updateProfileBalance(prizeWinnerToken, league.prizePoolPoints);
           await dbRepository.createTransaction({
-            id: `tx-league-refund-${Date.now()}-${p.userToken.slice(-4)}`,
-            userToken: p.userToken,
-            type: "wager_refund",
+            id: `tx-league-prize-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+            userToken: prizeWinnerToken,
+            type: "wager_win",
             currency: "points",
-            amount: league.entryFeePoints,
+            amount: league.prizePoolPoints,
             status: "completed",
-            reference: `TOURNAMENT_REFUND_${league.id}`,
+            reference: `TOURNAMENT_PRIZE_${league.id}`,
             metaJson: JSON.stringify({ leagueId: league.id, title: league.title }),
             createdAt: new Date().toISOString(),
           });
-          refundPostings.push(
+          await dbRepository.writeLedger([
             {
-              userId: p.userToken,
+              userId: league.organizerToken || "platform-treasury",
               accountType: "escrow",
-              entryType: "entry_fee_refund",
-              amount: String(-league.entryFeePoints),
+              entryType: "prize_disbursement",
+              amount: String(-league.prizePoolPoints),
               referenceType: "league",
               referenceId: league.id,
             },
             {
-              userId: p.userToken,
+              userId: prizeWinnerToken,
               accountType: "available",
-              entryType: "entry_fee_refund",
-              amount: String(league.entryFeePoints),
+              entryType: "prize_disbursement",
+              amount: String(league.prizePoolPoints),
               referenceType: "league",
               referenceId: league.id,
-            }
-          );
+            },
+          ]).catch(() => []);
         }
+
+        await this.logAdminAction(
+          adminToken,
+          adminProfile?.username || "Admin",
+          "DISBURSE_TOURNAMENT_ESCROW",
+          league.id,
+          { winnerToken: prizeWinnerToken, prizePool: league.prizePoolPoints }
+        );
+
+        return { success: true, league };
+      } else if (action === "refund") {
+        league.status = "completed";
+        await dbRepository.saveLeague(league);
+
+        // Refund entry fee points to all approved participants
+        const refundPostings: { userId: string; accountType: "available" | "escrow"; entryType: string; amount: string; referenceType: string; referenceId: string }[] = [];
+        for (const p of participants) {
+          if (p.status !== "rejected" && league.entryFeePoints > 0) {
+            await dbRepository.updateProfileBalance(p.userToken, league.entryFeePoints);
+            await dbRepository.createTransaction({
+              id: `tx-league-refund-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+              userToken: p.userToken,
+              type: "wager_refund",
+              currency: "points",
+              amount: league.entryFeePoints,
+              status: "completed",
+              reference: `TOURNAMENT_REFUND_${league.id}`,
+              metaJson: JSON.stringify({ leagueId: league.id, title: league.title }),
+              createdAt: new Date().toISOString(),
+            });
+            refundPostings.push(
+              {
+                userId: p.userToken,
+                accountType: "escrow",
+                entryType: "entry_fee_refund",
+                amount: String(-league.entryFeePoints),
+                referenceType: "league",
+                referenceId: league.id,
+              },
+              {
+                userId: p.userToken,
+                accountType: "available",
+                entryType: "entry_fee_refund",
+                amount: String(league.entryFeePoints),
+                referenceType: "league",
+                referenceId: league.id,
+              }
+            );
+          }
+        }
+        if (refundPostings.length > 0) {
+          await dbRepository.writeLedger(refundPostings).catch(() => []);
+        }
+
+        await this.logAdminAction(
+          adminToken,
+          adminProfile?.username || "Admin",
+          "REFUND_TOURNAMENT_ESCROW",
+          league.id,
+          { entryFeeRefunded: league.entryFeePoints, participantCount: participants.length }
+        );
+
+        return { success: true, league };
       }
-      if (refundPostings.length > 0) {
-        await dbRepository.writeLedger(refundPostings).catch(() => []);
-      }
 
-      await this.logAdminAction(
-        adminToken,
-        adminProfile?.username || "Admin",
-        "REFUND_TOURNAMENT_ESCROW",
-        league.id,
-        { entryFeeRefunded: league.entryFeePoints, participantCount: participants.length }
-      );
-
-      return { success: true, league };
-    }
-
-    throw new Error("Invalid escrow action");
+      throw new Error("Invalid escrow action");
+    });
   },
 
   async resolveMatchDispute(

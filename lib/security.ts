@@ -145,6 +145,71 @@ export const securityService = {
   },
 
   /**
+   * List of reserved system, administrative, and role keywords that cannot be chosen by players
+   */
+  isReservedUsername(username: string): boolean {
+    if (!username || typeof username !== "string") return true;
+    const clean = username.trim().toLowerCase();
+    const reserved = new Set([
+      "admin",
+      "superadmin",
+      "super_admin",
+      "administrator",
+      "system",
+      "root",
+      "moderator",
+      "mod",
+      "damii",
+      "damiigames",
+      "support",
+      "staff",
+      "treasurer",
+      "facilitator",
+      "official",
+      "help",
+      "null",
+      "undefined",
+      "anonymous",
+      "bot",
+      "ai",
+      "api",
+      "host",
+      "guest",
+      "user",
+      "server",
+      "platform",
+      "treasury",
+    ]);
+
+    if (reserved.has(clean)) return true;
+    if (/^(admin|superadmin|system|damii|support|official)[_.-]/i.test(clean)) return true;
+    return false;
+  },
+
+  /**
+   * Validates a username for syntax, length, and reservation constraints
+   */
+  validateUsername(username: string): { valid: boolean; error?: string } {
+    if (!username || typeof username !== "string") {
+      return { valid: false, error: "Username is required." };
+    }
+    const trimmed = username.trim();
+    if (trimmed.length < 3) {
+      return { valid: false, error: "Username must be at least 3 characters long." };
+    }
+    if (trimmed.length > 20) {
+      return { valid: false, error: "Username cannot exceed 20 characters." };
+    }
+    if (!/^[a-zA-Z0-9_.-]+$/.test(trimmed)) {
+      return { valid: false, error: "Username can only contain letters, numbers, underscores, dots, or hyphens." };
+    }
+    if (this.isReservedUsername(trimmed)) {
+      return { valid: false, error: "This username is reserved and cannot be registered." };
+    }
+    return { valid: true };
+  },
+
+  /**
    * Strips sensitive cryptographic credentials (passcode, salt) from a user profile object
    */
   sanitizeProfile<T extends Record<string, unknown>>(profile: T | null | undefined): T | null {

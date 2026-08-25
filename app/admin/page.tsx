@@ -392,7 +392,7 @@ export default function AdminPage() {
   const [token, setToken] = useState("");
   const [adminUsername, setAdminUsername] = useState("");
   const [adminPasscode, setAdminPasscode] = useState("");
-  const [adminSecret, setAdminSecret] = useState("damii-admin-2026");
+  const [adminSecret, setAdminSecret] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

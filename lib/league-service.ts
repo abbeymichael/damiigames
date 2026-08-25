@@ -1961,218 +1961,229 @@ export const leagueService = {
     thirdPlaceToken?: string | null,
     unawardedReason?: string
   ) {
-    // Validate that any awarded token is an enrolled participant in this league
-    const participants = await dbRepository.getLeagueParticipants(league.id);
-    const validTokens = new Set(participants.filter((p) => p.status !== "rejected").map((p) => p.userToken));
-
-    if (winnerToken && !validTokens.has(winnerToken)) {
-      throw new Error(`Security violation: Winner token (${winnerToken}) is not an enrolled participant in tournament '${league.title}'`);
-    }
-    if (runnerUpToken && !validTokens.has(runnerUpToken)) {
-      throw new Error(`Security violation: Runner-up token (${runnerUpToken}) is not an enrolled participant in tournament '${league.title}'`);
-    }
-    if (thirdPlaceToken && !validTokens.has(thirdPlaceToken)) {
-      throw new Error(`Security violation: 3rd-place token (${thirdPlaceToken}) is not an enrolled participant in tournament '${league.title}'`);
-    }
-
-    const winnerProfile = winnerToken ? await dbRepository.getProfile(winnerToken) : null;
-    const runnerUpProfile = runnerUpToken ? await dbRepository.getProfile(runnerUpToken) : null;
-    const thirdPlaceProfile = thirdPlaceToken ? await dbRepository.getProfile(thirdPlaceToken) : null;
-
-    league.status = "completed";
-    league.winnerToken = winnerToken;
-    league.winnerName = winnerProfile ? winnerProfile.username : (winnerToken ? "Champion" : "Unawarded");
-    league.runnerUpToken = runnerUpToken || null;
-    league.runnerUpName = runnerUpProfile ? runnerUpProfile.username : (runnerUpToken ? "Runner-Up" : "Unawarded");
-    league.thirdPlaceToken = thirdPlaceToken || null;
-    league.thirdPlaceName = thirdPlaceProfile ? thirdPlaceProfile.username : (thirdPlaceToken ? "3rd Place" : "Unawarded");
-
-    if (unawardedReason) {
-      league.unawardedReason = unawardedReason;
-    }
-
-    await dbRepository.saveLeague(league);
-
-    // Calculate payouts according to Prize Distribution percentages after platform fee
-    const settings = await dbRepository.getAdminSettings();
-    const tournamentFeePercent = settings.tournamentFeePercent ?? 10;
-    const totalPrize = league.prizePoolPoints;
-
-    if (totalPrize > 0) {
-      const platformFee = Math.round((totalPrize * tournamentFeePercent) / 100);
-      const netPrizePool = totalPrize - platformFee;
-
-      if (!league.platformFeeCharged && platformFee > 0) {
-        await dbRepository.createTransaction({
-          id: `tx-league-fee-${Date.now()}`,
-          userToken: "platform-treasury",
-          type: "platform_fee",
-          currency: "points",
-          amount: platformFee,
-          reference: league.id,
-          status: "completed",
-          metaJson: JSON.stringify({ leagueTitle: league.title, totalPrize, tournamentFeePercent }),
-          createdAt: new Date().toISOString(),
-        });
+    return dbRepository.lockKey(`league_payout:${league.id}`, async () => {
+      // Re-fetch league inside lock to prevent race condition / double-payout
+      const latestLeague = await dbRepository.getLeague(league.id);
+      if (!latestLeague) {
+        throw new Error(`Tournament ${league.id} not found.`);
+      }
+      if (latestLeague.status === "completed") {
+        throw new Error(`Tournament '${latestLeague.title}' prize pool has already been disbursed.`);
       }
 
-      const dist = league.prizeDistribution || { first: 60, second: 30, third: 10 };
+      // Validate that any awarded token is an enrolled participant in this league
+      const participants = await dbRepository.getLeagueParticipants(league.id);
+      const validTokens = new Set(participants.filter((p) => p.status !== "rejected").map((p) => p.userToken));
 
-      // 1st Place Payout or Unawarded Pool Return
-      const firstAmount = Math.round((netPrizePool * dist.first) / 100);
-      if (winnerToken) {
-        await dbRepository.updateProfileBalance(winnerToken, firstAmount);
-        await dbRepository.createTransaction({
-          id: `tx-league-prize-1st-${Date.now()}`,
-          userToken: winnerToken,
-          type: "league_prize",
-          currency: "points",
-          amount: firstAmount,
-          reference: league.id,
-          status: "completed",
-          metaJson: JSON.stringify({ rank: "1st Place (Champion)", leagueTitle: league.title, platformFee, netPrizePool }),
-          createdAt: new Date().toISOString(),
-        });
-      } else {
-        // Unawarded 1st place returned to platform reward pool
-        await dbRepository.createTransaction({
-          id: `tx-league-unawarded-1st-${Date.now()}`,
-          userToken: "platform-treasury",
-          type: "platform_fee",
-          currency: "points",
-          amount: firstAmount,
-          reference: league.id,
-          status: "completed",
-          metaJson: JSON.stringify({ note: "Unawarded 1st place prize returned to platform reward pool", reason: unawardedReason || "No eligible champion" }),
-          createdAt: new Date().toISOString(),
-        });
+      if (winnerToken && !validTokens.has(winnerToken)) {
+        throw new Error(`Security violation: Winner token (${winnerToken}) is not an enrolled participant in tournament '${league.title}'`);
+      }
+      if (runnerUpToken && !validTokens.has(runnerUpToken)) {
+        throw new Error(`Security violation: Runner-up token (${runnerUpToken}) is not an enrolled participant in tournament '${league.title}'`);
+      }
+      if (thirdPlaceToken && !validTokens.has(thirdPlaceToken)) {
+        throw new Error(`Security violation: 3rd-place token (${thirdPlaceToken}) is not an enrolled participant in tournament '${league.title}'`);
       }
 
-      // 2nd Place Payout or Unawarded Pool Return
-      const secondAmount = Math.round((netPrizePool * dist.second) / 100);
-      if (runnerUpToken) {
-        await dbRepository.updateProfileBalance(runnerUpToken, secondAmount);
-        await dbRepository.createTransaction({
-          id: `tx-league-prize-2nd-${Date.now()}`,
-          userToken: runnerUpToken,
-          type: "league_prize",
-          currency: "points",
-          amount: secondAmount,
-          reference: league.id,
-          status: "completed",
-          metaJson: JSON.stringify({ rank: "2nd Place (Runner-Up)", leagueTitle: league.title, platformFee, netPrizePool }),
-          createdAt: new Date().toISOString(),
-        });
-      } else {
-        // Unawarded 2nd place returned to platform reward pool
-        await dbRepository.createTransaction({
-          id: `tx-league-unawarded-2nd-${Date.now()}`,
-          userToken: "platform-treasury",
-          type: "platform_fee",
-          currency: "points",
-          amount: secondAmount,
-          reference: league.id,
-          status: "completed",
-          metaJson: JSON.stringify({ note: "Unawarded 2nd place prize returned to platform reward pool", reason: unawardedReason || "No eligible runner-up" }),
-          createdAt: new Date().toISOString(),
-        });
+      const winnerProfile = winnerToken ? await dbRepository.getProfile(winnerToken) : null;
+      const runnerUpProfile = runnerUpToken ? await dbRepository.getProfile(runnerUpToken) : null;
+      const thirdPlaceProfile = thirdPlaceToken ? await dbRepository.getProfile(thirdPlaceToken) : null;
+
+      latestLeague.status = "completed";
+      latestLeague.winnerToken = winnerToken;
+      latestLeague.winnerName = winnerProfile ? winnerProfile.username : (winnerToken ? "Champion" : "Unawarded");
+      latestLeague.runnerUpToken = runnerUpToken || null;
+      latestLeague.runnerUpName = runnerUpProfile ? runnerUpProfile.username : (runnerUpToken ? "Runner-Up" : "Unawarded");
+      latestLeague.thirdPlaceToken = thirdPlaceToken || null;
+      latestLeague.thirdPlaceName = thirdPlaceProfile ? thirdPlaceProfile.username : (thirdPlaceToken ? "3rd Place" : "Unawarded");
+
+      if (unawardedReason) {
+        latestLeague.unawardedReason = unawardedReason;
       }
 
-      // 3rd Place Payout or Unawarded Pool Return
-      const thirdAmount = Math.round((netPrizePool * dist.third) / 100);
-      if (thirdPlaceToken) {
-        await dbRepository.updateProfileBalance(thirdPlaceToken, thirdAmount);
-        await dbRepository.createTransaction({
-          id: `tx-league-prize-3rd-${Date.now()}`,
-          userToken: thirdPlaceToken,
-          type: "league_prize",
-          currency: "points",
-          amount: thirdAmount,
-          reference: league.id,
-          status: "completed",
-          metaJson: JSON.stringify({ rank: "3rd Place", leagueTitle: league.title, platformFee, netPrizePool }),
-          createdAt: new Date().toISOString(),
-        });
-      } else {
-        // Unawarded 3rd place returned to platform reward pool
-        await dbRepository.createTransaction({
-          id: `tx-league-unawarded-3rd-${Date.now()}`,
-          userToken: "platform-treasury",
-          type: "platform_fee",
-          currency: "points",
-          amount: thirdAmount,
-          reference: league.id,
-          status: "completed",
-          metaJson: JSON.stringify({ note: "Unawarded 3rd place prize returned to platform reward pool", reason: unawardedReason || "No eligible 3rd place" }),
-          createdAt: new Date().toISOString(),
-        });
-      }
+      await dbRepository.saveLeague(latestLeague);
 
-      // Double-entry ledger settlement:
-      // Escrow liability reduction (-totalPrize), platform commission credit (+platformFee), and winners/pool credits
-      await dbRepository.writeLedger([
-        {
-          userId: league.facilitatorToken || "platform-treasury",
-          accountType: "escrow",
-          entryType: "league_prize",
-          amount: String(-totalPrize),
-          referenceType: "league",
-          referenceId: league.id,
-        },
-        ...(platformFee > 0 && !league.platformFeeCharged ? [{
-          userId: "platform-treasury",
-          accountType: "available" as const,
-          entryType: "platform_fee" as const,
-          amount: String(platformFee),
-          referenceType: "league",
-          referenceId: league.id,
-        }] : []),
-        ...(winnerToken && firstAmount > 0 ? [{
-          userId: winnerToken,
-          accountType: "available" as const,
-          entryType: "league_prize" as const,
-          amount: String(firstAmount),
-          referenceType: "league",
-          referenceId: league.id,
-        }] : firstAmount > 0 ? [{
-          userId: "platform-treasury",
-          accountType: "available" as const,
-          entryType: "platform_fee" as const,
-          amount: String(firstAmount),
-          referenceType: "league",
-          referenceId: league.id,
-        }] : []),
-        ...(runnerUpToken && secondAmount > 0 ? [{
-          userId: runnerUpToken,
-          accountType: "available" as const,
-          entryType: "league_prize" as const,
-          amount: String(secondAmount),
-          referenceType: "league",
-          referenceId: league.id,
-        }] : secondAmount > 0 ? [{
-          userId: "platform-treasury",
-          accountType: "available" as const,
-          entryType: "platform_fee" as const,
-          amount: String(secondAmount),
-          referenceType: "league",
-          referenceId: league.id,
-        }] : []),
-        ...(thirdPlaceToken && thirdAmount > 0 ? [{
-          userId: thirdPlaceToken,
-          accountType: "available" as const,
-          entryType: "league_prize" as const,
-          amount: String(thirdAmount),
-          referenceType: "league",
-          referenceId: league.id,
-        }] : thirdAmount > 0 ? [{
-          userId: "platform-treasury",
-          accountType: "available" as const,
-          entryType: "platform_fee" as const,
-          amount: String(thirdAmount),
-          referenceType: "league",
-          referenceId: league.id,
-        }] : []),
-      ]).catch(() => []);
-    }
+      // Calculate payouts according to Prize Distribution percentages after platform fee
+      const settings = await dbRepository.getAdminSettings();
+      const tournamentFeePercent = settings.tournamentFeePercent ?? 10;
+      const totalPrize = latestLeague.prizePoolPoints;
+
+      if (totalPrize > 0) {
+        const platformFee = Math.round((totalPrize * tournamentFeePercent) / 100);
+        const netPrizePool = totalPrize - platformFee;
+
+        if (!latestLeague.platformFeeCharged && platformFee > 0) {
+          await dbRepository.createTransaction({
+            id: `tx-league-fee-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+            userToken: "platform-treasury",
+            type: "platform_fee",
+            currency: "points",
+            amount: platformFee,
+            reference: latestLeague.id,
+            status: "completed",
+            metaJson: JSON.stringify({ leagueTitle: latestLeague.title, totalPrize, tournamentFeePercent }),
+            createdAt: new Date().toISOString(),
+          });
+        }
+
+        const dist = latestLeague.prizeDistribution || { first: 60, second: 30, third: 10 };
+
+        // 1st Place Payout or Unawarded Pool Return
+        const firstAmount = Math.round((netPrizePool * dist.first) / 100);
+        if (winnerToken) {
+          await dbRepository.updateProfileBalance(winnerToken, firstAmount);
+          await dbRepository.createTransaction({
+            id: `tx-league-prize-1st-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+            userToken: winnerToken,
+            type: "league_prize",
+            currency: "points",
+            amount: firstAmount,
+            reference: latestLeague.id,
+            status: "completed",
+            metaJson: JSON.stringify({ rank: "1st Place (Champion)", leagueTitle: latestLeague.title, platformFee, netPrizePool }),
+            createdAt: new Date().toISOString(),
+          });
+        } else {
+          // Unawarded 1st place returned to platform reward pool
+          await dbRepository.createTransaction({
+            id: `tx-league-unawarded-1st-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+            userToken: "platform-treasury",
+            type: "platform_fee",
+            currency: "points",
+            amount: firstAmount,
+            reference: latestLeague.id,
+            status: "completed",
+            metaJson: JSON.stringify({ note: "Unawarded 1st place prize returned to platform reward pool", reason: unawardedReason || "No eligible champion" }),
+            createdAt: new Date().toISOString(),
+          });
+        }
+
+        // 2nd Place Payout or Unawarded Pool Return
+        const secondAmount = Math.round((netPrizePool * dist.second) / 100);
+        if (runnerUpToken) {
+          await dbRepository.updateProfileBalance(runnerUpToken, secondAmount);
+          await dbRepository.createTransaction({
+            id: `tx-league-prize-2nd-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+            userToken: runnerUpToken,
+            type: "league_prize",
+            currency: "points",
+            amount: secondAmount,
+            reference: latestLeague.id,
+            status: "completed",
+            metaJson: JSON.stringify({ rank: "2nd Place (Runner-Up)", leagueTitle: latestLeague.title, platformFee, netPrizePool }),
+            createdAt: new Date().toISOString(),
+          });
+        } else {
+          // Unawarded 2nd place returned to platform reward pool
+          await dbRepository.createTransaction({
+            id: `tx-league-unawarded-2nd-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+            userToken: "platform-treasury",
+            type: "platform_fee",
+            currency: "points",
+            amount: secondAmount,
+            reference: latestLeague.id,
+            status: "completed",
+            metaJson: JSON.stringify({ note: "Unawarded 2nd place prize returned to platform reward pool", reason: unawardedReason || "No eligible runner-up" }),
+            createdAt: new Date().toISOString(),
+          });
+        }
+
+        // 3rd Place Payout or Unawarded Pool Return
+        const thirdAmount = Math.round((netPrizePool * dist.third) / 100);
+        if (thirdPlaceToken) {
+          await dbRepository.updateProfileBalance(thirdPlaceToken, thirdAmount);
+          await dbRepository.createTransaction({
+            id: `tx-league-prize-3rd-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+            userToken: thirdPlaceToken,
+            type: "league_prize",
+            currency: "points",
+            amount: thirdAmount,
+            reference: latestLeague.id,
+            status: "completed",
+            metaJson: JSON.stringify({ rank: "3rd Place", leagueTitle: latestLeague.title, platformFee, netPrizePool }),
+            createdAt: new Date().toISOString(),
+          });
+        } else {
+          // Unawarded 3rd place returned to platform reward pool
+          await dbRepository.createTransaction({
+            id: `tx-league-unawarded-3rd-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+            userToken: "platform-treasury",
+            type: "platform_fee",
+            currency: "points",
+            amount: thirdAmount,
+            reference: latestLeague.id,
+            status: "completed",
+            metaJson: JSON.stringify({ note: "Unawarded 3rd place prize returned to platform reward pool", reason: unawardedReason || "No eligible 3rd place" }),
+            createdAt: new Date().toISOString(),
+          });
+        }
+
+        // Double-entry ledger settlement:
+        // Escrow liability reduction (-totalPrize), platform commission credit (+platformFee), and winners/pool credits
+        await dbRepository.writeLedger([
+          {
+            userId: latestLeague.facilitatorToken || "platform-treasury",
+            accountType: "escrow",
+            entryType: "league_prize",
+            amount: String(-totalPrize),
+            referenceType: "league",
+            referenceId: latestLeague.id,
+          },
+          ...(platformFee > 0 && !latestLeague.platformFeeCharged ? [{
+            userId: "platform-treasury",
+            accountType: "available" as const,
+            entryType: "platform_fee" as const,
+            amount: String(platformFee),
+            referenceType: "league",
+            referenceId: latestLeague.id,
+          }] : []),
+          ...(winnerToken && firstAmount > 0 ? [{
+            userId: winnerToken,
+            accountType: "available" as const,
+            entryType: "league_prize" as const,
+            amount: String(firstAmount),
+            referenceType: "league",
+            referenceId: latestLeague.id,
+          }] : firstAmount > 0 ? [{
+            userId: "platform-treasury",
+            accountType: "available" as const,
+            entryType: "platform_fee" as const,
+            amount: String(firstAmount),
+            referenceType: "league",
+            referenceId: latestLeague.id,
+          }] : []),
+          ...(runnerUpToken && secondAmount > 0 ? [{
+            userId: runnerUpToken,
+            accountType: "available" as const,
+            entryType: "league_prize" as const,
+            amount: String(secondAmount),
+            referenceType: "league",
+            referenceId: latestLeague.id,
+          }] : secondAmount > 0 ? [{
+            userId: "platform-treasury",
+            accountType: "available" as const,
+            entryType: "platform_fee" as const,
+            amount: String(secondAmount),
+            referenceType: "league",
+            referenceId: latestLeague.id,
+          }] : []),
+          ...(thirdPlaceToken && thirdAmount > 0 ? [{
+            userId: thirdPlaceToken,
+            accountType: "available" as const,
+            entryType: "league_prize" as const,
+            amount: String(thirdAmount),
+            referenceType: "league",
+            referenceId: latestLeague.id,
+          }] : thirdAmount > 0 ? [{
+            userId: "platform-treasury",
+            accountType: "available" as const,
+            entryType: "platform_fee" as const,
+            amount: String(thirdAmount),
+            referenceType: "league",
+            referenceId: latestLeague.id,
+          }] : []),
+        ]).catch(() => []);
+      }
+    });
   },
 };

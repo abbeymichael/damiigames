@@ -175,17 +175,10 @@ export async function POST(req: NextRequest) {
       // Validate username length & uniqueness if username is being changed
       const requestedUsername = body.username !== undefined ? String(body.username).trim() : undefined;
       if (requestedUsername && requestedUsername !== existingProfile.username) {
-        // Length check (3 - 25 characters)
-        if (requestedUsername.length < 3 || requestedUsername.length > 25) {
+        const validation = securityService.validateUsername(requestedUsername);
+        if (!validation.valid) {
           return NextResponse.json(
-            { error: "Username must be between 3 and 25 characters." },
-            { status: 400 }
-          );
-        }
-        // Format check: letters, numbers, underscores, and hyphens
-        if (!/^[a-zA-Z0-9_-]+$/.test(requestedUsername)) {
-          return NextResponse.json(
-            { error: "Username can only contain letters, numbers, underscores, and hyphens." },
+            { error: validation.error },
             { status: 400 }
           );
         }
@@ -295,6 +288,11 @@ export async function POST(req: NextRequest) {
 
     // 5. REGISTER
     if (action === "register") {
+      const validation = securityService.validateUsername(username);
+      if (!validation.valid) {
+        return NextResponse.json({ error: validation.error }, { status: 400 });
+      }
+
       if (!passcode || passcode.length < 3) {
         return NextResponse.json({ error: "Passcode/password must be at least 3 characters" }, { status: 400 });
       }
