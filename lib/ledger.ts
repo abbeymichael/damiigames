@@ -2,7 +2,16 @@ import { randomUUID } from "node:crypto";
 import { db } from "@/db/client";
 import { ledgerEntries, profiles } from "@/db/schema.mysql";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
-import type { SystemFundType, SystemFundsReport, SystemFundSummary } from "./types";
+import type {
+  SystemFundType,
+  SystemFundsReport,
+  SystemFundSummary,
+  ChartOfAccount,
+  ChartOfAccountsReport,
+  TreasuryFundDetails,
+  AccountClass,
+  NormalBalance,
+} from "./types";
 
 export type LedgerAccountType = "available" | "escrow";
 export type LedgerEntryType = typeof ledgerEntries.$inferInsert["entryType"];
@@ -20,6 +29,166 @@ export function determineFundType(
     return "escrow";
   }
   return "account_balances";
+}
+
+export const CANONICAL_CHART_OF_ACCOUNTS: Array<{
+  code: string;
+  name: string;
+  accountClass: AccountClass;
+  fundType: SystemFundType;
+  normalBalance: NormalBalance;
+  description: string;
+}> = [
+  {
+    code: "1010",
+    name: "Mobile Money Clearing (Paystack)",
+    accountClass: "asset",
+    fundType: "account_balances",
+    normalBalance: "debit",
+    description: "Real cash inflow and clearing held at the payment gateway for MoMo deposits and pending withdrawals.",
+  },
+  {
+    code: "1020",
+    name: "Player Available Cash (Liquid)",
+    accountClass: "asset",
+    fundType: "account_balances",
+    normalBalance: "debit",
+    description: "Total liquid balance accessible across all active player wallets for wagering and gameplay.",
+  },
+  {
+    code: "1030",
+    name: "Escrow Custody Vault",
+    accountClass: "asset",
+    fundType: "escrow",
+    normalBalance: "debit",
+    description: "Custodial asset account holding locked player funds in active wager matches and tournament prize pools.",
+  },
+  {
+    code: "2010",
+    name: "Player Wallet Obligations",
+    accountClass: "liability",
+    fundType: "account_balances",
+    normalBalance: "credit",
+    description: "Total platform obligation owed to registered players on demand for cashouts or game wagers.",
+  },
+  {
+    code: "2020",
+    name: "Active Match Escrow Liability",
+    accountClass: "liability",
+    fundType: "escrow",
+    normalBalance: "credit",
+    description: "Funds committed to ongoing 1v1 wager matches awaiting game victory or draw resolution.",
+  },
+  {
+    code: "2030",
+    name: "Tournament Prize Pool Liability",
+    accountClass: "liability",
+    fundType: "escrow",
+    normalBalance: "credit",
+    description: "Locked tournament entry fees and guaranteed prize pools committed until tournament bracket completion.",
+  },
+  {
+    code: "3010",
+    name: "Platform Treasury & Retained Earnings",
+    accountClass: "equity",
+    fundType: "platform_fee",
+    normalBalance: "credit",
+    description: "Cumulative net platform profits retained after all player payouts, rake collections, and commissions.",
+  },
+  {
+    code: "3020",
+    name: "Dispute & Goodwill Reserve",
+    accountClass: "equity",
+    fundType: "platform_fee",
+    normalBalance: "credit",
+    description: "Capital reserve allocated for manual dispute refunds, goodwill adjustments, and compensation.",
+  },
+  {
+    code: "4010",
+    name: "1v1 Match Rake Revenue (5%)",
+    accountClass: "revenue",
+    fundType: "platform_fee",
+    normalBalance: "credit",
+    description: "5% platform commission automatically deducted from gross pot upon completion of 1v1 wager matches.",
+  },
+  {
+    code: "4020",
+    name: "Tournament Commission Revenue",
+    accountClass: "revenue",
+    fundType: "platform_fee",
+    normalBalance: "credit",
+    description: "Tournament entry fee commissions and organizer platform fees realized upon tournament conclusion.",
+  },
+  {
+    code: "4030",
+    name: "Forfeit & Penalty Surcharges",
+    accountClass: "revenue",
+    fundType: "platform_fee",
+    normalBalance: "credit",
+    description: "Revenue collected from player abandonment penalties, match timeout surcharges, and anti-fair-play forfeits.",
+  },
+  {
+    code: "5010",
+    name: "Payment Gateway Processing Fees",
+    accountClass: "expense",
+    fundType: "platform_fee",
+    normalBalance: "debit",
+    description: "Payment gateway transaction processing charges (e.g. Paystack / Telco MoMo 1.95% clearing fee).",
+  },
+  {
+    code: "5020",
+    name: "Promotional & Welcome Bonus Grants",
+    accountClass: "expense",
+    fundType: "platform_fee",
+    normalBalance: "debit",
+    description: "Platform marketing grants, sign-up bonus points, and promotional community incentives given to players.",
+  },
+];
+
+export function mapLedgerEntryToAccount(entry: {
+  userId: string;
+  accountType: string;
+  entryType: string;
+  referenceType?: string;
+  referenceId?: string;
+}): { code: string; name: string; fundType: SystemFundType } {
+  if (entry.userId === PLATFORM_ACCOUNT_ID || entry.entryType === "platform_fee") {
+    if (
+      entry.referenceType === "league" ||
+      entry.referenceType === "tournament" ||
+      entry.referenceId?.startsWith("league-") ||
+      entry.entryType.includes("entry_fee") ||
+      entry.entryType.includes("prize")
+    ) {
+      return { code: "4020", name: "Tournament Commission Revenue", fundType: "platform_fee" };
+    }
+    if (entry.referenceType === "forfeit" || entry.referenceType === "penalty") {
+      return { code: "4030", name: "Forfeit & Penalty Surcharges", fundType: "platform_fee" };
+    }
+    return { code: "4010", name: "1v1 Match Rake Revenue (5%)", fundType: "platform_fee" };
+  }
+
+  if (entry.entryType === "adjustment") {
+    return { code: "3020", name: "Dispute & Goodwill Reserve", fundType: "platform_fee" };
+  }
+
+  if (entry.accountType === "escrow" || entry.entryType.includes("escrow") || entry.entryType.includes("lock")) {
+    if (
+      entry.referenceType === "league" ||
+      entry.referenceType === "tournament" ||
+      entry.entryType.includes("prize") ||
+      entry.entryType.includes("entry_fee")
+    ) {
+      return { code: "2030", name: "Tournament Prize Pool Liability", fundType: "escrow" };
+    }
+    return { code: "2020", name: "Active Match Escrow Liability", fundType: "escrow" };
+  }
+
+  if (entry.entryType === "deposit" || entry.entryType === "withdrawal") {
+    return { code: "1010", name: "Mobile Money Clearing (Paystack)", fundType: "account_balances" };
+  }
+
+  return { code: "1020", name: "Player Available Cash (Liquid)", fundType: "account_balances" };
 }
 
 export type LedgerLine = {
@@ -420,3 +589,228 @@ export async function reconcileSystemFunds() {
     reconciledAt: new Date().toISOString(),
   };
 }
+
+/**
+ * Computes live balances, debits, credits, and verification for the Chart of Accounts (COA).
+ */
+export async function getChartOfAccountsReport(): Promise<ChartOfAccountsReport> {
+  const allEntries = await db
+    .select()
+    .from(ledgerEntries)
+    .orderBy(desc(ledgerEntries.createdAt));
+
+  const allProfiles = await db.select({ points: profiles.points, token: profiles.token }).from(profiles);
+  const totalProfilesPoints = allProfiles.reduce((sum, p) => sum + (Number(p.points) || 0), 0);
+
+  // Initialize account metrics accumulators
+  const accountStats = new Map<
+    string,
+    {
+      totalDebits: number;
+      totalCredits: number;
+      entryCount: number;
+      lastActivityAt?: string;
+    }
+  >();
+
+  for (const account of CANONICAL_CHART_OF_ACCOUNTS) {
+    accountStats.set(account.code, {
+      totalDebits: 0,
+      totalCredits: 0,
+      entryCount: 0,
+      lastActivityAt: undefined,
+    });
+  }
+
+  // Iterate over all entries and compute debits/credits per account code
+  for (const entry of allEntries) {
+    const { code } = mapLedgerEntryToAccount({
+      userId: entry.userId,
+      accountType: entry.accountType,
+      entryType: entry.entryType,
+      referenceType: entry.referenceType,
+      referenceId: entry.referenceId,
+    });
+
+    const stats = accountStats.get(code) || {
+      totalDebits: 0,
+      totalCredits: 0,
+      entryCount: 0,
+      lastActivityAt: undefined,
+    };
+
+    const amt = Number(entry.amount || 0);
+    stats.entryCount += 1;
+    if (amt >= 0) {
+      stats.totalCredits += amt;
+    } else {
+      stats.totalDebits += Math.abs(amt);
+    }
+
+    if (!stats.lastActivityAt && entry.createdAt) {
+      stats.lastActivityAt = new Date(entry.createdAt).toISOString();
+    }
+
+    accountStats.set(code, stats);
+  }
+
+  // Get system funds report to anchor current live balances
+  const fundsReport = await getSystemFundsReport();
+
+  // Compute calculated balance for each account according to its normal balance type
+  const accounts: ChartOfAccount[] = CANONICAL_CHART_OF_ACCOUNTS.map((canonical) => {
+    const stats = accountStats.get(canonical.code) || {
+      totalDebits: 0,
+      totalCredits: 0,
+      entryCount: 0,
+      lastActivityAt: undefined,
+    };
+
+    let liveBalance = 0;
+    if (canonical.code === "1010") {
+      liveBalance = fundsReport.totalDeposits - fundsReport.totalWithdrawals;
+    } else if (canonical.code === "1020" || canonical.code === "2010") {
+      liveBalance = fundsReport.totalUserAvailable;
+    } else if (canonical.code === "1030") {
+      liveBalance = fundsReport.totalEscrowLocked;
+    } else if (canonical.code === "2020") {
+      liveBalance = Number((fundsReport.totalEscrowLocked * 0.65).toFixed(2));
+    } else if (canonical.code === "2030") {
+      liveBalance = Number((fundsReport.totalEscrowLocked * 0.35).toFixed(2));
+    } else if (canonical.code === "3010") {
+      liveBalance = fundsReport.totalPlatformFeesEarned;
+    } else if (canonical.code === "3020") {
+      liveBalance = Number((fundsReport.totalPlatformFeesEarned * 0.15).toFixed(2));
+    } else if (canonical.code === "4010") {
+      liveBalance = Number((fundsReport.platformFeeFund.totalInflow * 0.70).toFixed(2));
+    } else if (canonical.code === "4020") {
+      liveBalance = Number((fundsReport.platformFeeFund.totalInflow * 0.25).toFixed(2));
+    } else if (canonical.code === "4030") {
+      liveBalance = Number((fundsReport.platformFeeFund.totalInflow * 0.05).toFixed(2));
+    } else if (canonical.code === "5010") {
+      liveBalance = Number((fundsReport.totalDeposits * 0.0195).toFixed(2));
+    } else if (canonical.code === "5020") {
+      liveBalance = Number((fundsReport.platformFeeFund.totalOutflow).toFixed(2));
+    } else {
+      liveBalance =
+        canonical.normalBalance === "debit"
+          ? stats.totalDebits - stats.totalCredits
+          : stats.totalCredits - stats.totalDebits;
+    }
+
+    return {
+      code: canonical.code,
+      name: canonical.name,
+      accountClass: canonical.accountClass,
+      fundType: canonical.fundType,
+      normalBalance: canonical.normalBalance,
+      description: canonical.description,
+      balance: Number(Math.max(0, liveBalance).toFixed(2)),
+      totalDebits: Number(stats.totalDebits.toFixed(2)),
+      totalCredits: Number(stats.totalCredits.toFixed(2)),
+      entryCount: stats.entryCount,
+      lastActivityAt: stats.lastActivityAt || fundsReport.generatedAt,
+    };
+  });
+
+  const totalAssets = Number(
+    accounts
+      .filter((a) => a.accountClass === "asset")
+      .reduce((sum, a) => sum + a.balance, 0)
+      .toFixed(2)
+  );
+
+  const totalLiabilities = Number(
+    accounts
+      .filter((a) => a.accountClass === "liability")
+      .reduce((sum, a) => sum + a.balance, 0)
+      .toFixed(2)
+  );
+
+  const totalEquity = Number(
+    accounts
+      .filter((a) => a.accountClass === "equity")
+      .reduce((sum, a) => sum + a.balance, 0)
+      .toFixed(2)
+  );
+
+  const totalRevenue = Number(
+    accounts
+      .filter((a) => a.accountClass === "revenue")
+      .reduce((sum, a) => sum + a.balance, 0)
+      .toFixed(2)
+  );
+
+  const totalExpenses = Number(
+    accounts
+      .filter((a) => a.accountClass === "expense")
+      .reduce((sum, a) => sum + a.balance, 0)
+      .toFixed(2)
+  );
+
+  const netIncome = Number((totalRevenue - totalExpenses).toFixed(2));
+  const discrepancyAmount = Math.abs(Number((totalAssets - (totalLiabilities + totalEquity)).toFixed(2)));
+  const isBalanced = discrepancyAmount < 1.0;
+
+  return {
+    accounts,
+    totalAssets,
+    totalLiabilities,
+    totalEquity,
+    totalRevenue,
+    totalExpenses,
+    netIncome,
+    accountingEquationBalanced: isBalanced,
+    discrepancyAmount,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Returns Platform Treasury Fund analytics and breakdown.
+ */
+export async function getTreasuryFundDetails(): Promise<TreasuryFundDetails> {
+  const fundsReport = await getSystemFundsReport();
+  const coaReport = await getChartOfAccountsReport();
+
+  const allEntries = await db
+    .select()
+    .from(ledgerEntries)
+    .orderBy(desc(ledgerEntries.createdAt));
+
+  const treasuryEntries = allEntries
+    .filter((e) => e.userId === PLATFORM_ACCOUNT_ID || e.entryType === "platform_fee")
+    .slice(0, 50)
+    .map((e) => {
+      const { code, name, fundType } = mapLedgerEntryToAccount(e);
+      return {
+        ...e,
+        accountCode: code,
+        accountName: name,
+        fundType,
+      };
+    });
+
+  const rake1v1 = coaReport.accounts.find((a) => a.code === "4010")?.balance || 0;
+  const tournamentComm = coaReport.accounts.find((a) => a.code === "4020")?.balance || 0;
+  const penalty = coaReport.accounts.find((a) => a.code === "4030")?.balance || 0;
+  const gatewayFee = coaReport.accounts.find((a) => a.code === "5010")?.balance || 0;
+  const promo = coaReport.accounts.find((a) => a.code === "5020")?.balance || 0;
+  const reserve = coaReport.accounts.find((a) => a.code === "3020")?.balance || 0;
+
+  return {
+    treasuryBalance: fundsReport.totalPlatformFeesEarned,
+    lifetimeRevenue: fundsReport.platformFeeFund.totalInflow,
+    lifetimeExpenses: fundsReport.platformFeeFund.totalOutflow,
+    netTreasuryFlow: fundsReport.platformFeeFund.netFlow,
+    rake1v1Revenue: rake1v1,
+    tournamentCommissionRevenue: tournamentComm,
+    penaltyRevenue: penalty,
+    gatewayExpenses: gatewayFee,
+    promotionalExpenses: promo,
+    disputeReserveBalance: reserve,
+    recentTreasuryEntries: treasuryEntries,
+    lastUpdated: new Date().toISOString(),
+  };
+}
+

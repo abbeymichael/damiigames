@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { safeNavigate } from "@/components/NavLink";
 import {
   Bell,
   Volume2,
@@ -267,7 +268,7 @@ export function NotificationCenter({ userToken, username }: NotificationCenterPr
     setActiveToast(null);
     setIsOpen(false);
     if (notification.link) {
-      router.push(notification.link);
+      safeNavigate(router, notification.link);
     }
   };
 

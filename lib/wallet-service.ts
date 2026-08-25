@@ -274,18 +274,30 @@ export const walletService = {
     const p1 = await dbRepository.getProfile(player1Token);
     const p2 = await dbRepository.getProfile(player2Token);
 
-    if (!p1 || p1.points < wagerAmount) throw new Error(`Host has insufficient Points for ${wagerAmount} Points Wager`);
-    if (!p2 || p2.points < wagerAmount) throw new Error(`Guest has insufficient Points for ${wagerAmount} Points Wager`);
+    const p1Balance = Math.max(p1?.marbles ?? 0, p1?.points ?? 0);
+    const p2Balance = Math.max(p2?.marbles ?? 0, p2?.points ?? 0);
 
-    // Deduct wager Points from both players
-    await dbRepository.updateProfileBalance(player1Token, -wagerAmount);
-    await dbRepository.updateProfileBalance(player2Token, -wagerAmount);
+    if (!p1 || p1Balance < wagerAmount) throw new Error(`Host has insufficient Marbles for GH₵ ${wagerAmount} Wager`);
+    if (!p2 || p2Balance < wagerAmount) throw new Error(`Guest has insufficient Marbles for GH₵ ${wagerAmount} Wager`);
+
+    // Deduct wager balance from both players (prioritizing marbles or points)
+    if ((p1.marbles ?? 0) >= wagerAmount) {
+      await dbRepository.updateProfileMarblesBalance(player1Token, -wagerAmount);
+    } else {
+      await dbRepository.updateProfileBalance(player1Token, -wagerAmount);
+    }
+
+    if ((p2.marbles ?? 0) >= wagerAmount) {
+      await dbRepository.updateProfileMarblesBalance(player2Token, -wagerAmount);
+    } else {
+      await dbRepository.updateProfileBalance(player2Token, -wagerAmount);
+    }
 
     const escrow: WagerEscrow = {
       id: `escrow-${Date.now()}-${securityService.generateCsprngToken(4)}`,
       roomCode,
-      amountMarbles: 0,
-      amountPoints: wagerAmount * 2, // Total pot in Points
+      amountMarbles: wagerAmount * 2,
+      amountPoints: wagerAmount * 2, // Total pot
       player1Token,
       player2Token,
       lockedAt: new Date().toISOString(),

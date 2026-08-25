@@ -266,6 +266,8 @@ export default function ArenaPage() {
   const [roomMode, setRoomMode] = useState<RoomMode>("casual");
   const [wagerInput, setWagerInput] = useState<number>(20);
   const [challengeTargetUser, setChallengeTargetUser] = useState<string>("");
+  const [isPrivateRoom, setIsPrivateRoom] = useState<boolean>(false);
+  const [challengeToAccept, setChallengeToAccept] = useState<Room | null>(null);
 
   // Dynamic Player Names
   const [localWhiteName, setLocalWhiteName] = useState<string>("Kwame (Player 1)");
@@ -697,16 +699,28 @@ export default function ArenaPage() {
 
   // Turn timer countdown
   useEffect(() => {
-    setSecondsLeft(turnTimerLimit > 0 ? turnTimerLimit : 60);
+    if (mode === "online" && room?.timerState?.remainingTurnSeconds !== undefined && room.timerState.remainingTurnSeconds !== null) {
+      setSecondsLeft(room.timerState.remainingTurnSeconds);
+    } else {
+      setSecondsLeft(turnTimerLimit > 0 ? turnTimerLimit : 60);
+    }
   }, [turn, room?.moveCount, mode, turnTimerLimit]);
 
   useEffect(() => {
     const matchReady = mode === "local" || room?.status === "playing";
     if (!matchReady || winner || turnTimerLimit === 0) return;
-    const timer = window.setInterval(
-      () => setSecondsLeft((current) => (current > 0 ? current - 1 : 0)),
-      1000
-    );
+    const timer = window.setInterval(() => {
+      setSecondsLeft((current) => {
+        const next = current > 0 ? current - 1 : 0;
+        if (next < 10 && next > 0) {
+          soundService.playUrgentTick(next);
+        }
+        if (next === 9) {
+          soundService.playTurnReminder();
+        }
+        return next;
+      });
+    }, 1000);
     return () => window.clearInterval(timer);
   }, [mode, room?.status, winner, turn, turnTimerLimit]);
 
@@ -768,6 +782,7 @@ export default function ArenaPage() {
     const isNewRoom = lastProcessedRoomCodeRef.current !== next.code;
     const prevMoveCount = isNewRoom ? -1 : lastProcessedMoveCountRef.current;
     const newMoveCount = next.moveCount;
+    const moveCountChanged = isNewRoom || newMoveCount !== prevMoveCount;
 
     lastProcessedRoomCodeRef.current = next.code;
     lastProcessedMoveCountRef.current = newMoveCount;
@@ -798,19 +813,49 @@ export default function ArenaPage() {
     }
 
     setRoom(next);
-    setBoard(next.board);
-    setTurn(next.turn);
-    setForcedFrom(next.forcedFrom);
-    setWinner(next.winner);
-    setSelected(null);
-    if (next.status === "waiting")
-      setMessage(`Room ${next.code} created! Waiting for an opponent to join...`);
-    else if (next.winner) {
+
+    // Only overwrite board and turn if there is a new room or a move has landed on the server
+    if (moveCountChanged) {
+      setBoard(next.board);
+      setTurn(next.turn);
+      setForcedFrom(next.forcedFrom);
+      setWinner(next.winner);
+
+      // Auto-select piece if in the middle of a compulsory multi-jump sequence on your turn
+      if (next.forcedFrom !== null && next.role === next.turn) {
+        setSelected(next.forcedFrom);
+      } else {
+        setSelected(null);
+      }
+    } else {
+      // Idle polling tick with no new moves:
+      // Update winner / forcedFrom / status in case of resignation/timeout/draw
+      if (next.winner !== winner) setWinner(next.winner);
+      if (next.forcedFrom !== forcedFrom) setForcedFrom(next.forcedFrom);
+      // PRESERVE `selected` so the player's active piece selection and destination highlights are never disrupted by polling!
+    }
+
+    if (next.timerState?.remainingTurnSeconds !== undefined && next.timerState.remainingTurnSeconds !== null) {
+      setSecondsLeft(next.timerState.remainingTurnSeconds);
+    }
+    if (next.status === "waiting") {
+      if (next.guestName) {
+        if (next.role === "white") {
+          setMessage(`⚔️ Challenger ${next.guestName} connected & ready! Press "Ready — Start Match" to begin.`);
+        } else {
+          setMessage(`⚔️ Connected to ${next.hostName}'s room! Marked ready, waiting for host to start...`);
+        }
+      } else {
+        setMessage(`Room ${next.code} (${next.isPrivate ? "Private" : "Public"}) open! Waiting for opponent to accept...`);
+      }
+    } else if (next.winner) {
       const wName = next.winner === "white" ? next.hostName : next.guestName ?? "Guest";
       setMessage(`🏆 Game Over! ${wName} (${playerName(next.winner)}) wins!`);
-    } else if (next.role === next.turn)
-      setMessage(`🎯 Your turn to move as ${next.role === "white" ? next.hostName : next.guestName}!`);
-    else setMessage(`⏳ Waiting for ${next.turn === "white" ? next.hostName : next.guestName} to move...`);
+    } else if (moveCountChanged) {
+      if (next.role === next.turn)
+        setMessage(`🎯 Your turn to move as ${next.role === "white" ? next.hostName : next.guestName}!`);
+      else setMessage(`⏳ Waiting for ${next.turn === "white" ? next.hostName : next.guestName} to move...`);
+    }
   }
 
   function resetLocalMatch() {
@@ -891,6 +936,7 @@ export default function ArenaPage() {
 
   async function playOnline(move: Move) {
     if (!room) return;
+    setSelected(null);
     await onlineAction("move", { code: room.code, from: move.from, to: move.to });
   }
 
@@ -1574,17 +1620,25 @@ export default function ArenaPage() {
                             <span className="px-2 py-0.5 bg-[#0c3b2e] border border-[#184d3c] text-[#d6a735] font-mono font-bold text-xs rounded-md">
                               ROOM {r.code}
                             </span>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                              {r.isPrivate ? (
+                                <span className="px-2 py-0.5 bg-purple-950/80 border border-purple-500/40 text-purple-300 font-bold text-[10px] rounded-md flex items-center gap-1">
+                                  <Lock size={10} /> Private
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-bold text-[10px] rounded-md flex items-center gap-1">
+                                  <Globe size={10} /> Public
+                                </span>
+                              )}
                               {isPlaying && (
                                 <span className="px-2 py-0.5 bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-extrabold text-[10px] rounded-md flex items-center gap-1">
                                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
-                                  Live Match
+                                  Live
                                 </span>
                               )}
                               {isWaiting && (
                                 <span className="px-2 py-0.5 bg-amber-950/80 border border-amber-500/40 text-amber-300 font-extrabold text-[10px] rounded-md flex items-center gap-1">
-                                  <Clock size={10} />
-                                  Open / Waiting
+                                  <Clock size={10} /> Open
                                 </span>
                               )}
                               {isWager && (
@@ -1630,20 +1684,32 @@ export default function ArenaPage() {
                         {/* Action CTA */}
                         <div className="pt-2 flex items-center gap-2">
                           {isWaiting && !r.guestName && profile?.role !== "admin" && profile?.role !== "super_admin" ? (
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                if (!token) {
-                                  window.dispatchEvent(new CustomEvent("damii-open-auth"));
-                                  return;
-                                }
-                                setMode("online");
-                                await onlineAction("join", { code: r.code });
-                              }}
-                              className="w-full py-2 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all"
-                            >
-                              <Swords size={14} /> Join & Play as Black
-                            </button>
+                            r.hostName === username && token ? (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  setMode("online");
+                                  await onlineAction("join", { code: r.code });
+                                }}
+                                className="w-full py-2 bg-[#144435] hover:bg-[#1f5e4a] text-[#f5efdf] font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-[#184d3c] transition-all"
+                              >
+                                Rejoin Your Waiting Room
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!token) {
+                                    window.dispatchEvent(new CustomEvent("damii-open-auth"));
+                                    return;
+                                  }
+                                  setChallengeToAccept(r);
+                                }}
+                                className="w-full py-2 bg-gradient-to-r from-emerald-500 to-[#d6a735] hover:brightness-110 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all animate-pulse"
+                              >
+                                <Swords size={14} /> Accept Challenge
+                              </button>
+                            )
                           ) : (
                             <button
                               type="button"
@@ -1994,7 +2060,9 @@ export default function ArenaPage() {
                 <div
                   className={`relative flex items-center gap-1 sm:gap-2.5 p-1 sm:p-2.5 rounded-xl transition-all border min-h-[44px] sm:min-h-[52px] ${
                     turn === "white" && !winner
-                      ? "bg-[#0c3b2e] border-[#d6a735] ring-2 ring-[#d6a735]/40 shadow-lg shadow-[#d6a735]/10"
+                      ? secondsLeft < 10 && turnTimerLimit > 0 && (mode === "local" || room?.status === "playing")
+                        ? "bg-red-950/40 border-red-500/90 ring-2 ring-red-500/70 shadow-lg shadow-red-500/20 animate-urgent-card"
+                        : "bg-[#0c3b2e] border-[#d6a735] ring-2 ring-[#d6a735]/40 shadow-lg shadow-[#d6a735]/10"
                       : "bg-[#0c3b2e]/60 border-[#184d3c] opacity-80"
                   }`}
                 >
@@ -2006,13 +2074,21 @@ export default function ArenaPage() {
                       <small className="block text-[7px] sm:text-[10px] font-bold tracking-wider text-[#d6a735] uppercase shrink-0">
                         PLAYER 1
                       </small>
-                      <span
-                        className={`px-1 py-0.2 bg-[#d6a735] text-[#06261f] text-[7px] sm:text-[9px] font-extrabold rounded-full uppercase tracking-tighter transition-opacity shrink-0 ${
-                          turn === "white" && !winner ? "opacity-100 animate-pulse" : "opacity-0 pointer-events-none"
-                        }`}
-                      >
-                        TURN
-                      </span>
+                      {turn === "white" && !winner && (
+                        secondsLeft < 10 && turnTimerLimit > 0 && (mode === "local" || room?.status === "playing") ? (
+                          <span
+                            className="px-1.5 py-0.2 text-[7px] sm:text-[9px] font-black rounded-full uppercase tracking-tighter shrink-0 animate-badge-urgent flex items-center gap-0.5 shadow-sm"
+                            title="Turn clock urgent: less than 10 seconds remaining"
+                          >
+                            <Flame size={9} className="text-red-300 animate-bounce shrink-0" />
+                            <span>{secondsLeft}s LEFT</span>
+                          </span>
+                        ) : (
+                          <span className="px-1 py-0.2 bg-[#d6a735] text-[#06261f] text-[7px] sm:text-[9px] font-extrabold rounded-full uppercase tracking-tighter transition-opacity shrink-0 opacity-100 animate-pulse">
+                            TURN
+                          </span>
+                        )
+                      )}
                     </div>
                     <strong className="block text-[11px] sm:text-sm font-extrabold text-[#f5efdf] truncate max-w-[65px] xs:max-w-[100px] sm:max-w-none">
                       {whiteDisplayName}
@@ -2027,18 +2103,41 @@ export default function ArenaPage() {
                 </div>
 
                 {/* VS & Match Timer Badge */}
-                <div className="flex flex-col items-center justify-center gap-0.5 shrink-0 px-0.5 min-w-[36px] sm:min-w-[48px]">
+                <div className="flex flex-col items-center justify-center gap-0.5 shrink-0 px-0.5 min-w-[38px] sm:min-w-[54px]">
                   <span className="px-1 sm:px-2 py-0.5 text-[8px] sm:text-[10px] font-black text-[#f5efdf] uppercase tracking-widest bg-[#0c3b2e] rounded-md border border-[#184d3c]">
                     VS
                   </span>
                   {turnTimerLimit > 0 ? (
-                    <span
-                      className={`text-[8px] sm:text-[10px] font-mono font-bold px-0.5 py-0.5 rounded ${
-                        secondsLeft <= 15 ? "text-red-400 animate-pulse font-extrabold" : "text-[#cbd5e1]"
-                      }`}
-                    >
-                      {secondsLeft}s
-                    </span>
+                    secondsLeft < 10 && !winner && (mode === "local" || room?.status === "playing") ? (
+                      <div
+                        id="turn-timer-urgent-badge"
+                        className="flex items-center gap-0.5 sm:gap-1 px-1.5 py-0.5 bg-red-950/95 border border-red-500 rounded-md animate-timer-urgent text-red-200 shadow-md shadow-red-500/40 min-h-[20px]"
+                        title="Urgent: Less than 10 seconds remaining on turn clock!"
+                      >
+                        <Flame size={10} className="text-red-400 animate-bounce shrink-0" />
+                        <span className="text-[9px] sm:text-[11px] font-mono font-black text-red-200 tracking-tight">
+                          {secondsLeft}s
+                        </span>
+                      </div>
+                    ) : secondsLeft <= 15 && !winner && (mode === "local" || room?.status === "playing") ? (
+                      <div
+                        id="turn-timer-warning-badge"
+                        className="flex items-center gap-0.5 px-1 py-0.5 bg-amber-950/70 border border-amber-500/70 rounded-md text-amber-300 animate-pulse min-h-[20px]"
+                        title="Warning: 15 seconds remaining"
+                      >
+                        <Clock size={9} className="text-amber-400 shrink-0" />
+                        <span className="text-[8px] sm:text-[10px] font-mono font-bold text-amber-300">
+                          {secondsLeft}s
+                        </span>
+                      </div>
+                    ) : (
+                      <span
+                        id="turn-timer-badge"
+                        className="text-[8px] sm:text-[10px] font-mono font-bold px-1 py-0.5 rounded text-[#cbd5e1]"
+                      >
+                        {secondsLeft}s
+                      </span>
+                    )
                   ) : (
                     <span className="text-[8px] sm:text-[10px] text-slate-500 font-mono">∞</span>
                   )}
@@ -2048,7 +2147,9 @@ export default function ArenaPage() {
                 <div
                   className={`relative flex items-center justify-end gap-1 sm:gap-2.5 p-1 sm:p-2.5 rounded-xl transition-all border min-h-[44px] sm:min-h-[52px] ${
                     turn === "black" && !winner
-                      ? "bg-[#0c3b2e] border-[#d6a735] ring-2 ring-[#d6a735]/40 shadow-lg shadow-[#d6a735]/10"
+                      ? secondsLeft < 10 && turnTimerLimit > 0 && (mode === "local" || room?.status === "playing")
+                        ? "bg-red-950/40 border-red-500/90 ring-2 ring-red-500/70 shadow-lg shadow-red-500/20 animate-urgent-card"
+                        : "bg-[#0c3b2e] border-[#d6a735] ring-2 ring-[#d6a735]/40 shadow-lg shadow-[#d6a735]/10"
                       : "bg-[#0c3b2e]/60 border-[#184d3c] opacity-80"
                   }`}
                 >
@@ -2060,13 +2161,21 @@ export default function ArenaPage() {
                   </div>
                   <div className="min-w-0 flex-1 text-right">
                     <div className="flex items-center justify-end gap-0.5 sm:gap-1 h-3.5 sm:h-4">
-                      <span
-                        className={`px-1 py-0.2 bg-[#d6a735] text-[#06261f] text-[7px] sm:text-[9px] font-extrabold rounded-full uppercase tracking-tighter transition-opacity shrink-0 ${
-                          turn === "black" && !winner ? "opacity-100 animate-pulse" : "opacity-0 pointer-events-none"
-                        }`}
-                      >
-                        TURN
-                      </span>
+                      {turn === "black" && !winner && (
+                        secondsLeft < 10 && turnTimerLimit > 0 && (mode === "local" || room?.status === "playing") ? (
+                          <span
+                            className="px-1.5 py-0.2 text-[7px] sm:text-[9px] font-black rounded-full uppercase tracking-tighter shrink-0 animate-badge-urgent flex items-center gap-0.5 shadow-sm"
+                            title="Turn clock urgent: less than 10 seconds remaining"
+                          >
+                            <Flame size={9} className="text-red-300 animate-bounce shrink-0" />
+                            <span>{secondsLeft}s LEFT</span>
+                          </span>
+                        ) : (
+                          <span className="px-1 py-0.2 bg-[#d6a735] text-[#06261f] text-[7px] sm:text-[9px] font-extrabold rounded-full uppercase tracking-tighter transition-opacity shrink-0 opacity-100 animate-pulse">
+                            TURN
+                          </span>
+                        )
+                      )}
                       <small className="block text-[7px] sm:text-[10px] font-bold tracking-wider text-[#d6a735] uppercase shrink-0">
                         PLAYER 2
                       </small>
@@ -2080,6 +2189,22 @@ export default function ArenaPage() {
                   </span>
                 </div>
               </div>
+
+              {/* Dynamic Turn Countdown Progress Bar */}
+              {turnTimerLimit > 0 && !winner && (mode === "local" || room?.status === "playing") && (
+                <div className="mt-2 w-full bg-[#041913] rounded-full h-1 sm:h-1.5 overflow-hidden border border-[#184d3c]/80 relative shadow-inner">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ease-linear ${
+                      secondsLeft < 10
+                        ? "bg-gradient-to-r from-red-600 via-rose-500 to-red-400 urgent-bar-animated shadow-[0_0_10px_rgba(239,68,68,0.9)]"
+                        : secondsLeft <= 15
+                        ? "bg-gradient-to-r from-amber-500 to-yellow-400"
+                        : "bg-gradient-to-r from-emerald-500 via-[#10b981] to-[#d6a735]"
+                    }`}
+                    style={{ width: `${Math.max(0, Math.min(100, (secondsLeft / turnTimerLimit) * 100))}%` }}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Standalone Board & Game Stage Card */}
@@ -2275,7 +2400,147 @@ export default function ArenaPage() {
                 </div>
               </div>
             ) : (
-              /* Active 10x10 Board Container with Touch Prevention & Adaptive Zoom */
+              <div className="space-y-3">
+                {/* Online Room Waiting & Handshake Banner */}
+                {mode === "online" && room && room.status === "waiting" && (
+                  <div className="p-3.5 sm:p-4 bg-gradient-to-br from-[#0c3b2e] to-[#06261f] border-2 border-[#d6a735]/70 rounded-2xl shadow-xl space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-2.5 py-1 bg-[#06261f] border border-[#184d3c] text-[#d6a735] font-mono font-black text-xs rounded-lg">
+                          ROOM {room.code}
+                        </span>
+                        <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md flex items-center gap-1 ${
+                          room.isPrivate
+                            ? "bg-purple-950/80 text-purple-300 border border-purple-500/40"
+                            : "bg-emerald-950/80 text-emerald-300 border border-emerald-500/40"
+                        }`}>
+                          {room.isPrivate ? <Lock size={11} /> : <Globe size={11} />}
+                          {room.isPrivate ? "Private Room (Invite-only)" : "Public Match (Visible in Lobby)"}
+                        </span>
+                        {room.mode === "wager" && (
+                          <span className="px-2 py-0.5 bg-[#d6a735]/20 text-[#d6a735] border border-[#d6a735]/40 text-[10px] font-bold rounded-md flex items-center gap-1">
+                            <Zap size={11} /> Pot: GH₵ {(room.wagerAmount * 2).toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={copyChallengeLink}
+                          className="px-2.5 py-1 bg-[#144435] hover:bg-[#1f5e4a] text-[#f5efdf] text-[11px] font-bold rounded-lg flex items-center gap-1 transition-colors"
+                        >
+                          <Share2 size={12} /> {copiedLink ? "Link Copied!" : "Share Link"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const ok = await navigator.clipboard.writeText(room.code).then(() => true).catch(() => false);
+                            if (ok) {
+                              setCopiedCode(true);
+                              setTimeout(() => setCopiedCode(false), 2000);
+                            }
+                          }}
+                          className="px-2.5 py-1 bg-[#144435] hover:bg-[#1f5e4a] text-[#f5efdf] text-[11px] font-bold rounded-lg flex items-center gap-1 transition-colors"
+                        >
+                          <Copy size={12} /> {copiedCode ? "Code Copied!" : "Copy Code"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Handshake Status Section */}
+                    {!room.guestName ? (
+                      /* Waiting for challenger to join */
+                      <div className="p-3 bg-[#081c15]/90 border border-[#184d3c] rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 text-left">
+                          <div className="w-9 h-9 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 animate-pulse">
+                            <Clock size={18} />
+                          </div>
+                          <div>
+                            <strong className="text-xs sm:text-sm text-[#f5efdf] block font-extrabold">
+                              Waiting for an Opponent to Accept
+                            </strong>
+                            <p className="text-[11px] text-slate-300">
+                              {room.isPrivate
+                                ? "Share the 6-character room code or invite link with your opponent to connect."
+                                : "Your challenge is publicly listed in the Arena Lobby for any online player to accept."}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={onlineBusy}
+                          onClick={() => void onlineAction("leave_room", { code: room.code })}
+                          className="px-3 py-1.5 bg-red-950/80 hover:bg-red-900 text-red-200 border border-red-500/40 text-xs font-bold rounded-xl transition-all shrink-0"
+                        >
+                          Cancel Room
+                        </button>
+                      </div>
+                    ) : (
+                      /* Guest connected: Handshake & Ready Section */
+                      <div className="p-3.5 bg-gradient-to-r from-emerald-950/90 to-[#081c15] border-2 border-emerald-500/50 rounded-xl space-y-3">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-9 h-9 rounded-full bg-emerald-500/20 border border-emerald-400 flex items-center justify-center text-emerald-300 shrink-0">
+                              <Swords size={18} className="animate-bounce text-emerald-300" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs sm:text-sm font-black text-emerald-300">
+                                  Challenger Connected!
+                                </span>
+                                <span className="px-1.5 py-0.2 bg-emerald-900 text-emerald-200 text-[9px] font-extrabold rounded">
+                                  ● Ready
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-200">
+                                <strong>{room.guestName}</strong> accepted your challenge and is in the room.
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Ready & Start Action for Host / Status for Guest */}
+                          {room.role === "white" ? (
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                              <button
+                                type="button"
+                                disabled={onlineBusy}
+                                onClick={() => void onlineAction("ready", { code: room.code })}
+                                className="flex-1 sm:flex-initial px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-[#d6a735] hover:brightness-110 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 transition-all animate-pulse"
+                              >
+                                <Play size={14} className="fill-current" /> Ready — Start Match
+                              </button>
+                              <button
+                                type="button"
+                                disabled={onlineBusy}
+                                onClick={() => void onlineAction("leave_room", { code: room.code })}
+                                className="px-3 py-2 bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800/60 text-xs font-bold rounded-xl transition-all"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                              <span className="text-xs text-amber-300 font-bold animate-pulse flex items-center gap-1">
+                                <Clock size={12} /> Waiting for host to click Ready...
+                              </span>
+                              <button
+                                type="button"
+                                disabled={onlineBusy}
+                                onClick={() => void onlineAction("leave_room", { code: room.code })}
+                                className="px-3 py-1.5 bg-[#144435] hover:bg-[#1f5e4a] text-slate-300 text-xs font-bold rounded-xl border border-[#184d3c] transition-all"
+                              >
+                                Leave Room
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+              {/* Active 10x10 Board Container with Touch Prevention & Adaptive Zoom */}
               <div
                 className={`p-1.5 sm:p-3 ${activeBoardConfig.wrapBg} border-2 ${activeBoardConfig.wrapBorder} rounded-xl shadow-inner relative transition-colors duration-300 board-touch-contain select-none`}
                 style={{ touchAction: "none", overscrollBehavior: "none" }}
@@ -2326,8 +2591,8 @@ export default function ArenaPage() {
                       minWidth: `${boardZoom * 100}%`,
                       maxWidth: boardZoom === 1 ? "100%" : undefined,
                       display: "grid",
-                      gridTemplateColumns: "repeat(10, minmax(0, 1fr))",
-                      gridTemplateRows: "repeat(10, minmax(0, 1fr))",
+                      gridTemplateColumns: "repeat(10, 10%)",
+                      gridTemplateRows: "repeat(10, 10%)",
                       backgroundColor: activeBoardConfig.boardBg,
                       touchAction: boardZoom > 1 ? "pan-x" : "none",
                       overscrollBehavior: "none",
@@ -2349,7 +2614,7 @@ export default function ArenaPage() {
                       return (
                         <button
                           key={square}
-                          className={`square relative grid place-items-center p-0 border-0 transition-colors select-none touch-none ${
+                          className={`square relative flex items-center justify-center p-0 border-0 transition-colors select-none touch-none ${
                             selected === square ? "selected" : ""
                           } ${isDestination ? "destination" : ""} ${
                             isLastSource ? "last-move-source" : ""
@@ -2411,10 +2676,15 @@ export default function ArenaPage() {
                   </div>
                 </div>
               </div>
+            </div>
             )}
 
             {/* Dynamic Turn Status & Message Banner */}
-            <div className="flex flex-wrap items-center justify-between p-2.5 sm:p-3 bg-[#0c3b2e]/90 border border-[#184d3c] rounded-xl text-xs gap-2 min-h-[42px] sm:min-h-[46px]">
+            <div className={`flex flex-wrap items-center justify-between p-2.5 sm:p-3 rounded-xl text-xs gap-2 min-h-[42px] sm:min-h-[46px] transition-all border ${
+              secondsLeft < 10 && turnTimerLimit > 0 && !winner && (mode === "local" || room?.status === "playing")
+                ? "bg-red-950/60 border-red-500/80 shadow-md shadow-red-500/10"
+                : "bg-[#0c3b2e]/90 border-[#184d3c]"
+            }`}>
               <div className="flex items-center gap-1.5 sm:gap-2 text-[#f5efdf] font-medium min-w-0 flex-1">
                 <span className={`turn-dot ${turn} shrink-0`} />
                 <span className="truncate font-semibold text-[11px] sm:text-xs">{message}</span>
@@ -2428,6 +2698,17 @@ export default function ArenaPage() {
                     : "Start"}
                 </span>
               </div>
+
+              {secondsLeft < 10 && turnTimerLimit > 0 && !winner && (mode === "local" || room?.status === "playing") && (
+                <span
+                  id="urgent-turn-status-badge"
+                  className="px-1.5 sm:px-2 py-0.5 bg-red-950 text-red-200 border border-red-500 text-[9px] sm:text-[10px] font-black rounded-lg uppercase tracking-tight shrink-0 animate-badge-urgent flex items-center gap-1 shadow-sm shadow-red-500/30"
+                  title="Turn timer alert: less than 10 seconds remaining"
+                >
+                  <AlertTriangle size={10} className="text-red-300 animate-bounce shrink-0" />
+                  <span>{secondsLeft}s Clock Alert!</span>
+                </span>
+              )}
 
               {mustCapture && !winner && (
                 <span className="px-1.5 sm:px-2 py-0.5 bg-red-950 text-red-300 border border-red-800 text-[9px] sm:text-[10px] font-extrabold rounded uppercase tracking-wider shrink-0 animate-pulse">
@@ -2967,6 +3248,50 @@ export default function ArenaPage() {
                     </div>
                   ) : (
                     <div className="space-y-3">
+                      {/* Match Visibility Selector */}
+                      <div className="p-3 bg-[#06261f] border border-[#184d3c] rounded-xl space-y-2">
+                        <label className="text-[11px] font-extrabold text-[#d6a735] uppercase tracking-wider block">
+                          Match Visibility
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setIsPrivateRoom(false)}
+                            className={`p-2.5 rounded-xl border text-left flex items-start gap-2.5 transition-all ${
+                              !isPrivateRoom
+                                ? "bg-emerald-950/80 border-emerald-500 text-emerald-200 shadow-md shadow-emerald-500/10"
+                                : "bg-[#081c15] border-[#184d3c] text-slate-400 hover:border-slate-600"
+                            }`}
+                          >
+                            <Globe size={16} className={`mt-0.5 shrink-0 ${!isPrivateRoom ? "text-emerald-400" : "text-slate-500"}`} />
+                            <div>
+                              <strong className="text-xs block font-bold text-[#f5efdf]">Public Match</strong>
+                              <span className="text-[10px] text-slate-300 leading-tight block">
+                                Listed in Arena Lobby. Any online player can accept.
+                              </span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setIsPrivateRoom(true)}
+                            className={`p-2.5 rounded-xl border text-left flex items-start gap-2.5 transition-all ${
+                              isPrivateRoom
+                                ? "bg-purple-950/80 border-purple-500 text-purple-200 shadow-md shadow-purple-500/10"
+                                : "bg-[#081c15] border-[#184d3c] text-slate-400 hover:border-slate-600"
+                            }`}
+                          >
+                            <Lock size={16} className={`mt-0.5 shrink-0 ${isPrivateRoom ? "text-purple-400" : "text-slate-500"}`} />
+                            <div>
+                              <strong className="text-xs block font-bold text-[#f5efdf]">Private Room</strong>
+                              <span className="text-[10px] text-slate-300 leading-tight block">
+                                Unlisted. Only players with your room code can join.
+                              </span>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+
                       <div className="space-y-2">
                         <div className="flex gap-2">
                           <select
@@ -2997,6 +3322,7 @@ export default function ArenaPage() {
                               void onlineAction("create", {
                                 mode: roomMode,
                                 wagerAmount: roomMode === "wager" ? wagerInput : 0,
+                                isPrivate: isPrivateRoom,
                               })
                             }
                             className="px-4 py-2 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold rounded-xl text-xs transition-all shadow-md shadow-[#d6a735]/10 flex items-center gap-1 shrink-0"
@@ -3865,6 +4191,108 @@ export default function ArenaPage() {
                 className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50"
               >
                 Submit for Review
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* Challenge Acceptance Confirmation Modal */}
+      {challengeToAccept && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <section className="bg-[#06261f] border-2 border-[#d6a735] rounded-2xl max-w-md w-full p-5 sm:p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-[#184d3c]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[#d6a735]/20 border border-[#d6a735]/40 flex items-center justify-center text-[#d6a735]">
+                  <Swords size={18} />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-[#f5efdf]">Accept Match Challenge</h2>
+                  <p className="text-[11px] text-slate-300 font-mono">Room Code: {challengeToAccept.code}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setChallengeToAccept(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-[#0c3b2e] transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-3.5 bg-[#081c15] border border-[#184d3c] rounded-xl space-y-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">Challenger (Host):</span>
+                <span className="font-extrabold text-[#f5efdf] flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#f5efdf] inline-block" />
+                  {challengeToAccept.hostName} (White)
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">Your Assigned Side:</span>
+                <span className="font-extrabold text-emerald-400 flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#114232] border border-emerald-400 inline-block" />
+                  You (Black)
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">Match Format:</span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                  challengeToAccept.mode === "wager"
+                    ? "bg-[#d6a735]/20 text-[#d6a735] border border-[#d6a735]/40"
+                    : "bg-emerald-950 text-emerald-300 border border-emerald-500/40"
+                }`}>
+                  {challengeToAccept.mode === "wager" ? "Wager Match" : "Casual Match (Free)"}
+                </span>
+              </div>
+
+              {challengeToAccept.mode === "wager" && (
+                <div className="pt-2 border-t border-[#184d3c] space-y-1.5 text-[11px]">
+                  <div className="flex justify-between text-slate-300">
+                    <span>Entry Stake (Marbles):</span>
+                    <strong className="text-[#d6a735]">GH₵ {Number(challengeToAccept.wagerAmount).toFixed(2)}</strong>
+                  </div>
+                  <div className="flex justify-between text-slate-300">
+                    <span>Total Winner Pot:</span>
+                    <strong className="text-emerald-400">GH₵ {(Number(challengeToAccept.wagerAmount) * 2).toFixed(2)}</strong>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-slate-400">
+                    <span>Your Current Balance:</span>
+                    <span>GH₵ {Number(profile?.marblesBalance || 0).toFixed(2)}</span>
+                  </div>
+                  {Number(profile?.marblesBalance || 0) < Number(challengeToAccept.wagerAmount) && (
+                    <p className="text-[11px] text-red-400 font-bold pt-1">
+                      ⚠️ Insufficient balance to match this wager. Please top up your wallet.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <p className="text-[11px] text-slate-300 leading-relaxed">
+              Once you accept, you will connect to the room as Player 2. The host will be notified of your connection to begin the match.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setChallengeToAccept(null)}
+                className="px-4 py-2.5 bg-[#0c3b2e] hover:bg-[#144435] text-slate-300 rounded-xl text-xs font-semibold"
+              >
+                Decline
+              </button>
+              <button
+                type="button"
+                disabled={onlineBusy || (challengeToAccept.mode === "wager" && Number(profile?.marblesBalance || 0) < Number(challengeToAccept.wagerAmount))}
+                onClick={async () => {
+                  const targetCode = challengeToAccept.code;
+                  setChallengeToAccept(null);
+                  setMode("online");
+                  await onlineAction("join", { code: targetCode });
+                }}
+                className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-[#d6a735] hover:brightness-110 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50"
+              >
+                <Swords size={15} /> Accept Challenge & Connect
               </button>
             </div>
           </section>

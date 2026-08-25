@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { NavLink } from "@/components/NavLink";
+import { NavLink, safeNavigate } from "@/components/NavLink";
 import { useRouter } from "next/navigation";
 import { SharedHeader } from "@/components/SharedHeader";
 import { Footer } from "@/components/Footer";
@@ -41,7 +41,7 @@ export default function LandingPage() {
     if (isAdmin) {
       e.preventDefault();
       alert("Administrator accounts serve as system facilitators and regulators. Admin accounts cannot participate in player matches. Redirecting to Admin Control Center.");
-      router.push("/admin");
+      safeNavigate(router, "/admin");
     }
   };
 

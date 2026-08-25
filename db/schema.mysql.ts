@@ -171,6 +171,10 @@ export const rooms = mysqlTable(
     leagueId: varchar("league_id", { length: 191 }),
     matchId: varchar("match_id", { length: 191 }),
 
+    isPrivate: tinyint("is_private").notNull().default(0),
+    hostReady: tinyint("host_ready").notNull().default(0),
+    guestReady: tinyint("guest_ready").notNull().default(0),
+
     moveCount: int("move_count").notNull().default(0),
     /** 0/1 guard so match results are only ever applied once. */
     resultApplied: tinyint("result_applied").notNull().default(0),

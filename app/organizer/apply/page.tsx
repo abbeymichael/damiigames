@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { SharedHeader } from "@/components/SharedHeader";
 import { OrganizerApplicationForm } from "@/components/organizer/OrganizerApplicationForm";
 import { ShieldCheck, LogIn, UserPlus, ArrowLeft, AlertCircle, CheckCircle } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/NavLink";
 import { getAuthHeaders, saveSessionToken } from "@/lib/client-auth";
 
 export default function OrganizerApplyPage() {

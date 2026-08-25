@@ -491,6 +491,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(res);
     }
 
+    if (action === "get_chart_of_accounts") {
+      const report = dbRepository.getChartOfAccountsReport
+        ? await dbRepository.getChartOfAccountsReport()
+        : null;
+      return NextResponse.json({ success: true, report });
+    }
+
+    if (action === "get_treasury_fund" || action === "get_treasury_details") {
+      const details = dbRepository.getTreasuryFundDetails
+        ? await dbRepository.getTreasuryFundDetails()
+        : null;
+      return NextResponse.json({ success: true, details });
+    }
+
+    if (action === "reconcile_system_funds") {
+      const { reconcileSystemFunds } = await import("@/lib/ledger");
+      const res = await reconcileSystemFunds();
+      return NextResponse.json(res);
+    }
+
     if (action === "system_diagnostics" || action === "health_check") {
       const diagnostics = await adminService.getSystemDiagnostics(token);
       return NextResponse.json({ success: true, diagnostics });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import Link from "next/link";
+import Link from "@/components/NavLink";
 import { useRouter } from "next/navigation";
 import {
   ShieldCheck,

@@ -7,6 +7,7 @@ import type {
   AdminProfile,
   AdminSettings,
   AppRole,
+  ChartOfAccountsReport,
   GameCatalogItem,
   GameTypeLimit,
   League,
@@ -37,6 +38,7 @@ import type {
   TournamentActionRequest,
   TournamentEntry,
   TournamentPrize,
+  TreasuryFundDetails,
   User,
   WagerEscrow,
   WalletTransaction,
@@ -825,6 +827,9 @@ export const mysqlStore: DbRepository = {
           status: row.status,
           mode: row.mode,
           wagerAmount: row.wagerAmount,
+          isPrivate: row.isPrivate,
+          hostReady: row.hostReady,
+          guestReady: row.guestReady,
           escrowId: row.escrowId,
           leagueId: row.leagueId,
           matchId: row.matchId,
@@ -1936,6 +1941,16 @@ export const mysqlStore: DbRepository = {
       discrepancyAmount,
       generatedAt: now,
     };
+  },
+
+  async getChartOfAccountsReport(): Promise<ChartOfAccountsReport> {
+    const { getChartOfAccountsReport } = await import("../ledger");
+    return getChartOfAccountsReport();
+  },
+
+  async getTreasuryFundDetails(): Promise<TreasuryFundDetails> {
+    const { getTreasuryFundDetails } = await import("../ledger");
+    return getTreasuryFundDetails();
   },
 
   // --- Roles & RBAC (Section 1) ---

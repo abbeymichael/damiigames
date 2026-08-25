@@ -496,6 +496,40 @@ class SoundService {
   }
 
   /**
+   * Urgent clock countdown tick when player has less than 10 seconds remaining
+   */
+  public playUrgentTick(secondsRemaining: number = 5) {
+    if (!this.isCategoryEnabled("ui")) return;
+    const ctx = this.initCtx();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      // Pitch increases from 800Hz at 9s up to 1400Hz at 1s for escalating urgency
+      const baseFreq = Math.min(1400, 750 + (10 - Math.max(1, secondsRemaining)) * 65);
+
+      osc.type = secondsRemaining <= 3 ? "sawtooth" : "triangle";
+      osc.frequency.setValueAtTime(baseFreq, now);
+      osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.5, now + 0.045);
+
+      const volume = secondsRemaining <= 3 ? 0.22 : 0.14;
+      gain.gain.setValueAtTime(volume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.045);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /**
    * General notification chime dispatcher
    */
   public playNotification(type: string = "default") {

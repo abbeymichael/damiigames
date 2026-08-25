@@ -50,6 +50,7 @@ import {
 import { useState, useEffect, useCallback } from "react";
 import { getProfileRank } from "@/lib/rank-service";
 import { NotificationCenter } from "@/components/NotificationCenter";
+import { NavLink, safeNavigate } from "@/components/NavLink";
 import {
   saveSessionToken,
   rotateSessionToken,
@@ -66,55 +67,6 @@ type NotificationItem = {
   timestamp: string;
   link: string;
 };
-
-// vinext's current next/link shim has a broken internal click/navigate
-// handler (throws "e is not a function" and swallows the click, so nav
-// links stop working). This is a drop-in replacement that renders a plain
-// <a> and drives navigation through useRouter().push instead, which is
-// unaffected by that bug. Modifier-key clicks (cmd/ctrl/shift/middle-click)
-// are left alone so "open in new tab" still works normally.
-function NavLink({
-  href,
-  onClick,
-  className,
-  children,
-  title,
-}: {
-  href: string;
-  onClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void;
-  className?: string;
-  children: React.ReactNode;
-  title?: string;
-}) {
-  const router = useRouter();
-
-  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    onClick?.(e);
-    if (e.defaultPrevented) return;
-    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-    e.preventDefault();
-    try {
-      const result = router.push(href) as unknown;
-      if (result && typeof (result as Promise<unknown>).catch === "function") {
-        (result as Promise<unknown>).catch(() => {
-          if (typeof window !== "undefined") {
-            window.location.assign(href);
-          }
-        });
-      }
-    } catch {
-      if (typeof window !== "undefined") {
-        window.location.assign(href);
-      }
-    }
-  };
-
-  return (
-    <a href={href} onClick={handleClick} className={className} title={title}>
-      {children}
-    </a>
-  );
-}
 
 export function Header() {
   const pathname = usePathname();
@@ -2681,7 +2633,9 @@ export function Header() {
                     sessionStorage.setItem("damii-active-match", "false");
                     sessionStorage.setItem("damii-focus-mode", "false");
                   }
-                  router.push(target);
+                  if (target) {
+                    safeNavigate(router, target);
+                  }
                 }}
                 className="w-full sm:w-auto px-4 py-2.5 bg-red-950/80 hover:bg-red-900 border border-red-800 text-red-200 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1"
               >

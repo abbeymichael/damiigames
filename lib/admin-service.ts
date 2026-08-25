@@ -263,6 +263,8 @@ export const adminService = {
       organizerApplications,
       systemFunds,
       rawLedgerEntries,
+      chartOfAccounts,
+      treasuryDetails,
     ] = await Promise.all([
       dbRepository.listRoles().catch(() => []),
       dbRepository.listPermissions().catch(() => []),
@@ -273,16 +275,49 @@ export const adminService = {
       dbRepository.listOrganizerApplications().catch(() => []),
       dbRepository.getSystemFundsSummary().catch(() => null),
       dbRepository.getLedgerEntries({ limit: 300 }).catch(() => []),
+      dbRepository.getChartOfAccountsReport ? dbRepository.getChartOfAccountsReport().catch(() => null) : null,
+      dbRepository.getTreasuryFundDetails ? dbRepository.getTreasuryFundDetails().catch(() => null) : null,
     ]);
 
-    // Tag each ledger entry with its connected system fund
+    // Tag each ledger entry with its connected system fund and account code
     const ledgerEntries = rawLedgerEntries.map((le) => {
       const fundType = (le.userId === "platform-treasury" || le.entryType === "platform_fee")
         ? "platform_fee"
         : le.accountType === "escrow"
         ? "escrow"
         : "account_balances";
-      return { ...le, fundType };
+
+      let accountCode = "1020";
+      let accountName = "Player Available Cash (Liquid)";
+
+      if (le.userId === "platform-treasury" || le.entryType === "platform_fee") {
+        if (le.referenceType === "league" || le.referenceType === "tournament" || le.referenceId?.startsWith("league-")) {
+          accountCode = "4020";
+          accountName = "Tournament Commission Revenue";
+        } else if (le.referenceType === "forfeit" || le.referenceType === "penalty") {
+          accountCode = "4030";
+          accountName = "Forfeit & Penalty Surcharges";
+        } else {
+          accountCode = "4010";
+          accountName = "1v1 Match Rake Revenue (5%)";
+        }
+      } else if (le.entryType === "adjustment") {
+        accountCode = "3020";
+        accountName = "Dispute & Goodwill Reserve";
+      } else if (le.accountType === "escrow") {
+        if (le.referenceType === "league" || le.referenceType === "tournament") {
+          accountCode = "2030";
+          accountName = "Tournament Prize Pool Liability";
+        } else {
+          accountCode = "2020";
+          accountName = "Active Match Escrow Liability";
+        }
+      } else if (le.entryType === "deposit" || le.entryType === "withdrawal") {
+        accountCode = "1010";
+        accountName = "Mobile Money Clearing (Paystack)";
+      }
+
+      return { ...le, fundType, accountCode, accountName };
     });
 
     return {
@@ -312,6 +347,8 @@ export const adminService = {
       organizerApplications,
       systemFunds,
       ledgerEntries,
+      chartOfAccounts,
+      treasuryDetails,
     };
   },
 

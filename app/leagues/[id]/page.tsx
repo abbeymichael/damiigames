@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
+import Link, { safeNavigate } from "@/components/NavLink";
 import { SharedHeader } from "@/components/SharedHeader";
 import { Footer } from "@/components/Footer";
 import {
@@ -198,7 +198,7 @@ export default function TournamentDetailPage() {
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || "Failed to start match arena");
-      router.push(`/arena?code=${data.roomCode}&mode=league`);
+      safeNavigate(router, `/arena?code=${data.roomCode}&mode=league`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Match room launch failed");
       setBusy(false);

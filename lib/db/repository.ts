@@ -4,6 +4,7 @@ import type {
   AdminProfile,
   AdminSettings,
   AppRole,
+  ChartOfAccountsReport,
   GameCatalogItem,
   GameTypeLimit,
   League,
@@ -32,6 +33,7 @@ import type {
   TournamentActionRequest,
   TournamentEntry,
   TournamentPrize,
+  TreasuryFundDetails,
   User,
   WagerEscrow,
   WalletTransaction,
@@ -216,6 +218,8 @@ export interface DbRepository {
   getLedgerBalance(userId: string, accountType: LedgerAccountType): Promise<number>;
   getLedgerEntries(filter?: { userId?: string; referenceType?: string; referenceId?: string; limit?: number }): Promise<LedgerEntry[]>;
   getSystemFundsSummary(): Promise<SystemFundsReport>;
+  getChartOfAccountsReport?(): Promise<ChartOfAccountsReport>;
+  getTreasuryFundDetails?(): Promise<TreasuryFundDetails>;
 
   // --- Roles & RBAC (Section 1) ---
   listRoles(): Promise<AppRole[]>;

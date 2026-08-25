@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import Link from "next/link";
+import Link from "@/components/NavLink";
 import { SharedHeader } from "@/components/SharedHeader";
 import {
   LayoutDashboard,
@@ -49,7 +49,21 @@ import {
   Inbox,
 } from "lucide-react";
 import { getSessionToken, saveSessionToken, clearSessionToken } from "@/lib/client-auth";
-import type { AdminLog, Role, AppRole, Permission, AdminAccount, GameCatalogItem, TournamentActionRequest, OrganizerApplication, OrganizerApplicationDetailPayload, LedgerEntry, SystemFundsReport } from "@/lib/types";
+import type {
+  AdminLog,
+  Role,
+  AppRole,
+  Permission,
+  AdminAccount,
+  GameCatalogItem,
+  TournamentActionRequest,
+  OrganizerApplication,
+  OrganizerApplicationDetailPayload,
+  LedgerEntry,
+  SystemFundsReport,
+  ChartOfAccountsReport,
+  TreasuryFundDetails,
+} from "@/lib/types";
 import { ActionMenu } from "@/components/ActionMenu";
 import { AdminTable } from "@/components/AdminTable";
 import { ConfirmModal } from "@/components/admin/ConfirmModal";
@@ -162,6 +176,8 @@ type SystemMetrics = {
   tournamentRequests?: TournamentActionRequest[];
   systemSettings?: any;
   systemFunds?: SystemFundsReport | null;
+  chartOfAccounts?: ChartOfAccountsReport | null;
+  treasuryDetails?: TreasuryFundDetails | null;
   ledgerEntries?: LedgerEntry[];
 };
 
@@ -2026,6 +2042,8 @@ export default function AdminPage() {
                     transactions={filteredTransactions}
                     ledgerEntries={metrics?.ledgerEntries || []}
                     systemFunds={metrics?.systemFunds || null}
+                    chartOfAccounts={metrics?.chartOfAccounts || null}
+                    treasuryDetails={metrics?.treasuryDetails || null}
                     txFilter={txFilter}
                     setTxFilter={setTxFilter}
                     busy={busy}

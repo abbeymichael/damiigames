@@ -277,6 +277,9 @@ export type Room = {
   mode: GameMode;
   wagerAmount: number;
   isCustomWager?: boolean;
+  isPrivate?: boolean;
+  hostReady?: boolean;
+  guestReady?: boolean;
   escrowId: string | null;
   leagueId: string | null;
   matchId: string | null;
@@ -540,6 +543,54 @@ export interface FundLedgerConnection {
 }
 
 /* ------------------------------------------------------------------------- */
+/* Chart of Accounts (COA) & Treasury Analytics Types                         */
+/* ------------------------------------------------------------------------- */
+export type AccountClass = "asset" | "liability" | "equity" | "revenue" | "expense";
+export type NormalBalance = "debit" | "credit";
+
+export interface ChartOfAccount {
+  code: string; // e.g. "1010", "1020", "1030", "2010", "2020", "2030", "3010", "3020", "4010", "4020", "4030", "5010", "5020"
+  name: string;
+  accountClass: AccountClass;
+  fundType: SystemFundType;
+  normalBalance: NormalBalance;
+  description: string;
+  balance: number;
+  totalDebits: number;
+  totalCredits: number;
+  entryCount: number;
+  lastActivityAt?: string;
+}
+
+export interface ChartOfAccountsReport {
+  accounts: ChartOfAccount[];
+  totalAssets: number;
+  totalLiabilities: number;
+  totalEquity: number;
+  totalRevenue: number;
+  totalExpenses: number;
+  netIncome: number;
+  accountingEquationBalanced: boolean;
+  discrepancyAmount: number;
+  generatedAt: string;
+}
+
+export interface TreasuryFundDetails {
+  treasuryBalance: number;
+  lifetimeRevenue: number;
+  lifetimeExpenses: number;
+  netTreasuryFlow: number;
+  rake1v1Revenue: number;
+  tournamentCommissionRevenue: number;
+  penaltyRevenue: number;
+  gatewayExpenses: number;
+  promotionalExpenses: number;
+  disputeReserveBalance: number;
+  recentTreasuryEntries: LedgerEntry[];
+  lastUpdated: string;
+}
+
+/* ------------------------------------------------------------------------- */
 /* Double-Entry Ledger Types                                                 */
 /* ------------------------------------------------------------------------- */
 export type LedgerAccountType = "available" | "escrow";
@@ -574,6 +625,8 @@ export interface LedgerEntry {
   balanceAfter?: string;
   metadataJson?: string;
   fundType?: SystemFundType;
+  accountCode?: string;
+  accountName?: string;
   recordedAt?: string;
   createdAt: string | Date;
 }

@@ -30,6 +30,9 @@ function formatRoomResponse(room: Room, token: string) {
     code: room.code,
     hostName: room.hostName,
     guestName: room.guestName,
+    isPrivate: Boolean(room.isPrivate),
+    hostReady: Boolean(room.hostReady),
+    guestReady: Boolean(room.guestReady),
     board: JSON.parse(room.boardJson),
     turn: room.turn,
     forcedFrom: room.forcedFrom,
@@ -84,11 +87,17 @@ export async function GET(req: NextRequest) {
 
     const now = Date.now();
     const validRooms = rawRooms.filter((r) => {
-      if (r.status === "waiting" && !r.guestToken) {
+      if (r.status === "cancelled" || r.status === "forfeited") return false;
+      if (r.status === "waiting") {
         const createdMs = new Date(r.createdAt).getTime();
-        return now - createdMs < 10 * 60 * 1000;
+        if (now - createdMs >= 10 * 60 * 1000) return false;
+        // If private, only show to the host/creator or participants
+        if (r.isPrivate) {
+          return Boolean(rawToken && (rawToken === r.hostToken || rawToken === r.guestToken));
+        }
+        return true;
       }
-      return r.status !== "cancelled";
+      return true;
     });
 
     const nonPlayerRoles = new Set(["admin", "super_admin", "organizer", "facilitator", "treasurer"]);
@@ -140,13 +149,18 @@ export async function GET(req: NextRequest) {
   if (!code) {
     const activeRooms = await dbRepository.listRooms(20);
     const now = Date.now();
-    // Filter out expired unjoined rooms (>10 mins)
+    // Filter out expired unjoined rooms (>10 mins) and private rooms for non-participants
     const validRooms = activeRooms.filter((r) => {
-      if (r.status === "waiting" && !r.guestToken) {
+      if (r.status === "cancelled" || r.status === "forfeited") return false;
+      if (r.status === "waiting") {
         const createdMs = new Date(r.createdAt).getTime();
-        return now - createdMs < 10 * 60 * 1000;
+        if (now - createdMs >= 10 * 60 * 1000) return false;
+        if (r.isPrivate) {
+          return Boolean(token && (token === r.hostToken || token === r.guestToken));
+        }
+        return true;
       }
-      return r.status !== "cancelled";
+      return true;
     });
     return NextResponse.json({ activeRooms: validRooms });
   }
@@ -270,6 +284,7 @@ export async function POST(req: NextRequest) {
       }
       if (!code) code = `DAM${Math.floor(100 + Math.random() * 900)}`;
 
+      const isPrivate = Boolean(body.isPrivate);
       const now = new Date().toISOString();
       const room: Room = {
         code,
@@ -277,6 +292,9 @@ export async function POST(req: NextRequest) {
         hostToken: token,
         guestName: null,
         guestToken: null,
+        isPrivate,
+        hostReady: false,
+        guestReady: false,
         boardJson: JSON.stringify(createBoard()),
         turn: "white",
         forcedFrom: null,
@@ -301,7 +319,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ room: formatRoomResponse(room, token), profile });
     }
 
-    if (action === "join") {
+    if (action === "join" || action === "accept") {
       const code = cleanCode(body.code);
       if (!code) return NextResponse.json({ error: "Room code required" }, { status: 400 });
       if (!username) return NextResponse.json({ error: "Username required" }, { status: 400 });
@@ -316,27 +334,42 @@ export async function POST(req: NextRequest) {
       const room = await dbRepository.getRoom(code);
       if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
 
+      if (room.status === "cancelled" || room.status === "forfeited") {
+        return NextResponse.json({ error: "This room is no longer active." }, { status: 400 });
+      }
+
       if (room.hostToken === token) {
         const profile = await dbRepository.getProfile(token);
         return NextResponse.json({ room: formatRoomResponse(room, token), profile });
       }
 
       if (room.guestToken && room.guestToken !== token) {
-        return NextResponse.json({ error: "Room is full" }, { status: 400 });
+        return NextResponse.json({ error: "Room is full. Another player has joined." }, { status: 400 });
       }
 
       // Validate wager requirement for guest
       if (room.mode === "wager" && room.wagerAmount > 0) {
         const guestProfile = await dbRepository.getProfile(token);
-        if (!guestProfile || guestProfile.marbles < room.wagerAmount) {
-          return NextResponse.json({ error: `Insufficient Marbles. You need ${room.wagerAmount} Marbles to join this wager room.` }, { status: 400 });
+        const hostProfile = await dbRepository.getProfile(room.hostToken);
+        const guestBalance = Math.max(guestProfile?.marbles ?? 0, guestProfile?.points ?? 0);
+        const hostBalance = Math.max(hostProfile?.marbles ?? 0, hostProfile?.points ?? 0);
+        if (guestBalance < room.wagerAmount) {
+          return NextResponse.json({ error: `Insufficient Marbles. You need GH₵ ${room.wagerAmount} (Marbles) to accept this wager challenge.` }, { status: 400 });
+        }
+        if (hostBalance < room.wagerAmount) {
+          return NextResponse.json({ error: `Host has insufficient balance for this wager match.` }, { status: 400 });
         }
       }
 
       room.guestName = username;
       room.guestToken = token;
+      room.guestReady = true;
+      room.hostReady = true;
+      // Auto-start match immediately upon accepting the challenge
       room.status = "playing";
       room.lastMoveTime = Date.now();
+      room.disconnectTime = null;
+      room.disconnectedPlayer = null;
 
       // Lock wager escrow if wager match
       if (room.mode === "wager" && room.wagerAmount > 0 && !room.escrowId) {
@@ -354,6 +387,72 @@ export async function POST(req: NextRequest) {
       }
 
       await dbRepository.saveRoom(room);
+      const profile = await dbRepository.getProfile(token);
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+    }
+
+    if (action === "ready") {
+      const code = cleanCode(body.code);
+      if (!code) return NextResponse.json({ error: "Room code required" }, { status: 400 });
+      const room = await dbRepository.getRoom(code);
+      if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
+
+      const isHost = token === room.hostToken;
+      const isGuest = token === room.guestToken;
+      if (!isHost && !isGuest) {
+        return NextResponse.json({ error: "You are not a player in this match" }, { status: 403 });
+      }
+
+      if (isHost) room.hostReady = true;
+      if (isGuest) room.guestReady = true;
+
+      // When room owner triggers ready and a guest is connected, launch match!
+      if (room.hostToken && room.guestToken && room.hostReady) {
+        room.guestReady = true;
+        room.status = "playing";
+        room.lastMoveTime = Date.now();
+        room.disconnectTime = null;
+        room.disconnectedPlayer = null;
+
+        // Lock wager escrow if wager match
+        if (room.mode === "wager" && room.wagerAmount > 0 && !room.escrowId) {
+          try {
+            const escrow = await walletService.lockWagerEscrow(
+              room.code,
+              room.wagerAmount,
+              room.hostToken,
+              room.guestToken
+            );
+            room.escrowId = escrow.id;
+          } catch (err) {
+            return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to lock wager escrow" }, { status: 400 });
+          }
+        }
+      }
+
+      await dbRepository.saveRoom(room);
+      const profile = await dbRepository.getProfile(token);
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile });
+    }
+
+    if (action === "leave_room") {
+      const code = cleanCode(body.code);
+      const room = await dbRepository.getRoom(code);
+      if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
+
+      if (room.status === "waiting") {
+        if (token === room.guestToken) {
+          room.guestToken = null;
+          room.guestName = null;
+          room.guestReady = false;
+          room.hostReady = false;
+          await dbRepository.saveRoom(room);
+        } else if (token === room.hostToken) {
+          room.status = "cancelled";
+          await dbRepository.saveRoom(room);
+        }
+      }
+
       const profile = await dbRepository.getProfile(token);
       return NextResponse.json({ room: formatRoomResponse(room, token), profile });
     }

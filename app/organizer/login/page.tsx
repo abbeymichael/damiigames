@@ -15,7 +15,7 @@ import {
   Users,
   Sparkles,
 } from "lucide-react";
-import Link from "next/link";
+import Link, { safeNavigate } from "@/components/NavLink";
 import { useRouter } from "next/navigation";
 import { getAuthHeaders, saveSessionToken } from "@/lib/client-auth";
 
@@ -121,7 +121,7 @@ export default function OrganizerLoginPage() {
       window.dispatchEvent(new Event("damii-auth-changed"));
 
       setTimeout(() => {
-        router.push("/organizer");
+        safeNavigate(router, "/organizer");
       }, 1000);
     } catch {
       setError("Server connection failed. Please try again.");
