@@ -670,8 +670,38 @@ export const walletService = {
       tx.status = "completed";
       meta.transferCompletedAt = new Date().toISOString();
       meta.transferStatus = "success";
+      meta.gatewayResponse = data.gateway_response || "Successful";
       tx.metaJson = JSON.stringify(meta);
       await dbRepository.createTransaction(tx);
+
+      // Write ledger entry for settlement audit
+      await dbRepository.writeLedger([
+        {
+          userId: tx.userToken,
+          accountType: "available",
+          entryType: "withdrawal_settlement",
+          amount: "0",
+          referenceType: "paystack_transfer_success",
+          referenceId: tx.reference,
+        },
+      ]).catch(() => []);
+
+      // System audit log
+      await dbRepository.createAdminLog({
+        id: `adminlog-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+        adminToken: "system",
+        adminName: "Paystack Webhook",
+        action: "PAYSTACK_TRANSFER_SUCCESS",
+        target: tx.id,
+        detailsJson: JSON.stringify({
+          reference: tx.reference,
+          amountGhs,
+          transferCode,
+          userToken: tx.userToken,
+          status: "completed",
+        }),
+        createdAt: new Date().toISOString(),
+      }).catch(() => {});
 
       notificationService.sendNotification({
         userToken: tx.userToken,
@@ -706,6 +736,24 @@ export const walletService = {
             referenceId: tx.reference,
           },
         ]).catch(() => []);
+
+        // System audit log
+        await dbRepository.createAdminLog({
+          id: `adminlog-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+          adminToken: "system",
+          adminName: "Paystack Webhook",
+          action: "PAYSTACK_TRANSFER_FAILED",
+          target: tx.id,
+          detailsJson: JSON.stringify({
+            reference: tx.reference,
+            amountGhs,
+            transferCode,
+            userToken: tx.userToken,
+            reason: meta.failureReason,
+            status: "failed_and_refunded",
+          }),
+          createdAt: new Date().toISOString(),
+        }).catch(() => {});
 
         notificationService.sendNotification({
           userToken: tx.userToken,
