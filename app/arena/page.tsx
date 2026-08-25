@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { SharedHeader } from "@/components/SharedHeader";
 import { NavLink } from "@/components/NavLink";
+import { MatchSummaryModal } from "@/components/MatchSummaryModal";
 import {
   applyMove,
   createBoard,
@@ -303,6 +304,8 @@ export default function ArenaPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [showMatchSummaryModal, setShowMatchSummaryModal] = useState(false);
+  const hasShownSummaryForMatchRef = useRef<string | null>(null);
   const [disputeNotesInput, setDisputeNotesInput] = useState("");
 
   // Arena Lobby & Hub State
@@ -463,6 +466,28 @@ export default function ArenaPage() {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isMatchActive]);
+
+  // Auto-trigger Match Summary Modal when a match concludes
+  useEffect(() => {
+    const isMatchEnded = Boolean(
+      winner ||
+      (mode === "online" && (room?.status === "completed" || room?.status === "draw" || !!room?.winner))
+    );
+
+    if (isMatchEnded) {
+      const matchKey =
+        mode === "online" && room
+          ? `${room.code}-${room.moveCount}-${room.winner || room.status}`
+          : `local-${localMoves.length}-${winner}`;
+      if (hasShownSummaryForMatchRef.current !== matchKey) {
+        hasShownSummaryForMatchRef.current = matchKey;
+        setShowMatchSummaryModal(true);
+      }
+    } else {
+      hasShownSummaryForMatchRef.current = null;
+      setShowMatchSummaryModal(false);
+    }
+  }, [winner, mode, room?.status, room?.winner, room?.code, room?.moveCount, localMoves.length]);
 
   // Initialize Token & User Profile
   useEffect(() => {
@@ -2210,10 +2235,9 @@ export default function ArenaPage() {
             {/* Standalone Board & Game Stage Card */}
             <div className="w-full bg-[#06261f] border border-[#184d3c] rounded-2xl p-2 sm:p-5 shadow-2xl space-y-2.5 sm:space-y-4">
 
-            {/* Board or Game Complete View */}
-            {(winner || (mode === "online" && (room?.status === "completed" || room?.status === "draw" || room?.status === "cancelled" || room?.status === "under_review"))) ? (
-              <div className="relative overflow-hidden w-full bg-slate-950/90 border-2 border-amber-500/80 rounded-2xl p-5 sm:p-8 shadow-2xl space-y-5 text-center animate-in fade-in zoom-in-95 duration-300">
-                {/* Floating Confetti Particles Celebration */}
+            {/* Post-Match Summary Banner */}
+            {(winner || (mode === "online" && (room?.status === "completed" || room?.status === "draw" || room?.status === "cancelled" || room?.status === "under_review"))) && (
+              <div id="post-match-concluded-banner" className="relative overflow-hidden w-full bg-gradient-to-br from-[#06261f] via-[#081c15] to-[#04140f] border-2 border-[#d6a735]/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-4 text-center animate-in fade-in zoom-in-95 duration-300">
                 {winner && (
                   <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
                     {Array.from({ length: 28 }).map((_, i) => (
@@ -2231,176 +2255,142 @@ export default function ArenaPage() {
                   </div>
                 )}
 
-                <div className="relative z-20 inline-flex p-3 sm:p-4 bg-amber-500/10 border border-amber-500/30 rounded-full text-amber-400">
-                  {winner ? (
-                    <Trophy size={42} className="animate-bounce" />
-                  ) : (room?.status === "draw" || (room?.status === "completed" && !winner)) ? (
-                    <Handshake size={42} className="animate-pulse text-[#d6a735]" />
-                  ) : room?.status === "under_review" ? (
-                    <Scale size={42} className="animate-pulse text-indigo-400" />
-                  ) : (
-                    <AlertTriangle size={42} className="text-amber-400" />
-                  )}
-                </div>
-
-                <div className="relative z-20">
-                  <span className="px-3 py-1 bg-amber-500 text-slate-950 font-black text-xs uppercase tracking-widest rounded-full">
-                    {winner
-                      ? "MATCH CONCLUDED"
-                      : (room?.status === "draw" || (room?.status === "completed" && !winner))
-                      ? "MATCH CONCLUDED — DRAW"
-                      : room?.status === "under_review"
-                      ? "UNDER ADMINISTRATIVE REVIEW"
-                      : "MATCH CANCELLED"}
-                  </span>
-                  <h2 className="text-2xl sm:text-3xl font-black text-slate-100 mt-2">
-                    {winner
-                      ? (winner === "white" ? `${whiteDisplayName} Wins!` : `${blackDisplayName} Wins!`)
-                      : (room?.status === "draw" || (room?.status === "completed" && !winner))
-                      ? "Match Drawn by Agreement"
-                      : room?.status === "under_review"
-                      ? "Match Under Review"
-                      : "Match Cancelled"}
-                  </h2>
-                  <p className="text-xs sm:text-sm text-slate-400 mt-1">
-                    {winner ? (
-                      room?.mode === "league" || room?.leagueId ? (
-                        <span className="text-amber-300 font-bold">🏆 Official League Tournament Match Victory!</span>
+                <div className="relative z-20 flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-400 shrink-0">
+                      {winner ? (
+                        <Trophy size={32} className="animate-bounce" />
+                      ) : (room?.status === "draw" || (room?.status === "completed" && !winner)) ? (
+                        <Handshake size={32} className="animate-pulse text-[#d6a735]" />
+                      ) : room?.status === "under_review" ? (
+                        <Scale size={32} className="animate-pulse text-indigo-400" />
                       ) : (
-                        <span>Victory achieved in {activeMoves.length} total moves!</span>
-                      )
-                    ) : (room?.status === "draw" || (room?.status === "completed" && !winner)) ? (
-                      <span className="text-[#d6a735]">🤝 Both players awarded equal participation marbles & fair draw rating calculation.</span>
-                    ) : room?.status === "under_review" ? (
-                      <span className="text-indigo-300">⚖️ Administrators are reviewing move logs and timestamps (&lt; 2hr SLA).</span>
-                    ) : (
-                      <span>Room was cancelled without penalty. Funds returned.</span>
-                    )}
-                  </p>
+                        <AlertTriangle size={32} className="text-amber-400" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-2.5 py-0.5 bg-[#d6a735] text-[#06261f] font-black text-[10px] uppercase tracking-wider rounded-full">
+                          {winner
+                            ? "MATCH CONCLUDED"
+                            : (room?.status === "draw" || (room?.status === "completed" && !winner))
+                            ? "MATCH DRAWN"
+                            : room?.status === "under_review"
+                            ? "UNDER REVIEW"
+                            : "CANCELLED"}
+                        </span>
+                        <span className="text-xs text-slate-300">
+                          {activeMoves.length} total moves played
+                        </span>
+                      </div>
+                      <h2 className="text-xl sm:text-2xl font-black text-[#f5efdf] mt-0.5">
+                        {winner
+                          ? (winner === "white" ? `${whiteDisplayName} Wins! 👑` : `${blackDisplayName} Wins! 👑`)
+                          : (room?.status === "draw" || (room?.status === "completed" && !winner))
+                          ? "Match Drawn by Agreement"
+                          : room?.status === "under_review"
+                          ? "Match Under Review"
+                          : "Match Cancelled"}
+                      </h2>
+                    </div>
+                  </div>
+
+                  {/* Primary CTA: Open Match Summary Modal & Share Result */}
+                  <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end flex-wrap">
+                    <button
+                      id="view-match-summary-btn"
+                      type="button"
+                      onClick={() => setShowMatchSummaryModal(true)}
+                      className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-[#d6a735] hover:brightness-110 text-[#06261f] font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 transition-all hover:scale-105"
+                    >
+                      <Trophy size={15} />
+                      <span>View Match Summary</span>
+                    </button>
+
+                    <button
+                      id="post-match-share-btn"
+                      type="button"
+                      onClick={() => void copyShareResult()}
+                      className="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-md shadow-blue-600/20"
+                    >
+                      {copiedShareResult ? (
+                        <>
+                          <Check size={14} className="text-emerald-300" />
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Share2 size={14} />
+                          <span>Share Result</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
 
-                {/* Match Performance Stats */}
-                <div className="relative z-20 grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3.5 bg-slate-900/90 border border-slate-800 rounded-xl text-left">
-                  <div className="p-2 bg-slate-950/80 border border-slate-800 rounded-lg">
-                    <span className="block text-[10px] font-bold text-slate-500 uppercase">Player 1 Captures</span>
-                    <strong className="text-base font-black text-amber-400">{captures.white}</strong>
+                {/* Secondary Quick Action Bar */}
+                <div className="relative z-20 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#184d3c] text-xs">
+                  <div className="flex items-center gap-3 text-slate-300 text-[11px]">
+                    <span>⚪ {whiteDisplayName}: <strong className="text-[#d6a735]">{captures.white} captures</strong></span>
+                    <span>⚫ {blackDisplayName}: <strong className="text-emerald-400">{captures.black} captures</strong></span>
                   </div>
-                  <div className="p-2 bg-slate-950/80 border border-slate-800 rounded-lg">
-                    <span className="block text-[10px] font-bold text-slate-500 uppercase">Player 2 Captures</span>
-                    <strong className="text-base font-black text-emerald-400">{captures.black}</strong>
-                  </div>
-                  <div className="p-2 bg-slate-950/80 border border-slate-800 rounded-lg">
-                    <span className="block text-[10px] font-bold text-slate-500 uppercase">Total Moves</span>
-                    <strong className="text-base font-black text-slate-200">{activeMoves.length}</strong>
-                  </div>
-                  <div className="p-2 bg-slate-950/80 border border-slate-800 rounded-lg">
-                    <span className="block text-[10px] font-bold text-slate-500 uppercase">Mode</span>
-                    <strong className="text-xs font-bold text-slate-300 truncate block">
-                      {mode === "online" 
-                        ? (room?.leagueId ? "Tournament" : room?.mode === "wager" ? "Wager" : "Online Room")
-                        : (subMode === "vs_cpu" ? `AI (${cpuDifficulty})` : "Local 2P")}
-                    </strong>
-                  </div>
-                </div>
 
-                {/* Mode-Specific Action Handlers */}
-                <div className="relative z-20 flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => void copyShareResult()}
-                    className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shadow-blue-600/20"
-                  >
-                    {copiedShareResult ? (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {mode === "local" ? (
                       <>
-                        <Check size={16} className="text-emerald-300" />
-                        <span>Summary Copied to Clipboard!</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLocalGameStarted(true);
+                            resetLocalMatch();
+                          }}
+                          className="px-3 py-1.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] font-bold text-xs rounded-lg border border-[#184d3c] flex items-center gap-1 transition-colors"
+                        >
+                          <RotateCcw size={13} /> Rematch
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowPregameModal(true)}
+                          className="px-3 py-1.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] font-bold text-xs rounded-lg border border-[#184d3c] flex items-center gap-1 transition-colors"
+                        >
+                          <Swords size={13} /> Setup
+                        </button>
                       </>
                     ) : (
                       <>
-                        <Share2 size={16} />
-                        <span>Share Result</span>
+                        <button
+                          type="button"
+                          disabled={onlineBusy}
+                          onClick={() => void requestRematch()}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg flex items-center gap-1 transition-colors disabled:opacity-50"
+                        >
+                          <RefreshCw size={13} /> Rematch
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRoom(null);
+                            setShowPregameModal(true);
+                          }}
+                          className="px-3 py-1.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] font-bold text-xs rounded-lg border border-[#184d3c] flex items-center gap-1 transition-colors"
+                        >
+                          <Swords size={13} /> New Match
+                        </button>
                       </>
                     )}
-                  </button>
-
-                  {(room?.leagueId || roomMode === "league" || room?.mode === "league") ? (
-                    <>
-                      <a
-                        href={`/leagues?id=${room?.leagueId || ""}`}
-                        className="w-full sm:w-auto px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/20"
-                      >
-                        <Trophy size={16} /> Return to Tournament Hub
-                      </a>
-                      <button
-                        type="button"
-                        onClick={() => setShowHistory(true)}
-                        className="w-full sm:w-auto px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-slate-700 transition-colors"
-                      >
-                        <ListOrdered size={16} /> Review Move Log
-                      </button>
-                    </>
-                  ) : mode === "local" ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setLocalGameStarted(true);
-                          resetLocalMatch();
-                          setShowPregameModal(true);
-                        }}
-                        className="w-full sm:w-auto px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/20"
-                      >
-                        <Swords size={16} /> New Game Configuration
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setLocalGameStarted(true);
-                          resetLocalMatch();
-                        }}
-                        className="w-full sm:w-auto px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-slate-700 transition-colors"
-                      >
-                        <RotateCcw size={16} /> Rematch (Same Settings)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRoom(null);
-                          setWinner(null);
-                          setLocalMoves([]);
-                          setLocalGameStarted(false);
-                        }}
-                        className="w-full sm:w-auto px-4 py-2.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-[#184d3c] transition-colors"
-                      >
-                        <Gamepad2 size={16} /> Return to Lobby
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        disabled={onlineBusy}
-                        onClick={() => void requestRematch()}
-                        className="w-full sm:w-auto px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-500/20"
-                      >
-                        <RefreshCw size={16} /> Play Rematch
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRoom(null);
-                          setShowPregameModal(true);
-                        }}
-                        className="w-full sm:w-auto px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-slate-700 transition-colors"
-                      >
-                        <Swords size={16} /> Match Configuration
-                      </button>
-                    </>
-                  )}
+                    <button
+                      type="button"
+                      onClick={() => setShowHistory((prev) => !prev)}
+                      className="px-3 py-1.5 bg-[#0c3b2e] hover:bg-[#144435] text-slate-300 font-bold text-xs rounded-lg border border-[#184d3c] flex items-center gap-1 transition-colors"
+                    >
+                      <ListOrdered size={13} /> Move Log
+                    </button>
+                  </div>
                 </div>
               </div>
-            ) : (
-              <div className="space-y-3">
+            )}
+
+            <div className="space-y-3">
                 {/* Online Room Waiting & Handshake Banner */}
                 {mode === "online" && room && room.status === "waiting" && (
                   <div className="p-3.5 sm:p-4 bg-gradient-to-br from-[#0c3b2e] to-[#06261f] border-2 border-[#d6a735]/70 rounded-2xl shadow-xl space-y-3 animate-in fade-in zoom-in-95 duration-200">
@@ -2677,7 +2667,6 @@ export default function ArenaPage() {
                 </div>
               </div>
             </div>
-            )}
 
             {/* Dynamic Turn Status & Message Banner */}
             <div className={`flex flex-wrap items-center justify-between p-2.5 sm:p-3 rounded-xl text-xs gap-2 min-h-[42px] sm:min-h-[46px] transition-all border ${
@@ -4298,6 +4287,46 @@ export default function ArenaPage() {
           </section>
         </div>
       )}
+
+      {/* Match Summary Modal */}
+      <MatchSummaryModal
+        isOpen={showMatchSummaryModal}
+        onClose={() => setShowMatchSummaryModal(false)}
+        winner={winner}
+        board={board}
+        totalMoves={activeMoves.length}
+        whiteDisplayName={whiteDisplayName}
+        blackDisplayName={blackDisplayName}
+        whiteCaptures={captures.white}
+        blackCaptures={captures.black}
+        mode={mode}
+        subMode={subMode}
+        roomMode={roomMode}
+        room={room}
+        cpuDifficulty={cpuDifficulty}
+        onRematch={
+          mode === "local"
+            ? () => {
+                setLocalGameStarted(true);
+                resetLocalMatch();
+              }
+            : () => {
+                void requestRematch();
+              }
+        }
+        onNewGame={() => setShowPregameModal(true)}
+        onReviewLog={() => setShowHistory(true)}
+        onLobby={() => {
+          setRoom(null);
+          setWinner(null);
+          setLocalMoves([]);
+          setLocalGameStarted(false);
+        }}
+        boardThemeBg={activeBoardConfig.boardBg}
+        playableBg={activeBoardConfig.playableBg}
+        playableAltBg={activeBoardConfig.playableAltBg}
+        restBg={activeBoardConfig.restBg}
+      />
     </main>
   );
 }
