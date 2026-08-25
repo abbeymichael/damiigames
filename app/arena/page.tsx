@@ -3393,29 +3393,136 @@ export default function ArenaPage() {
                         </div>
                       </div>
 
-                      <div className="space-y-2">
-                        <div className="flex gap-2">
-                          <select
-                            value={roomMode}
-                            onChange={(e) => setRoomMode(e.target.value as RoomMode)}
-                            className="flex-1 px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
+                      {/* Match Mode Radio Selection */}
+                      <div className="p-3 bg-[#06261f] border border-[#184d3c] rounded-xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-extrabold text-[#d6a735] uppercase tracking-wider block">
+                            Match Type & Stakes
+                          </label>
+                          <span className="text-[10px] text-slate-400">
+                            {roomMode === "wager" ? "Escrow Pot Active" : "No Stake"}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setRoomMode("casual")}
+                            className={`p-2.5 rounded-xl border text-left flex items-center gap-2.5 transition-all ${
+                              roomMode === "casual"
+                                ? "bg-emerald-950/80 border-emerald-500 text-emerald-200 shadow-sm ring-1 ring-emerald-500/40"
+                                : "bg-[#081c15] border-[#184d3c] text-slate-400 hover:border-slate-600 hover:text-slate-200"
+                            }`}
                           >
-                            <option value="casual">Casual Match (Free)</option>
-                            <option value="wager">Wager Match (GH₵ Escrow Pot)</option>
-                          </select>
+                            <div
+                              className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                                roomMode === "casual" ? "border-emerald-400 bg-emerald-400" : "border-slate-500"
+                              }`}
+                            >
+                              {roomMode === "casual" && <div className="w-1.5 h-1.5 rounded-full bg-[#06261f]" />}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold flex items-center gap-1.5">
+                                <span className="text-[#f5efdf]">Casual Match</span>
+                                <span className="text-[9px] px-1.5 py-0.2 bg-emerald-950 text-emerald-300 border border-emerald-500/30 rounded font-normal">
+                                  Free
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-slate-400 truncate">
+                                Friendly game · No stakes
+                              </div>
+                            </div>
+                          </button>
 
-                          {roomMode === "wager" && (
-                            <input
-                              type="number"
-                              min={10}
-                              step={10}
-                              value={wagerInput}
-                              onChange={(e) => setWagerInput(Number(e.target.value))}
-                              placeholder="Stake GH₵"
-                              className="w-28 px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
-                            />
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => setRoomMode("wager")}
+                            className={`p-2.5 rounded-xl border text-left flex items-center gap-2.5 transition-all ${
+                              roomMode === "wager"
+                                ? "bg-amber-950/70 border-amber-400 text-amber-200 shadow-sm ring-1 ring-amber-400/40"
+                                : "bg-[#081c15] border-[#184d3c] text-slate-400 hover:border-slate-600 hover:text-slate-200"
+                            }`}
+                          >
+                            <div
+                              className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                                roomMode === "wager" ? "border-amber-400 bg-amber-400" : "border-slate-500"
+                              }`}
+                            >
+                              {roomMode === "wager" && <div className="w-1.5 h-1.5 rounded-full bg-[#06261f]" />}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold flex items-center gap-1.5">
+                                <span className="text-amber-300 font-extrabold">Wager Match</span>
+                                <Zap size={11} className="text-amber-400 shrink-0" />
+                              </div>
+                              <div className="text-[10px] text-slate-400 truncate">
+                                GH₵ Escrow Pot · Winner takes all
+                              </div>
+                            </div>
+                          </button>
+                        </div>
 
+                        {/* Wager Stake Amount Row (Next line when Wager is active) */}
+                        {roomMode === "wager" && (
+                          <div className="pt-2.5 border-t border-[#184d3c] space-y-2">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[11px] font-semibold text-slate-300">
+                                Wager Stake (GH₵ per player)
+                              </label>
+                              <span className="text-[10px] text-slate-400">
+                                Balance: <strong className="text-emerald-400">GH₵ {Math.max(Number(profile?.points ?? 0), Number(profile?.marbles ?? 0)).toFixed(2)}</strong>
+                              </span>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <div className="relative flex-1">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#d6a735]">
+                                  GH₵
+                                </span>
+                                <input
+                                  type="number"
+                                  min={5}
+                                  step={5}
+                                  value={wagerInput}
+                                  onChange={(e) => setWagerInput(Math.max(1, Number(e.target.value)))}
+                                  placeholder="Stake amount"
+                                  className="w-full pl-11 pr-3 py-2 bg-[#081c15] border border-[#184d3c] rounded-xl text-xs font-bold text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
+                                />
+                              </div>
+
+                              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                                {[10, 20, 50, 100].map((preset) => (
+                                  <button
+                                    key={preset}
+                                    type="button"
+                                    onClick={() => setWagerInput(preset)}
+                                    className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg border transition-all ${
+                                      wagerInput === preset
+                                        ? "bg-[#d6a735] text-[#06261f] border-[#d6a735]"
+                                        : "bg-[#081c15] border-[#184d3c] text-slate-300 hover:border-slate-500"
+                                    }`}
+                                  >
+                                    GH₵{preset}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Optional target player challenge field */}
+                        <div className="pt-1">
+                          <input
+                            type="text"
+                            value={challengeTargetUser}
+                            onChange={(e) => setChallengeTargetUser(e.target.value)}
+                            placeholder="Target Opponent Username (Optional - Sends In-App Alert)"
+                            className="w-full px-3 py-2 bg-[#081c15] border border-[#184d3c] rounded-xl text-[11px] text-[#f5efdf] placeholder-slate-500 focus:outline-none focus:border-[#d6a735]"
+                          />
+                        </div>
+
+                        {/* Next line: Dedicated Create Room Button */}
+                        <div>
                           <button
                             type="button"
                             disabled={onlineBusy}
@@ -3426,86 +3533,100 @@ export default function ArenaPage() {
                                 isPrivate: isPrivateRoom,
                               })
                             }
-                            className="px-4 py-2 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold rounded-xl text-xs transition-all shadow-md shadow-[#d6a735]/10 flex items-center gap-1 shrink-0"
+                            className="w-full py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-extrabold rounded-xl text-xs transition-all shadow-md shadow-[#d6a735]/15 flex items-center justify-center gap-2"
                           >
-                            <Plus size={14} /> Create Room
+                            <Plus size={15} />
+                            <span>
+                              Create {isPrivateRoom ? "Private" : "Public"} {roomMode === "wager" ? `GH₵ ${wagerInput} Wager` : "Casual"} Room
+                            </span>
                           </button>
-                        </div>
-
-                        {/* Optional target player challenge field */}
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={challengeTargetUser}
-                            onChange={(e) => setChallengeTargetUser(e.target.value)}
-                            placeholder="Target Opponent Username (Optional - Sends Audio & In-App Alert)"
-                            className="w-full px-3 py-1.5 bg-[#06261f] border border-[#184d3c] rounded-lg text-[11px] text-[#f5efdf] placeholder-slate-500 focus:outline-none focus:border-[#d6a735]"
-                          />
                         </div>
                       </div>
 
                       {/* Transparent Player-Facing Escrow Audit Trail Breakdown */}
                       {(roomMode === "wager" || room?.mode === "wager") && (
                         <div className="p-3 bg-[#06261f] border border-[#d6a735]/50 rounded-xl space-y-2 text-xs">
-                          <div className="flex items-center justify-between text-[#d6a735] font-extrabold uppercase tracking-wider text-[11px]">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[#d6a735] font-extrabold uppercase tracking-wider text-[11px]">
                             <span className="flex items-center gap-1.5">
-                              <ShieldCheck size={14} /> Guaranteed Escrow Vault Audit Trail
+                              <ShieldCheck size={14} className="shrink-0" /> Escrow Vault Audit Trail
                             </span>
-                            <span className="px-1.5 py-0.5 bg-emerald-950 text-emerald-300 rounded border border-emerald-500/30 text-[9px]">
+                            <span className="self-start sm:self-auto px-1.5 py-0.5 bg-emerald-950 text-emerald-300 rounded border border-emerald-500/30 text-[9px]">
                               Disputes &lt; 2h SLA
                             </span>
                           </div>
-                          <div className="grid grid-cols-2 gap-2 text-[11px] text-[#cbd5e1] pt-1 border-t border-[#184d3c]">
-                            <div>
-                              • Your Wager Stake: <strong className="text-[#f5efdf]">GH₵ {Number(wagerInput).toFixed(2)}</strong> (Locked)
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] text-[#cbd5e1] pt-1.5 border-t border-[#184d3c]">
+                            <div className="flex items-center justify-between sm:justify-start sm:gap-1">
+                              <span>• Your Wager Stake:</span>
+                              <strong className="text-[#f5efdf]">GH₵ {Number(wagerInput).toFixed(2)}</strong>
                             </div>
-                            <div>
-                              • Opponent Stake: <strong className="text-[#f5efdf]">GH₵ {Number(wagerInput).toFixed(2)}</strong> (Locked)
+                            <div className="flex items-center justify-between sm:justify-start sm:gap-1">
+                              <span>• Opponent Stake:</span>
+                              <strong className="text-[#f5efdf]">GH₵ {Number(wagerInput).toFixed(2)}</strong>
                             </div>
-                            <div>
-                              • Total Wager Pot: <strong className="text-amber-300">GH₵ {(Number(wagerInput) * 2).toFixed(2)}</strong>
+                            <div className="flex items-center justify-between sm:justify-start sm:gap-1">
+                              <span>• Total Wager Pot:</span>
+                              <strong className="text-amber-300">GH₵ {(Number(wagerInput) * 2).toFixed(2)}</strong>
                             </div>
-                            <div>
-                              • Winner Takes Pot: <strong className="text-emerald-400">GH₵ {(Number(wagerInput) * 2).toFixed(2)}</strong> (net of platform fee)
+                            <div className="flex items-center justify-between sm:justify-start sm:gap-1">
+                              <span>• Winner Takes Pot:</span>
+                              <strong className="text-emerald-400">GH₵ {(Number(wagerInput) * 2).toFixed(2)}</strong>
                             </div>
                           </div>
                         </div>
                       )}
 
-                      <div className="flex gap-2 pt-2 border-t border-[#184d3c]">
-                        <input
-                          type="text"
-                          maxLength={8}
-                          value={joinCode}
-                          onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                          placeholder="ENTER ROOM CODE"
-                          className="flex-1 px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs font-mono font-bold tracking-widest text-[#f5efdf] placeholder-[#63716b] uppercase focus:outline-none focus:border-[#d6a735]"
-                        />
-                        <button
-                          type="button"
-                          disabled={onlineBusy || !joinCode}
-                          onClick={() => void onlineAction("join", { code: joinCode })}
-                          className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition-all shrink-0"
-                        >
-                          Join Room
-                        </button>
+                      {/* Join Room Section with Mobile Optimization */}
+                      <div className="p-3 bg-[#06261f] border border-[#184d3c] rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-extrabold text-[#d6a735] uppercase tracking-wider flex items-center gap-1.5">
+                            <ArrowRight size={13} className="text-[#d6a735] shrink-0" />
+                            <span>Join Existing Room</span>
+                          </label>
+                          <span className="text-[10px] text-slate-400">8-digit Code</span>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <div className="relative flex-1">
+                            <input
+                              type="text"
+                              maxLength={8}
+                              value={joinCode}
+                              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                              placeholder="ENTER ROOM CODE (E.G. ABCD1234)"
+                              className="w-full px-3 py-2 bg-[#081c15] border border-[#184d3c] rounded-xl text-xs font-mono font-bold tracking-widest text-[#f5efdf] placeholder-[#63716b] uppercase focus:outline-none focus:border-[#d6a735]"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            disabled={onlineBusy || !joinCode}
+                            onClick={() => void onlineAction("join", { code: joinCode })}
+                            className="w-full sm:w-auto px-5 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 font-extrabold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 shrink-0"
+                          >
+                            <ArrowRight size={14} />
+                            <span>Join Room</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
 
                   {room && (
-                    <div className="p-3 bg-[#06261f]/80 border border-[#184d3c] rounded-xl space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-[#d6a735] uppercase">
-                          ACTIVE ROOM: {room.code}
-                        </span>
+                    <div className="p-3 bg-emerald-950/70 border border-emerald-500/50 rounded-xl space-y-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wider block">
+                            Active Room Code
+                          </span>
+                          <span className="text-base font-mono font-black text-[#d6a735] tracking-widest">
+                            {room.code}
+                          </span>
+                        </div>
                         <button
                           type="button"
                           onClick={copyChallengeLink}
-                          className="px-2 py-1 bg-[#144435] hover:bg-[#1f5e4a] text-[#f5efdf] text-[10px] font-bold rounded-lg flex items-center gap-1"
+                          className="w-full sm:w-auto px-3 py-2 bg-[#144435] hover:bg-[#1f5e4a] text-[#f5efdf] text-[11px] font-bold rounded-lg flex items-center justify-center gap-1.5 border border-[#184d3c] transition-colors"
                         >
-                          <Share2 size={12} />
-                          {copiedLink ? "Link Copied!" : "Copy Challenge Link"}
+                          <Share2 size={13} />
+                          <span>{copiedLink ? "Link Copied!" : "Copy Challenge Link"}</span>
                         </button>
                       </div>
                     </div>
@@ -3514,9 +3635,9 @@ export default function ArenaPage() {
               )}
             </div>
 
-            {/* Modal Footer */}
-            <div className="px-6 py-4 bg-[#0c3b2e] border-t border-[#184d3c] flex items-center justify-between">
-              <span className="text-[11px] text-[#cbd5e1]">
+            {/* Modal Footer with Mobile Responsiveness */}
+            <div className="p-4 sm:px-6 sm:py-4 bg-[#0c3b2e] border-t border-[#184d3c] flex flex-col sm:flex-row items-center justify-between gap-3">
+              <span className="text-[11px] text-[#cbd5e1] text-center sm:text-left">
                 FMJD 10x10 Compulsory Rules Active
               </span>
               <button
@@ -3544,7 +3665,7 @@ export default function ArenaPage() {
                   resetLocalMatch();
                   setShowPregameModal(false);
                 }}
-                className="px-6 py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-extrabold rounded-xl text-xs transition-all shadow-lg shadow-[#d6a735]/20 flex items-center gap-2"
+                className="w-full sm:w-auto px-6 py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-extrabold rounded-xl text-xs transition-all shadow-lg shadow-[#d6a735]/20 flex items-center justify-center gap-2"
               >
                 {subMode === "vs_cpu" && (cpuDifficulty === "medium" || cpuDifficulty === "hard") && (!token || !profile) ? (
                   <Lock size={14} />
@@ -3674,32 +3795,79 @@ export default function ArenaPage() {
                           </h4>
 
                           <div>
-                            <label className="block text-[11px] font-medium text-[#cbd5e1] mb-1">
-                              Match Type
+                            <label className="block text-[11px] font-bold text-[#cbd5e1] uppercase tracking-wider mb-1.5">
+                              Match Type & Stakes
                             </label>
-                            <select
-                              value={roomMode}
-                              onChange={(e) => setRoomMode(e.target.value as RoomMode)}
-                              className="w-full px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
-                            >
-                              <option value="casual">Casual Match (Free)</option>
-                              <option value="wager">Wager Match (GH₵ Escrow Pot)</option>
-                            </select>
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setRoomMode("casual")}
+                                className={`p-2.5 rounded-xl border text-left flex items-center gap-2 transition-all ${
+                                  roomMode === "casual"
+                                    ? "bg-emerald-950/80 border-emerald-500 text-emerald-200 ring-1 ring-emerald-500/40"
+                                    : "bg-[#06261f] border-[#184d3c] text-slate-400 hover:border-slate-600 hover:text-slate-200"
+                                }`}
+                              >
+                                <div
+                                  className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
+                                    roomMode === "casual" ? "border-emerald-400 bg-emerald-400" : "border-slate-500"
+                                  }`}
+                                >
+                                  {roomMode === "casual" && <div className="w-1.5 h-1.5 rounded-full bg-[#06261f]" />}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-xs font-bold text-[#f5efdf]">Casual (Free)</div>
+                                  <div className="text-[10px] text-slate-400 truncate">No stake</div>
+                                </div>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setRoomMode("wager")}
+                                className={`p-2.5 rounded-xl border text-left flex items-center gap-2 transition-all ${
+                                  roomMode === "wager"
+                                    ? "bg-amber-950/70 border-amber-400 text-amber-200 ring-1 ring-amber-400/40"
+                                    : "bg-[#06261f] border-[#184d3c] text-slate-400 hover:border-slate-600 hover:text-slate-200"
+                                }`}
+                              >
+                                <div
+                                  className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
+                                    roomMode === "wager" ? "border-amber-400 bg-amber-400" : "border-slate-500"
+                                  }`}
+                                >
+                                  {roomMode === "wager" && <div className="w-1.5 h-1.5 rounded-full bg-[#06261f]" />}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-xs font-bold text-amber-300">Wager</div>
+                                  <div className="text-[10px] text-slate-400 truncate">Escrow Pot</div>
+                                </div>
+                              </button>
+                            </div>
                           </div>
 
                           {roomMode === "wager" && (
-                            <div>
-                              <label className="block text-[11px] font-medium text-[#cbd5e1] mb-1">
-                                Wager Stake (GH₵ per player)
-                              </label>
-                              <input
-                                type="number"
-                                min={10}
-                                step={10}
-                                value={wagerInput}
-                                onChange={(e) => setWagerInput(Number(e.target.value))}
-                                className="w-full px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
-                              />
+                            <div className="pt-2 border-t border-[#184d3c] space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <label className="block text-[11px] font-medium text-[#cbd5e1]">
+                                  Wager Stake (GH₵ per player)
+                                </label>
+                                <span className="text-[10px] text-slate-400">
+                                  Bal: <strong className="text-emerald-400">GH₵ {Math.max(Number(profile?.points ?? 0), Number(profile?.marbles ?? 0)).toFixed(2)}</strong>
+                                </span>
+                              </div>
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#d6a735]">
+                                  GH₵
+                                </span>
+                                <input
+                                  type="number"
+                                  min={5}
+                                  step={5}
+                                  value={wagerInput}
+                                  onChange={(e) => setWagerInput(Math.max(1, Number(e.target.value)))}
+                                  className="w-full pl-11 pr-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs font-bold text-[#f5efdf] focus:outline-none focus:border-[#d6a735]"
+                                />
+                              </div>
                             </div>
                           )}
 
@@ -3712,32 +3880,35 @@ export default function ArenaPage() {
                                 wagerAmount: roomMode === "wager" ? wagerInput : 0,
                               })
                             }
-                            className="w-full py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold rounded-xl text-xs transition-all shadow-md shadow-[#d6a735]/10 flex items-center justify-center gap-1.5"
+                            className="w-full py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-extrabold rounded-xl text-xs transition-all shadow-md shadow-[#d6a735]/15 flex items-center justify-center gap-1.5"
                           >
-                            ＋ Create {roomMode === "wager" ? `GH₵ ${wagerInput} Wager` : "Casual"} Room
+                            <Plus size={15} /> Create {roomMode === "wager" ? `GH₵ ${wagerInput} Wager` : "Casual"} Room
                           </button>
                         </div>
 
-                        <div className="space-y-2 p-4 bg-[#0c3b2e]/60 border border-[#184d3c] rounded-2xl">
-                          <h4 className="text-xs font-bold text-[#f5efdf] flex items-center gap-1.5">
-                            <ArrowRight size={14} className="text-[#d6a735]" /> Join Private Room
-                          </h4>
-                          <div className="flex gap-2">
+                        <div className="space-y-2 p-3.5 bg-[#0c3b2e]/60 border border-[#184d3c] rounded-2xl">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-bold text-[#f5efdf] flex items-center gap-1.5">
+                              <ArrowRight size={14} className="text-[#d6a735]" /> Join Private Room
+                            </h4>
+                            <span className="text-[10px] text-slate-400">8-digit Code</span>
+                          </div>
+                          <div className="flex flex-col sm:flex-row gap-2">
                             <input
                               type="text"
                               maxLength={8}
                               value={joinCode}
                               onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                              placeholder="ROOM CODE"
-                              className="flex-1 px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs font-mono font-bold tracking-widest text-[#f5efdf] placeholder-[#63716b] uppercase focus:outline-none focus:border-[#d6a735]"
+                              placeholder="ENTER ROOM CODE"
+                              className="w-full sm:flex-1 px-3 py-2 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs font-mono font-bold tracking-widest text-[#f5efdf] placeholder-[#63716b] uppercase focus:outline-none focus:border-[#d6a735]"
                             />
                             <button
                               type="button"
                               disabled={onlineBusy || !joinCode}
                               onClick={() => void onlineAction("join", { code: joinCode })}
-                              className="px-4 py-2 bg-[#d6a735] hover:bg-[#b88c24] disabled:opacity-50 text-[#06261f] font-bold text-xs rounded-xl transition-all"
+                              className="w-full sm:w-auto px-5 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-1 shrink-0"
                             >
-                              Join
+                              <ArrowRight size={14} /> Join
                             </button>
                           </div>
                         </div>
