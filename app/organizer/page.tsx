@@ -941,6 +941,12 @@ export default function OrganizerPage() {
   };
 
   const filteredLeagues = leagues.filter((lg) => {
+    // Strict isolation: standard organizers only see and manage their own tournaments
+    const isGlobalAdmin = role === "admin" || role === "super_admin";
+    if (!isGlobalAdmin && lg.facilitatorToken !== token) {
+      return false;
+    }
+
     const matchesFilter =
       statusFilter === "all" || lg.status === statusFilter;
     const matchesSearch =

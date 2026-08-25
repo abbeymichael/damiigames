@@ -47,6 +47,7 @@ import {
   SlidersHorizontal,
   Gamepad2,
   Inbox,
+  MessageSquare,
 } from "lucide-react";
 import { getSessionToken, saveSessionToken, clearSessionToken } from "@/lib/client-auth";
 import type {
@@ -83,6 +84,7 @@ import { AdminStaffTable } from "@/components/admin/AdminStaffTable";
 import { GamesCatalogTable } from "@/components/admin/GamesCatalogTable";
 import { TournamentRequestsTable } from "@/components/admin/TournamentRequestsTable";
 import { LegalPagesEditor } from "@/components/admin/LegalPagesEditor";
+import { CommunicationsCenter } from "@/components/admin/CommunicationsCenter";
 import {
   ResponsiveContainer,
   LineChart,
@@ -328,6 +330,7 @@ const NAV_SECTIONS: NavSection[] = [
       { key: "tournaments", label: "Tournaments", icon: Trophy, permission: "tournaments.manage" },
       { key: "games", label: "Game Catalog", icon: Gamepad2, permission: "games.manage" },
       { key: "wallet", label: "Financial Ledger", icon: Wallet, permission: "wallet.view" },
+      { key: "communications", label: "Communications", icon: MessageSquare, permission: "system.sms_email" },
       { key: "limits", label: "Game Limits & Escrow", icon: SlidersHorizontal, permission: "limits.manage" },
       { key: "users", label: "Players & Users", icon: Users, permission: "users.view" },
     ],
@@ -370,6 +373,7 @@ function hasAccess(
     "admins.view": ["manage_admins"],
     "roles.view": ["manage_admins"],
     "audit.view": ["view_audit_log"],
+    "system.sms_email": ["manage_admins", "manage_wallet", "system.settings.view"],
     "system.settings.view": ["manage_wallet", "run_seeder"],
   };
 
@@ -2095,6 +2099,16 @@ export default function AdminPage() {
             {/* TAB: GAME LIMITS & ESCROW */}
             {activeTab === "limits" && (
               <GameLimitsTable token={token} adminSecret={adminSecret} />
+            )}
+
+            {/* TAB: COMMUNICATIONS & BROADCAST */}
+            {activeTab === "communications" && (
+              <CommunicationsCenter
+                token={token}
+                adminSecret={adminSecret}
+                allUsers={metrics?.allUsers || []}
+                onNavigateToSettings={() => setActiveTab("settings")}
+              />
             )}
 
             {/* TAB: AUDIT LOG */}

@@ -171,6 +171,16 @@ export const walletService = {
           tx.status = "completed";
           await dbRepository.createTransaction(tx);
           await dbRepository.updateProfileBalance(tx.userToken, tx.amount);
+          await dbRepository.writeLedger([
+            {
+              userId: tx.userToken,
+              accountType: "available",
+              entryType: "deposit",
+              amount: String(tx.amount),
+              referenceType: "paystack",
+              referenceId: cleanRef,
+            },
+          ]).catch(() => []);
 
           // Notify user of successful deposit
           notificationService.sendNotification({
@@ -255,6 +265,16 @@ export const walletService = {
       createdAt: new Date().toISOString(),
     };
     await dbRepository.createTransaction(tx);
+    await dbRepository.writeLedger([
+      {
+        userId: userToken,
+        accountType: "available",
+        entryType: "withdrawal",
+        amount: String(-ghsValue),
+        referenceType: "momo_withdrawal",
+        referenceId: ref,
+      },
+    ]).catch(() => []);
 
     // Notify user of cashout request submission
     notificationService.sendNotification({
@@ -333,6 +353,41 @@ export const walletService = {
       createdAt: now,
     });
 
+    await dbRepository.writeLedger([
+      {
+        userId: player1Token,
+        accountType: "available",
+        entryType: "wager_lock",
+        amount: String(-wagerAmount),
+        referenceType: "room",
+        referenceId: roomCode,
+      },
+      {
+        userId: player1Token,
+        accountType: "escrow",
+        entryType: "wager_lock",
+        amount: String(wagerAmount),
+        referenceType: "room",
+        referenceId: roomCode,
+      },
+      {
+        userId: player2Token,
+        accountType: "available",
+        entryType: "wager_lock",
+        amount: String(-wagerAmount),
+        referenceType: "room",
+        referenceId: roomCode,
+      },
+      {
+        userId: player2Token,
+        accountType: "escrow",
+        entryType: "wager_lock",
+        amount: String(wagerAmount),
+        referenceType: "room",
+        referenceId: roomCode,
+      },
+    ]).catch(() => []);
+
     return escrow;
   },
 
@@ -398,6 +453,42 @@ export const walletService = {
           createdAt: now,
         });
       }
+
+      const wagerStakePerPlayer = Math.floor(escrow.amountPoints / 2);
+      await dbRepository.writeLedger([
+        {
+          userId: escrow.player1Token,
+          accountType: "escrow",
+          entryType: "wager_win",
+          amount: String(-wagerStakePerPlayer),
+          referenceType: "room",
+          referenceId: escrow.roomCode,
+        },
+        ...(escrow.player2Token ? [{
+          userId: escrow.player2Token,
+          accountType: "escrow" as const,
+          entryType: "wager_win" as const,
+          amount: String(-wagerStakePerPlayer),
+          referenceType: "room",
+          referenceId: escrow.roomCode,
+        }] : []),
+        {
+          userId: winnerToken,
+          accountType: "available",
+          entryType: "wager_win",
+          amount: String(winnerPayout),
+          referenceType: "room",
+          referenceId: escrow.roomCode,
+        },
+        ...(platformFee > 0 ? [{
+          userId: "platform-treasury",
+          accountType: "available" as const,
+          entryType: "platform_fee" as const,
+          amount: String(platformFee),
+          referenceType: "room",
+          referenceId: escrow.roomCode,
+        }] : []),
+      ]).catch(() => []);
     } else {
       // Refund both players full wager amount on draw
       escrow.status = "refunded";
@@ -435,6 +526,43 @@ export const walletService = {
           createdAt: now,
         });
       }
+
+      await dbRepository.writeLedger([
+        {
+          userId: escrow.player1Token,
+          accountType: "escrow",
+          entryType: "wager_refund",
+          amount: String(-refundPerPlayer),
+          referenceType: "room",
+          referenceId: escrow.roomCode,
+        },
+        {
+          userId: escrow.player1Token,
+          accountType: "available",
+          entryType: "wager_refund",
+          amount: String(refundPerPlayer),
+          referenceType: "room",
+          referenceId: escrow.roomCode,
+        },
+        ...(escrow.player2Token ? [
+          {
+            userId: escrow.player2Token,
+            accountType: "escrow" as const,
+            entryType: "wager_refund" as const,
+            amount: String(-refundPerPlayer),
+            referenceType: "room",
+            referenceId: escrow.roomCode,
+          },
+          {
+            userId: escrow.player2Token,
+            accountType: "available" as const,
+            entryType: "wager_refund" as const,
+            amount: String(refundPerPlayer),
+            referenceType: "room",
+            referenceId: escrow.roomCode,
+          },
+        ] : []),
+      ]).catch(() => []);
 
       // Notify both players of draw and refunded stakes
       notificationService.sendNotification({

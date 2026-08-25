@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { dbRepository } from "./db-client";
 import { OtpRequest } from "./types";
+import { notificationService } from "./notification-service";
 
 const MIN_GAP_SECONDS = 60;
 const MAX_SENDS_PER_HOUR = 4;
@@ -78,13 +79,80 @@ export function generateOtpCode(): string {
 }
 
 /**
- * Sends SMS via Ghana SMS gateway or logs in dev/testing
+ * Sends SMS via Admin-configured Ghana SMS Gateway (Hubtel / Arkesel / Twilio) or mock simulation
  */
-export async function sendOtpSms(phoneNumber: string, code: string): Promise<{ success: boolean; messageId?: string }> {
-  // In development / demo environment, log code
-  console.log(`[damii][sms] Sending OTP ${code} to ${phoneNumber}`);
-  // If third-party SMS service credentials (e.g. Hubtel / Arkesel / Twilio) are configured in env, dispatch here
-  return { success: true, messageId: `sms_${Date.now()}` };
+export async function sendOtpSms(
+  phoneNumber: string,
+  code: string,
+): Promise<{ success: boolean; messageId?: string; error?: string; status?: string }> {
+  try {
+    const smsConfig = await notificationService.getSmsSettings();
+
+    let cleanPhone = phoneNumber.replace(/[^0-9]/g, "");
+    if (cleanPhone.startsWith("0") && cleanPhone.length === 10) {
+      cleanPhone = "233" + cleanPhone.substring(1);
+    }
+
+    // Interpolate OTP template configured in platform settings
+    const template = smsConfig.otpTemplate || "Your DAMII verification code is {code}. Valid for 4 minutes.";
+    const smsText = template
+      .replace(/\{code\}/g, code)
+      .replace(/\{appName\}/g, "DAMII")
+      .replace(/\{expiresIn\}/g, "4 minutes");
+
+    // If SMS notifications are disabled in admin platform settings
+    if (!smsConfig.enabled) {
+      console.log(`[damii][sms-disabled] Admin SMS is disabled. OTP for ${cleanPhone}: ${code}`);
+      const mockMsgId = `mock-otp-${Date.now()}`;
+      notificationService.recordDispatchedLog({
+        id: `otp-log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        recipientToken: phoneNumber,
+        recipientContact: cleanPhone,
+        channel: "sms",
+        title: "OTP Verification Code (Disabled/Mock)",
+        message: smsText,
+        type: "system",
+        status: "sent",
+        providerMessageId: mockMsgId,
+        timestamp: new Date().toISOString(),
+      });
+      return {
+        success: true,
+        messageId: mockMsgId,
+        status: "mock_sent",
+      };
+    }
+
+    // Execute provider dispatcher (Hubtel / Arkesel / Twilio / Mock)
+    const result = await notificationService.executeSmsProvider(smsConfig, cleanPhone, smsText);
+
+    // Record audit log entry in dispatchedChannelLogs
+    notificationService.recordDispatchedLog({
+      id: `otp-log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      recipientToken: phoneNumber,
+      recipientContact: cleanPhone,
+      channel: "sms",
+      title: "OTP Verification Code",
+      message: smsText,
+      type: "system",
+      status: result.status === "failed" ? "failed" : "sent",
+      providerMessageId: result.messageId,
+      timestamp: new Date().toISOString(),
+    });
+
+    return {
+      success: result.success,
+      messageId: result.messageId,
+      status: result.status,
+      error: result.error,
+    };
+  } catch (err) {
+    console.error("[sendOtpSms] Error sending OTP:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to dispatch OTP SMS",
+    };
+  }
 }
 
 /**

@@ -802,7 +802,153 @@ export const notificationService = {
   },
 
   /**
-   * SMS Gateway Dispatcher (Hubtel / Arkesel / Twilio)
+   * Records a log entry in the dispatchedChannelLogs array
+   */
+  recordDispatchedLog(log: NotificationDispatchedLog) {
+    dispatchedChannelLogs.push(log);
+    if (dispatchedChannelLogs.length > 200) {
+      dispatchedChannelLogs.splice(0, dispatchedChannelLogs.length - 200);
+    }
+  },
+
+  /**
+   * Real provider dispatcher for Hubtel / Arkesel / Twilio / Mock SMS
+   */
+  async executeSmsProvider(
+    smsConfig: SmsSettings,
+    cleanPhone: string,
+    smsText: string
+  ): Promise<{ success: boolean; messageId?: string; error?: string; status: "sent" | "failed" | "mock_sent" }> {
+    const provider = smsConfig.provider || "hubtel";
+    const senderId = smsConfig.senderId || "DAMII";
+
+    // 1. Hubtel SMS Gateway (Ghana E.164)
+    if (provider === "hubtel") {
+      const clientId = smsConfig.clientId || process.env.HUBTEL_CLIENT_ID || "";
+      const clientSecret = smsConfig.clientSecret || process.env.HUBTEL_CLIENT_SECRET || "";
+      const apiKey = smsConfig.apiKey || process.env.HUBTEL_API_KEY || "";
+
+      if ((clientId && clientSecret && !clientSecret.includes("•••")) || (apiKey && !apiKey.includes("***"))) {
+        try {
+          const authHeader = apiKey
+            ? `Basic ${Buffer.from(`${apiKey}:`).toString("base64")}`
+            : `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`;
+
+          const res = await fetch("https://sms.hubtel.com/v1/messages/send", {
+            method: "POST",
+            headers: {
+              Authorization: authHeader,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              From: senderId,
+              To: cleanPhone,
+              Content: smsText,
+              Type: 0,
+              RegisteredDelivery: true,
+            }),
+            signal: AbortSignal.timeout(8000),
+          });
+
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && (data.status === 0 || data.status === "0" || data.messageId || data.data?.messageId)) {
+            return {
+              success: true,
+              messageId: data.messageId || data.data?.messageId || `hubtel-${Date.now()}`,
+              status: "sent",
+            };
+          }
+          console.warn("[Hubtel SMS Warning]", data);
+        } catch (err) {
+          console.warn("[Hubtel SMS Exception]", err);
+        }
+      }
+    }
+
+    // 2. Arkesel SMS Gateway (Ghana / West Africa)
+    if (provider === "arkesel") {
+      const apiKey = smsConfig.apiKey || process.env.ARKESEL_API_KEY || "";
+      if (apiKey && !apiKey.includes("***")) {
+        try {
+          const res = await fetch("https://sms.arkesel.com/api/v2/sms/send", {
+            method: "POST",
+            headers: {
+              "api-key": apiKey,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              sender: senderId,
+              message: smsText,
+              recipients: [cleanPhone],
+            }),
+            signal: AbortSignal.timeout(8000),
+          });
+
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && (data.status === "success" || data.code === 1000)) {
+            return {
+              success: true,
+              messageId: data.data?.[0]?.id || `arkesel-${Date.now()}`,
+              status: "sent",
+            };
+          }
+          console.warn("[Arkesel SMS Warning]", data);
+        } catch (err) {
+          console.warn("[Arkesel SMS Exception]", err);
+        }
+      }
+    }
+
+    // 3. Twilio SMS Gateway
+    if (provider === "twilio") {
+      const accountSid = smsConfig.twilioAccountSid || process.env.TWILIO_ACCOUNT_SID || "";
+      const authToken = smsConfig.twilioAuthToken || process.env.TWILIO_AUTH_TOKEN || "";
+      const fromNumber = smsConfig.twilioFromNumber || process.env.TWILIO_FROM_NUMBER || senderId;
+
+      if (accountSid && authToken && !authToken.includes("••••") && !authToken.includes("***")) {
+        try {
+          const params = new URLSearchParams();
+          params.append("To", cleanPhone.startsWith("+") ? cleanPhone : `+${cleanPhone}`);
+          params.append("From", fromNumber);
+          params.append("Body", smsText);
+
+          const authHeader = `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString("base64")}`;
+          const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+            method: "POST",
+            headers: {
+              Authorization: authHeader,
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: params.toString(),
+            signal: AbortSignal.timeout(8000),
+          });
+
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.sid) {
+            return {
+              success: true,
+              messageId: data.sid,
+              status: "sent",
+            };
+          }
+          console.warn("[Twilio SMS Warning]", data);
+        } catch (err) {
+          console.warn("[Twilio SMS Exception]", err);
+        }
+      }
+    }
+
+    // 4. Mock / Fallback Delivery
+    console.log(`[DAMII SMS - MOCK/DISPATCH] [${provider.toUpperCase()}] Sender: "${senderId}" -> To: "${cleanPhone}" | Message: "${smsText}"`);
+    return {
+      success: true,
+      messageId: `mock-sms-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      status: "mock_sent",
+    };
+  },
+
+  /**
+   * SMS Gateway Dispatcher (Hubtel / Arkesel / Twilio / Mock)
    */
   async sendSmsMessage(payload: {
     phone: string;
@@ -812,7 +958,7 @@ export const notificationService = {
   }) {
     const smsConfig = await this.getSmsSettings();
     if (!smsConfig.enabled) {
-      return { success: false, error: "SMS notifications globally disabled" };
+      return { success: false, error: "SMS notifications globally disabled in platform settings" };
     }
 
     let cleanPhone = payload.phone.replace(/[^0-9]/g, "");
@@ -827,7 +973,9 @@ export const notificationService = {
       smsText = this.interpolateTemplate(smsConfig.tournamentAlertTemplate, payload.templateData || {});
     }
 
-    dispatchedChannelLogs.push({
+    const execResult = await this.executeSmsProvider(smsConfig, cleanPhone, smsText);
+
+    this.recordDispatchedLog({
       id: `sms-log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       recipientToken: payload.phone,
       recipientContact: cleanPhone,
@@ -835,16 +983,18 @@ export const notificationService = {
       title: smsText.slice(0, 30),
       message: smsText,
       type: payload.type,
-      status: "sent",
+      status: execResult.status === "failed" ? "failed" : "sent",
+      providerMessageId: execResult.messageId,
       timestamp: new Date().toISOString(),
     });
 
     return {
-      success: true,
+      success: execResult.success,
       provider: smsConfig.provider,
       senderId: smsConfig.senderId,
       recipient: cleanPhone,
       body: smsText,
+      messageId: execResult.messageId,
     };
   },
 

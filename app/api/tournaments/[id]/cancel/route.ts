@@ -7,7 +7,17 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const tournament = await ledgerService.cancelTournament(id);
+    let token = "";
+    const authHeader = req.headers.get("authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      token = authHeader.substring(7).trim();
+    }
+    try {
+      const body = await req.clone().json();
+      if (!token && body?.token) token = String(body.token).trim();
+    } catch {}
+
+    const tournament = await ledgerService.cancelTournament(id, token || undefined);
     return NextResponse.json({ success: true, tournament });
   } catch (error: any) {
     return NextResponse.json(

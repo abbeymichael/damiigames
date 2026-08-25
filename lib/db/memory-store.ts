@@ -154,6 +154,15 @@ export const memoryStore: DbRepository = {
       for (const p of seed.leagueParticipants) {
         data.leagueParticipants.set(p.id, { ...p });
       }
+      for (const app of seed.organizerApplications) {
+        data.organizerApplications.set(app.id, { ...app });
+      }
+      for (const r of seed.regions) {
+        data.regions.set(r.id, { ...r });
+      }
+      for (const g of seed.gameTypeLimits) {
+        data.gameTypeLimits.set(g.id, { ...g });
+      }
       data.adminSettings = { ...seed.adminSettings };
       data.initialized = true;
       console.log("[damii][db] Memory store initialized with seed accounts");
@@ -454,8 +463,9 @@ export const memoryStore: DbRepository = {
     const p = data.profiles.get(token);
     if (!p) return null;
     const newPoints = Math.max(0, (p.points || 0) + pointsDelta);
+    const newMarbles = Math.max(0, (p.marbles || 0) + pointsDelta);
     p.points = newPoints;
-    p.marbles = newPoints;
+    p.marbles = newMarbles;
     p.updatedAt = new Date().toISOString();
     data.profiles.set(token, { ...p });
     return { ...p };
@@ -473,7 +483,6 @@ export const memoryStore: DbRepository = {
     const opponent = opponentToken ? data.profiles.get(opponentToken) : null;
     const update = calculateDynamicRatingUpdate(p, opponent ? { ...opponent } : null, isWin, isDraw);
 
-    const pointsReward = isWin ? 100 : isDraw ? 20 : 10;
     p.rating = update.newRating;
     p.wins = update.newWins;
     p.losses = update.newLosses;
@@ -484,8 +493,6 @@ export const memoryStore: DbRepository = {
     p.opponentRatingAvg = Math.round(update.newOpponentRatingAvg ?? 0);
     p.totalOpponentsFaced = update.newTotalOpponentsFaced ?? 0;
     p.lastMatchAt = update.lastMatchAt ?? undefined;
-    p.points = (p.points || 0) + pointsReward;
-    p.marbles = (p.marbles || 0) + pointsReward;
     p.updatedAt = new Date().toISOString();
 
     data.profiles.set(token, { ...p });

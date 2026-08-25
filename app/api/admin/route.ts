@@ -761,6 +761,48 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, logs });
     }
 
+    if (action === "send_communication" || action === "broadcast_communication") {
+      const {
+        targetType,
+        targetRole,
+        targetRecipients,
+        channels,
+        title,
+        message,
+        urgency,
+        type,
+        actionUrl,
+        actionLabel,
+        customSubject,
+        customTemplate,
+      } = body;
+
+      if (!message || !message.trim()) {
+        return NextResponse.json({ error: "Message content is required" }, { status: 400 });
+      }
+
+      const res = await adminService.sendAdminCommunication(token, {
+        targetType: targetType || "all",
+        targetRole,
+        targetRecipients,
+        channels: channels && channels.length > 0 ? channels : ["in_app"],
+        title: title || "DAMII Platform Notice",
+        message: message.trim(),
+        urgency: urgency || "normal",
+        type: type || "system",
+        actionUrl: actionUrl || "/arena",
+        actionLabel: actionLabel || "Open Arena",
+        customSubject,
+        customTemplate,
+      });
+
+      return NextResponse.json({
+        success: true,
+        ...res,
+        message: `Communication dispatched successfully to ${res.summary.totalTargeted} user(s) across [${res.summary.channels.join(", ")}].`,
+      });
+    }
+
     if (action === "send_test_sms") {
       const { phoneNumber, message } = body;
       if (!phoneNumber) return NextResponse.json({ error: "Phone number required" }, { status: 400 });

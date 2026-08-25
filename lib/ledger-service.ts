@@ -450,12 +450,21 @@ export const ledgerService = {
 
   async disburseTournament(
     tournamentId: string,
-    placements: { placement: number; userId: string }[]
+    placements: { placement: number; userId: string }[],
+    callerId?: string
   ): Promise<Tournament> {
     const tData = await dbRepository.getTournament(tournamentId);
     if (!tData) throw new Error(`Tournament ${tournamentId} not found`);
     if (tData.tournament.status === "completed" || tData.tournament.status === "cancelled") {
       throw new Error(`Tournament ${tournamentId} is already ${tData.tournament.status}`);
+    }
+
+    if (callerId && tData.tournament.organizerId !== callerId) {
+      const caller = await dbRepository.getProfile(callerId);
+      const isAdmin = caller?.role === "admin" || caller?.role === "super_admin";
+      if (!isAdmin) {
+        throw new Error("Unauthorized: Organizers can only disburse prize pools for their own tournaments.");
+      }
     }
 
     const { tournament, prizes, entries } = tData;
@@ -536,11 +545,19 @@ export const ledgerService = {
     return updated!;
   },
 
-  async cancelTournament(tournamentId: string): Promise<Tournament> {
+  async cancelTournament(tournamentId: string, callerId?: string): Promise<Tournament> {
     const tData = await dbRepository.getTournament(tournamentId);
     if (!tData) throw new Error(`Tournament ${tournamentId} not found`);
     if (tData.tournament.status === "completed" || tData.tournament.status === "cancelled") {
       throw new Error(`Tournament ${tournamentId} is already ${tData.tournament.status}`);
+    }
+
+    if (callerId && tData.tournament.organizerId !== callerId) {
+      const caller = await dbRepository.getProfile(callerId);
+      const isAdmin = caller?.role === "admin" || caller?.role === "super_admin";
+      if (!isAdmin) {
+        throw new Error("Unauthorized: Organizers can only cancel their own tournaments.");
+      }
     }
 
     const { tournament, entries } = tData;

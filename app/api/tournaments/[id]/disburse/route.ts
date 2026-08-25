@@ -10,6 +10,13 @@ export async function POST(
     const body = await req.json();
     const { placements } = body;
 
+    let token = "";
+    const authHeader = req.headers.get("authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      token = authHeader.substring(7).trim();
+    }
+    if (!token && body?.token) token = String(body.token).trim();
+
     if (!Array.isArray(placements) || placements.length === 0) {
       return NextResponse.json(
         { success: false, error: "placements must be a non-empty array of { placement: number, userId: string }" },
@@ -17,7 +24,7 @@ export async function POST(
       );
     }
 
-    const tournament = await ledgerService.disburseTournament(id, placements);
+    const tournament = await ledgerService.disburseTournament(id, placements, token || undefined);
     return NextResponse.json({ success: true, tournament });
   } catch (error: any) {
     return NextResponse.json(

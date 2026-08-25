@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { leagueService } from "@/lib/league-service";
 import { requireApprovedOrganizer } from "@/lib/auth-guard";
+import { dbRepository } from "@/lib/db-client";
 
 const cleanToken = (v: unknown) => String(v ?? "").trim().slice(0, 80);
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
+  const organizerToken = searchParams.get("organizerToken") || searchParams.get("facilitatorToken");
 
   if (id) {
     try {
@@ -17,7 +19,10 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const leagues = await leagueService.listLeagues();
+  let leagues = await leagueService.listLeagues();
+  if (organizerToken) {
+    leagues = leagues.filter((l) => l.facilitatorToken === organizerToken);
+  }
   return NextResponse.json({ leagues });
 }
 
@@ -175,7 +180,7 @@ export async function POST(req: NextRequest) {
       const leagueId = String(body.leagueId ?? "");
       if (!leagueId) return NextResponse.json({ error: "League ID required" }, { status: 400 });
 
-      const matches = await leagueService.generateTournamentBracket(leagueId);
+      const matches = await leagueService.generateTournamentBracket(leagueId, token);
       return NextResponse.json({ success: true, matches });
     }
 
@@ -266,14 +271,26 @@ export async function POST(req: NextRequest) {
       const { leagueId, winnerToken, runnerUpToken, thirdPlaceToken } = body;
       if (!leagueId) return NextResponse.json({ error: "League ID required" }, { status: 400 });
 
-      const league = await leagueService.getLeagueDetails(String(leagueId));
-      if (!league) return NextResponse.json({ error: "League not found" }, { status: 400 });
+      const leagueDetails = await leagueService.getLeagueDetails(String(leagueId));
+      if (!leagueDetails || !leagueDetails.league) return NextResponse.json({ error: "League not found" }, { status: 400 });
+
+      const profile = await dbRepository.getProfile(token);
+      if (!profile) return NextResponse.json({ error: "Unauthorized profile" }, { status: 401 });
+
+      const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+      const isOwner = leagueDetails.league.facilitatorToken === token;
+      if (!isAdmin && !isOwner) {
+        return NextResponse.json(
+          { error: "Unauthorized: Organizers can only disburse prizes for their own tournaments." },
+          { status: 403 }
+        );
+      }
 
       await leagueService.payoutTournamentPrizePool(
-        league.league,
-        winnerToken || league.league.winnerToken || null,
-        runnerUpToken || league.league.runnerUpToken || null,
-        thirdPlaceToken || league.league.thirdPlaceToken || null
+        leagueDetails.league,
+        winnerToken || leagueDetails.league.winnerToken || null,
+        runnerUpToken || leagueDetails.league.runnerUpToken || null,
+        thirdPlaceToken || leagueDetails.league.thirdPlaceToken || null
       );
 
       const updated = await leagueService.getLeagueDetails(String(leagueId));

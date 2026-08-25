@@ -630,7 +630,7 @@ export const mysqlStore: DbRepository = {
         .update(schema.profiles)
         .set({
           points: sql`GREATEST(${schema.profiles.points} + ${pointsDelta}, 0)`,
-          marbles: sql`GREATEST(${schema.profiles.points} + ${pointsDelta}, 0)`,
+          marbles: sql`GREATEST(${schema.profiles.marbles} + ${pointsDelta}, 0)`,
           updatedAt: new Date().toISOString(),
         })
         .where(eq(schema.profiles.token, token));
@@ -671,9 +671,6 @@ export const mysqlStore: DbRepository = {
       const opponent = opponentRow ? rowToProfile(opponentRow) : null;
       const update = calculateDynamicRatingUpdate(p, opponent, isWin, isDraw);
 
-      const pointsReward = isWin ? 100 : isDraw ? 20 : 10;
-      const marblesReward = isWin ? 25 : isDraw ? 10 : 5;
-
       await getDb()
         .update(schema.profiles)
         .set({
@@ -687,8 +684,6 @@ export const mysqlStore: DbRepository = {
           opponentRatingAvg: Math.round(update.newOpponentRatingAvg ?? 0),
           totalOpponentsFaced: update.newTotalOpponentsFaced ?? 0,
           lastMatchAt: update.lastMatchAt ?? null,
-          points: sql`${schema.profiles.points} + ${pointsReward}`,
-          marbles: sql`${schema.profiles.marbles} + ${marblesReward}`,
           updatedAt: new Date().toISOString(),
         })
         .where(eq(schema.profiles.token, token));

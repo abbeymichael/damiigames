@@ -144,15 +144,13 @@ export const leagueService = {
     if (!league) throw new Error("League not found");
 
     const profile = await dbRepository.getProfile(facilitatorOrAdminToken);
-    if (
-      !profile ||
-      (profile.role !== "admin" &&
-        profile.role !== "super_admin" &&
-        profile.role !== "organizer" &&
-        profile.role !== "facilitator" &&
-        league.facilitatorToken !== facilitatorOrAdminToken)
-    ) {
-      throw new Error("Unauthorized. Only the tournament organizer or platform admin can update settings.");
+    if (!profile) throw new Error("Unauthorized profile");
+
+    const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+    const isOwner = league.facilitatorToken === facilitatorOrAdminToken;
+
+    if (!isAdmin && !isOwner) {
+      throw new Error("Unauthorized. Organizers can only update settings for their own tournaments.");
     }
 
     if (updates.title) league.title = updates.title.trim();
@@ -218,6 +216,24 @@ export const leagueService = {
         metaJson: JSON.stringify({ leagueTitle: league.title }),
         createdAt: new Date().toISOString(),
       });
+      await dbRepository.writeLedger([
+        {
+          userId: userToken,
+          accountType: "available",
+          entryType: "league_fee",
+          amount: String(-league.entryFeePoints),
+          referenceType: "league",
+          referenceId: league.id,
+        },
+        {
+          userId: userToken,
+          accountType: "escrow",
+          entryType: "league_fee",
+          amount: String(league.entryFeePoints),
+          referenceType: "league",
+          referenceId: league.id,
+        },
+      ]).catch(() => []);
     }
 
     const initialStatus = league.requiresApproval ? "pending" : "approved";
@@ -264,15 +280,13 @@ export const leagueService = {
     if (!league) throw new Error("League not found");
 
     const profile = await dbRepository.getProfile(facilitatorOrAdminToken);
-    if (
-      !profile ||
-      (profile.role !== "admin" &&
-        profile.role !== "super_admin" &&
-        profile.role !== "organizer" &&
-        profile.role !== "facilitator" &&
-        league.facilitatorToken !== facilitatorOrAdminToken)
-    ) {
-      throw new Error("Unauthorized to reseed participants");
+    if (!profile) throw new Error("Unauthorized profile");
+
+    const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+    const isOwner = league.facilitatorToken === facilitatorOrAdminToken;
+
+    if (!isAdmin && !isOwner) {
+      throw new Error("Unauthorized: Organizers can only reseed participants in their own tournaments.");
     }
 
     const participants = await dbRepository.getLeagueParticipants(leagueId);
@@ -297,15 +311,13 @@ export const leagueService = {
     if (!league) throw new Error("League not found");
 
     const profile = await dbRepository.getProfile(facilitatorToken);
-    if (
-      !profile ||
-      (profile.role !== "admin" &&
-        profile.role !== "super_admin" &&
-        profile.role !== "organizer" &&
-        profile.role !== "facilitator" &&
-        league.facilitatorToken !== facilitatorToken)
-    ) {
-      throw new Error("Unauthorized. Only the tournament organizer can approve applications.");
+    if (!profile) throw new Error("Unauthorized profile");
+
+    const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+    const isOwner = league.facilitatorToken === facilitatorToken;
+
+    if (!isAdmin && !isOwner) {
+      throw new Error("Unauthorized: Organizers can only approve applications for their own tournaments.");
     }
 
     const updated = await dbRepository.updateParticipantStatus(participantId, "approved");
@@ -340,15 +352,13 @@ export const leagueService = {
     if (!league) throw new Error("League not found");
 
     const profile = await dbRepository.getProfile(facilitatorToken);
-    if (
-      !profile ||
-      (profile.role !== "admin" &&
-        profile.role !== "super_admin" &&
-        profile.role !== "organizer" &&
-        profile.role !== "facilitator" &&
-        league.facilitatorToken !== facilitatorToken)
-    ) {
-      throw new Error("Unauthorized. Only the tournament organizer can reject applications.");
+    if (!profile) throw new Error("Unauthorized profile");
+
+    const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+    const isOwner = league.facilitatorToken === facilitatorToken;
+
+    if (!isAdmin && !isOwner) {
+      throw new Error("Unauthorized: Organizers can only reject applications for their own tournaments.");
     }
 
     // Refund entry fee if rejected by facilitator
@@ -389,15 +399,13 @@ export const leagueService = {
     if (!league) throw new Error("League not found");
 
     const organizer = await dbRepository.getProfile(organizerToken);
-    if (
-      !organizer ||
-      (organizer.role !== "admin" &&
-        organizer.role !== "super_admin" &&
-        organizer.role !== "organizer" &&
-        organizer.role !== "facilitator" &&
-        league.facilitatorToken !== organizerToken)
-    ) {
-      throw new Error("Unauthorized. Only tournament organizers can add players manually.");
+    if (!organizer) throw new Error("Unauthorized profile");
+
+    const isAdmin = organizer.role === "admin" || organizer.role === "super_admin";
+    const isOwner = league.facilitatorToken === organizerToken;
+
+    if (!isAdmin && !isOwner) {
+      throw new Error("Unauthorized: Organizers can only add players to their own tournaments.");
     }
 
     const cleanName = usernameToAdd.trim();
@@ -442,10 +450,10 @@ export const leagueService = {
     if (!organizer) throw new Error("Organizer profile not found");
 
     const isAdmin = organizer.role === "admin" || organizer.role === "super_admin";
-    const isFacilitator = league.facilitatorToken === organizerToken || organizer.role === "facilitator" || organizer.role === "organizer";
+    const isOwner = league.facilitatorToken === organizerToken;
 
-    if (!isAdmin && !isFacilitator) {
-      throw new Error("Unauthorized. Only the tournament organizer or admin can cancel this tournament.");
+    if (!isAdmin && !isOwner) {
+      throw new Error("Unauthorized: Organizers can only cancel their own tournaments.");
     }
 
     // Administrative review requirement: If tournament is already active, require admin approval
@@ -478,6 +486,25 @@ export const leagueService = {
             metaJson: JSON.stringify({ note: `100% Entry fee refund due to tournament cancellation: ${reason || "Cancelled by Organizer"}` }),
             createdAt: new Date().toISOString(),
           });
+
+          await dbRepository.writeLedger([
+            {
+              userId: p.userToken,
+              accountType: "escrow",
+              entryType: "league_fee",
+              amount: String(-league.entryFeePoints),
+              referenceType: "league",
+              referenceId: league.id,
+            },
+            {
+              userId: p.userToken,
+              accountType: "available",
+              entryType: "league_fee",
+              amount: String(league.entryFeePoints),
+              referenceType: "league",
+              referenceId: league.id,
+            },
+          ]).catch(() => []);
 
           // Notify participant
           notificationService.sendNotification({
@@ -561,8 +588,10 @@ export const leagueService = {
     if (!caller) throw new Error("Caller profile not found");
 
     const isAdmin = caller.role === "admin" || caller.role === "super_admin";
-    if (!isAdmin && league.facilitatorToken !== facilitatorOrAdminToken && caller.role !== "facilitator" && caller.role !== "organizer") {
-      throw new Error("Unauthorized to resize tournament.");
+    const isOwner = league.facilitatorToken === facilitatorOrAdminToken;
+
+    if (!isAdmin && !isOwner) {
+      throw new Error("Unauthorized: Organizers can only resize their own tournaments.");
     }
 
     const participants = await dbRepository.getLeagueParticipants(leagueId);
@@ -630,10 +659,10 @@ export const leagueService = {
     if (!caller) throw new Error("Caller profile not found");
 
     const isAdmin = caller.role === "admin" || caller.role === "super_admin";
-    const isFacilitator = league.facilitatorToken === adminOrFacilitatorToken || caller.role === "facilitator" || caller.role === "organizer";
+    const isOwner = league.facilitatorToken === adminOrFacilitatorToken;
 
-    if (!isAdmin && !isFacilitator) {
-      throw new Error("Unauthorized to disqualify participants.");
+    if (!isAdmin && !isOwner) {
+      throw new Error("Unauthorized: Organizers can only disqualify participants from their own tournaments.");
     }
 
     // Administrative review requirement: If tournament is active, require admin review
@@ -672,9 +701,19 @@ export const leagueService = {
     return target;
   },
 
-  async generateTournamentBracket(leagueId: string) {
+  async generateTournamentBracket(leagueId: string, callerToken?: string) {
     const league = await dbRepository.getLeague(leagueId);
     if (!league) throw new Error("League not found");
+
+    if (callerToken) {
+      const profile = await dbRepository.getProfile(callerToken);
+      if (!profile) throw new Error("Unauthorized profile");
+      const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+      const isOwner = league.facilitatorToken === callerToken;
+      if (!isAdmin && !isOwner) {
+        throw new Error("Unauthorized: Organizers can only generate brackets for their own tournaments.");
+      }
+    }
 
     const allParticipants = await dbRepository.getLeagueParticipants(leagueId);
     const participants = allParticipants.filter((p) => p.status === "approved" || !p.status);
@@ -1208,19 +1247,14 @@ export const leagueService = {
     const league = await dbRepository.getLeague(match.leagueId);
     if (!league) throw new Error("League not found");
 
-    const isStaff =
-      profile.role === "admin" ||
-      profile.role === "super_admin" ||
-      profile.role === "organizer" ||
-      profile.role === "facilitator" ||
-      league.facilitatorToken === facilitatorOrAdminToken;
-
+    const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+    const isOwner = league.facilitatorToken === facilitatorOrAdminToken;
     const isContestant =
       match.player1Token === facilitatorOrAdminToken ||
       match.player2Token === facilitatorOrAdminToken;
 
-    if (!isStaff && !isContestant) {
-      throw new Error("Only tournament organizers, administrators, or active match contestants can report match results");
+    if (!isAdmin && !isOwner && !isContestant) {
+      throw new Error("Unauthorized: Only tournament organizer, administrator, or active match contestants can report match results");
     }
 
     if (winnerToken === "draw") {
@@ -1374,14 +1408,12 @@ export const leagueService = {
     const league = await dbRepository.getLeague(match.leagueId);
     if (!league) throw new Error("League not found");
 
-    const isStaff =
-      profile.role === "admin" ||
-      profile.role === "super_admin" ||
-      profile.role === "organizer" ||
-      profile.role === "facilitator" ||
-      league.facilitatorToken === facilitatorOrAdminToken;
+    const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+    const isOwner = league.facilitatorToken === facilitatorOrAdminToken;
 
-    if (!isStaff) throw new Error("Only tournament organizers or administrators can set match schedules");
+    if (!isAdmin && !isOwner) {
+      throw new Error("Unauthorized: Organizers can only schedule matches for their own tournaments.");
+    }
 
     match.scheduledTime = scheduledTimeIso;
     await dbRepository.saveLeagueMatch(match);
@@ -1459,14 +1491,12 @@ export const leagueService = {
     const league = await dbRepository.getLeague(leagueId);
     if (!league) throw new Error("League not found");
 
-    const isStaff =
-      profile.role === "admin" ||
-      profile.role === "super_admin" ||
-      profile.role === "organizer" ||
-      profile.role === "facilitator" ||
-      league.facilitatorToken === facilitatorOrAdminToken;
+    const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+    const isOwner = league.facilitatorToken === facilitatorOrAdminToken;
 
-    if (!isStaff) throw new Error("Only tournament organizers or administrators can batch schedule matches");
+    if (!isAdmin && !isOwner) {
+      throw new Error("Unauthorized: Organizers can only batch schedule matches for their own tournaments.");
+    }
 
     const allMatches = await dbRepository.getLeagueMatches(leagueId);
     let targetMatches = options.round > 0
@@ -1581,14 +1611,12 @@ export const leagueService = {
     const league = await dbRepository.getLeague(leagueId);
     if (!league) throw new Error("League not found");
 
-    const isStaff =
-      profile.role === "admin" ||
-      profile.role === "super_admin" ||
-      profile.role === "organizer" ||
-      profile.role === "facilitator" ||
-      league.facilitatorToken === facilitatorOrAdminToken;
+    const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+    const isOwner = league.facilitatorToken === facilitatorOrAdminToken;
 
-    if (!isStaff) throw new Error("Only tournament organizers or administrators can clear round fixtures");
+    if (!isAdmin && !isOwner) {
+      throw new Error("Unauthorized: Organizers can only clear round fixtures for their own tournaments.");
+    }
 
     const allMatches = await dbRepository.getLeagueMatches(leagueId);
     const targetMatches = round > 0
@@ -1622,14 +1650,12 @@ export const leagueService = {
     const league = await dbRepository.getLeague(leagueId);
     if (!league) throw new Error("League not found");
 
-    const isStaff =
-      profile.role === "admin" ||
-      profile.role === "super_admin" ||
-      profile.role === "organizer" ||
-      profile.role === "facilitator" ||
-      league.facilitatorToken === facilitatorOrAdminToken;
+    const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+    const isOwner = league.facilitatorToken === facilitatorOrAdminToken;
 
-    if (!isStaff) throw new Error("Only organizers or administrators can delay rounds");
+    if (!isAdmin && !isOwner) {
+      throw new Error("Unauthorized: Organizers can only delay rounds for their own tournaments.");
+    }
 
     const allMatches = await dbRepository.getLeagueMatches(leagueId);
     const roundMatches = allMatches.filter((m) => m.round === round && m.status !== "completed");
@@ -1709,14 +1735,12 @@ export const leagueService = {
     const league = await dbRepository.getLeague(leagueId);
     if (!league) throw new Error("League not found");
 
-    const isStaff =
-      profile.role === "admin" ||
-      profile.role === "super_admin" ||
-      profile.role === "organizer" ||
-      profile.role === "facilitator" ||
-      league.facilitatorToken === facilitatorOrAdminToken;
+    const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+    const isOwner = league.facilitatorToken === facilitatorOrAdminToken;
 
-    if (!isStaff) throw new Error("Only tournament organizers or administrators can broadcast announcements");
+    if (!isAdmin && !isOwner) {
+      throw new Error("Unauthorized: Organizers can only broadcast announcements for their own tournaments.");
+    }
 
     const participants = await dbRepository.getLeagueParticipants(leagueId);
     let count = 0;

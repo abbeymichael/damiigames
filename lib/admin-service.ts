@@ -7,6 +7,9 @@ import {
   OrganizerApplicationStatus,
   Role,
   UserDetailPayload,
+  NotificationChannel,
+  NotificationType,
+  NotificationUrgency,
 } from "./types";
 import { leagueService } from "./league-service";
 import { notificationService } from "./notification-service";
@@ -1207,6 +1210,17 @@ export const adminService = {
       createdAt: new Date().toISOString(),
     });
 
+    await dbRepository.writeLedger([
+      {
+        userId: targetToken,
+        accountType: "available",
+        entryType: "adjustment",
+        amount: String(deltaPoints),
+        referenceType: "admin_adjustment",
+        referenceId: `ADMIN_ADJUST_${Date.now()}`,
+      },
+    ]).catch(() => []);
+
     await this.logAdminAction(
       adminToken,
       adminProfile?.username || "Admin",
@@ -1265,6 +1279,17 @@ export const adminService = {
       }),
       createdAt: new Date().toISOString(),
     });
+
+    await dbRepository.writeLedger([
+      {
+        userId: targetToken,
+        accountType: "available",
+        entryType: "adjustment",
+        amount: String(numAmount),
+        referenceType: "admin_manual_ledger",
+        referenceId: refTag,
+      },
+    ]).catch(() => []);
 
     await this.logAdminAction(
       adminToken,
@@ -2096,6 +2121,233 @@ export const adminService = {
       marbles: saved.marbles || 0,
       status: saved.status,
       createdAt: saved.createdAt,
+    };
+  },
+
+  /**
+   * Broadcast and targeted communications engine
+   */
+  async sendAdminCommunication(
+    adminToken: string,
+    payload: {
+      targetType: "all" | "users" | "role" | "active_recent" | "high_rated" | "high_balance";
+      targetRole?: string;
+      targetRecipients?: string[];
+      channels: NotificationChannel[];
+      title: string;
+      message: string;
+      urgency?: NotificationUrgency;
+      type?: NotificationType;
+      actionUrl?: string;
+      actionLabel?: string;
+      customSubject?: string;
+      customTemplate?: string;
+    }
+  ) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const session = await dbRepository.getSession(adminToken);
+    const userId = session ? session.userId : adminToken;
+    const adminProfile = await dbRepository.getProfile(userId);
+
+    const title = (payload.title || "DAMII Platform Notice").trim();
+    const message = (payload.message || "").trim();
+    if (!message) throw new Error("Message body is required");
+
+    const channels = payload.channels && payload.channels.length > 0 ? payload.channels : ["in_app"];
+    const urgency = payload.urgency || "normal";
+    const notifType = payload.type || "system";
+    const actionUrl = payload.actionUrl || "/arena";
+    const actionLabel = payload.actionLabel || "Open Arena";
+
+    // 1. Gather all candidates from db
+    const allProfiles = await dbRepository.getAllProfiles();
+    let targetProfiles: typeof allProfiles = [];
+
+    if (payload.targetType === "all") {
+      targetProfiles = allProfiles.filter((p) => p.status !== "banned");
+    } else if (payload.targetType === "users") {
+      const recSet = new Set((payload.targetRecipients || []).map((r) => r.trim().toLowerCase()));
+      targetProfiles = allProfiles.filter(
+        (p) =>
+          recSet.has(p.token.toLowerCase()) ||
+          recSet.has(p.username.toLowerCase()) ||
+          (p.email && recSet.has(p.email.toLowerCase())) ||
+          (p.phoneNumber && recSet.has(p.phoneNumber.replace(/\D/g, "")))
+      );
+    } else if (payload.targetType === "role") {
+      const targetRole = payload.targetRole || "user";
+      targetProfiles = allProfiles.filter((p) => p.role === targetRole && p.status !== "banned");
+    } else if (payload.targetType === "high_rated") {
+      targetProfiles = allProfiles.filter((p) => (p.rating || 1200) >= 1350 && p.status !== "banned");
+    } else if (payload.targetType === "high_balance") {
+      targetProfiles = allProfiles.filter(
+        (p) => ((p.marbles || 0) >= 20 || (p.points || 0) >= 100) && p.status !== "banned"
+      );
+    } else if (payload.targetType === "active_recent") {
+      targetProfiles = allProfiles.filter((p) => p.status !== "banned");
+    }
+
+    if (targetProfiles.length === 0 && payload.targetType !== "all") {
+      throw new Error("No recipient users found matching the specified targeting criteria");
+    }
+
+    // Channel stats breakdown
+    const channelBreakdown: Record<string, number> = {
+      in_app: 0,
+      sms: 0,
+      whatsapp: 0,
+      email: 0,
+    };
+    let deliveredCount = 0;
+
+    // Dispatch to in_app (if selected)
+    if (channels.includes("in_app")) {
+      if (payload.targetType === "all") {
+        await notificationService.dispatchNotification({
+          recipientToken: "ALL",
+          recipientUsername: "ALL",
+          title,
+          message,
+          urgency,
+          type: notifType,
+          link: actionUrl,
+          actionLabel,
+          channels: ["in_app"],
+        });
+        channelBreakdown.in_app += targetProfiles.length || 1;
+        deliveredCount += targetProfiles.length || 1;
+      } else {
+        for (const user of targetProfiles) {
+          await notificationService.dispatchNotification({
+            recipientToken: user.token,
+            recipientUsername: user.username,
+            recipientPhone: user.phoneNumber,
+            recipientEmail: user.email,
+            title,
+            message,
+            urgency,
+            type: notifType,
+            link: actionUrl,
+            actionLabel,
+            channels: ["in_app"],
+          });
+          channelBreakdown.in_app++;
+          deliveredCount++;
+        }
+      }
+    }
+
+    // Dispatch to SMS (if selected and recipient has phone)
+    if (channels.includes("sms")) {
+      for (const user of targetProfiles) {
+        if (user.phoneNumber) {
+          try {
+            await notificationService.sendSmsMessage({
+              phone: user.phoneNumber,
+              message: `${title}: ${message} ${actionUrl}`,
+              type: notifType,
+              templateData: {
+                recipient: user.username,
+                link: actionUrl,
+                title,
+                message,
+              },
+            });
+            channelBreakdown.sms++;
+            deliveredCount++;
+          } catch (e) {
+            console.warn(`[SMS Broadcast Fail] for ${user.username}:`, e);
+          }
+        }
+      }
+    }
+
+    // Dispatch to WhatsApp (if selected and recipient has phone)
+    if (channels.includes("whatsapp")) {
+      for (const user of targetProfiles) {
+        if (user.phoneNumber) {
+          try {
+            await notificationService.sendWhatsAppMessage({
+              phone: user.phoneNumber,
+              title,
+              message,
+              actionUrl,
+              actionLabel,
+              type: notifType,
+              templateData: {
+                recipient: user.username,
+                link: actionUrl,
+                title,
+                message,
+              },
+            });
+            channelBreakdown.whatsapp++;
+            deliveredCount++;
+          } catch (e) {
+            console.warn(`[WhatsApp Broadcast Fail] for ${user.username}:`, e);
+          }
+        }
+      }
+    }
+
+    // Dispatch to Email (if selected and recipient has email)
+    if (channels.includes("email")) {
+      for (const user of targetProfiles) {
+        if (user.email) {
+          try {
+            await notificationService.sendEmailNotification({
+              email: user.email,
+              subject: payload.customSubject || `DAMII: ${title}`,
+              title,
+              message,
+              actionUrl,
+              actionLabel,
+              type: notifType,
+              customSubject: payload.customSubject,
+              customTemplate: payload.customTemplate,
+              templateData: {
+                recipient: user.username,
+                link: actionUrl,
+                title,
+                message,
+              },
+            });
+            channelBreakdown.email++;
+            deliveredCount++;
+          } catch (e) {
+            console.warn(`[Email Broadcast Fail] for ${user.username}:`, e);
+          }
+        }
+      }
+    }
+
+    // Log admin action
+    await this.logAdminAction(
+      adminToken,
+      adminProfile?.username || "Admin",
+      "COMMUNICATION_BROADCAST_SENT",
+      payload.targetType === "all" ? "ALL_USERS" : `${targetProfiles.length}_USERS`,
+      {
+        targetType: payload.targetType,
+        targetCount: targetProfiles.length,
+        channels,
+        title,
+        channelBreakdown,
+        deliveredCount,
+        urgency,
+      }
+    );
+
+    return {
+      success: true,
+      summary: {
+        totalTargeted: targetProfiles.length,
+        deliveredCount,
+        channels,
+        channelBreakdown,
+        title,
+        dispatchedAt: new Date().toISOString(),
+      },
     };
   },
 };
