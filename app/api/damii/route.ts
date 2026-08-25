@@ -43,6 +43,8 @@ function formatRoomResponse(room: Room, token: string) {
     escrowId: room.escrowId,
     leagueId: room.leagueId,
     matchId: room.matchId,
+    ruleVariations: room.ruleVariations || null,
+    customConstraints: room.customConstraints || null,
     moveCount: room.moveCount,
     drawOfferedBy: room.drawOfferedBy || null,
     disputeStatus: room.disputeStatus || "none",
@@ -264,11 +266,29 @@ export async function POST(req: NextRequest) {
 
       const mode: GameMode = (["casual", "wager", "league"].includes(body.mode) ? body.mode : "casual") as GameMode;
       const wagerAmount = Math.max(0, Number(body.wagerAmount) || 0);
+      const ruleVariations = body.ruleVariations || undefined;
+      const customConstraints = body.customConstraints || undefined;
 
       if (mode === "wager" && wagerAmount > 0) {
         const profile = await dbRepository.getProfile(token);
         if (!profile || profile.marbles < wagerAmount) {
           return NextResponse.json({ error: `Insufficient Marbles balance for ${wagerAmount} Wager` }, { status: 400 });
+        }
+      }
+
+      // Check rating limits on creation if customConstraints specify min/max rating
+      if (customConstraints && existingProfile) {
+        if (customConstraints.minRating !== undefined && customConstraints.minRating !== null && existingProfile.rating < customConstraints.minRating) {
+          return NextResponse.json(
+            { error: `Rating Eligibility: Your rating (${existingProfile.rating}) is below the minimum required rating of ${customConstraints.minRating}.` },
+            { status: 403 }
+          );
+        }
+        if (customConstraints.maxRating !== undefined && customConstraints.maxRating !== null && existingProfile.rating > customConstraints.maxRating) {
+          return NextResponse.json(
+            { error: `Rating Eligibility: Your rating (${existingProfile.rating}) exceeds the maximum allowed rating of ${customConstraints.maxRating}.` },
+            { status: 403 }
+          );
         }
       }
 
@@ -296,6 +316,7 @@ export async function POST(req: NextRequest) {
         hostReady: false,
         guestReady: false,
         boardJson: JSON.stringify(createBoard()),
+        movesJson: "[]",
         turn: "white",
         forcedFrom: null,
         winner: null,
@@ -305,6 +326,8 @@ export async function POST(req: NextRequest) {
         escrowId: null,
         leagueId: body.leagueId ? String(body.leagueId) : null,
         matchId: body.matchId ? String(body.matchId) : null,
+        ruleVariations,
+        customConstraints,
         moveCount: 0,
         resultApplied: 0,
         lastMoveTime: Date.now(),
@@ -345,6 +368,23 @@ export async function POST(req: NextRequest) {
 
       if (room.guestToken && room.guestToken !== token) {
         return NextResponse.json({ error: "Room is full. Another player has joined." }, { status: 400 });
+      }
+
+      // Check rating limits on join if customConstraints specify min/max rating
+      if (room.customConstraints) {
+        const guestRating = existingProfile.rating ?? 1200;
+        if (room.customConstraints.minRating !== undefined && room.customConstraints.minRating !== null && guestRating < room.customConstraints.minRating) {
+          return NextResponse.json(
+            { error: `Rating Eligibility: Your rating (${guestRating}) is below this match's required minimum rating of ${room.customConstraints.minRating}.` },
+            { status: 403 }
+          );
+        }
+        if (room.customConstraints.maxRating !== undefined && room.customConstraints.maxRating !== null && guestRating > room.customConstraints.maxRating) {
+          return NextResponse.json(
+            { error: `Rating Eligibility: Your rating (${guestRating}) exceeds this match's maximum allowed rating of ${room.customConstraints.maxRating}.` },
+            { status: 403 }
+          );
+        }
       }
 
       // Validate wager requirement for guest
@@ -476,12 +516,12 @@ export async function POST(req: NextRequest) {
       if (room.turn !== playerRole) return NextResponse.json({ error: "Not your turn" }, { status: 400 });
 
       const board = JSON.parse(room.boardJson);
-      const allowed = legalMoves(board, room.turn, room.forcedFrom);
+      const allowed = legalMoves(board, room.turn, room.forcedFrom, room.ruleVariations);
       const selectedMove = allowed.find((m: Move) => m.from === from && m.to === to);
 
       if (!selectedMove) return NextResponse.json({ error: "Illegal move" }, { status: 400 });
 
-      const result = applyMove(board, room.turn, room.forcedFrom, from, to);
+      const result = applyMove(board, room.turn, room.forcedFrom, from, to, room.ruleVariations);
       room.boardJson = JSON.stringify(result.board);
       
       // Append move history

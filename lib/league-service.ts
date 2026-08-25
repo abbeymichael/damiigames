@@ -1206,7 +1206,9 @@ export const leagueService = {
     const roomCode = `TM${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
     const initialBoard = JSON.stringify(createBoard());
 
-    const newRoom = {
+    const league = await dbRepository.getLeague(match.leagueId);
+
+    const newRoom: Room = {
       code: roomCode,
       hostName: match.player1Name || "Player 1",
       hostToken: match.player1Token || playerToken,
@@ -1222,6 +1224,8 @@ export const leagueService = {
       escrowId: null,
       leagueId: match.leagueId,
       matchId: match.id,
+      ruleVariations: league?.ruleVariations,
+      customConstraints: league?.customConstraints,
       moveCount: 0,
       resultApplied: 0,
       lastMoveTime: Date.now(),
@@ -1304,7 +1308,7 @@ export const leagueService = {
       const tiebreakerRoomCode = `TB${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
       const initialBoard = JSON.stringify(createBoard());
 
-      const tiebreakerRoom = {
+      const tiebreakerRoom: Room = {
         code: tiebreakerRoomCode,
         hostName,
         hostToken,
@@ -1320,6 +1324,11 @@ export const leagueService = {
         escrowId: null,
         leagueId: match.leagueId,
         matchId: match.id,
+        ruleVariations: league.ruleVariations,
+        customConstraints: {
+          ...league.customConstraints,
+          turnTimerSeconds: 30, // Blitz tiebreaker turn clock
+        },
         moveCount: 0,
         resultApplied: 0,
         lastMoveTime: Date.now(),

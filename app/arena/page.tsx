@@ -780,9 +780,14 @@ export default function ArenaPage() {
     }
   }, [activeMoves.length]);
 
+  const activeRuleVariations = useMemo(() => {
+    if (mode === "online" && room?.ruleVariations) return room.ruleVariations;
+    return undefined;
+  }, [mode, room?.ruleVariations]);
+
   const moves = useMemo(
-    () => (winner ? [] : legalMoves(board, turn, forcedFrom)),
-    [board, turn, forcedFrom, winner]
+    () => (winner ? [] : legalMoves(board, turn, forcedFrom, activeRuleVariations)),
+    [board, turn, forcedFrom, winner, activeRuleVariations]
   );
 
   const selectable = useMemo(() => {
@@ -1015,7 +1020,7 @@ export default function ArenaPage() {
     const activeName = turn === "white" ? whiteDisplayName : blackDisplayName;
     const pieceBefore = board[move.from];
 
-    const result = applyMove(board, turn, forcedFrom, move.from, move.to);
+    const result = applyMove(board, turn, forcedFrom, move.from, move.to, activeRuleVariations);
     if (result.captured)
       setCaptures((current) => ({ ...current, [turn]: current[turn] + 1 }));
 
@@ -2099,6 +2104,43 @@ export default function ArenaPage() {
                     <Trophy size={12} /> Tournament Bracket
                   </a>
                 )}
+              </div>
+            )}
+
+            {/* Tournament Rules & Custom Constraints Banner */}
+            {mode === "online" && room && (room.ruleVariations || room.customConstraints) && (
+              <div className="w-full p-2.5 bg-[#06261f] border border-[#184d3c] rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 shadow-md">
+                <div className="flex items-center gap-2 text-slate-300">
+                  <ShieldCheck size={16} className="text-[#d6a735] shrink-0" />
+                  <span className="font-bold text-[#f5efdf]">Rules & Constraints Active:</span>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {room.ruleVariations?.captureRule && (
+                      <span className="px-2 py-0.5 bg-[#0c3b2e] border border-[#184d3c] text-[#d6a735] rounded-md text-[11px] font-semibold">
+                        Capture: {room.ruleVariations.captureRule === "majority" ? "Majority Capture" : room.ruleVariations.captureRule === "any" ? "Any Capture" : "Standard"}
+                      </span>
+                    )}
+                    {room.ruleVariations?.flyingKings !== undefined && (
+                      <span className="px-2 py-0.5 bg-[#0c3b2e] border border-[#184d3c] text-emerald-300 rounded-md text-[11px] font-semibold">
+                        Flying Kings: {room.ruleVariations.flyingKings ? "Enabled (Long Range)" : "Disabled (Step Only)"}
+                      </span>
+                    )}
+                    {room.customConstraints?.turnTimerSeconds !== undefined && room.customConstraints.turnTimerSeconds !== null && (
+                      <span className="px-2 py-0.5 bg-[#0c3b2e] border border-[#184d3c] text-sky-300 rounded-md text-[11px] font-semibold">
+                        Clock: {room.customConstraints.turnTimerSeconds}s
+                      </span>
+                    )}
+                    {room.customConstraints?.disconnectionGraceSeconds !== undefined && room.customConstraints.disconnectionGraceSeconds !== null && (
+                      <span className="px-2 py-0.5 bg-[#0c3b2e] border border-[#184d3c] text-amber-300 rounded-md text-[11px] font-semibold">
+                        Grace: {room.customConstraints.disconnectionGraceSeconds}s
+                      </span>
+                    )}
+                    {(room.customConstraints?.minRating !== undefined || room.customConstraints?.maxRating !== undefined) && (
+                      <span className="px-2 py-0.5 bg-[#0c3b2e] border border-[#184d3c] text-purple-300 rounded-md text-[11px] font-semibold">
+                        Rating: {room.customConstraints.minRating ?? "0"} - {room.customConstraints.maxRating ?? "∞"}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 

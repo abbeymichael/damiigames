@@ -293,6 +293,8 @@ export type Room = {
   drawOfferedBy?: Player | null;
   disputeStatus?: "none" | "under_review" | "resolved" | "voided" | string;
   disputeNotes?: string;
+  ruleVariations?: TournamentRuleVariations;
+  customConstraints?: TournamentCustomConstraints;
   movesJson?: string;
   moves?: MoveLogEntry[];
   role?: "white" | "black" | "spectator";

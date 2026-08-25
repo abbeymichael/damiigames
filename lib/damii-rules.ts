@@ -3,6 +3,21 @@ export type Piece = { player: Player; king: boolean };
 export type Board = Array<Piece | null>;
 export type Move = { from: number; to: number; captured?: number; isCapture?: boolean };
 
+export type CaptureRuleVariation = "standard_compulsory" | "maximum_quantity" | "free_choice";
+export type FlyingKingVariation = "unlimited_diagonal" | "restricted_steps" | "classic_single";
+export type PromotionVariation = "immediate" | "next_turn";
+export type SeriesFormatVariation = "bo1" | "bo3" | "bo5";
+
+export interface RuleConfig {
+  captureRule?: CaptureRuleVariation;
+  flyingKings?: FlyingKingVariation;
+  kingCapturePromotion?: PromotionVariation;
+  backwardMenCapture?: boolean; // default: true in 10x10 Damii
+  allowDrawOffer?: boolean;
+  repetitionDrawLimit?: number;
+  matchSeries?: SeriesFormatVariation;
+}
+
 const SIZE = 10;
 const idx = (row: number, col: number) => row * SIZE + col;
 export const rowOf = (square: number) => Math.floor(square / SIZE);
@@ -20,14 +35,23 @@ export function createBoard(): Board {
   });
 }
 
-export function capturesFor(board: Board, from: number): Move[] {
+export function capturesFor(board: Board, from: number, rules?: RuleConfig): Move[] {
   const piece = board[from];
   if (!piece) return [];
   const row = rowOf(from);
   const col = colOf(from);
-  const directions = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
   const moves: Move[] = [];
+
+  const flyingVariation = rules?.flyingKings || "unlimited_diagonal";
+  const allowBackwardMenCapture = rules?.backwardMenCapture ?? true;
+
   if (!piece.king) {
+    const directions = allowBackwardMenCapture
+      ? [[-1, -1], [-1, 1], [1, -1], [1, 1]]
+      : piece.player === "white"
+      ? [[-1, -1], [-1, 1]]
+      : [[1, -1], [1, 1]];
+
     for (const [dr, dc] of directions) {
       const middleRow = row + dr;
       const middleCol = col + dc;
@@ -42,18 +66,46 @@ export function capturesFor(board: Board, from: number): Move[] {
     }
     return moves;
   }
+
+  // King piece captures
+  const directions = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+
+  if (flyingVariation === "classic_single") {
+    // Classic single-step jumping only (like English draughts / American checkers)
+    for (const [dr, dc] of directions) {
+      const middleRow = row + dr;
+      const middleCol = col + dc;
+      const landingRow = row + dr * 2;
+      const landingCol = col + dc * 2;
+      if (!inside(landingRow, landingCol)) continue;
+      const middle = board[idx(middleRow, middleCol)];
+      const landing = idx(landingRow, landingCol);
+      if (middle && middle.player !== piece.player && !board[landing]) {
+        moves.push({ from, to: landing, captured: idx(middleRow, middleCol) });
+      }
+    }
+    return moves;
+  }
+
+  const maxSteps = flyingVariation === "restricted_steps" ? 3 : 9;
+
   for (const [dr, dc] of directions) {
     let scanRow = row + dr;
     let scanCol = col + dc;
     let enemy: number | undefined;
-    while (inside(scanRow, scanCol)) {
+    let steps = 0;
+
+    while (inside(scanRow, scanCol) && steps < maxSteps) {
+      steps++;
       const square = idx(scanRow, scanCol);
       const occupant = board[square];
       if (!occupant) {
         if (enemy !== undefined) moves.push({ from, to: square, captured: enemy });
       } else if (occupant.player === piece.player || enemy !== undefined) {
         break;
-      } else enemy = square;
+      } else {
+        enemy = square;
+      }
       scanRow += dr;
       scanCol += dc;
     }
@@ -61,23 +113,39 @@ export function capturesFor(board: Board, from: number): Move[] {
   return moves;
 }
 
-export function simpleMovesFor(board: Board, from: number): Move[] {
+export function simpleMovesFor(board: Board, from: number, rules?: RuleConfig): Move[] {
   const piece = board[from];
   if (!piece) return [];
   const row = rowOf(from);
   const col = colOf(from);
   const moves: Move[] = [];
+
+  const flyingVariation = rules?.flyingKings || "unlimited_diagonal";
+
   const directions = piece.king
     ? [[-1, -1], [-1, 1], [1, -1], [1, 1]]
-    : piece.player === "white" ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]];
+    : piece.player === "white"
+    ? [[-1, -1], [-1, 1]]
+    : [[1, -1], [1, 1]];
+
+  const maxSteps = !piece.king
+    ? 1
+    : flyingVariation === "classic_single"
+    ? 1
+    : flyingVariation === "restricted_steps"
+    ? 3
+    : 9;
+
   for (const [dr, dc] of directions) {
     let nextRow = row + dr;
     let nextCol = col + dc;
-    while (inside(nextRow, nextCol)) {
+    let steps = 0;
+
+    while (inside(nextRow, nextCol) && steps < maxSteps) {
+      steps++;
       const square = idx(nextRow, nextCol);
       if (board[square]) break;
       moves.push({ from, to: square });
-      if (!piece.king) break;
       nextRow += dr;
       nextCol += dc;
     }
@@ -85,38 +153,150 @@ export function simpleMovesFor(board: Board, from: number): Move[] {
   return moves;
 }
 
-export function legalMoves(board: Board, player: Player, forcedFrom: number | null = null): Move[] {
-  if (forcedFrom !== null) return capturesFor(board, forcedFrom);
-  const pieces = board.flatMap((piece, square) => piece?.player === player ? [square] : []);
-  const captures = pieces.flatMap((square) => capturesFor(board, square));
-  return captures.length ? captures : pieces.flatMap((square) => simpleMovesFor(board, square));
+// Calculate the maximum number of consecutive captures from a given square
+function countMaxConsecutiveCaptures(board: Board, square: number, rules?: RuleConfig, visitedCaptures: Set<number> = new Set()): number {
+  const immediateCaptures = capturesFor(board, square, rules);
+  if (immediateCaptures.length === 0) return 0;
+
+  let maxDepth = 0;
+  for (const move of immediateCaptures) {
+    if (move.captured !== undefined && visitedCaptures.has(move.captured)) continue;
+
+    const nextBoard = board.map((p) => (p ? { ...p } : null));
+    const piece = nextBoard[move.from];
+    if (!piece) continue;
+
+    nextBoard[move.from] = null;
+    nextBoard[move.to] = piece;
+    if (move.captured !== undefined) nextBoard[move.captured] = null;
+
+    const nextVisited = new Set(visitedCaptures);
+    if (move.captured !== undefined) nextVisited.add(move.captured);
+
+    const subCaptures = countMaxConsecutiveCaptures(nextBoard, move.to, rules, nextVisited);
+    maxDepth = Math.max(maxDepth, 1 + subCaptures);
+  }
+  return maxDepth;
 }
 
-export function applyMove(board: Board, player: Player, forcedFrom: number | null, from: number, to: number) {
-  const move = legalMoves(board, player, forcedFrom).find((candidate) => candidate.from === from && candidate.to === to);
+export function legalMoves(board: Board, player: Player, forcedFrom: number | null = null, rules?: RuleConfig): Move[] {
+  if (forcedFrom !== null) return capturesFor(board, forcedFrom, rules);
+
+  const pieces = board.flatMap((piece, square) => (piece?.player === player ? [square] : []));
+  const captureRule = rules?.captureRule || "standard_compulsory";
+
+  const allCaptures = pieces.flatMap((square) => capturesFor(board, square, rules));
+
+  if (captureRule === "free_choice") {
+    // Both captures and non-captures are legal simultaneously
+    const allSimple = pieces.flatMap((square) => simpleMovesFor(board, square, rules));
+    return [...allCaptures, ...allSimple];
+  }
+
+  if (allCaptures.length === 0) {
+    return pieces.flatMap((square) => simpleMovesFor(board, square, rules));
+  }
+
+  if (captureRule === "maximum_quantity") {
+    // Filter to only the pieces and moves that maximize total capture depth
+    let maxQuantity = 0;
+    const captureDepths: { move: Move; depth: number }[] = [];
+
+    for (const move of allCaptures) {
+      const nextBoard = board.map((p) => (p ? { ...p } : null));
+      const piece = nextBoard[move.from];
+      if (!piece) continue;
+      nextBoard[move.from] = null;
+      nextBoard[move.to] = piece;
+      if (move.captured !== undefined) nextBoard[move.captured] = null;
+
+      const remaining = countMaxConsecutiveCaptures(nextBoard, move.to, rules, new Set(move.captured !== undefined ? [move.captured] : []));
+      const totalDepth = 1 + remaining;
+      maxQuantity = Math.max(maxQuantity, totalDepth);
+      captureDepths.push({ move, depth: totalDepth });
+    }
+
+    const maxMoves = captureDepths.filter((cd) => cd.depth === maxQuantity).map((cd) => cd.move);
+    return maxMoves.length > 0 ? maxMoves : allCaptures;
+  }
+
+  // Standard compulsory: Must capture, but can choose any capture path
+  return allCaptures;
+}
+
+export function applyMove(
+  board: Board,
+  player: Player,
+  forcedFrom: number | null,
+  from: number,
+  to: number,
+  rules?: RuleConfig
+) {
+  const move = legalMoves(board, player, forcedFrom, rules).find((candidate) => candidate.from === from && candidate.to === to);
   if (!move) throw new Error("Illegal move");
-  const next = board.map((piece) => piece ? { ...piece } : null);
+
+  const next = board.map((piece) => (piece ? { ...piece } : null));
   const piece = next[from];
   if (!piece) throw new Error("Piece missing");
+
   next[from] = null;
   next[to] = piece;
   if (move.captured !== undefined) next[move.captured] = null;
-  const more = move.captured !== undefined ? capturesFor(next, to) : [];
-  if (more.length) return { board: next, turn: player, forcedFrom: to, winner: null as Player | null, captured: true };
-  if ((piece.player === "white" && rowOf(to) === 0) || (piece.player === "black" && rowOf(to) === 9)) piece.king = true;
+
+  // Check king promotion
+  const promotionRule = rules?.kingCapturePromotion || "immediate";
+  const reachedKingRow = (piece.player === "white" && rowOf(to) === 0) || (piece.player === "black" && rowOf(to) === 9);
+
+  let promotedNow = false;
+  if (!piece.king && reachedKingRow) {
+    if (promotionRule === "immediate") {
+      piece.king = true;
+      promotedNow = true;
+    }
+  }
+
+  const more = move.captured !== undefined ? capturesFor(next, to, rules) : [];
+
+  if (more.length) {
+    // Multi-jump in flight: if next_turn promotion, piece stays man during multi-jump
+    return {
+      board: next,
+      turn: player,
+      forcedFrom: to,
+      winner: null as Player | null,
+      captured: true,
+      promoted: promotedNow,
+    };
+  }
+
+  // Turn ended: if piece reached king row and promotion was next_turn, promote now
+  if (!piece.king && reachedKingRow) {
+    piece.king = true;
+    promotedNow = true;
+  }
+
   const opponent: Player = player === "white" ? "black" : "white";
   const opponentCount = next.filter((candidate) => candidate?.player === opponent).length;
-  const winner = opponentCount === 0 || legalMoves(next, opponent).length === 0 ? player : null;
-  return { board: next, turn: opponent, forcedFrom: null, winner, captured: move.captured !== undefined };
+  const winner = opponentCount === 0 || legalMoves(next, opponent, null, rules).length === 0 ? player : null;
+
+  return {
+    board: next,
+    turn: opponent,
+    forcedFrom: null,
+    winner,
+    captured: move.captured !== undefined,
+    promoted: promotedNow,
+  };
 }
 
 export function getBestCpuMove(
   board: Board,
   player: Player,
   forcedFrom: number | null,
-  difficulty: "easy" | "medium" | "hard" = "medium"
+  difficulty: "easy" | "medium" | "hard" = "medium",
+  rules?: RuleConfig
 ): Move | null {
-  const moves = legalMoves(board, player, forcedFrom);
+  const moves = legalMoves(board, player, forcedFrom, rules);
   if (moves.length === 0) return null;
 
   // Compulsory captures first
@@ -147,11 +327,11 @@ export function getBestCpuMove(
 
     if (difficulty === "hard") {
       try {
-        const res = applyMove(board, player, forcedFrom, move.from, move.to);
+        const res = applyMove(board, player, forcedFrom, move.from, move.to, rules);
         if (res.winner === player) {
           score += 500;
         } else if (res.turn !== player) {
-          const opponentMoves = legalMoves(res.board, res.turn, res.forcedFrom);
+          const opponentMoves = legalMoves(res.board, res.turn, res.forcedFrom, rules);
           const opponentCaptures = opponentMoves.filter((m) => m.captured !== undefined);
           if (opponentCaptures.length > 0) {
             score -= 35;
