@@ -58,7 +58,7 @@ class EnvValidationError extends Error {
   constructor(problems: string[]) {
     super(
       `Invalid environment configuration:\n${problems.map((p) => `  - ${p}`).join("\n")}\n` +
-        `See DEPLOYMENT_GUIDE.md for the full list of required variables.`,
+        `See SHARED_HOSTING_DEPLOYMENT.md for the full list of required variables.`,
     );
     this.name = "EnvValidationError";
   }
