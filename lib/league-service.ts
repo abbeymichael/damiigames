@@ -1,6 +1,7 @@
 import { dbRepository } from "./db-client";
 import { League, LeagueMatch, LeagueParticipant, TournamentFormat, PrizeDistribution } from "./types";
 import { notificationService } from "./notification-service";
+import { createBoard } from "./damii-rules";
 
 export const leagueService = {
   async listLeagues(): Promise<League[]> {
@@ -1177,7 +1178,7 @@ export const leagueService = {
 
     // Create a live match arena room
     const roomCode = `TM${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-    const initialBoard = JSON.stringify(Array(100).fill(null));
+    const initialBoard = JSON.stringify(createBoard());
 
     const newRoom = {
       code: roomCode,
@@ -1257,10 +1258,97 @@ export const leagueService = {
       throw new Error("Unauthorized: Only tournament organizer, administrator, or active match contestants can report match results");
     }
 
+    // -------------------------------------------------------------------------
+    // 1. KNOCKOUT TIEBREAKER RESOLUTION (Single / Double Elimination)
+    // -------------------------------------------------------------------------
+    if (winnerToken === "draw" && (league.format === "single_elimination" || league.format === "double_elimination" || !league.format)) {
+      // In knockout brackets, a drawn game MUST trigger an instant Sudden Death Blitz Tiebreaker Playoff
+      // to determine who advances to the next round.
+      const currentTiebreakerCount = ((match.player1Score || 0) + (match.player2Score || 0)) + 1;
+      match.player1Score = (match.player1Score || 0) + 1;
+      match.player2Score = (match.player2Score || 0) + 1;
+
+      // Swap starting colors for fair competitive balance in playoff
+      const isSwapped = currentTiebreakerCount % 2 === 1;
+      const hostToken = isSwapped ? (match.player2Token || match.player1Token || "") : (match.player1Token || "");
+      const hostName = isSwapped ? (match.player2Name || "Player 2") : (match.player1Name || "Player 1");
+      const guestToken = isSwapped ? match.player1Token : match.player2Token;
+      const guestName = isSwapped ? match.player1Name : match.player2Name;
+
+      const tiebreakerRoomCode = `TB${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+      const initialBoard = JSON.stringify(createBoard());
+
+      const tiebreakerRoom = {
+        code: tiebreakerRoomCode,
+        hostName,
+        hostToken,
+        guestName,
+        guestToken,
+        boardJson: initialBoard,
+        turn: "white" as const,
+        forcedFrom: null,
+        winner: null,
+        status: "playing" as const,
+        mode: "league" as const,
+        wagerAmount: 0,
+        escrowId: null,
+        leagueId: match.leagueId,
+        matchId: match.id,
+        moveCount: 0,
+        resultApplied: 0,
+        lastMoveTime: Date.now(),
+        disconnectTime: null,
+        disconnectedPlayer: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      await dbRepository.saveRoom(tiebreakerRoom);
+
+      match.roomCode = tiebreakerRoomCode;
+      match.status = "in_progress";
+      match.winnerToken = null;
+      match.disputeNotes = disputeNotes || `⚡ Match Drawn (Game ${currentTiebreakerCount}) — Sudden Death Blitz Tiebreaker #${currentTiebreakerCount} initiated with swapped colors (30s clock).`;
+
+      await dbRepository.saveLeagueMatch(match);
+
+      // Dispatch urgent in-app push notifications to both players
+      if (match.player1Token) {
+        notificationService.sendNotification({
+          userToken: match.player1Token,
+          username: match.player1Name,
+          type: "tournament_match",
+          title: `⚡ Sudden Death Blitz Tiebreaker #${currentTiebreakerCount}!`,
+          message: `Your knockout match in ${league.title} was drawn. Enter the Sudden Death Tiebreaker arena (${tiebreakerRoomCode}) now with swapped sides (30s clock) to decide who advances!`,
+          link: `/arena?code=${tiebreakerRoomCode}&mode=league`,
+          actionLabel: "Launch Tiebreaker",
+          actionPayload: { roomCode: tiebreakerRoomCode, matchId: match.id, leagueId: match.leagueId, isTiebreaker: true },
+        }).catch(() => {});
+      }
+
+      if (match.player2Token) {
+        notificationService.sendNotification({
+          userToken: match.player2Token,
+          username: match.player2Name,
+          type: "tournament_match",
+          title: `⚡ Sudden Death Blitz Tiebreaker #${currentTiebreakerCount}!`,
+          message: `Your knockout match in ${league.title} was drawn. Enter the Sudden Death Tiebreaker arena (${tiebreakerRoomCode}) now with swapped sides (30s clock) to decide who advances!`,
+          link: `/arena?code=${tiebreakerRoomCode}&mode=league`,
+          actionLabel: "Launch Tiebreaker",
+          actionPayload: { roomCode: tiebreakerRoomCode, matchId: match.id, leagueId: match.leagueId, isTiebreaker: true },
+        }).catch(() => {});
+      }
+
+      return { match, league, isTiebreaker: true, tiebreakerRoomCode };
+    }
+
+    // -------------------------------------------------------------------------
+    // 2. DECISIVE WINNER OR TABLE/SWISS DRAW OUTCOME
+    // -------------------------------------------------------------------------
     if (winnerToken === "draw") {
       match.winnerToken = null;
       match.status = "completed";
-      if (disputeNotes) match.disputeNotes = disputeNotes;
+      match.disputeNotes = disputeNotes || "Match drawn by mutual agreement (+1 pt awarded to each player in tournament standings).";
     } else {
       match.winnerToken = winnerToken;
       match.status = "completed";

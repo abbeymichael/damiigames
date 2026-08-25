@@ -2077,6 +2077,31 @@ export default function ArenaPage() {
               </div>
             )}
 
+            {/* Sudden Death Blitz Tiebreaker Live Match Banner */}
+            {mode === "online" && room && (room.code.startsWith("TB") || room.mode === "league" && room.code.startsWith("TB")) && (
+              <div id="sudden-death-tiebreaker-live-banner" className="w-full p-3 bg-gradient-to-r from-amber-950 via-[#0c3b2e] to-amber-950 border-2 border-[#d6a735] rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 shadow-xl animate-in fade-in">
+                <div className="flex items-center gap-2 text-[#f5efdf]">
+                  <Zap size={18} className="text-[#d6a735] animate-bounce shrink-0" />
+                  <div>
+                    <strong className="text-[#d6a735] text-xs sm:text-sm font-black uppercase tracking-wider">
+                      ⚡ Sudden Death Blitz Tiebreaker Match Active
+                    </strong>
+                    <p className="text-[11px] text-slate-200 mt-0.5">
+                      Knockout playoff rule in effect: 30s turn clock with swapped colors to determine bracket winner.
+                    </p>
+                  </div>
+                </div>
+                {room.leagueId && (
+                  <a
+                    href={`/leagues/${room.leagueId}`}
+                    className="px-2.5 py-1 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold text-[11px] rounded-lg flex items-center gap-1 shadow shrink-0"
+                  >
+                    <Trophy size={12} /> Tournament Bracket
+                  </a>
+                )}
+              </div>
+            )}
+
             {/* Detached Players Panel - Isolated from Board Zoom & Layout Shifts */}
             <div className="w-full bg-[#06261f] border border-[#184d3c] rounded-2xl p-2.5 sm:p-3.5 shadow-xl">
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1 sm:gap-3 min-h-[52px] sm:min-h-[60px]">
@@ -2273,6 +2298,8 @@ export default function ArenaPage() {
                         <span className="px-2.5 py-0.5 bg-[#d6a735] text-[#06261f] font-black text-[10px] uppercase tracking-wider rounded-full">
                           {winner
                             ? "MATCH CONCLUDED"
+                            : (room?.leagueId || roomMode === "league" || room?.mode === "league") && (room?.status === "draw" || (room?.status === "completed" && !winner))
+                            ? "⚡ SUDDEN DEATH TIEBREAKER"
                             : (room?.status === "draw" || (room?.status === "completed" && !winner))
                             ? "MATCH DRAWN"
                             : room?.status === "under_review"
@@ -2286,6 +2313,8 @@ export default function ArenaPage() {
                       <h2 className="text-xl sm:text-2xl font-black text-[#f5efdf] mt-0.5">
                         {winner
                           ? (winner === "white" ? `${whiteDisplayName} Wins! 👑` : `${blackDisplayName} Wins! 👑`)
+                          : (room?.leagueId || roomMode === "league" || room?.mode === "league") && (room?.status === "draw" || (room?.status === "completed" && !winner))
+                          ? "Tournament Draw — Sudden Death Blitz Playoff ⚡"
                           : (room?.status === "draw" || (room?.status === "completed" && !winner))
                           ? "Match Drawn by Agreement"
                           : room?.status === "under_review"
@@ -2297,6 +2326,15 @@ export default function ArenaPage() {
 
                   {/* Primary CTA: Open Match Summary Modal & Share Result */}
                   <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end flex-wrap">
+                    {room?.leagueId && !winner && (room?.status === "draw" || room?.status === "completed") && (
+                      <a
+                        href={`/leagues/${room.leagueId}`}
+                        className="px-4 py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/30 transition-all hover:scale-105"
+                      >
+                        <Zap size={15} />
+                        <span>Enter Sudden Death Playoff</span>
+                      </a>
+                    )}
                     <button
                       id="view-match-summary-btn"
                       type="button"

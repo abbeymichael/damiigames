@@ -230,6 +230,12 @@ export function BracketTreeView({
                                       <span className="text-slate-400 font-medium">Pending Schedule</span>
                                     )}
                                   </div>
+                                  {((match.player1Score || 0) + (match.player2Score || 0) > 0 || match.disputeNotes?.includes("Tiebreaker") || match.disputeNotes?.includes("Sudden Death")) && (
+                                    <div className="text-[9px] sm:text-[10px] bg-amber-950/80 border border-[#d6a735]/60 text-amber-300 px-2 py-0.5 rounded font-bold flex items-center gap-1">
+                                      <Zap size={10} className="text-[#d6a735] animate-bounce shrink-0" />
+                                      <span className="truncate">Sudden Death Tiebreaker (Game #{((match.player1Score || 0) + (match.player2Score || 0)) + 1})</span>
+                                    </div>
+                                  )}
                                   {match.scheduledTime && match.status !== "completed" && (
                                     <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
                                       <span className="flex items-center gap-1">
@@ -452,6 +458,12 @@ export function BracketTreeView({
                           {match.status.replace("_", " ")}
                         </span>
                       </div>
+                      {((match.player1Score || 0) + (match.player2Score || 0) > 0 || match.disputeNotes?.includes("Tiebreaker") || match.disputeNotes?.includes("Sudden Death")) && (
+                        <div className="text-[10px] bg-amber-950/90 border border-[#d6a735]/60 text-amber-300 px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 shadow-sm">
+                          <Zap size={11} className="text-[#d6a735] animate-bounce shrink-0" />
+                          <span>Sudden Death Tiebreaker (Game #{((match.player1Score || 0) + (match.player2Score || 0)) + 1})</span>
+                        </div>
+                      )}
                       {match.scheduledTime && match.status !== "completed" && (
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="flex items-center gap-1 text-slate-400 font-mono text-[10px]">

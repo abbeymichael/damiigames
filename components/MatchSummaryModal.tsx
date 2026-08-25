@@ -297,6 +297,39 @@ export function MatchSummaryModal({
             <Sparkles size={14} className="text-[#d6a735] shrink-0" />
             <span>{outcomeDetails.reason}</span>
           </p>
+
+          {/* Tournament Draw & Sudden Death Tiebreaker Banner */}
+          {!winner && (room?.leagueId || roomMode === "league" || room?.mode === "league") && (
+            <div
+              id="tournament-draw-tiebreaker-alert"
+              className="p-3.5 sm:p-4 bg-gradient-to-r from-amber-950/80 via-[#0c3b2e] to-amber-950/80 border-2 border-[#d6a735] rounded-2xl space-y-2 text-left shadow-xl animate-in fade-in"
+            >
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="px-2.5 py-0.5 bg-[#d6a735] text-[#06261f] font-black text-[10px] uppercase tracking-wider rounded-full flex items-center gap-1">
+                  <Zap size={12} /> Sudden Death Tiebreaker
+                </span>
+                <span className="text-[11px] font-mono text-amber-300 font-bold">
+                  Tournament Knockout Rules Active
+                </span>
+              </div>
+              <h3 className="text-sm sm:text-base font-extrabold text-[#f5efdf]">
+                ⚡ Knockout Bracket Match Drawn — Sudden Death Blitz Playoff Initiated!
+              </h3>
+              <p className="text-xs text-slate-200 leading-relaxed">
+                In tournament elimination brackets, matches cannot end in a draw. The platform has automatically initiated a <strong>Sudden Death Blitz Playoff (30s turn clock, swapped sides)</strong> to determine who advances to the next round of the tournament bracket!
+              </p>
+              {room?.leagueId && (
+                <div className="pt-1 flex items-center gap-2 flex-wrap">
+                  <a
+                    href={`/leagues/${room.leagueId}`}
+                    className="px-3 py-1.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black text-xs rounded-xl inline-flex items-center gap-1.5 transition-transform hover:scale-105 shadow"
+                  >
+                    <Trophy size={13} /> View Tournament Bracket &amp; Playoff
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Core Content Grid: Final Board Snapshot + Performance Breakdown */}

@@ -43,6 +43,7 @@ import {
   LogOut,
   Copy,
   Play,
+  Zap,
   ExternalLink,
   SlidersHorizontal,
   Gamepad2,
@@ -2717,12 +2718,25 @@ export default function AdminPage() {
                             <span className="font-bold uppercase text-[#d6a735]">
                               Round {m.round || 1} — Match #{idx + 1}
                             </span>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                              m.status === "completed" ? "bg-cyan-950 text-cyan-300 border border-cyan-500/40" : m.status === "in_progress" ? "bg-emerald-950 text-emerald-300 border border-emerald-500/40 animate-pulse" : "bg-slate-800 text-slate-300"
-                            }`}>
-                              {m.status || "pending"}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              {((m.player1Score || 0) + (m.player2Score || 0) > 0 || m.disputeNotes?.includes("Tiebreaker")) && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-amber-950 text-amber-300 border border-amber-500/50 flex items-center gap-1 animate-pulse">
+                                  <Zap size={10} className="text-[#d6a735]" /> Sudden Death Tiebreaker (Game #{((m.player1Score || 0) + (m.player2Score || 0)) + 1})
+                                </span>
+                              )}
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                m.status === "completed" ? "bg-cyan-950 text-cyan-300 border border-cyan-500/40" : m.status === "in_progress" ? "bg-emerald-950 text-emerald-300 border border-emerald-500/40 animate-pulse" : "bg-slate-800 text-slate-300"
+                              }`}>
+                                {m.status || "pending"}
+                              </span>
+                            </div>
                           </div>
+
+                          {m.disputeNotes && (
+                            <div className="p-2 bg-amber-950/40 border border-amber-800/40 rounded-lg text-[11px] text-amber-200 font-mono">
+                              <strong>Audit Note:</strong> {m.disputeNotes}
+                            </div>
+                          )}
 
                           <div className="flex items-center justify-between gap-3 my-2">
                             <div className="flex-1 text-left p-2 bg-[#081c15] border border-[#1a5e48] rounded-lg">

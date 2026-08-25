@@ -591,7 +591,11 @@ export default function TournamentDetailPage() {
                   <span className="text-xs font-mono font-bold text-[#d6a735]">
                     Round {myUpcomingMatch.round} • Match #{myUpcomingMatch.matchNumber}
                   </span>
-                  {myUpcomingMatch.status === "in_progress" ? (
+                  {((myUpcomingMatch.player1Score || 0) + (myUpcomingMatch.player2Score || 0) > 0 || myUpcomingMatch.disputeNotes?.includes("Tiebreaker")) ? (
+                    <span className="px-2.5 py-0.5 bg-amber-500/20 border border-amber-400 text-amber-300 text-[10px] font-black uppercase rounded-full flex items-center gap-1 animate-pulse">
+                      <Zap size={11} className="text-[#d6a735]" /> Sudden Death Blitz Playoff Active (Game #{((myUpcomingMatch.player1Score || 0) + (myUpcomingMatch.player2Score || 0)) + 1})
+                    </span>
+                  ) : myUpcomingMatch.status === "in_progress" ? (
                     <span className="px-2.5 py-0.5 bg-amber-500/20 border border-amber-400 text-amber-300 text-[10px] font-black uppercase rounded-full flex items-center gap-1 animate-pulse">
                       <Zap size={11} /> Live Now
                     </span>
@@ -629,7 +633,9 @@ export default function TournamentDetailPage() {
                   className="w-full sm:w-auto px-6 py-3 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black text-xs sm:text-sm rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2 active:scale-95"
                 >
                   <Play size={16} className="fill-current" />
-                  Enter Match Board Ahead of Time
+                  {((myUpcomingMatch.player1Score || 0) + (myUpcomingMatch.player2Score || 0) > 0 || myUpcomingMatch.disputeNotes?.includes("Tiebreaker"))
+                    ? "Enter Sudden Death Blitz Arena ⚔️"
+                    : "Enter Match Board Ahead of Time"}
                 </button>
               </div>
             </div>
@@ -1172,7 +1178,11 @@ export default function TournamentDetailPage() {
                       checked={scoringWinnerToken === "draw"}
                       onChange={(e) => setSelectedScoringWinnerToken(e.target.value)}
                     />
-                    <span className="text-xs font-bold text-sky-400">Match Draw (Round Robin Only)</span>
+                    <span className="text-xs font-bold text-sky-400">
+                      {league.format === "round_robin" || league.format === "swiss"
+                        ? "Match Draw (+1 Point to both players)"
+                        : "Match Draw → Trigger Sudden Death Blitz Tiebreaker ⚡"}
+                    </span>
                   </label>
                 </div>
               </div>
