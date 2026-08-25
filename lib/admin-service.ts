@@ -302,7 +302,7 @@ export const adminService = {
           accountName = "Forfeit & Penalty Surcharges";
         } else {
           accountCode = "4010";
-          accountName = "1v1 Match Rake Revenue (5%)";
+          accountName = "1v1 Match Rake Revenue";
         }
       } else if (le.entryType === "adjustment") {
         accountCode = "3020";

@@ -179,6 +179,8 @@ export const dbRepository: DbRepository = {
   getLedgerBalance: withStore("getLedgerBalance"),
   getLedgerEntries: withStore("getLedgerEntries"),
   getSystemFundsSummary: withStore("getSystemFundsSummary"),
+  getChartOfAccountsReport: withStore("getChartOfAccountsReport"),
+  getTreasuryFundDetails: withStore("getTreasuryFundDetails"),
 
   // Roles & RBAC
   listRoles: withStore("listRoles"),

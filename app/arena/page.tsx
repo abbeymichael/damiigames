@@ -3434,7 +3434,7 @@ export default function ArenaPage() {
                               • Total Wager Pot: <strong className="text-amber-300">GH₵ {(Number(wagerInput) * 2).toFixed(2)}</strong>
                             </div>
                             <div>
-                              • Winner Takes: <strong className="text-emerald-400">GH₵ {(Number(wagerInput) * 2 * 0.95).toFixed(2)}</strong> (5% platform fee)
+                              • Winner Takes Pot: <strong className="text-emerald-400">GH₵ {(Number(wagerInput) * 2).toFixed(2)}</strong> (net of platform fee)
                             </div>
                           </div>
                         </div>

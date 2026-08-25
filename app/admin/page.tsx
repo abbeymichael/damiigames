@@ -2012,7 +2012,7 @@ export default function AdminPage() {
                     <div className="p-3.5 bg-[#06261f] border border-[#1a5e48] rounded-xl space-y-1">
                       <span className="text-[10px] font-bold uppercase text-slate-200 tracking-wider">Total Deposit Volume</span>
                       <p className="text-xl font-black text-[#d6a735]">
-                        GH₵ {typeof metrics?.totalVolumePoints === "number" ? metrics.totalVolumePoints.toFixed(2) : (metrics?.totalVolumePoints || 8450)}
+                        GH₵ {(typeof metrics?.totalVolumePoints === "number" ? metrics.totalVolumePoints : (metrics?.systemFunds?.totalDeposits ?? 0)).toFixed(2)}
                       </p>
                       <p className="text-[10px] text-slate-300 font-medium">Mobile Money Gateway Inflow</p>
                     </div>
@@ -2020,7 +2020,7 @@ export default function AdminPage() {
                     <div className="p-3.5 bg-[#06261f] border border-[#1a5e48] rounded-xl space-y-1">
                       <span className="text-[10px] font-bold uppercase text-slate-200 tracking-wider">User Wallet Balances</span>
                       <p className="text-xl font-black text-emerald-400">
-                        GH₵ {(metrics?.allUsers?.reduce((acc, u) => acc + (u.points || 0), 0) || 12500).toFixed(2)}
+                        GH₵ {(metrics?.systemFunds?.totalUserAvailable ?? (metrics?.allUsers?.reduce((acc, u) => acc + (u.points || 0), 0) ?? 0)).toFixed(2)}
                       </p>
                       <p className="text-[10px] text-slate-300 font-medium">Active Player Balances</p>
                     </div>
@@ -2028,7 +2028,7 @@ export default function AdminPage() {
                     <div className="p-3.5 bg-[#06261f] border border-[#1a5e48] rounded-xl space-y-1">
                       <span className="text-[10px] font-bold uppercase text-slate-200 tracking-wider">Escrow Volume</span>
                       <p className="text-xl font-black text-cyan-400">
-                        GH₵ {typeof metrics?.totalEscrowProcessed === "number" ? metrics.totalEscrowProcessed.toFixed(2) : (metrics?.totalEscrowProcessed || 3200)}
+                        GH₵ {(metrics?.systemFunds?.totalEscrowLocked ?? (typeof metrics?.totalEscrowProcessed === "number" ? metrics.totalEscrowProcessed : 0)).toFixed(2)}
                       </p>
                       <p className="text-[10px] text-slate-300 font-medium">Locked in matches & leagues</p>
                     </div>
@@ -2036,7 +2036,7 @@ export default function AdminPage() {
                     <div className="p-3.5 bg-[#06261f] border border-[#1a5e48] rounded-xl space-y-1">
                       <span className="text-[10px] font-bold uppercase text-slate-200 tracking-wider">Total Transactions</span>
                       <p className="text-xl font-black text-[#f5efdf]">
-                        {metrics?.totalTransactions || 0}
+                        {metrics?.totalTransactions ?? metrics?.ledgerEntries?.length ?? 0}
                       </p>
                       <p className="text-[10px] text-slate-300 font-medium">System ledger entries</p>
                     </div>

@@ -105,11 +105,11 @@ export const CANONICAL_CHART_OF_ACCOUNTS: Array<{
   },
   {
     code: "4010",
-    name: "1v1 Match Rake Revenue (5%)",
+    name: "1v1 Match Rake Revenue",
     accountClass: "revenue",
     fundType: "platform_fee",
     normalBalance: "credit",
-    description: "5% platform commission automatically deducted from gross pot upon completion of 1v1 wager matches.",
+    description: "Dynamic platform commission automatically deducted from gross pot upon completion of 1v1 wager matches (configurable, e.g. 5% - 10%).",
   },
   {
     code: "4020",
@@ -165,7 +165,7 @@ export function mapLedgerEntryToAccount(entry: {
     if (entry.referenceType === "forfeit" || entry.referenceType === "penalty") {
       return { code: "4030", name: "Forfeit & Penalty Surcharges", fundType: "platform_fee" };
     }
-    return { code: "4010", name: "1v1 Match Rake Revenue (5%)", fundType: "platform_fee" };
+    return { code: "4010", name: "1v1 Match Rake Revenue", fundType: "platform_fee" };
   }
 
   if (entry.entryType === "adjustment") {

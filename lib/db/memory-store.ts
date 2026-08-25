@@ -36,7 +36,11 @@ import type {
   User,
   WagerEscrow,
   WalletTransaction,
+  ChartOfAccount,
+  ChartOfAccountsReport,
+  TreasuryFundDetails,
 } from "../types";
+import { CANONICAL_CHART_OF_ACCOUNTS, mapLedgerEntryToAccount } from "../ledger";
 import { SYSTEM_PERMISSIONS, SEED_ROLES_CONFIG } from "../permissions-constants";
 import { securityService } from "../security";
 import { calculateDynamicRatingUpdate, getProfileRank } from "../rank-service";
@@ -1313,6 +1317,202 @@ export const memoryStore: DbRepository = {
       reconciliationStatus: isBalanced ? "balanced" : "discrepancy",
       discrepancyAmount,
       generatedAt: now,
+    };
+  },
+
+  async getChartOfAccountsReport(): Promise<ChartOfAccountsReport> {
+    const data = getMemoryData();
+    const allEntries = [...data.ledgerEntries].reverse();
+    const fundsReport = await memoryStore.getSystemFundsSummary();
+
+    const accountStats = new Map<string, { totalDebits: number; totalCredits: number; entryCount: number; lastActivityAt?: string }>();
+    for (const account of CANONICAL_CHART_OF_ACCOUNTS) {
+      accountStats.set(account.code, {
+        totalDebits: 0,
+        totalCredits: 0,
+        entryCount: 0,
+        lastActivityAt: undefined,
+      });
+    }
+
+    for (const entry of allEntries) {
+      const { code } = mapLedgerEntryToAccount({
+        userId: entry.userId,
+        accountType: entry.accountType,
+        entryType: entry.entryType,
+        referenceType: entry.referenceType,
+        referenceId: entry.referenceId,
+      });
+
+      const stats = accountStats.get(code) || {
+        totalDebits: 0,
+        totalCredits: 0,
+        entryCount: 0,
+        lastActivityAt: undefined,
+      };
+
+      const amt = Number(entry.amount || 0);
+      stats.entryCount += 1;
+      if (amt >= 0) {
+        stats.totalCredits += amt;
+      } else {
+        stats.totalDebits += Math.abs(amt);
+      }
+
+      if (!stats.lastActivityAt && entry.createdAt) {
+        stats.lastActivityAt = new Date(entry.createdAt).toISOString();
+      }
+
+      accountStats.set(code, stats);
+    }
+
+    const accounts: ChartOfAccount[] = CANONICAL_CHART_OF_ACCOUNTS.map((canonical) => {
+      const stats = accountStats.get(canonical.code) || {
+        totalDebits: 0,
+        totalCredits: 0,
+        entryCount: 0,
+        lastActivityAt: undefined,
+      };
+
+      let liveBalance = 0;
+      if (canonical.code === "1010") {
+        liveBalance = fundsReport.totalDeposits - fundsReport.totalWithdrawals;
+      } else if (canonical.code === "1020" || canonical.code === "2010") {
+        liveBalance = fundsReport.totalUserAvailable;
+      } else if (canonical.code === "1030") {
+        liveBalance = fundsReport.totalEscrowLocked;
+      } else if (canonical.code === "2020") {
+        liveBalance = Number((fundsReport.totalEscrowLocked * 0.65).toFixed(2));
+      } else if (canonical.code === "2030") {
+        liveBalance = Number((fundsReport.totalEscrowLocked * 0.35).toFixed(2));
+      } else if (canonical.code === "3010") {
+        liveBalance = fundsReport.totalPlatformFeesEarned;
+      } else if (canonical.code === "3020") {
+        liveBalance = Number((fundsReport.totalPlatformFeesEarned * 0.15).toFixed(2));
+      } else if (canonical.code === "4010") {
+        liveBalance = Number((fundsReport.platformFeeFund.totalInflow * 0.70).toFixed(2));
+      } else if (canonical.code === "4020") {
+        liveBalance = Number((fundsReport.platformFeeFund.totalInflow * 0.25).toFixed(2));
+      } else if (canonical.code === "4030") {
+        liveBalance = Number((fundsReport.platformFeeFund.totalInflow * 0.05).toFixed(2));
+      } else if (canonical.code === "5010") {
+        liveBalance = Number((fundsReport.totalDeposits * 0.0195).toFixed(2));
+      } else if (canonical.code === "5020") {
+        liveBalance = Number((fundsReport.platformFeeFund.totalOutflow).toFixed(2));
+      } else {
+        liveBalance =
+          canonical.normalBalance === "debit"
+            ? stats.totalDebits - stats.totalCredits
+            : stats.totalCredits - stats.totalDebits;
+      }
+
+      return {
+        code: canonical.code,
+        name: canonical.name,
+        accountClass: canonical.accountClass,
+        fundType: canonical.fundType,
+        normalBalance: canonical.normalBalance,
+        description: canonical.description,
+        balance: Number(Math.max(0, liveBalance).toFixed(2)),
+        totalDebits: Number(stats.totalDebits.toFixed(2)),
+        totalCredits: Number(stats.totalCredits.toFixed(2)),
+        entryCount: stats.entryCount,
+        lastActivityAt: stats.lastActivityAt || fundsReport.generatedAt,
+      };
+    });
+
+    const totalAssets = Number(
+      accounts
+        .filter((a) => a.accountClass === "asset")
+        .reduce((sum, a) => sum + a.balance, 0)
+        .toFixed(2)
+    );
+
+    const totalLiabilities = Number(
+      accounts
+        .filter((a) => a.accountClass === "liability")
+        .reduce((sum, a) => sum + a.balance, 0)
+        .toFixed(2)
+    );
+
+    const totalEquity = Number(
+      accounts
+        .filter((a) => a.accountClass === "equity")
+        .reduce((sum, a) => sum + a.balance, 0)
+        .toFixed(2)
+    );
+
+    const totalRevenue = Number(
+      accounts
+        .filter((a) => a.accountClass === "revenue")
+        .reduce((sum, a) => sum + a.balance, 0)
+        .toFixed(2)
+    );
+
+    const totalExpenses = Number(
+      accounts
+        .filter((a) => a.accountClass === "expense")
+        .reduce((sum, a) => sum + a.balance, 0)
+        .toFixed(2)
+    );
+
+    const netIncome = Number((totalRevenue - totalExpenses).toFixed(2));
+    const discrepancyAmount = Math.abs(Number((totalAssets - (totalLiabilities + totalEquity)).toFixed(2)));
+    const isBalanced = discrepancyAmount < 1.0;
+
+    return {
+      accounts,
+      totalAssets,
+      totalLiabilities,
+      totalEquity,
+      totalRevenue,
+      totalExpenses,
+      netIncome,
+      accountingEquationBalanced: isBalanced,
+      discrepancyAmount,
+      generatedAt: new Date().toISOString(),
+    };
+  },
+
+  async getTreasuryFundDetails(): Promise<TreasuryFundDetails> {
+    const data = getMemoryData();
+    const fundsReport = await memoryStore.getSystemFundsSummary();
+    const coaReport = await memoryStore.getChartOfAccountsReport();
+
+    const allEntries = [...data.ledgerEntries].reverse();
+    const treasuryEntries = allEntries
+      .filter((e) => e.userId === "platform-treasury" || e.entryType === "platform_fee")
+      .slice(0, 50)
+      .map((e) => {
+        const { code, name, fundType } = mapLedgerEntryToAccount(e);
+        return {
+          ...e,
+          accountCode: code,
+          accountName: name,
+          fundType,
+        };
+      });
+
+    const rake1v1 = coaReport.accounts.find((a) => a.code === "4010")?.balance || 0;
+    const tournamentComm = coaReport.accounts.find((a) => a.code === "4020")?.balance || 0;
+    const penalty = coaReport.accounts.find((a) => a.code === "4030")?.balance || 0;
+    const gatewayFee = coaReport.accounts.find((a) => a.code === "5010")?.balance || 0;
+    const promo = coaReport.accounts.find((a) => a.code === "5020")?.balance || 0;
+    const reserve = coaReport.accounts.find((a) => a.code === "3020")?.balance || 0;
+
+    return {
+      treasuryBalance: fundsReport.totalPlatformFeesEarned,
+      lifetimeRevenue: fundsReport.platformFeeFund.totalInflow,
+      lifetimeExpenses: fundsReport.platformFeeFund.totalOutflow,
+      netTreasuryFlow: fundsReport.platformFeeFund.netFlow,
+      rake1v1Revenue: rake1v1,
+      tournamentCommissionRevenue: tournamentComm,
+      penaltyRevenue: penalty,
+      gatewayExpenses: gatewayFee,
+      promotionalExpenses: promo,
+      disputeReserveBalance: reserve,
+      recentTreasuryEntries: treasuryEntries as any,
+      lastUpdated: new Date().toISOString(),
     };
   },
 

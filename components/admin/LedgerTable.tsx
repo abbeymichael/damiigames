@@ -510,7 +510,7 @@ export function LedgerTable({
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between p-2 rounded-lg bg-[#06261f] border border-[#114232] text-xs">
-                  <span className="text-slate-300 font-medium">4010: 1v1 Match Rake (5%)</span>
+                  <span className="text-slate-300 font-medium">4010: 1v1 Match Rake Revenue</span>
                   <span className="font-mono font-bold text-amber-300">
                     GH₵ {(treasuryDetails?.rake1v1Revenue ?? (systemFunds.platformFeeFund.totalInflow * 0.70)).toFixed(2)}
                   </span>
@@ -719,7 +719,7 @@ export function LedgerTable({
               <p className="text-2xl font-black text-emerald-400 font-mono">
                 GH₵ {(treasuryDetails?.lifetimeRevenue ?? systemFunds?.platformFeeFund.totalInflow ?? 0).toFixed(2)}
               </p>
-              <p className="text-[10px] text-slate-300">5% Match Rake + Tournament Commissions</p>
+              <p className="text-[10px] text-slate-300">Match Rake (Dynamic 5%–10%) + Tourney Commissions</p>
             </div>
 
             <div className="p-4 rounded-xl bg-[#06261f] border border-[#1a5e48] space-y-1">
@@ -748,7 +748,7 @@ export function LedgerTable({
               <div className="space-y-3">
                 <div>
                   <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-slate-300">1v1 Wager Match Rake (5%) [4010]</span>
+                    <span className="text-slate-300">1v1 Wager Match Rake [4010]</span>
                     <span className="font-mono font-bold text-amber-300">
                       GH₵ {(treasuryDetails?.rake1v1Revenue ?? ((systemFunds?.platformFeeFund.totalInflow ?? 0) * 0.70)).toFixed(2)}
                     </span>
