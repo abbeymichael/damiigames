@@ -1017,10 +1017,14 @@ export const mysqlStore: DbRepository = {
   },
 
   async getLeagueParticipants(leagueId) {
-    const rows = await getDb()
-      .select()
-      .from(schema.leagueParticipants)
-      .where(eq(schema.leagueParticipants.leagueId, leagueId));
+    if (leagueId) {
+      const rows = await getDb()
+        .select()
+        .from(schema.leagueParticipants)
+        .where(eq(schema.leagueParticipants.leagueId, leagueId));
+      return rows.map(rowToParticipant);
+    }
+    const rows = await getDb().select().from(schema.leagueParticipants);
     return rows.map(rowToParticipant);
   },
 

@@ -262,14 +262,15 @@ export async function POST(req: NextRequest) {
       await dbRepository.upsertProfile(token, username);
 
       const mode: GameMode = (["casual", "wager", "league"].includes(body.mode) ? body.mode : "casual") as GameMode;
-      const wagerAmount = Math.max(0, Number(body.wagerAmount) || 0);
+      const rawWager = Number(body.wagerAmount) || 0;
+      const wagerAmount = Math.min(50000, Math.max(0, Math.floor(rawWager)));
       const ruleVariations = body.ruleVariations || undefined;
       const customConstraints = body.customConstraints || undefined;
 
       if (mode === "wager" && wagerAmount > 0) {
         const profile = await dbRepository.getProfile(token);
-        if (!profile || profile.marbles < wagerAmount) {
-          return NextResponse.json({ error: `Insufficient Marbles balance for ${wagerAmount} Wager` }, { status: 400 });
+        if (!profile || (profile.points || 0) < wagerAmount) {
+          return NextResponse.json({ error: `Insufficient Points balance for GH₵ ${wagerAmount} (${wagerAmount} Points) Wager` }, { status: 400 });
         }
       }
 
@@ -384,17 +385,17 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Validate wager requirement for guest
+      // Validate wager requirement for guest and host
       if (room.mode === "wager" && room.wagerAmount > 0) {
         const guestProfile = await dbRepository.getProfile(token);
         const hostProfile = await dbRepository.getProfile(room.hostToken);
-        const guestBalance = Math.max(guestProfile?.marbles ?? 0, guestProfile?.points ?? 0);
-        const hostBalance = Math.max(hostProfile?.marbles ?? 0, hostProfile?.points ?? 0);
-        if (guestBalance < room.wagerAmount) {
-          return NextResponse.json({ error: `Insufficient Marbles. You need GH₵ ${room.wagerAmount} (Marbles) to accept this wager challenge.` }, { status: 400 });
+        const guestPoints = guestProfile?.points ?? 0;
+        const hostPoints = hostProfile?.points ?? 0;
+        if (guestPoints < room.wagerAmount) {
+          return NextResponse.json({ error: `Insufficient Points. You need GH₵ ${room.wagerAmount} (${room.wagerAmount} Points) to accept this wager challenge.` }, { status: 400 });
         }
-        if (hostBalance < room.wagerAmount) {
-          return NextResponse.json({ error: `Host has insufficient balance for this wager match.` }, { status: 400 });
+        if (hostPoints < room.wagerAmount) {
+          return NextResponse.json({ error: `Host has insufficient Points balance for this wager match.` }, { status: 400 });
         }
       }
 
@@ -803,6 +804,50 @@ export async function POST(req: NextRequest) {
       const room = await dbRepository.getRoom(code);
       if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
 
+      // Authorization: only the active host or guest can request a rematch
+      if (token !== room.hostToken && token !== room.guestToken) {
+        return NextResponse.json({ error: "Unauthorized: You are not a player in this room" }, { status: 403 });
+      }
+
+      // Ensure room is finished before rematching
+      if (room.status !== "finished" && room.status !== "forfeited" && room.status !== "cancelled") {
+        return NextResponse.json({ error: "Cannot trigger rematch while a match is in progress" }, { status: 400 });
+      }
+
+      // Ensure previous match finish effects (such as stats and previous escrow disbursal) are applied
+      await applyGameFinishEffects(room);
+
+      // If this was a wager match, re-verify both players' points balances and lock a new escrow
+      let newEscrowId: string | null = null;
+      if (room.mode === "wager" && room.wagerAmount > 0 && room.guestToken) {
+        const hostProfile = await dbRepository.getProfile(room.hostToken);
+        const guestProfile = await dbRepository.getProfile(room.guestToken);
+        const hostPoints = hostProfile?.points ?? 0;
+        const guestPoints = guestProfile?.points ?? 0;
+
+        if (hostPoints < room.wagerAmount || guestPoints < room.wagerAmount) {
+          return NextResponse.json(
+            { error: "Insufficient Points for rematch wager. Both players must have at least GH₵ " + room.wagerAmount + " Points." },
+            { status: 400 }
+          );
+        }
+
+        try {
+          const escrow = await walletService.lockWagerEscrow(
+            room.code,
+            room.wagerAmount,
+            room.hostToken,
+            room.guestToken
+          );
+          newEscrowId = escrow.id;
+        } catch (err) {
+          return NextResponse.json(
+            { error: err instanceof Error ? err.message : "Failed to lock wager escrow for rematch" },
+            { status: 400 }
+          );
+        }
+      }
+
       room.boardJson = JSON.stringify(createBoard());
       room.turn = "white";
       room.forcedFrom = null;
@@ -812,9 +857,44 @@ export async function POST(req: NextRequest) {
       room.movesJson = "[]";
       room.resultApplied = 0;
       room.lastMoveTime = Date.now();
-      room.escrowId = null;
+      room.disconnectTime = null;
+      room.disconnectedPlayer = null;
+      room.escrowId = newEscrowId;
 
       await dbRepository.saveRoom(room);
+      const profile = await dbRepository.getProfile(token);
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
+    }
+
+    if (action === "disconnect") {
+      const code = cleanCode(body.code);
+      const room = await dbRepository.getRoom(code);
+      if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
+
+      if (token === room.hostToken || token === room.guestToken) {
+        const playerRole: Player = token === room.hostToken ? "white" : "black";
+        if (room.status === "playing") {
+          room.disconnectTime = Date.now();
+          room.disconnectedPlayer = playerRole;
+          await dbRepository.saveRoom(room);
+        }
+      }
+      return NextResponse.json({ success: true });
+    }
+
+    if (action === "reconnect") {
+      const code = cleanCode(body.code);
+      const room = await dbRepository.getRoom(code);
+      if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
+
+      if (token === room.hostToken || token === room.guestToken) {
+        const playerRole: Player = token === room.hostToken ? "white" : "black";
+        if (room.disconnectedPlayer === playerRole) {
+          room.disconnectTime = null;
+          room.disconnectedPlayer = null;
+          await dbRepository.saveRoom(room);
+        }
+      }
       const profile = await dbRepository.getProfile(token);
       return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
     }

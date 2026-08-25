@@ -330,7 +330,7 @@ export const leagueService = {
   },
 
   async approveApplicant(facilitatorToken: string, participantId: string) {
-    const allParticipants = Array.from((await dbRepository.getLeagueParticipants("")).values());
+    const allParticipants = await dbRepository.getLeagueParticipants("");
     const part = allParticipants.find((p) => p.id === participantId);
     if (!part) throw new Error("Participant application not found");
 
@@ -371,7 +371,7 @@ export const leagueService = {
   },
 
   async rejectApplicant(facilitatorToken: string, participantId: string) {
-    const allParticipants = Array.from((await dbRepository.getLeagueParticipants("")).values());
+    const allParticipants = await dbRepository.getLeagueParticipants("");
     const part = allParticipants.find((p) => p.id === participantId);
     if (!part) throw new Error("Participant application not found");
 

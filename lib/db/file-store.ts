@@ -671,9 +671,9 @@ export const fileStore: any = {
   },
 
   async getLeagueParticipants(leagueId) {
-    return Array.from(data().leagueParticipants.values())
-      .filter((p) => p.leagueId === leagueId)
-      .map((p) => ({ ...p }));
+    const parts = Array.from(data().leagueParticipants.values());
+    const filtered = leagueId ? parts.filter((p) => p.leagueId === leagueId) : parts;
+    return filtered.map((p) => ({ ...p }));
   },
 
   async addLeagueParticipant(participant) {

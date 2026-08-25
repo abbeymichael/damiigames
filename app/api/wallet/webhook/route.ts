@@ -10,18 +10,17 @@ export async function POST(req: NextRequest) {
     const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
 
     if (!paystackSecret) {
-      if (process.env.NODE_ENV === "production") {
-        return NextResponse.json({ error: "PAYSTACK_SECRET_KEY not configured on server" }, { status: 500 });
-      }
-    } else {
-      if (!signature) {
-        return NextResponse.json({ error: "Missing x-paystack-signature header" }, { status: 401 });
-      }
-      // Verify HMAC SHA512 signature strictly
-      const isValidSignature = securityService.verifyPaystackHmac(rawBody, signature, paystackSecret);
-      if (!isValidSignature) {
-        return NextResponse.json({ error: "Invalid Paystack HMAC signature" }, { status: 401 });
-      }
+      return NextResponse.json({ error: "PAYSTACK_SECRET_KEY not configured on server" }, { status: 500 });
+    }
+
+    if (!signature) {
+      return NextResponse.json({ error: "Missing x-paystack-signature header" }, { status: 401 });
+    }
+
+    // Verify HMAC SHA512 signature strictly
+    const isValidSignature = securityService.verifyPaystackHmac(rawBody, signature, paystackSecret);
+    if (!isValidSignature) {
+      return NextResponse.json({ error: "Invalid Paystack HMAC signature" }, { status: 401 });
     }
 
     const event = JSON.parse(rawBody || "{}");
