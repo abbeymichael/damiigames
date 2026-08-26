@@ -33,18 +33,45 @@ DAMII is built with **Next.js App Router** and uses **MySQL** as its single auth
 
 ---
 
-## 3. Step 2: Upload Application Files
+## 3. Step 2: Build on Local PC & Upload Deployable Package
 
-1. On your local machine, prepare the project files (ensure you include `package.json`, `server.js`, `app.js`, `.htaccess.example`, and application source folders).
-2. Compress the files into a `.zip` archive (excluding `node_modules` and `.next` build cache).
-3. In cPanel, open **File Manager**.
-4. Navigate to your user root (e.g., `/home/cpaneluser/`).
-5. Create a dedicated folder for the application:
+You can deploy DAMII using either of two convenient methods:
+
+### Method A: Build on Local PC (Recommended - Standalone Bundle)
+Building on your local computer produces a self-contained production bundle with all operational scripts, Drizzle database migrations, public static assets, and Apache/Passenger entry files already bundled.
+
+1. On your local machine, run:
+   ```bash
+   npm run build
    ```
-   /home/cpaneluser/damii_app
+   *(Or `npm run package:standalone` if packaging an existing standalone build)*.
+2. The packager automatically prepares the standalone directory (`.next/standalone` or `dist/standalone`) with:
+   - `server.js` and `app.js` (Phusion Passenger entry points)
+   - `scripts/` (containing `db-migrate.js`, `seed.js`, and `check-env.js`)
+   - `drizzle/` (containing all MySQL `.sql` migration files)
+   - `public/` and `.next/static/` (client UI bundles and assets)
+   - `.htaccess` (Apache reverse proxy and security headers)
+   - `package.json` (configured with `npm run db:migrate`, `npm run seed`, `npm start`)
+3. Compress the contents of the standalone folder into a `.zip` file.
+4. In cPanel **File Manager**, navigate to your application directory (e.g. `/home/cpaneluser/damii_app`).
+5. Upload and extract your `.zip` archive.
+
+### Method B: Upload Full Source (Server-side Build)
+1. Compress the project files into a `.zip` archive (excluding `node_modules` and `.next`).
+2. Upload and extract into `/home/cpaneluser/damii_app`.
+3. Build directly on the server via cPanel Terminal using `npm run build`.
+
+---
+
+## 4. Automatic Database Migrations (Zero-Failure Guarantee)
+
+DAMII includes dual-layer schema synchronization:
+1. **Automated On-Boot Migration**: When the server starts, `mysqlStore.ensureSchema()` automatically applies any pending Drizzle migrations (using both disk files and embedded fallback SQL definitions).
+2. **Manual CLI Migration (Optional)**: In cPanel Terminal, you can run:
+   ```bash
+   npm run db:migrate
    ```
-   *(Keeping the application folder outside `public_html` is recommended for security).*
-6. Upload your `.zip` file into `/home/cpaneluser/damii_app` and extract it.
+   This verifies tables and runs all `.sql` migration files safely and idempotently.
 
 ---
 

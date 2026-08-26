@@ -50,6 +50,7 @@ import { getEnv } from "../env";
 import { buildSeedDataset, DEFAULT_ADMIN_SETTINGS, DEFAULT_REGIONS } from "./seed-data";
 import { lockKey, type DbRepository } from "./repository";
 import { assertConnection, closePool, getDb, getPool, withTransaction } from "./mysql-connection";
+import { EMBEDDED_MIGRATIONS } from "./embedded-migrations";
 import * as schema from "../../db/schema.mysql";
 import {
   adminLogToRow,
@@ -188,7 +189,9 @@ async function ensureSchema(): Promise<void> {
       const applied = new Set((rows || []).map((r: any) => r.name));
 
       const migrationsDir = path.join(process.cwd(), "drizzle", "mysql");
-      if (fs.existsSync(migrationsDir)) {
+      const diskFilesExist = fs.existsSync(migrationsDir);
+
+      if (diskFilesExist) {
         const files = fs
           .readdirSync(migrationsDir)
           .filter((f) => f.endsWith(".sql"))
@@ -222,9 +225,39 @@ async function ensureSchema(): Promise<void> {
               file,
               new Date().toISOString(),
             ]);
+            applied.add(file);
           } catch {
             // ignore
           }
+        }
+      }
+
+      // Check for any unapplied migrations in EMBEDDED_MIGRATIONS (guarantees standalone safety)
+      for (const migration of EMBEDDED_MIGRATIONS) {
+        if (applied.has(migration.name)) continue;
+        for (const stmt of migration.statements) {
+          try {
+            await conn.query(stmt);
+          } catch (err: any) {
+            const tolerable = [
+              "ER_TABLE_EXISTS_ERROR",
+              "ER_DUP_KEYNAME",
+              "ER_DUP_FIELDNAME",
+            ].includes(err?.code);
+            if (!tolerable) {
+              console.warn(`[damii][db] Embedded migration notice for ${migration.name}:`, err?.message);
+            }
+          }
+        }
+
+        try {
+          await conn.query(`INSERT IGNORE INTO \`__drizzle_migrations\` (name, applied_at) VALUES (?, ?)`, [
+            migration.name,
+            new Date().toISOString(),
+          ]);
+          applied.add(migration.name);
+        } catch {
+          // ignore
         }
       }
     } finally {

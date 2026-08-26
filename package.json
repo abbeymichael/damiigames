@@ -18,7 +18,8 @@
     "db:generate": "node scripts/db-generate.js",
     "db:migrate": "node scripts/db-migrate.js",
     "db:push": "node scripts/db-generate.js --push",
-    "env:check": "node scripts/check-env.js"
+    "env:check": "node scripts/check-env.js",
+    "package:standalone": "node scripts/package-standalone.js"
   },
   "dependencies": {
     "@types/d3": "^7.4.3",

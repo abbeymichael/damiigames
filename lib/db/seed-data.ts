@@ -23,7 +23,8 @@ import { securityService } from "../security";
  * (the deployment guide covers this).
  */
 
-export const DEFAULT_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || "admin123";
+export const DEFAULT_ADMIN_PASSWORD =
+  process.env.ADMIN_PASSCODE || process.env.SEED_ADMIN_PASSWORD || "admin123";
 export const DEFAULT_PLAYER_PASSWORD = process.env.SEED_PLAYER_PASSWORD || "123456";
 
 export const DEFAULT_ADMIN_SETTINGS: AdminSettings = {

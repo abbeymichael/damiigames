@@ -1,0 +1,479 @@
+/**
+ * Embedded SQL migrations for DAMII.
+ *
+ * Provides a guaranteed in-bundle copy of the schema migrations so that
+ * when the application is bundled for standalone execution or deployed to
+ * shared hosting without the `drizzle/` folder, the database tables and
+ * columns are still automatically created and kept up to date.
+ */
+
+export interface EmbeddedMigration {
+  name: string;
+  statements: string[];
+}
+
+export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
+  {
+    name: "0000_oval_rattler.sql",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS \`admin_logs\` (
+	\`id\` varchar(191) NOT NULL,
+	\`admin_token\` varchar(191) NOT NULL,
+	\`admin_name\` varchar(191) NOT NULL,
+	\`action\` varchar(191) NOT NULL,
+	\`target\` varchar(191) NOT NULL,
+	\`details_json\` text NOT NULL,
+	\`created_at\` varchar(32) NOT NULL,
+	CONSTRAINT \`admin_logs_id\` PRIMARY KEY(\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`admin_profiles\` (
+	\`user_id\` varchar(191) NOT NULL,
+	\`permissions_json\` text NOT NULL,
+	\`is_super_admin\` tinyint NOT NULL DEFAULT 0,
+	\`granted_by\` varchar(191) NOT NULL,
+	\`granted_at\` varchar(32) NOT NULL,
+	CONSTRAINT \`admin_profiles_user_id\` PRIMARY KEY(\`user_id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`admin_settings\` (
+	\`id\` int NOT NULL DEFAULT 1,
+	\`wager_fee_percent\` int NOT NULL DEFAULT 5,
+	\`tournament_fee_percent\` int NOT NULL DEFAULT 10,
+	\`points_per_ghs_buy\` int NOT NULL DEFAULT 1,
+	\`points_per_ghs_withdraw\` int NOT NULL DEFAULT 1,
+	\`min_deposit_ghs\` int NOT NULL DEFAULT 5,
+	\`max_deposit_ghs\` int NOT NULL DEFAULT 5000,
+	\`min_withdrawal_ghs\` int NOT NULL DEFAULT 10,
+	\`max_withdrawal_ghs\` int NOT NULL DEFAULT 2000,
+	\`max_daily_withdrawal_ghs\` int NOT NULL DEFAULT 5000,
+	\`updated_at\` varchar(32) NOT NULL,
+	\`updated_by\` varchar(191),
+	CONSTRAINT \`admin_settings_id_pk\` PRIMARY KEY(\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`escrows\` (
+	\`id\` varchar(191) NOT NULL,
+	\`room_code\` varchar(32) NOT NULL,
+	\`amount_marbles\` int NOT NULL DEFAULT 0,
+	\`amount_points\` int NOT NULL DEFAULT 0,
+	\`player1_token\` varchar(191) NOT NULL,
+	\`player2_token\` varchar(191),
+	\`locked_at\` varchar(32) NOT NULL,
+	\`status\` varchar(16) NOT NULL DEFAULT 'locked',
+	\`winner_token\` varchar(191),
+	\`disbursed_at\` varchar(32),
+	CONSTRAINT \`escrows_id\` PRIMARY KEY(\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`league_matches\` (
+	\`id\` varchar(191) NOT NULL,
+	\`league_id\` varchar(191) NOT NULL,
+	\`round\` int NOT NULL,
+	\`match_number\` int NOT NULL,
+	\`bracket_type\` varchar(32) NOT NULL DEFAULT 'winners',
+	\`player1_token\` varchar(191),
+	\`player1_name\` varchar(191),
+	\`player1_score\` int NOT NULL DEFAULT 0,
+	\`player2_token\` varchar(191),
+	\`player2_name\` varchar(191),
+	\`player2_score\` int NOT NULL DEFAULT 0,
+	\`winner_token\` varchar(191),
+	\`winner_name\` varchar(191),
+	\`status\` varchar(32) NOT NULL DEFAULT 'pending',
+	\`room_code\` varchar(32),
+	\`completed_at\` varchar(32),
+	\`scheduled_date_time\` varchar(64),
+	\`next_match_id\` varchar(191),
+	\`loser_match_id\` varchar(191),
+	\`is_disputed\` tinyint NOT NULL DEFAULT 0,
+	\`dispute_reason\` text,
+	CONSTRAINT \`league_matches_id\` PRIMARY KEY(\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`league_participants\` (
+	\`league_id\` varchar(191) NOT NULL,
+	\`user_token\` varchar(191) NOT NULL,
+	\`username\` varchar(191) NOT NULL,
+	\`joined_at\` varchar(32) NOT NULL,
+	\`seed\` int,
+	\`score\` int NOT NULL DEFAULT 0,
+	\`wins\` int NOT NULL DEFAULT 0,
+	\`losses\` int NOT NULL DEFAULT 0,
+	\`draws\` int NOT NULL DEFAULT 0,
+	\`checked_in\` tinyint NOT NULL DEFAULT 0,
+	\`status\` varchar(32) NOT NULL DEFAULT 'registered',
+	CONSTRAINT \`league_participants_league_id_user_token_pk\` PRIMARY KEY(\`league_id\`,\`user_token\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`leagues\` (
+	\`id\` varchar(191) NOT NULL,
+	\`title\` varchar(191) NOT NULL,
+	\`description\` text NOT NULL,
+	\`entry_fee_points\` int NOT NULL DEFAULT 0,
+	\`prize_pool_points\` int NOT NULL DEFAULT 0,
+	\`max_participants\` int NOT NULL DEFAULT 8,
+	\`facilitator_token\` varchar(191) NOT NULL,
+	\`facilitator_name\` varchar(191) NOT NULL,
+	\`status\` varchar(32) NOT NULL DEFAULT 'registration',
+	\`created_at\` varchar(32) NOT NULL,
+	\`schedule_date\` varchar(64) NOT NULL DEFAULT 'Saturdays & Sundays',
+	\`schedule_time\` varchar(64) NOT NULL DEFAULT '18:00 GMT',
+	\`turn_timer_seconds\` int NOT NULL DEFAULT 60,
+	\`rules_notes\` text,
+	\`winner_token\` varchar(191),
+	\`winner_name\` varchar(191),
+	\`format\` varchar(32) NOT NULL DEFAULT 'single_elimination',
+	\`is_private\` tinyint NOT NULL DEFAULT 0,
+	\`invite_code\` varchar(32),
+	\`requires_approval\` tinyint NOT NULL DEFAULT 0,
+	\`prize_1st_percent\` int NOT NULL DEFAULT 60,
+	\`prize_2nd_percent\` int NOT NULL DEFAULT 30,
+	\`prize_3rd_percent\` int NOT NULL DEFAULT 10,
+	\`rule_variations_json\` text,
+	\`custom_constraints_json\` text,
+	CONSTRAINT \`leagues_id\` PRIMARY KEY(\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`organizer_profiles\` (
+	\`user_id\` varchar(191) NOT NULL,
+	\`organization_name\` varchar(191) NOT NULL,
+	\`status\` varchar(32) NOT NULL DEFAULT 'pending',
+	\`applied_at\` varchar(32) NOT NULL,
+	\`approved_at\` varchar(32),
+	\`approved_by\` varchar(191),
+	\`rejection_reason\` text,
+	\`ghana_card_pin\` varchar(64),
+	\`contact_phone\` varchar(32),
+	\`bio\` text,
+	\`tournament_frequency\` varchar(64),
+	\`created_tournaments_count\` int NOT NULL DEFAULT 0,
+	CONSTRAINT \`organizer_profiles_user_id\` PRIMARY KEY(\`user_id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`paystack_processed_refs\` (
+	\`reference\` varchar(191) NOT NULL,
+	\`created_at\` varchar(32) NOT NULL,
+	CONSTRAINT \`paystack_processed_refs_reference\` PRIMARY KEY(\`reference\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`profiles\` (
+	\`token\` varchar(191) NOT NULL,
+	\`username\` varchar(191) NOT NULL,
+	\`username_lower\` varchar(191) NOT NULL,
+	\`phone_number\` varchar(32),
+	\`passcode\` varchar(191),
+	\`password_salt\` varchar(64),
+	\`rating\` int NOT NULL DEFAULT 1200,
+	\`marbles\` int NOT NULL DEFAULT 0,
+	\`points\` int NOT NULL DEFAULT 0,
+	\`wins\` int NOT NULL DEFAULT 0,
+	\`losses\` int NOT NULL DEFAULT 0,
+	\`draws\` int NOT NULL DEFAULT 0,
+	\`win_streak\` int NOT NULL DEFAULT 0,
+	\`best_streak\` int NOT NULL DEFAULT 0,
+	\`last_match_at\` varchar(32),
+	\`matches_last_7_days\` int NOT NULL DEFAULT 0,
+	\`opponent_rating_avg\` int NOT NULL DEFAULT 0,
+	\`total_opponents_faced\` int NOT NULL DEFAULT 0,
+	\`role\` varchar(32) NOT NULL DEFAULT 'user',
+	\`status\` varchar(32) NOT NULL DEFAULT 'active',
+	\`banned_at\` varchar(32),
+	\`banned_reason\` text,
+	\`created_at\` varchar(32) NOT NULL,
+	\`updated_at\` varchar(32) NOT NULL,
+	CONSTRAINT \`profiles_token\` PRIMARY KEY(\`token\`),
+	CONSTRAINT \`profiles_username_lower_uq\` UNIQUE(\`username_lower\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`rooms\` (
+	\`code\` varchar(32) NOT NULL,
+	\`host_token\` varchar(191) NOT NULL,
+	\`host_name\` varchar(191) NOT NULL,
+	\`guest_token\` varchar(191),
+	\`guest_name\` varchar(191),
+	\`mode\` varchar(32) NOT NULL DEFAULT 'casual',
+	\`status\` varchar(32) NOT NULL DEFAULT 'waiting',
+	\`wager_amount\` int NOT NULL DEFAULT 0,
+	\`board_json\` text NOT NULL,
+	\`turn\` varchar(8) NOT NULL DEFAULT 'W',
+	\`winner\` varchar(8),
+	\`spectator_count\` int NOT NULL DEFAULT 0,
+	\`moves_json\` text,
+	\`last_move_at\` varchar(32) NOT NULL,
+	\`created_at\` varchar(32) NOT NULL,
+	CONSTRAINT \`rooms_code\` PRIMARY KEY(\`code\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`sessions\` (
+	\`id\` varchar(191) NOT NULL,
+	\`user_token\` varchar(191) NOT NULL,
+	\`csrf_token\` varchar(191) NOT NULL,
+	\`ip_address\` varchar(64),
+	\`user_agent\` text,
+	\`created_at\` varchar(32) NOT NULL,
+	\`last_seen_at\` varchar(32) NOT NULL,
+	\`expires_at\` varchar(32) NOT NULL,
+	\`revoked_at\` varchar(32),
+	CONSTRAINT \`sessions_id\` PRIMARY KEY(\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`transactions\` (
+	\`id\` varchar(191) NOT NULL,
+	\`user_token\` varchar(191) NOT NULL,
+	\`type\` varchar(32) NOT NULL,
+	\`amount\` int NOT NULL,
+	\`currency\` varchar(16) NOT NULL DEFAULT 'GHS',
+	\`status\` varchar(32) NOT NULL DEFAULT 'pending',
+	\`reference\` varchar(191) NOT NULL,
+	\`provider\` varchar(32),
+	\`phone_number\` varchar(32),
+	\`created_at\` varchar(32) NOT NULL,
+	CONSTRAINT \`transactions_id\` PRIMARY KEY(\`id\`),
+	CONSTRAINT \`transactions_reference_uq\` UNIQUE(\`reference\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+    ],
+  },
+  {
+    name: "0001_superb_dorian_gray.sql",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS \`admin_user_roles\` (
+	\`user_id\` varchar(36) NOT NULL,
+	\`role_id\` varchar(36) NOT NULL,
+	\`assigned_by_admin_id\` varchar(36) NOT NULL,
+	\`assigned_at\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	CONSTRAINT \`admin_user_roles_user_id_role_id_pk\` PRIMARY KEY(\`user_id\`,\`role_id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`game_type_limits\` (
+	\`id\` varchar(36) NOT NULL,
+	\`game_type\` varchar(32) NOT NULL,
+	\`min_wager\` decimal(14,2) NOT NULL,
+	\`max_wager\` decimal(14,2) NOT NULL,
+	\`min_tournament_prize_pool\` decimal(14,2) NOT NULL,
+	\`max_tournament_prize_pool\` decimal(14,2) NOT NULL,
+	\`platform_fee_percent\` decimal(5,4) NOT NULL,
+	\`updated_at\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	CONSTRAINT \`game_type_limits_id\` PRIMARY KEY(\`id\`),
+	CONSTRAINT \`game_type_limits_game_type_unique\` UNIQUE(\`game_type\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`games\` (
+	\`id\` varchar(36) NOT NULL,
+	\`name\` varchar(64) NOT NULL,
+	\`slug\` varchar(32) NOT NULL,
+	\`icon_url\` varchar(255),
+	\`status\` enum('enabled','disabled') NOT NULL DEFAULT 'enabled',
+	\`description\` varchar(500),
+	\`created_at\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	CONSTRAINT \`games_id\` PRIMARY KEY(\`id\`),
+	CONSTRAINT \`games_slug_unique\` UNIQUE(\`slug\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`ledger_entries\` (
+	\`id\` varchar(36) NOT NULL,
+	\`user_id\` varchar(36) NOT NULL,
+	\`account_type\` enum('available','escrow') NOT NULL,
+	\`entry_type\` enum('deposit','withdrawal','wager_lock','wager_payout','wager_refund','platform_fee','entry_fee_lock','entry_fee_release','entry_fee_refund','prize_pool_lock','prize_disbursement','prize_pool_refund') NOT NULL,
+	\`amount\` decimal(14,2) NOT NULL,
+	\`reference_type\` varchar(32) NOT NULL,
+	\`reference_id\` varchar(36) NOT NULL,
+	\`transaction_group_id\` varchar(36) NOT NULL,
+	\`balance_after\` decimal(14,2) NOT NULL,
+	\`created_at\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	CONSTRAINT \`ledger_entries_id\` PRIMARY KEY(\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`matches\` (
+	\`id\` varchar(36) NOT NULL,
+	\`game_type\` varchar(32) NOT NULL,
+	\`player_a_id\` varchar(36) NOT NULL,
+	\`player_b_id\` varchar(36),
+	\`wager_amount\` decimal(14,2) NOT NULL,
+	\`status\` enum('open','in_progress','completed','cancelled') NOT NULL DEFAULT 'open',
+	\`winner_id\` varchar(36),
+	\`created_at\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	\`settled_at\` timestamp NULL DEFAULT NULL,
+	CONSTRAINT \`matches_id\` PRIMARY KEY(\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`organizer_applications\` (
+	\`id\` varchar(36) NOT NULL,
+	\`user_id\` varchar(36) NOT NULL,
+	\`applicant_type\` enum('individual','organization'),
+	\`organization_name\` varchar(160),
+	\`organization_reg_number\` varchar(64),
+	\`ghana_card_front_url\` varchar(255),
+	\`ghana_card_back_url\` varchar(255),
+	\`selfie_url\` varchar(255),
+	\`physical_address\` varchar(255),
+	\`proof_of_address_url\` varchar(255),
+	\`intended_game_types\` varchar(255),
+	\`expected_tournament_size\` int,
+	\`expected_frequency\` varchar(64),
+	\`prior_experience\` varchar(500),
+	\`terms_accepted_at\` timestamp NULL DEFAULT NULL,
+	\`status\` enum('draft','pending','approved','rejected','needs_info') NOT NULL DEFAULT 'draft',
+	\`previous_application_id\` varchar(36),
+	\`submitted_at\` timestamp NULL DEFAULT NULL,
+	\`needs_info_requested_at\` timestamp NULL DEFAULT NULL,
+	\`needs_info_note\` varchar(500),
+	\`reviewed_by_admin_id\` varchar(36),
+	\`reviewed_at\` timestamp NULL DEFAULT NULL,
+	\`review_note\` varchar(500),
+	\`created_at\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	CONSTRAINT \`organizer_applications_id\` PRIMARY KEY(\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`organizer_revocations\` (
+	\`id\` varchar(36) NOT NULL,
+	\`user_id\` varchar(36) NOT NULL,
+	\`revoked_by_admin_id\` varchar(36) NOT NULL,
+	\`reason\` varchar(500) NOT NULL,
+	\`evidence_url\` varchar(255),
+	\`reapply_eligible_at\` timestamp NULL DEFAULT NULL,
+	\`created_at\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	CONSTRAINT \`organizer_revocations_id\` PRIMARY KEY(\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`otp_requests\` (
+	\`id\` varchar(36) NOT NULL,
+	\`phone_number\` varchar(20) NOT NULL,
+	\`code_hash\` varchar(128) NOT NULL,
+	\`ip_address\` varchar(45) NOT NULL,
+	\`expires_at\` timestamp NOT NULL,
+	\`consumed_at\` timestamp NULL DEFAULT NULL,
+	\`created_at\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	CONSTRAINT \`otp_requests_id\` PRIMARY KEY(\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`permissions\` (
+	\`id\` varchar(36) NOT NULL,
+	\`key\` varchar(96) NOT NULL,
+	\`category\` varchar(32) NOT NULL,
+	\`description\` varchar(255) NOT NULL,
+	CONSTRAINT \`permissions_id\` PRIMARY KEY(\`id\`),
+	CONSTRAINT \`permissions_key_unique\` UNIQUE(\`key\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`regions\` (
+	\`id\` varchar(64) NOT NULL,
+	\`name\` varchar(120) NOT NULL,
+	\`code\` varchar(32),
+	\`sort_order\` int NOT NULL DEFAULT 0,
+	\`active\` tinyint NOT NULL DEFAULT 1,
+	\`created_at\` varchar(32) NOT NULL,
+	CONSTRAINT \`regions_id\` PRIMARY KEY(\`id\`),
+	CONSTRAINT \`regions_name_uq\` UNIQUE(\`name\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`role_permissions\` (
+	\`role_id\` varchar(36) NOT NULL,
+	\`permission_id\` varchar(36) NOT NULL,
+	CONSTRAINT \`role_permissions_role_id_permission_id_pk\` PRIMARY KEY(\`role_id\`,\`permission_id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`roles\` (
+	\`id\` varchar(36) NOT NULL,
+	\`name\` varchar(64) NOT NULL,
+	\`description\` varchar(255),
+	\`is_system_role\` tinyint NOT NULL DEFAULT 0,
+	\`created_at\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	CONSTRAINT \`roles_id\` PRIMARY KEY(\`id\`),
+	CONSTRAINT \`roles_name_unique\` UNIQUE(\`name\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`system_settings\` (
+	\`id\` varchar(36) NOT NULL,
+	\`category\` enum('sms','email','general','backup','security') NOT NULL,
+	\`key\` varchar(96) NOT NULL,
+	\`value\` text NOT NULL,
+	\`updated_by_admin_id\` varchar(36),
+	\`updated_at\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	CONSTRAINT \`system_settings_id\` PRIMARY KEY(\`id\`),
+	CONSTRAINT \`settings_category_key_idx\` UNIQUE(\`category\`,\`key\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`tournament_action_requests\` (
+	\`id\` varchar(36) NOT NULL,
+	\`tournament_id\` varchar(36) NOT NULL,
+	\`organizer_id\` varchar(36) NOT NULL,
+	\`request_type\` enum('cancel_tournament','disqualify_player','result_override') NOT NULL,
+	\`target_user_id\` varchar(36),
+	\`match_id\` varchar(36),
+	\`reason\` varchar(500) NOT NULL,
+	\`status\` enum('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+	\`reviewed_by_admin_id\` varchar(36),
+	\`reviewed_at\` timestamp NULL DEFAULT NULL,
+	\`review_note\` varchar(500),
+	\`created_at\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	CONSTRAINT \`tournament_action_requests_id\` PRIMARY KEY(\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`tournament_entries\` (
+	\`id\` varchar(36) NOT NULL,
+	\`tournament_id\` varchar(36) NOT NULL,
+	\`user_id\` varchar(36) NOT NULL,
+	\`fee_paid\` decimal(14,2) NOT NULL DEFAULT '0.00',
+	\`final_placement\` int,
+	\`joined_at\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	CONSTRAINT \`tournament_entries_id\` PRIMARY KEY(\`id\`),
+	CONSTRAINT \`tournament_entries_user_uq\` UNIQUE(\`tournament_id\`,\`user_id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`tournament_prizes\` (
+	\`id\` varchar(36) NOT NULL,
+	\`tournament_id\` varchar(36) NOT NULL,
+	\`placement\` int NOT NULL,
+	\`amount\` decimal(14,2) NOT NULL,
+	CONSTRAINT \`tournament_prizes_id\` PRIMARY KEY(\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`tournaments\` (
+	\`id\` varchar(36) NOT NULL,
+	\`organizer_id\` varchar(36) NOT NULL,
+	\`game_type\` varchar(32) NOT NULL,
+	\`entry_fee\` decimal(14,2) NOT NULL DEFAULT '0.00',
+	\`total_prize_pool\` decimal(14,2) NOT NULL,
+	\`status\` enum('open','in_progress','completed','cancelled') NOT NULL DEFAULT 'open',
+	\`created_at\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	\`completed_at\` timestamp NULL DEFAULT NULL,
+	CONSTRAINT \`tournaments_id\` PRIMARY KEY(\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+      `CREATE TABLE IF NOT EXISTS \`users\` (
+	\`id\` varchar(36) NOT NULL,
+	\`phone_number\` varchar(20) NOT NULL,
+	\`phone_verified_at\` timestamp NULL DEFAULT NULL,
+	\`full_name\` varchar(120),
+	\`email\` varchar(160),
+	\`email_verified_at\` timestamp NULL DEFAULT NULL,
+	\`ghana_card_number\` varchar(32),
+	\`date_of_birth\` timestamp NULL DEFAULT NULL,
+	\`gender\` varchar(16),
+	\`avatar_url\` varchar(255),
+	\`region\` varchar(64),
+	\`city\` varchar(64),
+	\`address\` varchar(255),
+	\`momo_number\` varchar(20),
+	\`momo_network\` varchar(32),
+	\`username\` varchar(32),
+	\`referral_code\` varchar(32),
+	\`role\` enum('player','organizer','admin') NOT NULL DEFAULT 'player',
+	\`profile_completed_at\` timestamp NULL DEFAULT NULL,
+	\`created_at\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	CONSTRAINT \`users_id\` PRIMARY KEY(\`id\`),
+	CONSTRAINT \`users_phone_number_unique\` UNIQUE(\`phone_number\`),
+	CONSTRAINT \`users_username_unique\` UNIQUE(\`username\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+    ],
+  },
+  {
+    name: "0002_add_room_privacy_and_ready.sql",
+    statements: [
+      `ALTER TABLE \`rooms\` ADD COLUMN \`is_private\` tinyint NOT NULL DEFAULT 0`,
+      `ALTER TABLE \`rooms\` ADD COLUMN \`host_ready\` tinyint NOT NULL DEFAULT 0`,
+      `ALTER TABLE \`rooms\` ADD COLUMN \`guest_ready\` tinyint NOT NULL DEFAULT 0`,
+    ],
+  },
+];

@@ -15,6 +15,7 @@ import {
   projectRoot,
   resolveMysqlConfig
 } from "./lib/load-env.mjs";
+import { EMBEDDED_MIGRATIONS } from "./lib/embedded-migrations.mjs";
 
 loadEnvFiles();
 
@@ -30,18 +31,17 @@ function splitStatements(sql) {
 }
 
 async function main() {
-  if (!fs.existsSync(MIGRATIONS_DIR)) {
-    console.error(`✗ No migrations directory at ${MIGRATIONS_DIR}. Run \`npm run db:generate\` first.`);
-    process.exit(1);
+  const diskExists = fs.existsSync(MIGRATIONS_DIR);
+  let files = [];
+  if (diskExists) {
+    files = fs
+      .readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith(".sql"))
+      .sort();
   }
 
-  const files = fs
-    .readdirSync(MIGRATIONS_DIR)
-    .filter((f) => f.endsWith(".sql"))
-    .sort();
-
-  if (files.length === 0) {
-    console.error("✗ No .sql migration files found. Run `npm run db:generate` first.");
+  if (files.length === 0 && (!EMBEDDED_MIGRATIONS || EMBEDDED_MIGRATIONS.length === 0)) {
+    console.error("✗ No .sql migration files or embedded migrations found. Run `npm run db:generate` first.");
     process.exit(1);
   }
 
@@ -106,6 +106,38 @@ async function main() {
         file,
         new Date().toISOString(),
       ]);
+      applied.add(file);
+      appliedCount++;
+    }
+
+    // Process embedded migrations for any migration missing on disk
+    for (const migration of EMBEDDED_MIGRATIONS) {
+      if (applied.has(migration.name)) continue;
+
+      console.log(`  + ${migration.name} [embedded] (${migration.statements.length} statements)`);
+
+      for (const statement of migration.statements) {
+        try {
+          await connection.query(statement);
+        } catch (err) {
+          const tolerable = [
+            "ER_TABLE_EXISTS_ERROR",
+            "ER_DUP_KEYNAME",
+            "ER_DUP_FIELDNAME",
+          ].includes(err.code);
+          if (tolerable) {
+            console.log(`    ~ skipped (already present): ${err.code}`);
+            continue;
+          }
+          throw new Error(`Migration ${migration.name} failed: ${err.message}\nStatement: ${statement.slice(0, 200)}`);
+        }
+      }
+
+      await connection.query(`INSERT INTO \`${TRACKING_TABLE}\` (name, applied_at) VALUES (?, ?)`, [
+        migration.name,
+        new Date().toISOString(),
+      ]);
+      applied.add(migration.name);
       appliedCount++;
     }
 

@@ -1,32 +1,26 @@
 # ==============================================================================
-# DAMII - Apache / cPanel / Shared Hosting .htaccess Configuration
+# DAMII - Apache & Shared Hosting Configuration (.htaccess)
 # ==============================================================================
+# This file provides two common deployment configurations for shared hosting:
 #
-# OPTION A: Using Phusion Passenger (cPanel "Setup Node.js App")
-# ------------------------------------------------------------------------------
-# If your shared host uses CloudLinux / Phusion Passenger Node.js selector,
-# cPanel manages the routing automatically. Ensure `server.js` or `app.js`
-# is configured as the Application Startup File in your cPanel dashboard.
-#
-#
-# OPTION B: Apache Reverse Proxy to Local Node.js Port
-# ------------------------------------------------------------------------------
-# If your shared host runs Node.js as a background daemon listening on a local
-# port (e.g., 3000), uncomment the following rules to proxy web traffic:
+# Option A: Reverse Proxy to Node.js backend running on local port (e.g. 3000)
+# Option B: Phusion Passenger (cPanel "Setup Node.js App")
+# ==============================================================================
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Force HTTPS (optional if handled by Cloudflare / host)
+    # 1. Force HTTPS (Optional, uncomment if SSL certificate is installed)
     # RewriteCond %{HTTPS} off
-    # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+    # RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
-    # WebSocket & Real-time Upgrades
+    # 2. WebSocket Reverse Proxy Support
     RewriteCond %{HTTP:Upgrade} websocket [NC]
     RewriteCond %{HTTP:Connection} upgrade [NC]
-    RewriteRule ^/?(.*) ws://127.0.0.1:3000/$1 [P,L]
+    RewriteRule ^(.*)$ ws://127.0.0.1:3000/$1 [P,L]
 
-    # Proxy all HTTP traffic to the Node.js server
+    # 3. HTTP Reverse Proxy to Node.js backend
+    # If not accessing an existing physical file, pass to Node.js server
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
@@ -34,6 +28,15 @@
 
 <IfModule mod_proxy.c>
     ProxyPreserveHost On
-    ProxyRequests Off
-    ProxyTimeout 86400
+    ProxyTimeout 300
+</IfModule>
+
+# ==============================================================================
+# Security Headers & Caching
+# ==============================================================================
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
 </IfModule>

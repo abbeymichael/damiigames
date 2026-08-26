@@ -32,7 +32,7 @@ const child = spawn(process.execPath, [vinextCli, "build"], {
   env: process.env,
 });
 
-child.on("exit", (code) => {
+child.on("exit", async (code) => {
   if (code !== 0) {
     process.exit(code ?? 1);
   }
@@ -50,6 +50,10 @@ child.on("exit", (code) => {
         console.log("Validated artifact: ESM Worker default.fetch and hosting manifest are present.");
       }
     }
+
+    // Ensure standalone deployable bundle contains scripts, drizzle migrations, and static assets
+    const { packageStandalone } = await import("./package-standalone.js");
+    packageStandalone();
   } catch (err) {
     console.warn("Artifact validation notice:", err.message);
   }
