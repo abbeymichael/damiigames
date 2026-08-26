@@ -1649,7 +1649,7 @@ export const memoryStore: DbRepository = {
       ...updates,
       updatedAt: new Date().toISOString(),
     };
-    if (permissionKeys) {
+    if (permissionKeys !== undefined) {
       updated.permissionKeys = permissionKeys;
       data.rolePermissions.set(id, new Set(permissionKeys));
     }
@@ -1665,18 +1665,17 @@ export const memoryStore: DbRepository = {
 
   async listPermissions() {
     const data = getMemoryData();
-    if (data.permissions.size === 0) {
-      SYSTEM_PERMISSIONS.forEach((p, idx) => {
-        const perm: Permission = {
-          id: `perm-${idx + 1}`,
-          key: p.key,
-          category: p.category,
-          description: p.description,
-          createdAt: new Date().toISOString(),
-        };
-        data.permissions.set(perm.key, perm);
-      });
-    }
+    SYSTEM_PERMISSIONS.forEach((p, idx) => {
+      const existing = data.permissions.get(p.key);
+      const perm: Permission = {
+        id: existing?.id || `perm-${idx + 1}`,
+        key: p.key,
+        category: p.category,
+        description: p.description,
+        createdAt: existing?.createdAt || new Date().toISOString(),
+      };
+      data.permissions.set(perm.key, perm);
+    });
     return Array.from(data.permissions.values()).map((p) => ({ ...p }));
   },
 

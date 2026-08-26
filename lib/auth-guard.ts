@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { dbRepository } from "./db-client";
 import { Profile, Role, AdminPermission, Session } from "./types";
 import { securityService } from "./security";
+import { hasPermission } from "./permissions";
 
 export interface AuthContext {
   token: string;
@@ -196,16 +197,17 @@ export async function requireRole(req: NextRequest, allowedRoles: Role[]): Promi
   return ctx;
 }
 
-export async function requireAdminPermission(req: NextRequest, permission: AdminPermission): Promise<AuthContext> {
+export async function requireAdminPermission(req: NextRequest, permission: string): Promise<AuthContext> {
   const ctx = await requireAuth(req);
   if (ctx.isSuperAdmin) return ctx;
 
   if (!["admin", "super_admin", "treasurer", "facilitator"].includes(ctx.role)) {
-    throw new AuthError("Forbidden. Administrative access required.", 403);
+    throw new AuthError("403 Forbidden. Administrative privileges required.", 403);
   }
 
-  if (!ctx.permissions.includes(permission)) {
-    throw new AuthError(`Forbidden. Missing required permission '${permission}'.`, 403);
+  const allowed = await hasPermission(ctx.user.token, permission);
+  if (!allowed && !ctx.permissions.includes(permission as any)) {
+    throw new AuthError(`403 Forbidden. Missing required permission '${permission}' for this module.`, 403);
   }
 
   return ctx;

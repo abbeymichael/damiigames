@@ -13,7 +13,7 @@ import {
 } from "./types";
 import { leagueService } from "./league-service";
 import { notificationService } from "./notification-service";
-import { hasPermission } from "./permissions";
+import { hasPermission, getAdminPermissions } from "./permissions";
 
 export const adminService = {
   async verifyAdminAccessAsync(token: string): Promise<boolean> {
@@ -80,7 +80,25 @@ export const adminService = {
       loginTime: new Date().toISOString(),
     });
 
-    return { token: session.token, csrfToken: session.csrfToken, profile: securityService.sanitizeProfile(profile) };
+    const perms = await getAdminPermissions(profile.token).catch(() => ({
+      isSuperAdmin: profile.role === "super_admin",
+      permissionKeys: [],
+      roleTitle: profile.role === "super_admin" ? "Super Admin" : "Administrator",
+      roleNames: [],
+    }));
+
+    const sanitized = securityService.sanitizeProfile(profile);
+
+    return {
+      token: session.token,
+      csrfToken: session.csrfToken,
+      profile: {
+        ...sanitized,
+        roleTitle: perms.roleTitle || (perms.isSuperAdmin ? "Super Admin" : "Administrator"),
+        isSuperAdmin: perms.isSuperAdmin,
+        permissionKeys: perms.permissionKeys,
+      },
+    };
   },
 
   async seedInitialData() {
@@ -2374,6 +2392,13 @@ export const adminService = {
       (log) => log.adminToken === adminToken || log.adminToken === profile.token || log.adminName === profile.username
     );
 
+    const perms = await getAdminPermissions(profile.token || adminToken).catch(() => ({
+      isSuperAdmin: profile.role === "super_admin",
+      permissionKeys: [],
+      roleTitle: profile.role === "super_admin" ? "Super Admin" : "Administrator",
+      roleNames: [],
+    }));
+
     return {
       profile: {
         token: profile.token,
@@ -2382,6 +2407,9 @@ export const adminService = {
         email: profile.email || "",
         phoneNumber: profile.phoneNumber || "",
         role: profile.role,
+        roleTitle: perms.roleTitle || (perms.isSuperAdmin ? "Super Admin" : "Administrator"),
+        isSuperAdmin: perms.isSuperAdmin,
+        permissionKeys: perms.permissionKeys,
         points: profile.points,
         marbles: profile.marbles || 0,
         status: profile.status,

@@ -137,6 +137,8 @@ export async function hasPermission(userIdOrToken: string, key: string): Promise
         "games.manage",
         "games.delete",
         "wallet.view",
+        "deposits.view",
+        "withdrawals.view",
         "wallet.payouts",
         "wallet.reject_payout",
         "ledger.adjust",
@@ -167,6 +169,8 @@ export async function hasPermission(userIdOrToken: string, key: string): Promise
     } else if (activeRole === "treasurer") {
       const treasurerKeys = [
         "wallet.view",
+        "deposits.view",
+        "withdrawals.view",
         "wallet.payouts",
         "wallet.reject_payout",
         "ledger.adjust",
@@ -198,18 +202,20 @@ export async function hasPermission(userIdOrToken: string, key: string): Promise
 }
 
 /**
- * Retrieves all permission keys and Super Admin status for an admin user.
+ * Retrieves all permission keys, roleTitle, roleNames and Super Admin status for an admin user.
  */
 export async function getAdminPermissions(userIdOrToken: string): Promise<{
   isSuperAdmin: boolean;
   permissionKeys: string[];
+  roleTitle: string;
+  roleNames: string[];
 }> {
   if (!userIdOrToken || typeof userIdOrToken !== "string") {
-    return { isSuperAdmin: false, permissionKeys: [] };
+    return { isSuperAdmin: false, permissionKeys: [], roleTitle: "Administrator", roleNames: [] };
   }
   const identifier = userIdOrToken.trim();
   if (!identifier) {
-    return { isSuperAdmin: false, permissionKeys: [] };
+    return { isSuperAdmin: false, permissionKeys: [], roleTitle: "Administrator", roleNames: [] };
   }
 
   try {
@@ -224,15 +230,40 @@ export async function getAdminPermissions(userIdOrToken: string): Promise<{
     if (profile?.role === "super_admin" || session?.role === "super_admin") {
       return {
         isSuperAdmin: true,
+        roleTitle: "Super Admin",
+        roleNames: ["Super Admin"],
         permissionKeys: SYSTEM_PERMISSIONS.map((p) => p.key),
       };
     }
 
+    const checkIds = Array.from(new Set([resolvedUserId, identifier, profile?.token, profile?.id].filter(Boolean) as string[]));
     const keysSet = new Set<string>();
+    const roleNamesSet = new Set<string>();
 
-    // 1. Check assigned RBAC roles from repository
+    // 1. Check admin_profiles table
+    for (const uid of checkIds) {
+      try {
+        const adminProf = await dbRepository.getAdminProfile(uid).catch(() => null);
+        if (adminProf) {
+          if (adminProf.isSuperAdmin) {
+            return {
+              isSuperAdmin: true,
+              roleTitle: "Super Admin",
+              roleNames: ["Super Admin"],
+              permissionKeys: SYSTEM_PERMISSIONS.map((p) => p.key),
+            };
+          }
+          if (Array.isArray(adminProf.permissions)) {
+            adminProf.permissions.forEach((p) => keysSet.add(p));
+          }
+        }
+      } catch {
+        // Continue
+      }
+    }
+
+    // 2. Check assigned RBAC roles from repository
     try {
-      const checkIds = Array.from(new Set([resolvedUserId, identifier, profile?.token, profile?.id].filter(Boolean) as string[]));
       let assignedRoleIds: string[] = [];
       for (const uid of checkIds) {
         const roles = await dbRepository.getAdminUserRoleAssignments(uid).catch(() => []);
@@ -248,11 +279,14 @@ export async function getAdminPermissions(userIdOrToken: string): Promise<{
         if (userRoles.some((r) => r.isSystemRole)) {
           return {
             isSuperAdmin: true,
+            roleTitle: "Super Admin",
+            roleNames: ["Super Admin"],
             permissionKeys: SYSTEM_PERMISSIONS.map((p) => p.key),
           };
         }
 
         for (const r of userRoles) {
+          if (r.name) roleNamesSet.add(r.name);
           if (r.permissionKeys) {
             r.permissionKeys.forEach((k) => keysSet.add(k));
           }
@@ -262,15 +296,15 @@ export async function getAdminPermissions(userIdOrToken: string): Promise<{
       // Continue to DB or fallbacks
     }
 
-    // 2. Direct DB fallback
+    // 3. Direct DB fallback
     try {
       const db = getDb();
-      const checkIds = Array.from(new Set([resolvedUserId, identifier, profile?.token, profile?.id].filter(Boolean) as string[]));
 
       for (const uid of checkIds) {
         const assignedRoles = await db
           .select({
             roleId: schema.roles.id,
+            roleName: schema.roles.name,
             isSystemRole: schema.roles.isSystemRole,
           })
           .from(schema.adminUserRoles)
@@ -280,9 +314,15 @@ export async function getAdminPermissions(userIdOrToken: string): Promise<{
         if (assignedRoles.some((r) => r.isSystemRole === 1)) {
           return {
             isSuperAdmin: true,
+            roleTitle: "Super Admin",
+            roleNames: ["Super Admin"],
             permissionKeys: SYSTEM_PERMISSIONS.map((p) => p.key),
           };
         }
+
+        assignedRoles.forEach((r) => {
+          if (r.roleName) roleNamesSet.add(r.roleName);
+        });
 
         const permissionRows = await db
           .select({ key: schema.permissions.key })
@@ -303,7 +343,7 @@ export async function getAdminPermissions(userIdOrToken: string): Promise<{
       // In memory mode
     }
 
-    // 3. Fallbacks if no explicit RBAC assignment yet
+    // 4. Fallbacks if no explicit RBAC assignment yet
     const activeRole = profile?.role || session?.role;
     if (keysSet.size === 0) {
       if (activeRole === "admin") {
@@ -324,6 +364,8 @@ export async function getAdminPermissions(userIdOrToken: string): Promise<{
           "games.manage",
           "games.delete",
           "wallet.view",
+          "deposits.view",
+          "withdrawals.view",
           "wallet.payouts",
           "wallet.reject_payout",
           "ledger.adjust",
@@ -353,6 +395,8 @@ export async function getAdminPermissions(userIdOrToken: string): Promise<{
       } else if (activeRole === "treasurer") {
         [
           "wallet.view",
+          "deposits.view",
+          "withdrawals.view",
           "wallet.payouts",
           "wallet.reject_payout",
           "ledger.adjust",
@@ -375,12 +419,28 @@ export async function getAdminPermissions(userIdOrToken: string): Promise<{
       }
     }
 
+    const roleNames = Array.from(roleNamesSet);
+    let roleTitle = "Administrator";
+    if (roleNames.length > 0) {
+      roleTitle = roleNames.join(", ");
+    } else if (activeRole === "super_admin") {
+      roleTitle = "Super Admin";
+    } else if (activeRole === "treasurer") {
+      roleTitle = "Finance Admin";
+    } else if (activeRole === "facilitator") {
+      roleTitle = "Tournament Arbiter";
+    } else if (activeRole === "admin") {
+      roleTitle = "Administrator";
+    }
+
     return {
       isSuperAdmin: false,
+      roleTitle,
+      roleNames,
       permissionKeys: Array.from(keysSet),
     };
   } catch (err) {
     console.error(`[damii][permissions] getAdminPermissions error for ${userIdOrToken}:`, err);
-    return { isSuperAdmin: false, permissionKeys: [] };
+    return { isSuperAdmin: false, permissionKeys: [], roleTitle: "Administrator", roleNames: [] };
   }
 }

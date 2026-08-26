@@ -4,7 +4,7 @@ import { leagueService } from "@/lib/league-service";
 import { walletService } from "@/lib/wallet-service";
 import { dbRepository } from "@/lib/db-client";
 import { attachAuthCookies } from "@/lib/auth-guard";
-import { hasPermission } from "@/lib/permissions";
+import { hasPermission, getAdminPermissions } from "@/lib/permissions";
 import { notificationService } from "@/lib/notification-service";
 
 const cleanToken = (v: unknown) => String(v ?? "").trim().slice(0, 80);
@@ -14,12 +14,22 @@ export async function GET(req: NextRequest) {
   const token = cleanToken(searchParams.get("token"));
 
   if (!(await adminService.verifyAdminAccessAsync(token))) {
-    return NextResponse.json({ error: "Unauthorized admin access" }, { status: 403 });
+    return NextResponse.json({ error: "403 Forbidden: Unauthorized admin access" }, { status: 403 });
   }
 
   try {
-    const metrics = await adminService.getSystemMetrics(token);
-    return NextResponse.json(metrics);
+    const [metrics, adminPerms, selfProfile] = await Promise.all([
+      adminService.getSystemMetrics(token),
+      getAdminPermissions(token),
+      adminService.getAdminSelfProfile(token).catch(() => null),
+    ]);
+    const roleTitle = adminPerms.roleTitle || selfProfile?.profile?.roleTitle || (adminPerms.isSuperAdmin ? "Super Admin" : "Administrator");
+    return NextResponse.json({
+      ...metrics,
+      adminPermissions: adminPerms,
+      currentAdmin: selfProfile?.profile || null,
+      adminRoleTitle: roleTitle,
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Admin error" },
@@ -37,20 +47,46 @@ export async function POST(req: NextRequest) {
     if (action === "admin_login" || action === "login") {
       const { username, passcode } = body;
       const res = await adminService.adminLogin(String(username || ""), String(passcode || ""));
-      const metrics = await adminService.getSystemMetrics(res.token);
+      const [metrics, adminPerms] = await Promise.all([
+        adminService.getSystemMetrics(res.token),
+        getAdminPermissions(res.token),
+      ]);
+      const roleTitle = adminPerms.roleTitle || res.profile?.roleTitle || (adminPerms.isSuperAdmin ? "Super Admin" : "Administrator");
       const nextRes = NextResponse.json({
         success: true,
         token: res.token,
         csrfToken: res.csrfToken,
-        profile: res.profile,
-        metrics,
+        profile: {
+          ...res.profile,
+          roleTitle,
+        },
+        metrics: {
+          ...metrics,
+          adminPermissions: adminPerms,
+          currentAdmin: {
+            ...res.profile,
+            roleTitle,
+          },
+          adminRoleTitle: roleTitle,
+        },
+        adminPermissions: adminPerms,
+        adminRoleTitle: roleTitle,
+        currentAdmin: {
+          ...res.profile,
+          roleTitle,
+        },
       });
       attachAuthCookies(nextRes, res.token, res.csrfToken);
       return nextRes;
     }
 
     if (!(await adminService.verifyAdminAccessAsync(token))) {
-      return NextResponse.json({ error: "Unauthorized admin access" }, { status: 403 });
+      return NextResponse.json({ error: "403 Forbidden: Unauthorized admin access" }, { status: 403 });
+    }
+
+    if (action === "get_admin_permissions" || action === "permissions") {
+      const perms = await getAdminPermissions(token);
+      return NextResponse.json({ success: true, permissions: perms, adminPermissions: perms });
     }
 
     if (action === "seed" || action === "seed_initial_data") {

@@ -1,203 +1,342 @@
 import type { Permission } from "./types";
 
+export interface ModuleCategoryInfo {
+  id: string;
+  label: string;
+  shortLabel: string;
+  description: string;
+  icon: string;
+  badgeColor: string;
+}
+
+/**
+ * Standard Operational Module Categories.
+ * Provides clear modular grouping across Players, Tournaments, Organizers, Games,
+ * Deposits, Withdrawals, Ledger, Disputes, Admin Staff, Communications, Audit, and System.
+ */
+export const MODULE_CATEGORIES: ModuleCategoryInfo[] = [
+  {
+    id: "players",
+    label: "Players & Accounts",
+    shortLabel: "Players",
+    description: "Player profiles, account editing, disciplinary suspensions, and user records.",
+    icon: "Users",
+    badgeColor: "bg-blue-950/80 text-blue-300 border-blue-500/40",
+  },
+  {
+    id: "tournaments",
+    label: "Tournaments & Brackets",
+    shortLabel: "Tournaments",
+    description: "Tournament lifecycle, bracket seeding, prize pools, and organizer action reviews.",
+    icon: "Trophy",
+    badgeColor: "bg-amber-950/80 text-amber-300 border-amber-500/40",
+  },
+  {
+    id: "organizers",
+    label: "Organizers & KYC",
+    shortLabel: "Organizers",
+    description: "Organizer credentials, Ghana Card KYC reviews, applications, and standing revocations.",
+    icon: "UserCheck",
+    badgeColor: "bg-indigo-950/80 text-indigo-300 border-indigo-500/40",
+  },
+  {
+    id: "games",
+    label: "Games & Rules Catalog",
+    shortLabel: "Games",
+    description: "Game variants (10x10, Classic, Blitz, Rapid), board timers, rules, and wager limits.",
+    icon: "Gamepad2",
+    badgeColor: "bg-purple-950/80 text-purple-300 border-purple-500/40",
+  },
+  {
+    id: "deposits",
+    label: "Deposits & Wallet",
+    shortLabel: "Deposits",
+    description: "Financial overview, player balance inspection, Mobile Money deposits, and escrow balances.",
+    icon: "ArrowDownCircle",
+    badgeColor: "bg-emerald-950/80 text-emerald-300 border-emerald-500/40",
+  },
+  {
+    id: "withdrawals",
+    label: "Withdrawals & Payouts",
+    shortLabel: "Withdrawals",
+    description: "Mobile Money cashout requests, payout approvals, disbursements, and refunding rejections.",
+    icon: "ArrowUpCircle",
+    badgeColor: "bg-teal-950/80 text-teal-300 border-teal-500/40",
+  },
+  {
+    id: "ledger",
+    label: "Financial Ledger & Adjustments",
+    shortLabel: "Ledger",
+    description: "Double-entry accounting adjustments, manual wallet credits/debits, and voiding transactions.",
+    icon: "BookOpen",
+    badgeColor: "bg-cyan-950/80 text-cyan-300 border-cyan-500/40",
+  },
+  {
+    id: "disputes",
+    label: "Disputes & Arbiter",
+    shortLabel: "Disputes",
+    description: "Match dispute claims, move replays, clock logs, wager voiding, and match arbitration.",
+    icon: "Scale",
+    badgeColor: "bg-rose-950/80 text-rose-300 border-rose-500/40",
+  },
+  {
+    id: "admins",
+    label: "Admin Staff & RBAC",
+    shortLabel: "Admins",
+    description: "Administrative staff accounts, credential management, custom roles, and permission matrices.",
+    icon: "UserCog",
+    badgeColor: "bg-sky-950/80 text-sky-300 border-sky-500/40",
+  },
+  {
+    id: "communications",
+    label: "Communications & Broadcasts",
+    shortLabel: "Broadcasts",
+    description: "SMS, Email, and WhatsApp broadcast dispatch histories, templates, and delivery logs.",
+    icon: "MessageSquare",
+    badgeColor: "bg-pink-950/80 text-pink-300 border-pink-500/40",
+  },
+  {
+    id: "audit",
+    label: "Audit Logs & Compliance",
+    shortLabel: "Audit",
+    description: "Immutable administrative audit logs, data export to CSV/JSON, and compliance retention.",
+    icon: "FileText",
+    badgeColor: "bg-amber-950/80 text-amber-200 border-amber-600/40",
+  },
+  {
+    id: "system",
+    label: "System Settings & Maintenance",
+    shortLabel: "System",
+    description: "Platform parameters, maintenance mode switches, security policies, diagnostics, and backups.",
+    icon: "Settings",
+    badgeColor: "bg-slate-900 text-slate-300 border-slate-700",
+  },
+];
+
 /**
  * Standard Granular System Permissions catalog.
- * Grouped directly into the 4 primary operational categories.
- * Safe for both Client and Server usage (no database or Node dependencies).
+ * Grouped into discrete, intuitive module categories.
+ * Safe for both Client and Server usage.
  */
 export const SYSTEM_PERMISSIONS: Omit<Permission, "id">[] = [
-  // REVIEW
-  {
-    key: "organizers.view",
-    category: "review",
-    description: "Inspect organizer accounts, KYC documents, and application submissions.",
-  },
-  {
-    key: "organizers.review",
-    category: "review",
-    description: "Approve, reject, or request info on organizer KYC applications.",
-  },
-  {
-    key: "disputes.view",
-    category: "review",
-    description: "View active match disputes, move logs, timer history, and player claims.",
-  },
-  {
-    key: "disputes.resolve",
-    category: "review",
-    description: "Review game move logs, void or resolve wager disputes and declare winners.",
-  },
-  {
-    key: "disputes.delete",
-    category: "review",
-    description: "Dismiss, clear, or delete dispute records and incident flags.",
-  },
-  {
-    key: "tournaments.requests",
-    category: "review",
-    description: "Review and approve/reject organizer tournament cancellations, disqualifications, and result overrides.",
-  },
-  {
-    key: "tournaments.requests.delete",
-    category: "review",
-    description: "Permanently delete or dismiss tournament action requests from the queue.",
-  },
-
-  // OPERATIONS
-  {
-    key: "tournaments.view",
-    category: "operations",
-    description: "View all leagues, brackets, fixtures, participants, and prize pools.",
-  },
-  {
-    key: "tournaments.manage",
-    category: "operations",
-    description: "Create, edit, resize, start brackets, or cancel tournaments directly.",
-  },
-  {
-    key: "tournaments.delete",
-    category: "operations",
-    description: "Permanently delete tournaments, clean up brackets, and refund active participant escrows.",
-  },
-  {
-    key: "games.view",
-    category: "operations",
-    description: "View games catalog formats, board rules, timers, and active status.",
-  },
-  {
-    key: "games.manage",
-    category: "operations",
-    description: "Create, edit, enable/disable game types in the platform catalog.",
-  },
-  {
-    key: "games.delete",
-    category: "operations",
-    description: "Permanently delete game types and catalog entries.",
-  },
-  {
-    key: "wallet.view",
-    category: "operations",
-    description: "View financial overview, recent transactions, deposits, and escrow balances.",
-  },
-  {
-    key: "wallet.payouts",
-    category: "operations",
-    description: "Approve or process Mobile Money cashout requests.",
-  },
-  {
-    key: "wallet.reject_payout",
-    category: "operations",
-    description: "Reject cashout requests and return funds to user available balance.",
-  },
-  {
-    key: "ledger.adjust",
-    category: "operations",
-    description: "Record manual double-entry ledger adjustments and wallet mutations with audit reasons.",
-  },
-  {
-    key: "transactions.void",
-    category: "operations",
-    description: "Void or invalidate ledger transactions and escrow locks.",
-  },
-  {
-    key: "limits.manage",
-    category: "operations",
-    description: "Configure game-type wager ranges, escrow rules, and prize pool limits.",
-  },
+  // 1. PLAYERS & USERS
   {
     key: "users.view",
-    category: "operations",
-    description: "Search and inspect player, organizer, and user profiles and match histories.",
+    category: "players",
+    description: "Search and inspect player profiles, DPI ratings, match histories, and sessions.",
   },
   {
     key: "users.edit",
-    category: "operations",
+    category: "players",
     description: "Edit user profile details, usernames, avatar, and assigned balances.",
   },
   {
     key: "users.suspend",
-    category: "operations",
-    description: "Suspend or unban user and player accounts.",
+    category: "players",
+    description: "Suspend, ban, or unban player and user accounts with recorded reasons.",
   },
   {
     key: "users.delete",
-    category: "operations",
+    category: "players",
     description: "Permanently delete player accounts, profile data, and associated user sessions.",
+  },
+
+  // 2. TOURNAMENTS & BRACKETS
+  {
+    key: "tournaments.view",
+    category: "tournaments",
+    description: "View all leagues, brackets, fixtures, participants, seeds, and prize pools.",
+  },
+  {
+    key: "tournaments.manage",
+    category: "tournaments",
+    description: "Create, edit, resize, start brackets, seed players, or cancel tournaments.",
+  },
+  {
+    key: "tournaments.requests",
+    category: "tournaments",
+    description: "Review and approve/reject organizer tournament cancellations, disqualifications, and overrides.",
+  },
+  {
+    key: "tournaments.requests.delete",
+    category: "tournaments",
+    description: "Permanently delete or dismiss tournament action requests from the queue.",
+  },
+  {
+    key: "tournaments.delete",
+    category: "tournaments",
+    description: "Permanently delete tournaments, clean up brackets, and refund active participant escrows.",
+  },
+
+  // 3. ORGANIZERS & KYC
+  {
+    key: "organizers.view",
+    category: "organizers",
+    description: "Inspect organizer accounts, KYC documents, Ghana Card IDs, and application submissions.",
+  },
+  {
+    key: "organizers.review",
+    category: "organizers",
+    description: "Approve, reject, or request additional information on organizer KYC applications.",
   },
   {
     key: "organizers.revoke",
-    category: "operations",
-    description: "Revoke approved organizer standing and permissions.",
+    category: "organizers",
+    description: "Revoke approved organizer standing and tournament hosting permissions.",
   },
   {
     key: "organizers.delete",
-    category: "operations",
+    category: "organizers",
     description: "Permanently delete organizer profiles, KYC application files, and organizer records.",
   },
 
-  // ADMIN
+  // 4. GAMES & RULES
+  {
+    key: "games.view",
+    category: "games",
+    description: "View games catalog formats (10x10, Classic, Blitz, Rapid), board rules, and timers.",
+  },
+  {
+    key: "games.manage",
+    category: "games",
+    description: "Create, edit, and toggle enabled/disabled game types in the platform catalog.",
+  },
+  {
+    key: "games.delete",
+    category: "games",
+    description: "Permanently delete game types and catalog entries.",
+  },
+  {
+    key: "limits.manage",
+    category: "games",
+    description: "Configure game-type wager ranges, escrow limits, and platform fee percentages.",
+  },
+
+  // 5. DEPOSITS & WALLET
+  {
+    key: "wallet.view",
+    category: "deposits",
+    description: "View financial overview, recent transactions, player balances, and escrow locks.",
+  },
+  {
+    key: "deposits.view",
+    category: "deposits",
+    description: "Inspect Mobile Money deposit trails, Paystack gateway events, and payment references.",
+  },
+
+  // 6. WITHDRAWALS & PAYOUTS
+  {
+    key: "withdrawals.view",
+    category: "withdrawals",
+    description: "View pending and historical Mobile Money cashout requests and settlement logs.",
+  },
+  {
+    key: "wallet.payouts",
+    category: "withdrawals",
+    description: "Approve or process Mobile Money cashout payouts to user accounts.",
+  },
+  {
+    key: "wallet.reject_payout",
+    category: "withdrawals",
+    description: "Reject cashout requests and return funds directly to user available balances.",
+  },
+
+  // 7. FINANCIAL LEDGER & ADJUSTMENTS
+  {
+    key: "ledger.adjust",
+    category: "ledger",
+    description: "Record manual double-entry ledger adjustments and wallet mutations with audit reasons.",
+  },
+  {
+    key: "transactions.void",
+    category: "ledger",
+    description: "Void or invalidate ledger transactions and emergency-release escrow locks.",
+  },
+
+  // 8. DISPUTES & ARBITER
+  {
+    key: "disputes.view",
+    category: "disputes",
+    description: "View active match disputes, board snapshots, move logs, timer history, and claims.",
+  },
+  {
+    key: "disputes.resolve",
+    category: "disputes",
+    description: "Review game move logs, void or resolve wager disputes, and declare match winners.",
+  },
+  {
+    key: "disputes.delete",
+    category: "disputes",
+    description: "Dismiss, clear, or delete dispute records and incident flags.",
+  },
+
+  // 9. ADMIN STAFF & RBAC
   {
     key: "admins.view",
-    category: "admin",
-    description: "View administrative staff accounts and credential status.",
+    category: "admins",
+    description: "View administrative staff accounts, active sessions, and credential status.",
   },
   {
     key: "admins.manage",
-    category: "admin",
+    category: "admins",
     description: "Invite, create, assign roles, or deactivate admin staff accounts.",
   },
   {
     key: "admins.delete",
-    category: "admin",
+    category: "admins",
     description: "Permanently delete administrator staff accounts and credentials.",
   },
   {
     key: "roles.view",
-    category: "admin",
-    description: "View RBAC roles and permissions assignment matrix.",
+    category: "admins",
+    description: "View RBAC roles and granular permissions assignment matrix.",
   },
   {
     key: "roles.manage",
-    category: "admin",
+    category: "admins",
     description: "Create, edit, and configure custom admin roles and permission matrices.",
   },
   {
     key: "roles.delete",
-    category: "admin",
+    category: "admins",
     description: "Delete custom administrative RBAC roles and permissions bindings.",
   },
 
-  // SYSTEM
+  // 10. COMMUNICATIONS & BROADCASTS
+  {
+    key: "communications.view",
+    category: "communications",
+    description: "View SMS, Email, and WhatsApp dispatch histories and notification templates.",
+  },
+  {
+    key: "communications.send",
+    category: "communications",
+    description: "Dispatch manual SMS or email broadcasts to players, organizers, or staff.",
+  },
+  {
+    key: "communications.delete",
+    category: "communications",
+    description: "Clear or delete notification and message dispatch logs.",
+  },
+
+  // 11. AUDIT LOGS & COMPLIANCE
   {
     key: "audit.view",
-    category: "system",
+    category: "audit",
     description: "Inspect immutable audit log trails and administrative records.",
   },
   {
     key: "audit.export",
-    category: "system",
+    category: "audit",
     description: "Export audit logs and financial records to CSV or JSON formats.",
   },
   {
     key: "audit.delete",
-    category: "system",
+    category: "audit",
     description: "Purge older audit log records beyond compliance retention windows.",
   },
-  {
-    key: "communications.view",
-    category: "system",
-    description: "View SMS and email dispatch histories and notification templates.",
-  },
-  {
-    key: "communications.send",
-    category: "system",
-    description: "Dispatch manual SMS or email broadcasts to players or staff.",
-  },
-  {
-    key: "communications.delete",
-    category: "system",
-    description: "Clear or delete notification and message dispatch logs.",
-  },
+
+  // 12. SYSTEM SETTINGS & MAINTENANCE
   {
     key: "system.settings.view",
     category: "system",
@@ -229,10 +368,12 @@ export const SEED_ROLES_CONFIG = [
   },
   {
     name: "Finance Admin",
-    description: "Wallet oversight, Mobile Money payouts, manual ledger adjustments, transaction voiding, and escrow limits.",
+    description: "Wallet oversight, deposits review, Mobile Money payouts, manual ledger adjustments, transaction voiding, and escrow limits.",
     isSystemRole: false,
     permissionKeys: [
       "wallet.view",
+      "deposits.view",
+      "withdrawals.view",
       "wallet.payouts",
       "wallet.reject_payout",
       "ledger.adjust",
@@ -293,3 +434,4 @@ export const SEED_ROLES_CONFIG = [
     ],
   },
 ];
+

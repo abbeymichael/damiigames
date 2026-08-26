@@ -2008,7 +2008,44 @@ export const mysqlStore: DbRepository = {
 
   // --- Roles & RBAC (Section 1) ---
   async listRoles(): Promise<AppRole[]> {
-    const roleRows = await getDb().select().from(schema.roles).orderBy(asc(schema.roles.name));
+    let roleRows = await getDb().select().from(schema.roles).orderBy(asc(schema.roles.name));
+    if (roleRows.length === 0) {
+      await mysqlStore.listPermissions();
+      const allPermRows = await getDb().select().from(schema.permissions);
+      const permKeyToId = new Map(allPermRows.map((pr) => [pr.key, pr.id]));
+
+      for (const rc of SEED_ROLES_CONFIG) {
+        const roleId = `role-${rc.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+        const roleRow = roleToRow({
+          id: roleId,
+          name: rc.name,
+          description: rc.description,
+          isSystemRole: rc.isSystemRole,
+          createdAt: new Date().toISOString(),
+        });
+
+        await getDb()
+          .insert(schema.roles)
+          .values(roleRow)
+          .onDuplicateKeyUpdate({ set: { description: roleRow.description } })
+          .catch(() => null);
+
+        const links = rc.permissionKeys
+          .map((k) => permKeyToId.get(k))
+          .filter((pid): pid is string => Boolean(pid))
+          .map((permissionId) => ({ roleId, permissionId }));
+
+        for (const link of links) {
+          await getDb()
+            .insert(schema.rolePermissions)
+            .values(link)
+            .onDuplicateKeyUpdate({ set: { roleId: link.roleId } })
+            .catch(() => null);
+        }
+      }
+      roleRows = await getDb().select().from(schema.roles).orderBy(asc(schema.roles.name));
+    }
+
     const allRolePerms = await getDb()
       .select({
         roleId: schema.rolePermissions.roleId,
@@ -2071,18 +2108,43 @@ export const mysqlStore: DbRepository = {
     await getDb().insert(schema.roles).values(row);
 
     if (permissionKeys.length > 0) {
-      const perms = await getDb()
+      let perms = await getDb()
         .select({ id: schema.permissions.id, key: schema.permissions.key })
         .from(schema.permissions);
 
-      const keyToId = new Map(perms.map((p) => [p.key, p.id]));
+      let keyToId = new Map(perms.map((p) => [p.key, p.id]));
+
+      for (const key of permissionKeys) {
+        if (!keyToId.has(key)) {
+          const sysPerm = SYSTEM_PERMISSIONS.find((sp) => sp.key === key);
+          const permId = `perm-${key.replace(/[^a-zA-Z0-9]/g, "-")}`;
+          await getDb()
+            .insert(schema.permissions)
+            .values({
+              id: permId,
+              key,
+              category: (sysPerm?.category || "operations") as any,
+              description: sysPerm?.description || `Permission for ${key}`,
+            })
+            .onDuplicateKeyUpdate({ set: { key } })
+            .catch(() => null);
+          keyToId.set(key, permId);
+        }
+      }
+
       const links = permissionKeys
         .map((k) => keyToId.get(k))
         .filter((id): id is string => Boolean(id))
         .map((permId) => ({ roleId: role.id, permissionId: permId }));
 
       if (links.length > 0) {
-        await getDb().insert(schema.rolePermissions).values(links);
+        for (const link of links) {
+          await getDb()
+            .insert(schema.rolePermissions)
+            .values(link)
+            .onDuplicateKeyUpdate({ set: { roleId: link.roleId } })
+            .catch(() => null);
+        }
       }
     }
 
@@ -2110,15 +2172,40 @@ export const mysqlStore: DbRepository = {
       await getDb().delete(schema.rolePermissions).where(eq(schema.rolePermissions.roleId, id));
 
       if (permissionKeys.length > 0) {
-        const perms = await getDb().select().from(schema.permissions);
-        const keyToId = new Map(perms.map((p) => [p.key, p.id]));
+        let perms = await getDb().select().from(schema.permissions);
+        let keyToId = new Map(perms.map((p) => [p.key, p.id]));
+
+        for (const key of permissionKeys) {
+          if (!keyToId.has(key)) {
+            const sysPerm = SYSTEM_PERMISSIONS.find((sp) => sp.key === key);
+            const permId = `perm-${key.replace(/[^a-zA-Z0-9]/g, "-")}`;
+            await getDb()
+              .insert(schema.permissions)
+              .values({
+                id: permId,
+                key,
+                category: (sysPerm?.category || "operations") as any,
+                description: sysPerm?.description || `Permission for ${key}`,
+              })
+              .onDuplicateKeyUpdate({ set: { key } })
+              .catch(() => null);
+            keyToId.set(key, permId);
+          }
+        }
+
         const links = permissionKeys
           .map((k) => keyToId.get(k))
           .filter((pid): pid is string => Boolean(pid))
           .map((permId) => ({ roleId: id, permissionId: permId }));
 
         if (links.length > 0) {
-          await getDb().insert(schema.rolePermissions).values(links);
+          for (const link of links) {
+            await getDb()
+              .insert(schema.rolePermissions)
+              .values(link)
+              .onDuplicateKeyUpdate({ set: { roleId: link.roleId } })
+              .catch(() => null);
+          }
         }
       }
     }
@@ -2138,6 +2225,19 @@ export const mysqlStore: DbRepository = {
   },
 
   async listPermissions(): Promise<Permission[]> {
+    for (const p of SYSTEM_PERMISSIONS) {
+      const permRow = permissionToRow({
+        id: `perm-${p.key.replace(/\./g, "-")}`,
+        key: p.key,
+        category: p.category as any,
+        description: p.description,
+      });
+      await getDb()
+        .insert(schema.permissions)
+        .values(permRow)
+        .onDuplicateKeyUpdate({ set: { description: permRow.description, category: permRow.category } })
+        .catch(() => null);
+    }
     const rows = await getDb().select().from(schema.permissions).orderBy(asc(schema.permissions.key));
     return rows.map(rowToPermission);
   },

@@ -677,7 +677,23 @@ export interface LedgerEntryInput {
 /* ------------------------------------------------------------------------- */
 /* RBAC & Granular Permissions Types (Section 1)                             */
 /* ------------------------------------------------------------------------- */
-export type PermissionCategory = "review" | "operations" | "admin" | "system";
+export type PermissionCategory =
+  | "players"
+  | "tournaments"
+  | "organizers"
+  | "games"
+  | "deposits"
+  | "withdrawals"
+  | "ledger"
+  | "disputes"
+  | "admins"
+  | "communications"
+  | "audit"
+  | "system"
+  | "review"
+  | "operations"
+  | "admin"
+  | string;
 
 export interface Permission {
   id: string;

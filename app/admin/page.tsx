@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "@/components/NavLink";
 import { SharedHeader } from "@/components/SharedHeader";
 import {
@@ -32,6 +32,7 @@ import {
   Ban,
   Plus,
   Minus,
+  ArrowLeft,
   ArrowUpRight,
   ArrowDownRight,
   ArrowDownLeft,
@@ -187,120 +188,6 @@ type SystemMetrics = {
   ledgerEntries?: LedgerEntry[];
 };
 
-// Named permission bundles, matching lib/types.ts & lib/permissions.ts
-const ROLE_BUNDLES: Record<string, { label: string; isSuperAdmin: boolean; permissions: string[] }> = {
-  super_admin: {
-    label: "Super Admin",
-    isSuperAdmin: true,
-    permissions: [
-      "organizers.review",
-      "disputes.resolve",
-      "tournaments.requests",
-      "tournaments.manage",
-      "tournaments.cancel",
-      "games.manage",
-      "wallet.view",
-      "wallet.payout",
-      "ledger.adjust",
-      "users.view",
-      "users.suspend",
-      "limits.manage",
-      "admins.view",
-      "admins.manage",
-      "roles.view",
-      "roles.manage",
-      "system.settings.view",
-      "system.settings.edit",
-      "system.maintenance",
-      "system.sms_email",
-      "system.security",
-      "system.diagnostics_backup",
-      "system.seed",
-      "audit.view",
-      // Legacy compatibility keys
-      "manage_users",
-      "manage_organizers",
-      "manage_tournaments",
-      "manage_wallet",
-      "manage_payouts",
-      "resolve_disputes",
-      "manage_admins",
-      "run_seeder",
-      "view_audit_log",
-    ],
-  },
-  tournament_admin: {
-    label: "Tournament Admin",
-    isSuperAdmin: false,
-    permissions: [
-      "tournaments.manage",
-      "tournaments.cancel",
-      "tournaments.requests",
-      "games.manage",
-      "organizers.review",
-      "disputes.resolve",
-      "audit.view",
-      "manage_tournaments",
-      "manage_organizers",
-      "resolve_disputes",
-      "view_audit_log",
-    ],
-  },
-  treasurer: {
-    label: "Finance & Treasurer",
-    isSuperAdmin: false,
-    permissions: [
-      "wallet.view",
-      "wallet.payout",
-      "ledger.adjust",
-      "limits.manage",
-      "audit.view",
-      "manage_wallet",
-      "manage_payouts",
-      "view_audit_log",
-    ],
-  },
-  moderator: {
-    label: "Arbiter / Moderator",
-    isSuperAdmin: false,
-    permissions: [
-      "disputes.resolve",
-      "users.view",
-      "tournaments.requests",
-      "audit.view",
-      "manage_users",
-      "resolve_disputes",
-      "view_audit_log",
-    ],
-  },
-  organizer_reviewer: {
-    label: "Organizer Reviewer",
-    isSuperAdmin: false,
-    permissions: [
-      "organizers.review",
-      "audit.view",
-      "manage_organizers",
-      "view_audit_log",
-    ],
-  },
-  system_admin: {
-    label: "System & Ops Admin",
-    isSuperAdmin: false,
-    permissions: [
-      "system.settings.view",
-      "system.settings.edit",
-      "system.maintenance",
-      "system.sms_email",
-      "system.security",
-      "system.diagnostics_backup",
-      "games.manage",
-      "audit.view",
-      "run_seeder",
-      "view_audit_log",
-    ],
-  },
-};
-
 interface NavItem {
   key: string;
   label: string;
@@ -314,7 +201,7 @@ interface NavSection {
   items: NavItem[];
 }
 
-// Nav items declare which permission unlocks them. `null` = always visible.
+// Nav items declare which permission unlocks them. `null` = always visible to all authenticated admins.
 const NAV_SECTIONS: NavSection[] = [
   {
     title: null,
@@ -323,20 +210,20 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: "Review",
     items: [
-      { key: "organizers", label: "Organizer Requests", icon: UserCheck, permission: "organizers.review", badgeKey: "pendingOrganizers" },
-      { key: "disputes", label: "Disputes & Matches", icon: Gavel, permission: "disputes.resolve", badgeKey: "openDisputes" },
+      { key: "organizers", label: "Organizer Requests", icon: UserCheck, permission: "organizers.view", badgeKey: "pendingOrganizers" },
+      { key: "disputes", label: "Disputes & Matches", icon: Gavel, permission: "disputes.view", badgeKey: "openDisputes" },
       { key: "tournament_requests", label: "Tournament Requests", icon: Inbox, permission: "tournaments.requests", badgeKey: "pendingTournamentRequests" },
     ],
   },
   {
     title: "Operations",
     items: [
-      { key: "tournaments", label: "Tournaments", icon: Trophy, permission: "tournaments.manage" },
-      { key: "games", label: "Game Catalog", icon: Gamepad2, permission: "games.manage" },
-      { key: "deposits", label: "Deposits", icon: ArrowDownLeft, permission: "wallet.view" },
-      { key: "withdrawals", label: "Withdrawals & Payouts", icon: ArrowUpRight, permission: "wallet.view", badgeKey: "pendingWithdrawals" },
+      { key: "tournaments", label: "Tournaments", icon: Trophy, permission: "tournaments.view" },
+      { key: "games", label: "Game Catalog", icon: Gamepad2, permission: "games.view" },
+      { key: "deposits", label: "Deposits", icon: ArrowDownLeft, permission: "deposits.view" },
+      { key: "withdrawals", label: "Withdrawals & Payouts", icon: ArrowUpRight, permission: "withdrawals.view", badgeKey: "pendingWithdrawals" },
       { key: "wallet", label: "Financial Ledger", icon: Wallet, permission: "wallet.view" },
-      { key: "communications", label: "Communications", icon: MessageSquare, permission: "system.sms_email" },
+      { key: "communications", label: "Communications", icon: MessageSquare, permission: "communications.view" },
       { key: "limits", label: "Game Limits & Escrow", icon: SlidersHorizontal, permission: "limits.manage" },
       { key: "users", label: "Players & Users", icon: Users, permission: "users.view" },
     ],
@@ -358,33 +245,68 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
+const TAB_ITEMS_CONFIG: Record<
+  string,
+  { key: string; label: string; permission: string | null; icon: any; moduleName: string }
+> = {
+  overview: { key: "overview", label: "Overview", permission: null, icon: LayoutDashboard, moduleName: "Dashboard Overview" },
+  organizers: { key: "organizers", label: "Organizer Requests", permission: "organizers.view", icon: UserCheck, moduleName: "Organizer Applications & KYC" },
+  disputes: { key: "disputes", label: "Disputes & Matches", permission: "disputes.view", icon: Gavel, moduleName: "Match Disputes & Resolution" },
+  tournament_requests: { key: "tournament_requests", label: "Tournament Requests", permission: "tournaments.requests", icon: Inbox, moduleName: "Tournament Requests" },
+  tournaments: { key: "tournaments", label: "Tournaments", permission: "tournaments.view", icon: Trophy, moduleName: "Tournaments & Brackets" },
+  games: { key: "games", label: "Game Catalog", permission: "games.view", icon: Gamepad2, moduleName: "Games & Rules Catalog" },
+  deposits: { key: "deposits", label: "Deposits", permission: "deposits.view", icon: ArrowDownLeft, moduleName: "Deposits & Paystack" },
+  withdrawals: { key: "withdrawals", label: "Withdrawals & Payouts", permission: "withdrawals.view", icon: ArrowUpRight, moduleName: "Withdrawals & Payouts" },
+  wallet: { key: "wallet", label: "Financial Ledger", permission: "wallet.view", icon: Wallet, moduleName: "Financial Ledger & Treasury" },
+  payments: { key: "wallet", label: "Financial Ledger", permission: "wallet.view", icon: Wallet, moduleName: "Financial Ledger & Treasury" },
+  ledger: { key: "wallet", label: "Financial Ledger", permission: "wallet.view", icon: Wallet, moduleName: "Financial Ledger & Treasury" },
+  communications: { key: "communications", label: "Communications", permission: "communications.view", icon: MessageSquare, moduleName: "Communications & Broadcasts" },
+  limits: { key: "limits", label: "Game Limits & Escrow", permission: "limits.manage", icon: SlidersHorizontal, moduleName: "Game Limits & Escrow" },
+  users: { key: "users", label: "Players & Users", permission: "users.view", icon: Users, moduleName: "Player Management" },
+  players: { key: "users", label: "Players & Users", permission: "users.view", icon: Users, moduleName: "Player Management" },
+  admins: { key: "admins", label: "Admin Staff", permission: "admins.view", icon: UserCheck, moduleName: "Admin Staff Accounts" },
+  roles: { key: "roles", label: "Roles & Permissions", permission: "roles.view", icon: ShieldCheck, moduleName: "Roles & Granular Permissions" },
+  audit: { key: "audit", label: "Audit Trail", permission: "audit.view", icon: ScrollText, moduleName: "Audit Trail & Compliance Logs" },
+  settings: { key: "settings", label: "System Settings", permission: "system.settings.view", icon: Settings, moduleName: "System Settings & Controls" },
+  pages: { key: "pages", label: "Legal & Policy Pages", permission: "system.settings.view", icon: FileText, moduleName: "Legal & Policy Pages" },
+};
+
 function hasAccess(
-  role: { isSuperAdmin: boolean; permissions: string[] },
+  role: { isSuperAdmin: boolean; permissions: string[] } | null | undefined,
   permission: string | null
-) {
+): boolean {
   if (permission === null) return true;
+  if (!role) return false;
   if (role.isSuperAdmin) return true;
+  if (!Array.isArray(role.permissions)) return false;
   if (role.permissions.includes(permission)) return true;
 
-  // Legacy fallback mappings
-  const legacyMap: Record<string, string[]> = {
-    "organizers.review": ["manage_organizers"],
+  // Strict aliases: only permissions in the same functional domain grant access
+  const permissionAliases: Record<string, string[]> = {
+    "organizers.view": ["organizers.review", "organizers.revoke", "organizers.delete", "manage_organizers"],
+    "organizers.review": ["organizers.revoke", "organizers.delete", "manage_organizers"],
+    "disputes.view": ["disputes.resolve", "disputes.delete", "resolve_disputes"],
     "disputes.resolve": ["resolve_disputes"],
-    "tournaments.requests": ["manage_tournaments"],
+    "tournaments.view": ["tournaments.manage", "tournaments.delete", "tournaments.requests", "manage_tournaments"],
+    "tournaments.requests": ["tournaments.requests.delete", "tournaments.manage", "manage_tournaments"],
     "tournaments.manage": ["manage_tournaments"],
-    "games.manage": ["manage_tournaments", "manage_admins"],
-    "wallet.view": ["manage_wallet", "manage_payouts"],
+    "games.view": ["games.manage", "games.delete"],
+    "games.manage": [],
+    "deposits.view": ["wallet.view", "manage_wallet"],
+    "withdrawals.view": ["wallet.view", "wallet.payouts", "wallet.payout", "wallet.reject_payout", "manage_wallet", "manage_payouts"],
+    "wallet.view": ["ledger.adjust", "transactions.void", "manage_wallet"],
+    "communications.view": ["communications.send", "communications.delete", "system.sms_email"],
+    "system.sms_email": ["communications.send", "communications.view"],
     "limits.manage": ["manage_wallet"],
-    "users.view": ["manage_users"],
-    "admins.view": ["manage_admins"],
-    "roles.view": ["manage_admins"],
-    "audit.view": ["view_audit_log"],
-    "system.sms_email": ["manage_admins", "manage_wallet", "system.settings.view"],
-    "system.settings.view": ["manage_wallet", "run_seeder"],
+    "users.view": ["users.edit", "users.suspend", "users.delete", "manage_users"],
+    "admins.view": ["admins.manage", "admins.delete", "manage_admins"],
+    "roles.view": ["roles.manage", "roles.delete", "manage_admins"],
+    "audit.view": ["audit.export", "audit.delete", "view_audit_log"],
+    "system.settings.view": ["system.settings.edit", "system.settings.delete", "system.maintenance", "system.security", "system.backup"],
   };
 
-  const fallbacks = legacyMap[permission] || [];
-  return fallbacks.some((f) => role.permissions.includes(f));
+  const aliases = permissionAliases[permission] || [];
+  return aliases.some((alias) => role.permissions.includes(alias));
 }
 
 export default function AdminPage() {
@@ -398,12 +320,48 @@ export default function AdminPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Sidebar, Mobile Drawer & Profile Dropdown State
-  const [roleKey, setRoleKey] = useState("super_admin");
+  // Live RBAC permissions and role state from server session
+  const [adminRoleName, setAdminRoleName] = useState<string>("Administrator");
+  const [adminPermissions, setAdminPermissions] = useState<{
+    isSuperAdmin: boolean;
+    permissionKeys: string[];
+  }>({
+    isSuperAdmin: false,
+    permissionKeys: [],
+  });
   const [collapsed, setCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("overview");
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [isMobileAdminDrawerOpen, setIsMobileAdminDrawerOpen] = useState(false);
+
+  // Compute effective role bundle strictly from live server permissions
+  const currentRole = useMemo(() => {
+    const isSuper = Boolean(adminPermissions?.isSuperAdmin);
+    const keys = Array.isArray(adminPermissions?.permissionKeys) ? adminPermissions.permissionKeys : [];
+    let label = "Administrator";
+    if (isSuper) {
+      label = "Super Admin";
+    } else if (adminRoleName && adminRoleName !== "admin") {
+      label = adminRoleName.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    } else if (keys.length === 0) {
+      label = "Restricted Admin";
+    }
+    return {
+      label,
+      isSuperAdmin: isSuper,
+      permissions: keys,
+    };
+  }, [adminPermissions, adminRoleName]);
+
+  // Tab navigation helper with URL query synchronization
+  const navigateToTab = useCallback((newTab: string) => {
+    setActiveTab(newTab);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", newTab);
+      window.history.pushState({ tab: newTab }, "", url.toString());
+    }
+  }, []);
 
   // Organizer Approval & Admin Roles State
   const [organizersList, setOrganizersList] = useState<any[]>([]);
@@ -494,10 +452,28 @@ export default function AdminPage() {
   } | null>(null);
   const [confirmExecuting, setConfirmExecuting] = useState(false);
 
-  const currentRole = ROLE_BUNDLES[roleKey] || ROLE_BUNDLES.super_admin;
-
   useEffect(() => {
     setMounted(true);
+
+    // Read URL tab query parameter on mount
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab") || (window.location.hash ? window.location.hash.replace("#", "") : null);
+      if (tabParam) {
+        setActiveTab(tabParam.toLowerCase());
+      }
+    }
+
+    // Handle browser forward/back buttons
+    const handlePopState = () => {
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        const tabParam = params.get("tab") || "overview";
+        setActiveTab(tabParam.toLowerCase());
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+
     const savedToken = getSessionToken();
     const name = localStorage.getItem("damii-player-name");
     if (savedToken) {
@@ -510,6 +486,12 @@ export default function AdminPage() {
           if (res.ok) {
             const data = await res.json();
             setMetrics(data);
+            if (data.adminPermissions) {
+              setAdminPermissions(data.adminPermissions);
+            }
+            if (data.currentAdmin?.username) {
+              setAdminUsername(data.currentAdmin.username);
+            }
             setIsAuthenticated(true);
             setSuccess("Active admin session restored.");
           }
@@ -518,6 +500,8 @@ export default function AdminPage() {
           /* Session check failed, stay on login */
         });
     }
+
+    return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
   useEffect(() => {
@@ -530,7 +514,10 @@ export default function AdminPage() {
       setMaxWithdrawalGhsInput(metrics.settings.maxWithdrawalGhs ?? 2000);
       setMaxDailyWithdrawalGhsInput(metrics.settings.maxDailyWithdrawalGhs ?? 5000);
     }
-  }, [metrics?.settings]);
+    if (metrics?.adminPermissions) {
+      setAdminPermissions(metrics.adminPermissions);
+    }
+  }, [metrics?.settings, metrics?.adminPermissions]);
 
   const chartData = useMemo(() => {
     if (metrics?.dailyActivity && metrics.dailyActivity.length > 0) {
@@ -632,6 +619,11 @@ export default function AdminPage() {
 
       setToken(data.token);
       setMetrics(data.metrics);
+      if (data.adminPermissions) {
+        setAdminPermissions(data.adminPermissions);
+      } else if (data.metrics?.adminPermissions) {
+        setAdminPermissions(data.metrics.adminPermissions);
+      }
       setIsAuthenticated(true);
       setSuccess(`Admin session authenticated for ${data.profile.username}!`);
 
@@ -667,7 +659,12 @@ export default function AdminPage() {
     try {
       const res = await fetch(`/api/admin?token=${encodeURIComponent(token)}&secret=${encodeURIComponent(adminSecret)}`);
       const data = await res.json();
-      if (res.ok) setMetrics(data);
+      if (res.ok) {
+        setMetrics(data);
+        if (data.adminPermissions) {
+          setAdminPermissions(data.adminPermissions);
+        }
+      }
       fetchOrganizersList();
       fetchAdminRolesList();
     } catch {
@@ -1730,7 +1727,7 @@ export default function AdminPage() {
                                 <button
                                   key={item.key}
                                   onClick={() => {
-                                    setActiveTab(item.key);
+                                    navigateToTab(item.key);
                                     setIsMobileAdminDrawerOpen(false);
                                   }}
                                   className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${
@@ -1843,7 +1840,7 @@ export default function AdminPage() {
                             return (
                               <button
                                 key={item.key}
-                                onClick={() => setActiveTab(item.key)}
+                                onClick={() => navigateToTab(item.key)}
                                 className={`flex items-center gap-3 rounded-xl px-2.5 py-2 text-xs font-bold transition-all ${
                                   isActive
                                     ? "bg-[#d6a735] text-[#06261f] shadow-md font-black"
@@ -1914,6 +1911,109 @@ export default function AdminPage() {
                 </p>
               )}
 
+            {/* 403 Forbidden Screen or Tab Content */}
+            {(() => {
+              const currentTabConfig = TAB_ITEMS_CONFIG[activeTab] || {
+                key: activeTab,
+                label: activeTab.charAt(0).toUpperCase() + activeTab.slice(1).replace(/_/g, " "),
+                permission: "system.settings.view",
+                icon: ShieldAlert,
+                moduleName: activeTab.charAt(0).toUpperCase() + activeTab.slice(1).replace(/_/g, " "),
+              };
+              const isTabPermitted = hasAccess(currentRole, currentTabConfig.permission);
+
+              if (!isTabPermitted) {
+                const permittedItems = NAV_SECTIONS.flatMap((s) => s.items).filter((i) =>
+                  hasAccess(currentRole, i.permission)
+                );
+                return (
+                  <div className="flex flex-col items-center justify-center min-h-[55vh] py-10 px-4 text-center max-w-2xl mx-auto animate-in fade-in zoom-in-95 duration-200" id="admin-403-access-denied-view">
+                    <div className="w-20 h-20 rounded-3xl bg-red-950/70 border border-red-500/40 flex items-center justify-center text-red-400 mb-6 shadow-2xl shadow-red-950/60 ring-8 ring-red-950/20">
+                      <ShieldAlert size={42} className="animate-pulse" />
+                    </div>
+
+                    <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-black uppercase tracking-widest mb-4">
+                      <Ban size={13} />
+                      <span>403 Forbidden • Access Denied</span>
+                    </div>
+
+                    <h1 className="text-2xl sm:text-3xl font-black text-[#f5efdf] mb-2 font-serif">
+                      {currentTabConfig.moduleName || "Module"} Restricted
+                    </h1>
+
+                    <p className="text-xs sm:text-sm text-slate-300 mb-6 max-w-lg leading-relaxed">
+                      Your administrator account <strong className="text-[#d6a735]">"{adminUsername || "Admin"}"</strong> ({currentRole.label}) does not have permission to view or manage this module.
+                    </p>
+
+                    <div className="w-full bg-[#081c15] border border-red-900/50 rounded-2xl p-4 sm:p-5 mb-6 text-left space-y-2.5 text-xs shadow-xl">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-slate-400 border-b border-[#1a5e48]/40 pb-2">
+                        <span className="font-semibold text-slate-300">Attempted Route / Tab:</span>
+                        <code className="text-red-300 font-mono bg-red-950/60 px-2 py-0.5 rounded border border-red-900/50">/admin?tab={activeTab}</code>
+                      </div>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-slate-400 border-b border-[#1a5e48]/40 pb-2">
+                        <span className="font-semibold text-slate-300">Required Permission:</span>
+                        <code className="text-amber-300 font-mono bg-amber-950/60 px-2 py-0.5 rounded border border-amber-900/50">{currentTabConfig.permission || "Restricted Action"}</code>
+                      </div>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-slate-400">
+                        <span className="font-semibold text-slate-300">Access Status:</span>
+                        <span className="text-red-400 font-bold flex items-center gap-1.5">
+                          <Lock size={13} /> Blocked by Role-Based Access Control (RBAC)
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                      <button
+                        type="button"
+                        onClick={() => navigateToTab("overview")}
+                        className="w-full sm:w-auto px-6 py-3 bg-[#d6a735] hover:bg-[#c4962b] text-[#06261f] font-black text-xs sm:text-sm rounded-xl shadow-lg shadow-[#d6a735]/20 flex items-center justify-center gap-2 transition-transform active:scale-95 cursor-pointer"
+                        id="admin-403-return-overview-btn"
+                      >
+                        <ArrowLeft size={18} />
+                        <span>Return to Overview</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const firstAllowed = permittedItems.find((i) => i.key !== activeTab);
+                          navigateToTab(firstAllowed ? firstAllowed.key : "overview");
+                        }}
+                        className="w-full sm:w-auto px-5 py-3 bg-[#0c3b2e] hover:bg-[#1a5e48] text-slate-200 hover:text-white font-bold text-xs sm:text-sm rounded-xl border border-[#1a5e48] transition-colors cursor-pointer"
+                        id="admin-403-ack-back-btn"
+                      >
+                        Acknowledge & Go Back
+                      </button>
+                    </div>
+
+                    {permittedItems.length > 0 && (
+                      <div className="mt-8 pt-6 border-t border-[#1a5e48]/60 w-full text-left">
+                        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
+                          Your Permitted Modules:
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {permittedItems.map((item) => {
+                            const Icon = item.icon;
+                            return (
+                              <button
+                                key={item.key}
+                                type="button"
+                                onClick={() => navigateToTab(item.key)}
+                                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#081c15] hover:bg-[#0c3b2e] border border-[#1a5e48] text-xs text-slate-200 hover:text-[#d6a735] transition-all cursor-pointer font-semibold shadow-xs"
+                              >
+                                <Icon size={14} className="text-[#d6a735]" />
+                                <span>{item.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <>
             {/* TAB: OVERVIEW */}
             {activeTab === "overview" && (
               <div className="space-y-6">
@@ -2213,7 +2313,7 @@ export default function AdminPage() {
                 token={token}
                 adminSecret={adminSecret}
                 allUsers={metrics?.allUsers || []}
-                onNavigateToSettings={() => setActiveTab("settings")}
+                onNavigateToSettings={() => navigateToTab("settings")}
               />
             )}
 
@@ -2239,6 +2339,9 @@ export default function AdminPage() {
             {activeTab === "pages" && (
               <LegalPagesEditor token={token} />
             )}
+                </>
+              );
+            })()}
           </main>
         </div>
       </div>
