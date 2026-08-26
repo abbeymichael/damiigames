@@ -6,6 +6,7 @@ import { timerService } from "@/lib/timer-service";
 import { leagueService } from "@/lib/league-service";
 import { presenceService } from "@/lib/presence-service";
 import { securityService } from "@/lib/security";
+import { getAuthContext, validateCsrfToken } from "@/lib/auth-guard";
 import { Room, GameMode, Player, MoveLogEntry, Profile } from "@/lib/types";
 
 const cleanName = (value: unknown) => String(value ?? "").trim().replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 20);
@@ -219,10 +220,22 @@ export async function POST(req: NextRequest) {
     const rawToken = cleanToken(body.token);
     const username = cleanName(body.username);
 
-    if (!rawToken) return NextResponse.json({ error: "Player token required" }, { status: 400 });
+    let session = null;
+    const authCtx = await getAuthContext(req);
+    if (authCtx?.session) {
+      session = authCtx.session;
+    } else if (rawToken) {
+      session = await dbRepository.getSession(rawToken);
+    }
 
-    const { token: resolvedToken, profile: resolvedProfile } = await resolvePlayerToken(rawToken, username);
-    const token = resolvedToken || rawToken;
+    // Enforce CSRF token verification on state-changing game and profile actions
+    validateCsrfToken(req, session);
+
+    if (!rawToken && !authCtx?.user?.token) return NextResponse.json({ error: "Player token required" }, { status: 400 });
+
+    const effectiveRawToken = rawToken || authCtx?.user?.token || "";
+    const { token: resolvedToken, profile: resolvedProfile } = await resolvePlayerToken(effectiveRawToken, username);
+    const token = resolvedToken || effectiveRawToken;
     const existingProfile = resolvedProfile || (await dbRepository.getProfile(token));
 
     if (token) {

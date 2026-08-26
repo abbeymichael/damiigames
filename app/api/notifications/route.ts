@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbRepository } from "@/lib/db-client";
 import { notificationService } from "@/lib/notification-service";
+import { getAuthContext, validateCsrfToken } from "@/lib/auth-guard";
 
 const cleanToken = (v: unknown) => String(v ?? "").trim().slice(0, 80);
 
@@ -11,6 +12,11 @@ export async function GET(req: NextRequest) {
   if (rawToken) {
     const session = await dbRepository.getSession(rawToken);
     if (session) token = session.userId;
+  }
+
+  if (!token) {
+    const authCtx = await getAuthContext(req);
+    if (authCtx?.user?.token) token = authCtx.user.token;
   }
 
   if (!token) {
@@ -40,14 +46,23 @@ export async function POST(req: NextRequest) {
     const rawToken = cleanToken(body.token);
 
     let token = rawToken;
-    if (rawToken) {
-      const session = await dbRepository.getSession(rawToken);
+    let session = null;
+
+    const authCtx = await getAuthContext(req);
+    if (authCtx?.user?.token) {
+      token = authCtx.user.token;
+      session = authCtx.session;
+    } else if (rawToken) {
+      session = await dbRepository.getSession(rawToken);
       if (session) token = session.userId;
     }
 
     if (!token) {
       return NextResponse.json({ error: "Unauthorized: Valid player token required" }, { status: 401 });
     }
+
+    // CSRF token validation
+    validateCsrfToken(req, session);
 
     const profile = await dbRepository.getProfile(token);
     if (!profile) {

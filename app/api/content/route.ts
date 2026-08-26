@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { contentService } from "@/lib/content-service";
 import { adminService } from "@/lib/admin-service";
+import { getAuthContext, validateCsrfToken } from "@/lib/auth-guard";
+import { dbRepository } from "@/lib/db-client";
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,11 +27,26 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { action, token, slug, content } = body;
+    const { action, token: rawToken, slug, content } = body;
+
+    let token = String(rawToken || "").trim();
+    let session = null;
+
+    const authCtx = await getAuthContext(req);
+    if (authCtx?.user?.token) {
+      token = authCtx.user.token;
+      session = authCtx.session;
+    } else if (rawToken) {
+      session = await dbRepository.getSession(String(rawToken));
+      if (session) token = session.userId;
+    }
 
     if (!token) {
       return NextResponse.json({ error: "Admin authentication token required" }, { status: 401 });
     }
+
+    // CSRF verification on content management actions
+    validateCsrfToken(req, session);
 
     const isAuthorized = await adminService.verifyAdminAccessAsync(String(token));
     if (!isAuthorized) {

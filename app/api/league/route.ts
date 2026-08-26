@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { leagueService } from "@/lib/league-service";
-import { requireApprovedOrganizer } from "@/lib/auth-guard";
+import { requireApprovedOrganizer, validateCsrfToken, getAuthContext } from "@/lib/auth-guard";
 import { dbRepository } from "@/lib/db-client";
+import { securityService } from "@/lib/security";
 
 const cleanToken = (v: unknown) => String(v ?? "").trim().slice(0, 80);
 
@@ -30,9 +31,24 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const action = String(body.action ?? "").trim().toLowerCase();
-    const token = cleanToken(body.token);
+    const rawToken = cleanToken(body.token);
+
+    let token = rawToken;
+    let session = null;
+
+    const authCtx = await getAuthContext(req);
+    if (authCtx?.user?.token) {
+      token = authCtx.user.token;
+      session = authCtx.session;
+    } else if (rawToken) {
+      session = await dbRepository.getSession(rawToken);
+      if (session) token = session.userId;
+    }
 
     if (!token) return NextResponse.json({ error: "Token required" }, { status: 400 });
+
+    // Enforce CSRF protection across state-changing league operations
+    validateCsrfToken(req, session);
 
     if (action === "create") {
       // Server-side guard checking if user is an approved organizer or admin
