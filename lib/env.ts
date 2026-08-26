@@ -79,14 +79,15 @@ function int(value: string | undefined, fallback: number): number {
  * Falls back to the MYSQL_* variables for any part not present in the URL.
  */
 function parseMysqlConfig(problems: string[]): MysqlConfig | null {
-  const url = process.env.DATABASE_URL;
+  const rawUrl = process.env.DATABASE_URL;
+  const url = rawUrl ? rawUrl.trim().replace(/^["']|["']$/g, "") : "";
 
   // Local-friendly defaults so `npm run dev` works against a stock MySQL install.
-  let host = process.env.MYSQL_HOST || "127.0.0.1";
+  let host = (process.env.MYSQL_HOST || "").trim().replace(/^["']|["']$/g, "") || "127.0.0.1";
   let port = int(process.env.MYSQL_PORT, 3306);
-  let user = process.env.MYSQL_USER || "root";
+  let user = (process.env.MYSQL_USER || "").trim().replace(/^["']|["']$/g, "") || "root";
   let password = process.env.MYSQL_PASSWORD || "";
-  let database = process.env.MYSQL_DATABASE || "damii";
+  let database = (process.env.MYSQL_DATABASE || "").trim().replace(/^["']|["']$/g, "") || "damii";
   let ssl = bool(process.env.MYSQL_SSL, false);
 
   if (url) {
@@ -97,7 +98,7 @@ function parseMysqlConfig(problems: string[]): MysqlConfig | null {
       return null;
     }
     try {
-      const parsed = new URL(url);
+      const parsed = new URL(url.replace(/^mysql2:/i, "mysql:"));
       host = decodeURIComponent(parsed.hostname) || host;
       port = parsed.port ? Number(parsed.port) : port;
       user = decodeURIComponent(parsed.username) || user;
@@ -108,7 +109,8 @@ function parseMysqlConfig(problems: string[]): MysqlConfig | null {
       const sslParam =
         parsed.searchParams.get("ssl") ||
         parsed.searchParams.get("sslmode") ||
-        parsed.searchParams.get("ssl-mode");
+        parsed.searchParams.get("ssl-mode") ||
+        parsed.searchParams.get("sslaccept");
       if (
         sslParam &&
         sslParam.toLowerCase() !== "false" &&

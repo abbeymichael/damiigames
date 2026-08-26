@@ -703,6 +703,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, game: updated });
     }
 
+    if (action === "delete_game") {
+      const { gameId } = body;
+      if (!gameId) return NextResponse.json({ error: "gameId required" }, { status: 400 });
+      const res = await adminService.deleteGame(token, String(gameId));
+      return NextResponse.json(res);
+    }
+
     /* ------------------------------------------------------------------------- */
     /* Tournament Action Requests Queue (Section 2.3)                            */
     /* ------------------------------------------------------------------------- */
@@ -742,6 +749,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, request: reviewed });
     }
 
+    if (action === "delete_tournament_request") {
+      const { requestId } = body;
+      if (!requestId) return NextResponse.json({ error: "requestId required" }, { status: 400 });
+      const res = await adminService.deleteTournamentActionRequest(token, String(requestId));
+      return NextResponse.json(res);
+    }
+
     /* ------------------------------------------------------------------------- */
     /* System Settings Categories (SMS, Email, General, Security) (Section 2.7)  */
     /* ------------------------------------------------------------------------- */
@@ -758,6 +772,54 @@ export async function POST(req: NextRequest) {
       }
       const entry = await adminService.saveSystemSetting(token, category, key, value);
       return NextResponse.json({ success: true, setting: entry });
+    }
+
+    if (action === "delete_system_setting") {
+      const { category, key } = body;
+      if (!category || !key) {
+        return NextResponse.json({ error: "category and key required" }, { status: 400 });
+      }
+      const res = await adminService.deleteSystemSetting(token, category, String(key));
+      return NextResponse.json(res);
+    }
+
+    if (action === "purge_audit_logs") {
+      const { olderThanDays } = body;
+      const res = await adminService.purgeAuditLogs(token, Number(olderThanDays) || 90);
+      return NextResponse.json(res);
+    }
+
+    if (action === "delete_dispute" || action === "dismiss_dispute") {
+      const { roomCode } = body;
+      if (!roomCode) return NextResponse.json({ error: "roomCode required" }, { status: 400 });
+      const res = await adminService.deleteDispute(token, String(roomCode));
+      return NextResponse.json(res);
+    }
+
+    if (action === "clear_notification_logs") {
+      const res = await adminService.clearNotificationLogs(token);
+      return NextResponse.json(res);
+    }
+
+    if (action === "edit_user_profile") {
+      const { targetToken, updates } = body;
+      if (!targetToken || !updates) return NextResponse.json({ error: "targetToken and updates required" }, { status: 400 });
+      const res = await adminService.editUserProfile(token, String(targetToken), updates);
+      return NextResponse.json({ success: true, profile: res });
+    }
+
+    if (action === "edit_tournament") {
+      const { leagueId, updates } = body;
+      if (!leagueId || !updates) return NextResponse.json({ error: "leagueId and updates required" }, { status: 400 });
+      const res = await adminService.editTournament(token, String(leagueId), updates);
+      return NextResponse.json({ success: true, league: res });
+    }
+
+    if (action === "void_transaction") {
+      const { txId, reason } = body;
+      if (!txId) return NextResponse.json({ error: "txId required" }, { status: 400 });
+      const res = await adminService.voidTransaction(token, String(txId), String(reason || ""));
+      return NextResponse.json({ success: true, transaction: res });
     }
 
     /* ------------------------------------------------------------------------- */

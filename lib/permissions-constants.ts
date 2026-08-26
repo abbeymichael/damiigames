@@ -8,9 +8,19 @@ import type { Permission } from "./types";
 export const SYSTEM_PERMISSIONS: Omit<Permission, "id">[] = [
   // REVIEW
   {
+    key: "organizers.view",
+    category: "review",
+    description: "Inspect organizer accounts, KYC documents, and application submissions.",
+  },
+  {
     key: "organizers.review",
     category: "review",
     description: "Approve, reject, or request info on organizer KYC applications.",
+  },
+  {
+    key: "disputes.view",
+    category: "review",
+    description: "View active match disputes, move logs, timer history, and player claims.",
   },
   {
     key: "disputes.resolve",
@@ -18,12 +28,27 @@ export const SYSTEM_PERMISSIONS: Omit<Permission, "id">[] = [
     description: "Review game move logs, void or resolve wager disputes and declare winners.",
   },
   {
+    key: "disputes.delete",
+    category: "review",
+    description: "Dismiss, clear, or delete dispute records and incident flags.",
+  },
+  {
     key: "tournaments.requests",
     category: "review",
     description: "Review and approve/reject organizer tournament cancellations, disqualifications, and result overrides.",
   },
+  {
+    key: "tournaments.requests.delete",
+    category: "review",
+    description: "Permanently delete or dismiss tournament action requests from the queue.",
+  },
 
   // OPERATIONS
+  {
+    key: "tournaments.view",
+    category: "operations",
+    description: "View all leagues, brackets, fixtures, participants, and prize pools.",
+  },
   {
     key: "tournaments.manage",
     category: "operations",
@@ -35,14 +60,24 @@ export const SYSTEM_PERMISSIONS: Omit<Permission, "id">[] = [
     description: "Permanently delete tournaments, clean up brackets, and refund active participant escrows.",
   },
   {
+    key: "games.view",
+    category: "operations",
+    description: "View games catalog formats, board rules, timers, and active status.",
+  },
+  {
     key: "games.manage",
     category: "operations",
     description: "Create, edit, enable/disable game types in the platform catalog.",
   },
   {
+    key: "games.delete",
+    category: "operations",
+    description: "Permanently delete game types and catalog entries.",
+  },
+  {
     key: "wallet.view",
     category: "operations",
-    description: "View financial overview, recent transactions, and escrow balances.",
+    description: "View financial overview, recent transactions, deposits, and escrow balances.",
   },
   {
     key: "wallet.payouts",
@@ -50,9 +85,19 @@ export const SYSTEM_PERMISSIONS: Omit<Permission, "id">[] = [
     description: "Approve or process Mobile Money cashout requests.",
   },
   {
+    key: "wallet.reject_payout",
+    category: "operations",
+    description: "Reject cashout requests and return funds to user available balance.",
+  },
+  {
     key: "ledger.adjust",
     category: "operations",
     description: "Record manual double-entry ledger adjustments and wallet mutations with audit reasons.",
+  },
+  {
+    key: "transactions.void",
+    category: "operations",
+    description: "Void or invalidate ledger transactions and escrow locks.",
   },
   {
     key: "limits.manage",
@@ -63,6 +108,11 @@ export const SYSTEM_PERMISSIONS: Omit<Permission, "id">[] = [
     key: "users.view",
     category: "operations",
     description: "Search and inspect player, organizer, and user profiles and match histories.",
+  },
+  {
+    key: "users.edit",
+    category: "operations",
+    description: "Edit user profile details, usernames, avatar, and assigned balances.",
   },
   {
     key: "users.suspend",
@@ -124,6 +174,31 @@ export const SYSTEM_PERMISSIONS: Omit<Permission, "id">[] = [
     description: "Inspect immutable audit log trails and administrative records.",
   },
   {
+    key: "audit.export",
+    category: "system",
+    description: "Export audit logs and financial records to CSV or JSON formats.",
+  },
+  {
+    key: "audit.delete",
+    category: "system",
+    description: "Purge older audit log records beyond compliance retention windows.",
+  },
+  {
+    key: "communications.view",
+    category: "system",
+    description: "View SMS and email dispatch histories and notification templates.",
+  },
+  {
+    key: "communications.send",
+    category: "system",
+    description: "Dispatch manual SMS or email broadcasts to players or staff.",
+  },
+  {
+    key: "communications.delete",
+    category: "system",
+    description: "Clear or delete notification and message dispatch logs.",
+  },
+  {
     key: "system.settings.view",
     category: "system",
     description: "View system configurations, SMS/Email settings, and health diagnostics.",
@@ -132,6 +207,11 @@ export const SYSTEM_PERMISSIONS: Omit<Permission, "id">[] = [
     key: "system.settings.edit",
     category: "system",
     description: "Modify platform configurations, maintenance switch, SMS templates, and security policies.",
+  },
+  {
+    key: "system.settings.delete",
+    category: "system",
+    description: "Delete custom or transient platform configuration entries.",
   },
   {
     key: "system.backup",
@@ -149,34 +229,66 @@ export const SEED_ROLES_CONFIG = [
   },
   {
     name: "Finance Admin",
-    description: "Wallet oversight, Mobile Money payouts, manual ledger adjustments, and escrow limits.",
+    description: "Wallet oversight, Mobile Money payouts, manual ledger adjustments, transaction voiding, and escrow limits.",
     isSystemRole: false,
     permissionKeys: [
       "wallet.view",
       "wallet.payouts",
+      "wallet.reject_payout",
       "ledger.adjust",
+      "transactions.void",
       "limits.manage",
       "audit.view",
+      "audit.export",
     ],
   },
   {
     name: "Support Admin",
-    description: "Player account management, suspension/unsuspension, and activity review.",
+    description: "Player account management, profile updates, suspension/unsuspension, user deletion, dispute resolution, and communications.",
     isSystemRole: false,
     permissionKeys: [
       "users.view",
+      "users.edit",
       "users.suspend",
+      "users.delete",
+      "disputes.view",
+      "disputes.resolve",
+      "disputes.delete",
+      "communications.view",
+      "communications.send",
       "audit.view",
     ],
   },
   {
     name: "Reviewer",
-    description: "Review organizer KYC applications, match disputes, and tournament organizer requests.",
+    description: "Review organizer KYC applications, match disputes, and tournament organizer action requests.",
     isSystemRole: false,
     permissionKeys: [
+      "organizers.view",
       "organizers.review",
+      "organizers.revoke",
+      "organizers.delete",
+      "disputes.view",
       "disputes.resolve",
+      "disputes.delete",
       "tournaments.requests",
+      "tournaments.requests.delete",
+      "audit.view",
+    ],
+  },
+  {
+    name: "Tournament Director",
+    description: "Manage tournament operations, brackets, participant lists, tournament requests, and game catalog.",
+    isSystemRole: false,
+    permissionKeys: [
+      "tournaments.view",
+      "tournaments.manage",
+      "tournaments.delete",
+      "tournaments.requests",
+      "tournaments.requests.delete",
+      "games.view",
+      "games.manage",
+      "games.delete",
       "audit.view",
     ],
   },

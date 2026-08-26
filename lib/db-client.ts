@@ -13,13 +13,20 @@ import { memoryStore } from "./db/memory-store";
 
 let activeStore: DbRepository = memoryStore;
 let initPromise: Promise<DbRepository> | null = null;
+let lastAttemptTime = 0;
 
 async function boot(): Promise<DbRepository> {
-  if (!initPromise) {
+  if (activeStore === mysqlStore) {
+    return mysqlStore;
+  }
+  const now = Date.now();
+  if (!initPromise || (activeStore === memoryStore && now - lastAttemptTime > 3000)) {
+    lastAttemptTime = now;
     initPromise = (async () => {
       try {
         if (mysqlStore.init) await mysqlStore.init();
         activeStore = mysqlStore;
+        console.log("[damii][db] Connected to MySQL database store.");
         return mysqlStore;
       } catch (err) {
         console.warn(
@@ -35,11 +42,11 @@ async function boot(): Promise<DbRepository> {
 }
 
 // Kick off the connection probe immediately at module load
-const booted = boot();
+boot();
 
 function withStore<T extends keyof DbRepository>(method: T) {
   return (async (...args: unknown[]) => {
-    const store = await booted;
+    const store = await boot();
     return (store[method] as any)(...args);
   }) as DbRepository[T] extends (...a: infer A) => infer R ? (...a: A) => R : never;
 }

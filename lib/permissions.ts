@@ -11,26 +11,45 @@ export { SYSTEM_PERMISSIONS, SEED_ROLES_CONFIG };
  * Checks if a user has a specific permission key.
  *
  * Checks:
- * 1. User must exist and not be banned.
- * 2. If user role === "super_admin" or holds any Super Admin system role, returns true immediately.
- * 3. Checks if user holds any assigned RBAC role that contains the specific permission key.
- * 4. Safe fallback for default roles (admin, treasurer, facilitator) across both MySQL and memory storage.
+ * 1. Resolves session or profile token/identifier.
+ * 2. User must exist and not be banned.
+ * 3. If user role === "super_admin" or holds any Super Admin system role, returns true immediately.
+ * 4. Checks if user holds any assigned RBAC role that contains the specific permission key.
+ * 5. Safe fallback for default roles (admin, treasurer, facilitator) across both MySQL and memory storage.
  */
-export async function hasPermission(userId: string, key: string): Promise<boolean> {
-  if (!userId) return false;
+export async function hasPermission(userIdOrToken: string, key: string): Promise<boolean> {
+  if (!userIdOrToken || typeof userIdOrToken !== "string") return false;
+  const identifier = userIdOrToken.trim();
+  if (!identifier) return false;
 
   try {
+    // 0. Resolve session token if present
+    let session = await dbRepository.getSession(identifier).catch(() => null);
+    const resolvedUserId = session?.userId || identifier;
+
     // 1. First check profile status & role via repository or db
-    const profile = await dbRepository.getProfile(userId).catch(() => null);
-    if (!profile || profile.status === "banned") return false;
+    let profile = await dbRepository.getProfile(resolvedUserId).catch(() => null);
+    if (!profile && resolvedUserId !== identifier) {
+      profile = await dbRepository.getProfile(identifier).catch(() => null);
+    }
+
+    if (profile && profile.status === "banned") return false;
 
     // Super Admin role bypasses granular checks immediately
-    if (profile.role === "super_admin") return true;
+    if (profile?.role === "super_admin" || session?.role === "super_admin") return true;
 
     // 2. Check assigned roles & permissions from repository
     try {
-      const assignedRoleIds = await dbRepository.getAdminUserRoleAssignments(userId).catch(() => []);
-      if (assignedRoleIds && assignedRoleIds.length > 0) {
+      const checkIds = Array.from(new Set([resolvedUserId, identifier, profile?.token, profile?.id].filter(Boolean) as string[]));
+      let assignedRoleIds: string[] = [];
+      for (const uid of checkIds) {
+        const roles = await dbRepository.getAdminUserRoleAssignments(uid).catch(() => []);
+        if (roles && roles.length > 0) {
+          assignedRoleIds = Array.from(new Set([...assignedRoleIds, ...roles]));
+        }
+      }
+
+      if (assignedRoleIds.length > 0) {
         const allRoles = await dbRepository.listRoles().catch(() => []);
         const userRoles = allRoles.filter((r) => assignedRoleIds.includes(r.id));
 
@@ -51,76 +70,129 @@ export async function hasPermission(userId: string, key: string): Promise<boolea
     // 3. If MySQL DB is available, check direct join tables
     try {
       const db = getDb();
+      const checkIds = Array.from(new Set([resolvedUserId, identifier, profile?.token, profile?.id].filter(Boolean) as string[]));
 
-      // Check if the user has a Super Admin system role assigned
-      const systemRoleRows = await db
-        .select({ isSystemRole: schema.roles.isSystemRole })
-        .from(schema.adminUserRoles)
-        .innerJoin(schema.roles, eq(schema.roles.id, schema.adminUserRoles.roleId))
-        .where(
-          and(
-            eq(schema.adminUserRoles.userId, userId),
-            eq(schema.roles.isSystemRole, 1)
+      for (const uid of checkIds) {
+        // Check if the user has a Super Admin system role assigned
+        const systemRoleRows = await db
+          .select({ isSystemRole: schema.roles.isSystemRole })
+          .from(schema.adminUserRoles)
+          .innerJoin(schema.roles, eq(schema.roles.id, schema.adminUserRoles.roleId))
+          .where(
+            and(
+              eq(schema.adminUserRoles.userId, uid),
+              eq(schema.roles.isSystemRole, 1)
+            )
+          );
+
+        if (systemRoleRows.length > 0) return true;
+
+        // Check granular permission match
+        const [match] = await db
+          .select({ id: schema.permissions.id })
+          .from(schema.adminUserRoles)
+          .innerJoin(
+            schema.rolePermissions,
+            eq(schema.rolePermissions.roleId, schema.adminUserRoles.roleId)
           )
-        );
-
-      if (systemRoleRows.length > 0) return true;
-
-      // Check granular permission match
-      const [match] = await db
-        .select({ id: schema.permissions.id })
-        .from(schema.adminUserRoles)
-        .innerJoin(
-          schema.rolePermissions,
-          eq(schema.rolePermissions.roleId, schema.adminUserRoles.roleId)
-        )
-        .innerJoin(
-          schema.permissions,
-          eq(schema.permissions.id, schema.rolePermissions.permissionId)
-        )
-        .where(
-          and(
-            eq(schema.adminUserRoles.userId, userId),
-            eq(schema.permissions.key, key)
+          .innerJoin(
+            schema.permissions,
+            eq(schema.permissions.id, schema.rolePermissions.permissionId)
           )
-        )
-        .limit(1);
+          .where(
+            and(
+              eq(schema.adminUserRoles.userId, uid),
+              eq(schema.permissions.key, key)
+            )
+          )
+          .limit(1);
 
-      if (match) return true;
+        if (match) return true;
+      }
     } catch {
       // Ignore DB query errors if running in memory mode
     }
 
-    // 4. Default fallback checks based on profile.role
-    if (profile.role === "admin") {
+    // 4. Default fallback checks based on profile.role or session.role
+    const activeRole = profile?.role || session?.role;
+    if (activeRole === "super_admin") {
+      return true;
+    }
+
+    if (activeRole === "admin") {
       const defaultAdminKeys = [
+        "organizers.view",
         "organizers.review",
         "organizers.revoke",
+        "organizers.delete",
+        "disputes.view",
         "disputes.resolve",
+        "disputes.delete",
+        "tournaments.view",
         "tournaments.requests",
+        "tournaments.requests.delete",
         "tournaments.manage",
+        "tournaments.delete",
+        "games.view",
         "games.manage",
+        "games.delete",
         "wallet.view",
+        "wallet.payouts",
+        "wallet.reject_payout",
+        "ledger.adjust",
+        "transactions.void",
         "limits.manage",
         "users.view",
+        "users.edit",
         "users.suspend",
+        "users.delete",
         "admins.view",
+        "admins.manage",
+        "admins.delete",
         "roles.view",
+        "roles.manage",
+        "roles.delete",
+        "communications.view",
+        "communications.send",
+        "communications.delete",
         "audit.view",
+        "audit.export",
+        "audit.delete",
         "system.settings.view",
+        "system.settings.edit",
+        "system.settings.delete",
+        "system.backup",
       ];
       if (defaultAdminKeys.includes(key)) return true;
-    } else if (profile.role === "treasurer") {
-      const treasurerKeys = ["wallet.view", "wallet.payouts", "ledger.adjust", "limits.manage", "audit.view"];
+    } else if (activeRole === "treasurer") {
+      const treasurerKeys = [
+        "wallet.view",
+        "wallet.payouts",
+        "wallet.reject_payout",
+        "ledger.adjust",
+        "transactions.void",
+        "limits.manage",
+        "audit.view",
+        "audit.export",
+      ];
       if (treasurerKeys.includes(key)) return true;
-    } else if (profile.role === "facilitator") {
-      const facilitatorKeys = ["tournaments.manage", "organizers.review", "audit.view"];
+    } else if (activeRole === "facilitator") {
+      const facilitatorKeys = [
+        "tournaments.view",
+        "tournaments.manage",
+        "tournaments.requests",
+        "organizers.view",
+        "organizers.review",
+        "disputes.view",
+        "disputes.resolve",
+        "audit.view",
+      ];
       if (facilitatorKeys.includes(key)) return true;
     }
 
     return false;
   } catch (err) {
-    console.error(`[damii][permissions] hasPermission check error for ${userId} on ${key}:`, err);
+    console.error(`[damii][permissions] hasPermission check error for ${userIdOrToken} on ${key}:`, err);
     return false;
   }
 }
@@ -128,18 +200,28 @@ export async function hasPermission(userId: string, key: string): Promise<boolea
 /**
  * Retrieves all permission keys and Super Admin status for an admin user.
  */
-export async function getAdminPermissions(userId: string): Promise<{
+export async function getAdminPermissions(userIdOrToken: string): Promise<{
   isSuperAdmin: boolean;
   permissionKeys: string[];
 }> {
-  if (!userId) {
+  if (!userIdOrToken || typeof userIdOrToken !== "string") {
+    return { isSuperAdmin: false, permissionKeys: [] };
+  }
+  const identifier = userIdOrToken.trim();
+  if (!identifier) {
     return { isSuperAdmin: false, permissionKeys: [] };
   }
 
   try {
-    const profile = await dbRepository.getProfile(userId).catch(() => null);
+    const session = await dbRepository.getSession(identifier).catch(() => null);
+    const resolvedUserId = session?.userId || identifier;
 
-    if (profile?.role === "super_admin") {
+    let profile = await dbRepository.getProfile(resolvedUserId).catch(() => null);
+    if (!profile && resolvedUserId !== identifier) {
+      profile = await dbRepository.getProfile(identifier).catch(() => null);
+    }
+
+    if (profile?.role === "super_admin" || session?.role === "super_admin") {
       return {
         isSuperAdmin: true,
         permissionKeys: SYSTEM_PERMISSIONS.map((p) => p.key),
@@ -150,8 +232,16 @@ export async function getAdminPermissions(userId: string): Promise<{
 
     // 1. Check assigned RBAC roles from repository
     try {
-      const assignedRoleIds = await dbRepository.getAdminUserRoleAssignments(userId).catch(() => []);
-      if (assignedRoleIds && assignedRoleIds.length > 0) {
+      const checkIds = Array.from(new Set([resolvedUserId, identifier, profile?.token, profile?.id].filter(Boolean) as string[]));
+      let assignedRoleIds: string[] = [];
+      for (const uid of checkIds) {
+        const roles = await dbRepository.getAdminUserRoleAssignments(uid).catch(() => []);
+        if (roles && roles.length > 0) {
+          assignedRoleIds = Array.from(new Set([...assignedRoleIds, ...roles]));
+        }
+      }
+
+      if (assignedRoleIds.length > 0) {
         const allRoles = await dbRepository.listRoles().catch(() => []);
         const userRoles = allRoles.filter((r) => assignedRoleIds.includes(r.id));
 
@@ -175,63 +265,113 @@ export async function getAdminPermissions(userId: string): Promise<{
     // 2. Direct DB fallback
     try {
       const db = getDb();
-      const assignedRoles = await db
-        .select({
-          roleId: schema.roles.id,
-          isSystemRole: schema.roles.isSystemRole,
-        })
-        .from(schema.adminUserRoles)
-        .innerJoin(schema.roles, eq(schema.roles.id, schema.adminUserRoles.roleId))
-        .where(eq(schema.adminUserRoles.userId, userId));
+      const checkIds = Array.from(new Set([resolvedUserId, identifier, profile?.token, profile?.id].filter(Boolean) as string[]));
 
-      if (assignedRoles.some((r) => r.isSystemRole === 1)) {
-        return {
-          isSuperAdmin: true,
-          permissionKeys: SYSTEM_PERMISSIONS.map((p) => p.key),
-        };
+      for (const uid of checkIds) {
+        const assignedRoles = await db
+          .select({
+            roleId: schema.roles.id,
+            isSystemRole: schema.roles.isSystemRole,
+          })
+          .from(schema.adminUserRoles)
+          .innerJoin(schema.roles, eq(schema.roles.id, schema.adminUserRoles.roleId))
+          .where(eq(schema.adminUserRoles.userId, uid));
+
+        if (assignedRoles.some((r) => r.isSystemRole === 1)) {
+          return {
+            isSuperAdmin: true,
+            permissionKeys: SYSTEM_PERMISSIONS.map((p) => p.key),
+          };
+        }
+
+        const permissionRows = await db
+          .select({ key: schema.permissions.key })
+          .from(schema.adminUserRoles)
+          .innerJoin(
+            schema.rolePermissions,
+            eq(schema.rolePermissions.roleId, schema.adminUserRoles.roleId)
+          )
+          .innerJoin(
+            schema.permissions,
+            eq(schema.permissions.id, schema.rolePermissions.permissionId)
+          )
+          .where(eq(schema.adminUserRoles.userId, uid));
+
+        permissionRows.forEach((r) => keysSet.add(r.key));
       }
-
-      const permissionRows = await db
-        .select({ key: schema.permissions.key })
-        .from(schema.adminUserRoles)
-        .innerJoin(
-          schema.rolePermissions,
-          eq(schema.rolePermissions.roleId, schema.adminUserRoles.roleId)
-        )
-        .innerJoin(
-          schema.permissions,
-          eq(schema.permissions.id, schema.rolePermissions.permissionId)
-        )
-        .where(eq(schema.adminUserRoles.userId, userId));
-
-      permissionRows.forEach((r) => keysSet.add(r.key));
     } catch {
       // In memory mode
     }
 
     // 3. Fallbacks if no explicit RBAC assignment yet
+    const activeRole = profile?.role || session?.role;
     if (keysSet.size === 0) {
-      if (profile?.role === "admin") {
+      if (activeRole === "admin") {
         [
+          "organizers.view",
           "organizers.review",
           "organizers.revoke",
+          "organizers.delete",
+          "disputes.view",
           "disputes.resolve",
+          "disputes.delete",
+          "tournaments.view",
           "tournaments.requests",
+          "tournaments.requests.delete",
           "tournaments.manage",
+          "tournaments.delete",
+          "games.view",
           "games.manage",
+          "games.delete",
           "wallet.view",
+          "wallet.payouts",
+          "wallet.reject_payout",
+          "ledger.adjust",
+          "transactions.void",
           "limits.manage",
           "users.view",
+          "users.edit",
           "users.suspend",
+          "users.delete",
           "admins.view",
+          "admins.manage",
+          "admins.delete",
           "roles.view",
+          "roles.manage",
+          "roles.delete",
+          "communications.view",
+          "communications.send",
+          "communications.delete",
           "audit.view",
+          "audit.export",
+          "audit.delete",
           "system.settings.view",
+          "system.settings.edit",
+          "system.settings.delete",
+          "system.backup",
         ].forEach((k) => keysSet.add(k));
-      } else if (profile?.role === "treasurer") {
-        ["wallet.view", "wallet.payouts", "ledger.adjust", "limits.manage", "audit.view"].forEach((k) =>
-          keysSet.add(k)
-        );
+      } else if (activeRole === "treasurer") {
+        [
+          "wallet.view",
+          "wallet.payouts",
+          "wallet.reject_payout",
+          "ledger.adjust",
+          "transactions.void",
+          "limits.manage",
+          "audit.view",
+          "audit.export",
+        ].forEach((k) => keysSet.add(k));
+      } else if (activeRole === "facilitator") {
+        [
+          "tournaments.view",
+          "tournaments.manage",
+          "tournaments.requests",
+          "organizers.view",
+          "organizers.review",
+          "disputes.view",
+          "disputes.resolve",
+          "audit.view",
+        ].forEach((k) => keysSet.add(k));
       }
     }
 
@@ -240,7 +380,7 @@ export async function getAdminPermissions(userId: string): Promise<{
       permissionKeys: Array.from(keysSet),
     };
   } catch (err) {
-    console.error(`[damii][permissions] getAdminPermissions error for ${userId}:`, err);
+    console.error(`[damii][permissions] getAdminPermissions error for ${userIdOrToken}:`, err);
     return { isSuperAdmin: false, permissionKeys: [] };
   }
 }

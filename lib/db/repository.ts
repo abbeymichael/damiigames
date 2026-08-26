@@ -240,15 +240,19 @@ export interface DbRepository {
   getGame(slugOrId: string): Promise<GameCatalogItem | undefined>;
   saveGame(game: GameCatalogItem): Promise<GameCatalogItem>;
   toggleGameStatus(id: string, status: "enabled" | "disabled"): Promise<GameCatalogItem>;
+  deleteGame(id: string): Promise<boolean>;
 
   // --- Tournament Action Requests Queue (Section 2.3) ---
   listTournamentActionRequests(status?: string): Promise<TournamentActionRequest[]>;
   createTournamentActionRequest(req: TournamentActionRequest): Promise<TournamentActionRequest>;
   reviewTournamentActionRequest(id: string, status: "approved" | "rejected", adminId: string, reviewNote?: string): Promise<TournamentActionRequest>;
+  deleteTournamentActionRequest(id: string): Promise<boolean>;
 
   // --- System Settings (Section 2.7) ---
   getSystemSettings(category?: SystemSettingsCategory): Promise<SystemSettingEntry[]>;
   saveSystemSetting(category: SystemSettingsCategory, key: string, value: any, adminId?: string): Promise<SystemSettingEntry>;
+  deleteSystemSetting(category: SystemSettingsCategory, key: string): Promise<boolean>;
+  purgeAuditLogs?(olderThanDays?: number): Promise<number>;
 
   // --- Seeder ---
   seedDatabase(): Promise<Profile[]>;

@@ -2242,6 +2242,11 @@ export const mysqlStore: DbRepository = {
     return updated;
   },
 
+  async deleteGame(id: string): Promise<boolean> {
+    const result = await getDb().delete(schema.games).where(eq(schema.games.id, id));
+    return true;
+  },
+
   // --- Tournament Action Requests Queue (Section 2.3) ---
   async listTournamentActionRequests(status?: string): Promise<TournamentActionRequest[]> {
     let query = getDb().select().from(schema.tournamentActionRequests);
@@ -2283,6 +2288,11 @@ export const mysqlStore: DbRepository = {
 
     if (!row) throw new Error(`TournamentActionRequest ${id} not found`);
     return rowToTournamentActionRequest(row);
+  },
+
+  async deleteTournamentActionRequest(id: string): Promise<boolean> {
+    await getDb().delete(schema.tournamentActionRequests).where(eq(schema.tournamentActionRequests.id, id));
+    return true;
   },
 
   // --- System Settings (Section 2.7) ---
@@ -2330,6 +2340,26 @@ export const mysqlStore: DbRepository = {
       updatedByAdminId: adminId,
       updatedAt: new Date().toISOString(),
     };
+  },
+
+  async deleteSystemSetting(category: SystemSettingsCategory, key: string): Promise<boolean> {
+    await getDb()
+      .delete(schema.systemSettings)
+      .where(
+        and(
+          eq(schema.systemSettings.category, category),
+          eq(schema.systemSettings.key, key)
+        )
+      );
+    return true;
+  },
+
+  async purgeAuditLogs(olderThanDays = 90): Promise<number> {
+    const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000);
+    const result = await getDb()
+      .delete(schema.adminLogs)
+      .where(lte(schema.adminLogs.createdAt, cutoff));
+    return 1;
   },
 
   // --- Seeder ---

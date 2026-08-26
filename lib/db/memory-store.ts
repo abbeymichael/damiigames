@@ -1780,6 +1780,13 @@ export const memoryStore: DbRepository = {
     return { ...updated };
   },
 
+  async deleteGame(id) {
+    const data = getMemoryData();
+    await memoryStore.listGames();
+    const deleted = data.games.delete(id);
+    return deleted;
+  },
+
   // --- Tournament Action Requests Queue ---
   async listTournamentActionRequests(status) {
     const data = getMemoryData();
@@ -1810,6 +1817,12 @@ export const memoryStore: DbRepository = {
     return { ...updated };
   },
 
+  async deleteTournamentActionRequest(id) {
+    const data = getMemoryData();
+    const deleted = data.tournamentActionRequests.delete(id);
+    return deleted;
+  },
+
   // --- System Settings ---
   async getSystemSettings(category) {
     const data = getMemoryData();
@@ -1832,6 +1845,21 @@ export const memoryStore: DbRepository = {
     };
     data.systemSettings.set(id, entry);
     return { ...entry };
+  },
+
+  async deleteSystemSetting(category, key) {
+    const data = getMemoryData();
+    const id = `setting-${category}-${key}`;
+    const deleted = data.systemSettings.delete(id);
+    return deleted;
+  },
+
+  async purgeAuditLogs(olderThanDays = 90) {
+    const data = getMemoryData();
+    const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000).getTime();
+    const initialLen = data.adminLogs.length;
+    data.adminLogs = data.adminLogs.filter((log) => new Date(log.createdAt).getTime() >= cutoff);
+    return initialLen - data.adminLogs.length;
   },
 
   // --- Seeder ---
