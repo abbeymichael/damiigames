@@ -68,13 +68,11 @@ export async function POST(req: NextRequest) {
 
       await sendOtpSms(sanitizedPhone, rawCode);
 
-      const isDev = process.env.NODE_ENV !== "production";
       return NextResponse.json({
         success: true,
         requestId,
         expiresAt: expiresAt.toISOString(),
         message: `6-digit verification code sent to ${sanitizedPhone}. Expires in 4 minutes.`,
-        debugCode: isDev ? rawCode : undefined,
       });
     }
 
