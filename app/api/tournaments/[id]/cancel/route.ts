@@ -1,23 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ledgerService } from "@/lib/ledger-service";
+import { getAuthContext, validateCsrfToken } from "@/lib/auth-guard";
+import { securityService } from "@/lib/security";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    let token = "";
-    const authHeader = req.headers.get("authorization");
-    if (authHeader?.startsWith("Bearer ")) {
-      token = authHeader.substring(7).trim();
+    const auth = await getAuthContext(req);
+    if (!auth || !auth.user) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized. Valid session required." },
+        { status: 401 }
+      );
     }
-    try {
-      const body = await req.clone().json();
-      if (!token && body?.token) token = String(body.token).trim();
-    } catch {}
 
-    const tournament = await ledgerService.cancelTournament(id, token || undefined);
+    const csrf = validateCsrfToken(req, auth.session);
+    if (!csrf.valid) {
+      return NextResponse.json(
+        { success: false, error: csrf.error || "Invalid or missing CSRF token" },
+        { status: 403 }
+      );
+    }
+
+    const { id } = await params;
+    const safeTournamentId = securityService.sanitizeInput(id);
+
+    const tournament = await ledgerService.cancelTournament(safeTournamentId, auth.user.token);
     return NextResponse.json({ success: true, tournament });
   } catch (error: any) {
     return NextResponse.json(
@@ -26,3 +36,4 @@ export async function POST(
     );
   }
 }
+

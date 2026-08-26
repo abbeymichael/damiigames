@@ -1,23 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ledgerService } from "@/lib/ledger-service";
+import { getAuthContext, validateCsrfToken } from "@/lib/auth-guard";
+import { securityService } from "@/lib/security";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const body = await req.json();
-    const { playerBId } = body;
-
-    if (!playerBId) {
+    const auth = await getAuthContext(req);
+    if (!auth || !auth.user) {
       return NextResponse.json(
-        { success: false, error: "Missing playerBId" },
-        { status: 400 }
+        { success: false, error: "Unauthorized. Valid session required to join match." },
+        { status: 401 }
       );
     }
 
-    const match = await ledgerService.joinMatchEscrow(id, playerBId);
+    const csrf = validateCsrfToken(req, auth.session);
+    if (!csrf.valid) {
+      return NextResponse.json(
+        { success: false, error: csrf.error || "Invalid or missing CSRF token" },
+        { status: 403 }
+      );
+    }
+
+    const { id } = await params;
+    const safeMatchId = securityService.sanitizeInput(id);
+
+    // IDOR Prevention: strictly bind to the authenticated caller's account
+    const safePlayerBId = auth.user.token;
+
+    const match = await ledgerService.joinMatchEscrow(safeMatchId, safePlayerBId);
     return NextResponse.json({ success: true, match });
   } catch (error: any) {
     return NextResponse.json(
@@ -26,3 +39,4 @@ export async function POST(
     );
   }
 }
+
