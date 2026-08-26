@@ -5,7 +5,7 @@ import { NavLink, safeNavigate } from "@/components/NavLink";
 import { useRouter } from "next/navigation";
 import { SharedHeader } from "@/components/SharedHeader";
 import { Footer } from "@/components/Footer";
-import { Swords, Trophy, Wallet, ShieldCheck, Zap, ArrowRight, Play, BookOpen, Layers, ShieldAlert, Lock } from "lucide-react";
+import { Swords, Trophy, Wallet, ShieldCheck, Zap, ArrowRight, BookOpen, ShieldAlert, LayoutGrid, Timer } from "lucide-react";
 
 export default function LandingPage() {
   const router = useRouter();
@@ -109,22 +109,73 @@ export default function LandingPage() {
           )}
         </div>
 
-        <div className="hero-stats">
-          <div>
-            <strong>10 × 10</strong>
-            <span>Authentic Board</span>
-          </div>
-          <div>
-            <strong>60s</strong>
-            <span>Turn Clock</span>
-          </div>
-          <div>
-            <strong>100% Safe</strong>
-            <span>Automated Escrow</span>
-          </div>
-          <div>
-            <strong>Instant</strong>
-            <span>Payout Settlement</span>
+        <div className="max-w-5xl mx-auto my-6 px-2">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 p-3 md:p-4 rounded-2xl bg-gradient-to-b from-[#ffffff] to-[#fffdf9] border border-[#0c3b2e]/15 shadow-[0_10px_30px_-10px_rgba(6,38,31,0.08)]">
+            
+            {/* Stat 1: 10 x 10 Board */}
+            <div className="group flex flex-col items-center text-center p-3.5 sm:p-4 rounded-xl bg-white/80 border border-[#0c3b2e]/8 hover:border-[#d6a735]/60 hover:bg-[#fffef8] transition-all duration-200 hover:-translate-y-0.5 shadow-xs">
+              <div className="w-10 h-10 rounded-xl bg-emerald-950/5 border border-emerald-900/10 text-[#0c3b2e] flex items-center justify-center mb-2.5 group-hover:scale-105 group-hover:bg-[#0c3b2e] group-hover:text-[#d6a735] transition-all">
+                <LayoutGrid size={20} />
+              </div>
+              <div className="font-serif font-black text-xl sm:text-2xl text-[#0c3b2e] tracking-tight leading-none mb-1">
+                10 × 10
+              </div>
+              <div className="text-xs font-bold text-[#0c3b2e] tracking-wide">
+                Authentic Board
+              </div>
+              <div className="text-[10px] text-[#63716b] mt-0.5 hidden sm:block">
+                100-Square Battleground
+              </div>
+            </div>
+
+            {/* Stat 2: 60s Turn Clock */}
+            <div className="group flex flex-col items-center text-center p-3.5 sm:p-4 rounded-xl bg-white/80 border border-[#0c3b2e]/8 hover:border-[#d6a735]/60 hover:bg-[#fffef8] transition-all duration-200 hover:-translate-y-0.5 shadow-xs">
+              <div className="w-10 h-10 rounded-xl bg-amber-950/5 border border-amber-900/10 text-[#b45309] flex items-center justify-center mb-2.5 group-hover:scale-105 group-hover:bg-[#b45309] group-hover:text-white transition-all">
+                <Timer size={20} />
+              </div>
+              <div className="font-serif font-black text-xl sm:text-2xl text-[#0c3b2e] tracking-tight leading-none mb-1">
+                60s
+              </div>
+              <div className="text-xs font-bold text-[#0c3b2e] tracking-wide">
+                Turn Clock
+              </div>
+              <div className="text-[10px] text-[#63716b] mt-0.5 hidden sm:block">
+                Tactical Blitz & Grace Window
+              </div>
+            </div>
+
+            {/* Stat 3: 100% Safe Escrow */}
+            <div className="group flex flex-col items-center text-center p-3.5 sm:p-4 rounded-xl bg-white/80 border border-[#0c3b2e]/8 hover:border-[#d6a735]/60 hover:bg-[#fffef8] transition-all duration-200 hover:-translate-y-0.5 shadow-xs">
+              <div className="w-10 h-10 rounded-xl bg-teal-950/5 border border-teal-900/10 text-[#0f766e] flex items-center justify-center mb-2.5 group-hover:scale-105 group-hover:bg-[#0f766e] group-hover:text-white transition-all">
+                <ShieldCheck size={20} />
+              </div>
+              <div className="font-serif font-black text-xl sm:text-2xl text-[#0c3b2e] tracking-tight leading-none mb-1">
+                100% Safe
+              </div>
+              <div className="text-xs font-bold text-[#0c3b2e] tracking-wide">
+                Automated Escrow
+              </div>
+              <div className="text-[10px] text-[#63716b] mt-0.5 hidden sm:block">
+                Protected Wager Vault
+              </div>
+            </div>
+
+            {/* Stat 4: Instant Settlement */}
+            <div className="group flex flex-col items-center text-center p-3.5 sm:p-4 rounded-xl bg-white/80 border border-[#0c3b2e]/8 hover:border-[#d6a735]/60 hover:bg-[#fffef8] transition-all duration-200 hover:-translate-y-0.5 shadow-xs">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[#d6a735] flex items-center justify-center mb-2.5 group-hover:scale-105 group-hover:bg-[#d6a735] group-hover:text-[#06261f] transition-all">
+                <Zap size={20} />
+              </div>
+              <div className="font-serif font-black text-xl sm:text-2xl text-[#0c3b2e] tracking-tight leading-none mb-1">
+                Instant
+              </div>
+              <div className="text-xs font-bold text-[#0c3b2e] tracking-wide">
+                Payout Settlement
+              </div>
+              <div className="text-[10px] text-[#63716b] mt-0.5 hidden sm:block">
+                Direct Balance Crediting
+              </div>
+            </div>
+
           </div>
         </div>
       </section>
@@ -169,8 +220,11 @@ export default function LandingPage() {
 
       <section className="rules-section">
         <div className="rules-container">
-          <div className="rules-header">
-            <BookOpen size={28} />
+          <div className="rules-header flex flex-col items-center">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#d6a735]/15 border border-[#d6a735]/30 text-[#e9c158] text-xs font-semibold tracking-wide uppercase mb-3">
+              <BookOpen size={15} className="text-[#d6a735]" />
+              <span>Official Ruleset</span>
+            </div>
             <h2>Core Damii Rules</h2>
             <p>Master the compulsory capture and flying king tactics.</p>
           </div>
