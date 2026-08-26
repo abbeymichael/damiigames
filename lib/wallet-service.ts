@@ -2,6 +2,7 @@ import { dbRepository } from "./db-client";
 import { securityService } from "./security";
 import { WalletTransaction, WagerEscrow } from "./types";
 import { notificationService } from "./notification-service";
+import { getAdminPermissions } from "./permissions";
 
 export const walletService = {
   // 1 GHS = 100 Points
@@ -10,9 +11,23 @@ export const walletService = {
   async getBalance(token: string) {
     const profile = await dbRepository.getProfile(token);
     if (!profile) {
-      return { points: 0, marbles: 0, marblesBalance: 0, rating: 1000, username: "", role: "user", phoneNumber: "", wins: 0, losses: 0, draws: 0 };
+      return { points: 0, marbles: 0, marblesBalance: 0, rating: 1000, username: "", role: "user", roleTitle: undefined, isSuperAdmin: false, phoneNumber: "", wins: 0, losses: 0, draws: 0 };
     }
     const bal = Math.max(profile.points ?? 0, profile.marbles ?? 0);
+
+    let roleTitle: string | undefined = undefined;
+    let isSuperAdmin = false;
+    if (["admin", "super_admin", "treasurer", "facilitator"].includes(profile.role)) {
+      try {
+        const perms = await getAdminPermissions(token);
+        roleTitle = perms.roleTitle;
+        isSuperAdmin = perms.isSuperAdmin;
+      } catch {
+        roleTitle = profile.role === "super_admin" ? "Super Admin" : "Administrator";
+        isSuperAdmin = profile.role === "super_admin";
+      }
+    }
+
     return {
       points: profile.points ?? 0,
       marbles: profile.marbles ?? 0,
@@ -20,6 +35,8 @@ export const walletService = {
       rating: profile.rating,
       username: profile.username,
       role: profile.role,
+      roleTitle,
+      isSuperAdmin,
       phoneNumber: profile.phoneNumber || "",
       wins: profile.wins || 0,
       losses: profile.losses || 0,

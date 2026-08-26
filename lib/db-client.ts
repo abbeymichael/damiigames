@@ -56,7 +56,7 @@ export const dbRepository: DbRepository = {
     return activeStore.dialect;
   },
   lockKey: (key, fn) => activeStore.lockKey(key, fn),
-  init: () => booted.then(() => undefined),
+  init: () => boot().then(() => undefined),
   close: () => (activeStore.close ? activeStore.close() : Promise.resolve()),
 
   createSession: withStore("createSession"),

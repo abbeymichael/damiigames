@@ -80,6 +80,8 @@ export function Header() {
   const [username, setUsername] = useState("");
   const [points, setPoints] = useState(0);
   const [role, setRole] = useState("user");
+  const [roleTitle, setRoleTitle] = useState<string>("");
+  const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(false);
   const [rating, setRating] = useState(1000);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [wins, setWins] = useState(0);
@@ -283,6 +285,8 @@ export function Header() {
         try {
           const parsed = JSON.parse(cachedAuth);
           if (parsed.role) setRole(parsed.role);
+          if (parsed.roleTitle) setRoleTitle(parsed.roleTitle);
+          if (parsed.isSuperAdmin !== undefined) setIsSuperAdmin(Boolean(parsed.isSuperAdmin));
           if (parsed.username) setUsername(parsed.username);
           if (parsed.points !== undefined) setPoints(parsed.points);
           if (parsed.avatarUrl !== undefined) setAvatarUrl(parsed.avatarUrl);
@@ -300,6 +304,12 @@ export function Header() {
             if (data.profile.phoneNumber !== undefined) setPhoneNumber(data.profile.phoneNumber);
             if (data.profile.points !== undefined) setPoints(data.profile.points);
             if (data.profile.role) setRole(data.profile.role);
+            if (data.profile.roleTitle) setRoleTitle(data.profile.roleTitle);
+            if (data.roleTitle) setRoleTitle(data.roleTitle);
+            if (data.adminPermissions?.roleTitle) setRoleTitle(data.adminPermissions.roleTitle);
+            if (data.profile.isSuperAdmin !== undefined) setIsSuperAdmin(Boolean(data.profile.isSuperAdmin));
+            if (data.isSuperAdmin !== undefined) setIsSuperAdmin(Boolean(data.isSuperAdmin));
+            if (data.adminPermissions?.isSuperAdmin !== undefined) setIsSuperAdmin(Boolean(data.adminPermissions.isSuperAdmin));
             if (data.profile.rating !== undefined) setRating(data.profile.rating);
             if (data.profile.wins !== undefined) setWins(data.profile.wins);
             if (data.profile.losses !== undefined) setLosses(data.profile.losses);
@@ -308,6 +318,23 @@ export function Header() {
             if (data.profile.bestStreak !== undefined) setBestStreak(data.profile.bestStreak);
             if (data.profile.matchesLast7Days !== undefined) setMatchesLast7Days(data.profile.matchesLast7Days);
             if (data.profile.opponentRatingAvg !== undefined) setOpponentRatingAvg(data.profile.opponentRatingAvg);
+
+            // Sync with cached user in localStorage
+            try {
+              const currentAuth = localStorage.getItem("damii-auth-user");
+              const parsed = currentAuth ? JSON.parse(currentAuth) : {};
+              parsed.username = data.profile.username || parsed.username;
+              parsed.role = data.profile.role || parsed.role;
+              if (data.roleTitle || data.profile.roleTitle || data.adminPermissions?.roleTitle) {
+                parsed.roleTitle = data.roleTitle || data.profile.roleTitle || data.adminPermissions?.roleTitle;
+              }
+              if (data.isSuperAdmin !== undefined || data.profile.isSuperAdmin !== undefined || data.adminPermissions?.isSuperAdmin !== undefined) {
+                parsed.isSuperAdmin = Boolean(data.isSuperAdmin ?? data.profile.isSuperAdmin ?? data.adminPermissions?.isSuperAdmin);
+              }
+              localStorage.setItem("damii-auth-user", JSON.stringify(parsed));
+            } catch {
+              // ignore
+            }
           }
           if (data.user) {
             if (data.user.avatarUrl !== undefined) setAvatarUrl(data.user.avatarUrl);
@@ -332,6 +359,8 @@ export function Header() {
             setPoints(data.balance.points ?? 0);
             if (data.balance.username) setUsername(data.balance.username);
             if (data.balance.role) setRole(data.balance.role);
+            if (data.balance.roleTitle) setRoleTitle(data.balance.roleTitle);
+            if (data.balance.isSuperAdmin !== undefined) setIsSuperAdmin(Boolean(data.balance.isSuperAdmin));
             if (data.balance.rating !== undefined) setRating(data.balance.rating);
             if (data.balance.phoneNumber !== undefined) setPhoneNumber(data.balance.phoneNumber);
             if (data.balance.wins !== undefined) setWins(data.balance.wins);
@@ -349,6 +378,8 @@ export function Header() {
               parsed.points = data.balance.points;
               parsed.username = data.balance.username || parsed.username;
               parsed.role = data.balance.role || parsed.role;
+              if (data.balance.roleTitle) parsed.roleTitle = data.balance.roleTitle;
+              if (data.balance.isSuperAdmin !== undefined) parsed.isSuperAdmin = data.balance.isSuperAdmin;
               localStorage.setItem("damii-auth-user", JSON.stringify(parsed));
             } catch {
               // ignore
@@ -1009,6 +1040,9 @@ export function Header() {
     localStorage.removeItem("damii-auth-user");
     setUserToken(null);
     setUsername("");
+    setRole("guest");
+    setRoleTitle("");
+    setIsSuperAdmin(false);
     setIsProfileDropdownOpen(false);
     window.dispatchEvent(new Event("damii-auth-changed"));
   };
@@ -1017,11 +1051,18 @@ export function Header() {
     clearAuth();
   };
 
-  const isAdmin = role === "admin" || role === "super_admin";
+  const isAdmin =
+    role === "admin" ||
+    role === "super_admin" ||
+    role === "treasurer" ||
+    role === "facilitator" ||
+    isSuperAdmin ||
+    Boolean(roleTitle && !["player", "user", "organizer", "guest"].includes(roleTitle.toLowerCase()));
   const isOrganizer = role === "organizer" || organizerStatus === "approved";
   const isFacilitator = role === "facilitator" || role === "treasurer";
   const isOrganizerPending = organizerStatus === "pending";
   const isOrganizerOrApplied =
+    isAdmin ||
     ["organizer", "facilitator", "admin", "super_admin"].includes(role) ||
     ["pending", "approved", "rejected"].includes(organizerStatus);
 
@@ -1180,9 +1221,11 @@ export function Header() {
                                     </strong>
                                     <div className="flex items-center gap-1.5 mt-0.5">
                                       <span className="px-2 py-0.5 bg-red-500/30 text-red-200 border border-red-500/50 text-[9px] font-black rounded uppercase tracking-wider flex items-center gap-1">
-                                        <ShieldCheck size={10} /> {role === "super_admin" ? "Super Admin" : "Administrator"}
+                                        <ShieldCheck size={10} /> {roleTitle || (isSuperAdmin || role === "super_admin" ? "Super Admin" : "Administrator")}
                                       </span>
-                                      <span className="text-[10px] text-red-300/80 font-bold">Level 5 Authority</span>
+                                      <span className="text-[10px] text-red-300/80 font-bold">
+                                        {isSuperAdmin ? "Super Authority" : roleTitle ? `${roleTitle} Clearance` : "Administrative Authority"}
+                                      </span>
                                     </div>
                                     {phoneNumber && (
                                       <span className="block text-[10px] text-red-200/80 mt-1 font-semibold truncate flex items-center gap-1">
@@ -1194,9 +1237,9 @@ export function Header() {
 
                                 <div className="p-2.5 bg-red-950/40 border border-red-800/40 rounded-xl text-[10px] text-red-200/90 leading-relaxed space-y-1">
                                   <div className="flex items-center gap-1 text-red-300 font-extrabold uppercase tracking-wider text-[9px]">
-                                    <ShieldAlert size={11} className="text-red-400" /> System Regulator Clearance
+                                    <ShieldAlert size={11} className="text-red-400" /> {isSuperAdmin ? "Super Admin Clearance" : roleTitle ? `${roleTitle} Clearance` : "System Regulator Clearance"}
                                   </div>
-                                  <p>Full administrative oversight across tournament brackets, referee disputes, financial ledgers, and platform settings.</p>
+                                  <p>{isSuperAdmin ? "Full root administrative oversight across tournament brackets, referee disputes, financial reserves, and platform configurations." : roleTitle ? `Assigned administrative controls and permissions for ${roleTitle}.` : "Administrative oversight across tournament brackets, referee disputes, financial ledgers, and platform settings."}</p>
                                 </div>
 
                                 <div className="space-y-1.5 pt-1">
@@ -1790,7 +1833,7 @@ export function Header() {
                     if (isAdmin) {
                       cardBg = "bg-gradient-to-br from-red-950 to-[#081c15] border-red-600/50";
                       avatarStyle = "bg-red-600 text-white border-red-400";
-                      roleTag = role === "super_admin" ? "Super Admin" : "Administrator";
+                      roleTag = roleTitle || (isSuperAdmin || role === "super_admin" ? "Super Admin" : "Administrator");
                       roleIcon = <ShieldAlert size={10} className="text-red-300" />;
                     } else if (isOrganizer) {
                       cardBg = "bg-gradient-to-br from-amber-950 to-[#081c15] border-amber-500/50";

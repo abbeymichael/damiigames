@@ -3,6 +3,7 @@ import { dbRepository } from "@/lib/db-client";
 import { securityService } from "@/lib/security";
 import { Profile } from "@/lib/types";
 import { attachAuthCookies, clearAuthCookies, extractTokenFromRequest, getAuthContext, requireAuth } from "@/lib/auth-guard";
+import { getAdminPermissions } from "@/lib/permissions";
 
 const cleanStr = (v: unknown) => securityService.sanitizeInput(String(v ?? "")).slice(0, 80);
 
@@ -55,9 +56,27 @@ export async function GET(req: NextRequest) {
     sanitized.phoneVerifiedAt = user.phoneVerifiedAt ? user.phoneVerifiedAt.toString() : (profile.phoneNumber ? new Date().toISOString() : null);
   }
 
+  // Resolve dynamic admin role & permissions if user has administrative access
+  let adminPerms = null;
+  if (["admin", "super_admin", "treasurer", "facilitator"].includes(profile.role) || session?.role === "super_admin" || session?.role === "admin") {
+    adminPerms = await getAdminPermissions(userToken).catch(() => null);
+    if (adminPerms) {
+      sanitized.roleTitle = adminPerms.roleTitle || (adminPerms.isSuperAdmin ? "Super Admin" : "Administrator");
+      sanitized.isSuperAdmin = adminPerms.isSuperAdmin;
+      sanitized.permissionKeys = adminPerms.permissionKeys;
+      sanitized.roleNames = adminPerms.roleNames;
+      if (adminPerms.isSuperAdmin) {
+        sanitized.role = "super_admin";
+      }
+    }
+  }
+
   const res = NextResponse.json({
     profile: sanitized,
     user: user || null,
+    adminPermissions: adminPerms,
+    roleTitle: sanitized.roleTitle || (sanitized.role === "super_admin" ? "Super Admin" : sanitized.role === "admin" ? "Administrator" : undefined),
+    isSuperAdmin: sanitized.isSuperAdmin,
     sessionToken: session ? session.token : undefined,
     csrfToken: session?.csrfToken,
   });
@@ -355,12 +374,32 @@ export async function POST(req: NextRequest) {
       // Create server session with HttpOnly cookie & CSRF token
       const session = await dbRepository.createSession(profile.token, profile.role, ip, userAgent);
 
+      const sanitized = sanitizeProfileResponse(profile);
+
+      // Resolve dynamic admin role & permissions if user has administrative access
+      let adminPerms = null;
+      if (["admin", "super_admin", "treasurer", "facilitator"].includes(profile.role)) {
+        adminPerms = await getAdminPermissions(profile.token).catch(() => null);
+        if (adminPerms) {
+          sanitized.roleTitle = adminPerms.roleTitle || (adminPerms.isSuperAdmin ? "Super Admin" : "Administrator");
+          sanitized.isSuperAdmin = adminPerms.isSuperAdmin;
+          sanitized.permissionKeys = adminPerms.permissionKeys;
+          sanitized.roleNames = adminPerms.roleNames;
+          if (adminPerms.isSuperAdmin) {
+            sanitized.role = "super_admin";
+          }
+        }
+      }
+
       const res = NextResponse.json({
         success: true,
         token: session.token,
         csrfToken: session.csrfToken,
         userToken: profile.token,
-        profile: sanitizeProfileResponse(profile),
+        profile: sanitized,
+        adminPermissions: adminPerms,
+        roleTitle: sanitized.roleTitle || (sanitized.role === "super_admin" ? "Super Admin" : sanitized.role === "admin" ? "Administrator" : undefined),
+        isSuperAdmin: sanitized.isSuperAdmin,
       });
 
       attachAuthCookies(res, session.token, session.csrfToken);

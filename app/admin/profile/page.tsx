@@ -32,6 +32,9 @@ interface AdminProfileData {
   email: string;
   phoneNumber: string;
   role: Role;
+  roleTitle?: string;
+  isSuperAdmin?: boolean;
+  permissionKeys?: string[];
   points: number;
   marbles: number;
   status: string;
@@ -258,7 +261,7 @@ export default function AdminProfilePage() {
             <div className="flex items-center gap-2 self-start sm:self-auto">
               <span className="px-3 py-1 rounded-full bg-[#d6a735]/15 border border-[#d6a735]/40 text-[#d6a735] text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
                 <ShieldCheck size={14} />
-                {profile.role.replace("_", " ")}
+                {profile.roleTitle || (profile.isSuperAdmin || profile.role === "super_admin" ? "Super Admin" : "Administrator")}
               </span>
               <span className="px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-800/60 text-emerald-300 text-xs font-semibold capitalize">
                 {profile.status}

@@ -489,6 +489,11 @@ export default function AdminPage() {
             if (data.adminPermissions) {
               setAdminPermissions(data.adminPermissions);
             }
+            if (data.adminRoleTitle) {
+              setAdminRoleName(data.adminRoleTitle);
+            } else if (data.adminPermissions?.roleTitle) {
+              setAdminRoleName(data.adminPermissions.roleTitle);
+            }
             if (data.currentAdmin?.username) {
               setAdminUsername(data.currentAdmin.username);
             }
@@ -517,7 +522,12 @@ export default function AdminPage() {
     if (metrics?.adminPermissions) {
       setAdminPermissions(metrics.adminPermissions);
     }
-  }, [metrics?.settings, metrics?.adminPermissions]);
+    if (metrics?.adminRoleTitle) {
+      setAdminRoleName(metrics.adminRoleTitle);
+    } else if (metrics?.adminPermissions?.roleTitle) {
+      setAdminRoleName(metrics.adminPermissions.roleTitle);
+    }
+  }, [metrics?.settings, metrics?.adminPermissions, metrics?.adminRoleTitle]);
 
   const chartData = useMemo(() => {
     if (metrics?.dailyActivity && metrics.dailyActivity.length > 0) {
@@ -624,6 +634,13 @@ export default function AdminPage() {
       } else if (data.metrics?.adminPermissions) {
         setAdminPermissions(data.metrics.adminPermissions);
       }
+      if (data.adminRoleTitle) {
+        setAdminRoleName(data.adminRoleTitle);
+      } else if (data.adminPermissions?.roleTitle) {
+        setAdminRoleName(data.adminPermissions.roleTitle);
+      } else if (data.profile?.roleTitle) {
+        setAdminRoleName(data.profile.roleTitle);
+      }
       setIsAuthenticated(true);
       setSuccess(`Admin session authenticated for ${data.profile.username}!`);
 
@@ -636,7 +653,9 @@ export default function AdminPage() {
           token: data.token,
           username: data.profile.username,
           points: data.profile.points,
-          role: "admin",
+          role: data.profile.role || (data.adminPermissions?.isSuperAdmin ? "super_admin" : "admin"),
+          roleTitle: data.adminRoleTitle || data.profile?.roleTitle || data.adminPermissions?.roleTitle || (data.adminPermissions?.isSuperAdmin ? "Super Admin" : "Administrator"),
+          isSuperAdmin: Boolean(data.adminPermissions?.isSuperAdmin || data.profile?.isSuperAdmin),
         })
       );
       window.dispatchEvent(new Event("damii-auth-changed"));
@@ -663,6 +682,11 @@ export default function AdminPage() {
         setMetrics(data);
         if (data.adminPermissions) {
           setAdminPermissions(data.adminPermissions);
+        }
+        if (data.adminRoleTitle) {
+          setAdminRoleName(data.adminRoleTitle);
+        } else if (data.adminPermissions?.roleTitle) {
+          setAdminRoleName(data.adminPermissions.roleTitle);
         }
       }
       fetchOrganizersList();
