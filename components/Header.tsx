@@ -164,7 +164,6 @@ export function Header() {
   const [createdUsername, setCreatedUsername] = useState<string | null>(null);
   const [hasCopiedUsername, setHasCopiedUsername] = useState(false);
   const [regExpiresAt, setRegExpiresAt] = useState("");
-  const [regDebugCode, setRegDebugCode] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
 
   // Profile completion state
@@ -619,7 +618,6 @@ export function Header() {
 
       setRegRequestId(data.requestId);
       setRegExpiresAt(data.expiresAt);
-      setRegDebugCode(data.debugCode || null);
       setResendCooldown(60);
       setRegStep(2);
       setAuthSuccess(`6-digit code sent to ${regPhone.trim()}`);
@@ -2405,19 +2403,6 @@ export function Header() {
                       A 6-digit verification code was sent to <strong className="text-white">{regPhone}</strong>.
                     </p>
                   </div>
-
-                  {regDebugCode && (
-                    <div className="p-2 bg-amber-950/60 border border-amber-800 rounded-xl text-amber-200 text-xs flex items-center justify-between">
-                      <span>Sandbox Code: <strong>{regDebugCode}</strong></span>
-                      <button
-                        type="button"
-                        onClick={() => setRegOtpCode(regDebugCode)}
-                        className="px-2 py-0.5 bg-amber-500 text-slate-950 text-[10px] font-black rounded hover:bg-amber-400"
-                      >
-                        Auto-Fill
-                      </button>
-                    </div>
-                  )}
 
                   <div>
                     <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center gap-1">

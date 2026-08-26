@@ -65,7 +65,6 @@ export function OrganizerApplicationForm({
   const [otpRequestId, setOtpRequestId] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpExpiresAt, setOtpExpiresAt] = useState("");
-  const [otpDebugCode, setOtpDebugCode] = useState<string | null>(null);
   const [otpCooldown, setOtpCooldown] = useState(0);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
@@ -191,9 +190,6 @@ export function OrganizerApplicationForm({
 
       setOtpRequestId(data.requestId);
       setOtpExpiresAt(data.expiresAt);
-      if (data.debugCode) {
-        setOtpDebugCode(data.debugCode);
-      }
       setOtpCooldown(60);
       setSuccess(`Verification code sent to ${clean}. Enter the 6-digit code below.`);
     } catch {
@@ -557,11 +553,6 @@ export function OrganizerApplicationForm({
                       <span className="text-xs font-bold text-[#d6a735] flex items-center gap-1.5">
                         <Lock size={14} /> Enter 6-Digit Verification Code
                       </span>
-                      {otpDebugCode && (
-                        <span className="text-[11px] bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/40 font-mono">
-                          Dev Demo Code: {otpDebugCode}
-                        </span>
-                      )}
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <input

@@ -91,7 +91,6 @@ export default function OrganizerPage() {
   const [regOtpRequestId, setRegOtpRequestId] = useState("");
   const [regOtpCode, setRegOtpCode] = useState("");
   const [regOtpCooldown, setRegOtpCooldown] = useState(0);
-  const [regOtpDebugCode, setRegOtpDebugCode] = useState<string | null>(null);
   const [regIsSendingOtp, setRegIsSendingOtp] = useState(false);
   const [regIsVerifyingOtp, setRegIsVerifyingOtp] = useState(false);
 
@@ -388,9 +387,6 @@ export default function OrganizerPage() {
       }
 
       setRegOtpRequestId(data.requestId);
-      if (data.debugCode) {
-        setRegOtpDebugCode(data.debugCode);
-      }
       setRegOtpCooldown(60);
       setSuccess(`6-digit verification code sent to ${clean}. Enter code below to complete account registration.`);
     } catch {

@@ -66,18 +66,14 @@ export async function POST(req: NextRequest) {
       expiresAt,
     });
 
-    // 4. Send SMS to the user
+    // 4. Send SMS to the user (logs to logs/sms-otp.log in simulated/dev mode)
     await sendOtpSms(sanitizedPhone, rawCode);
-
-    // In development or non-production environment, return debugCode for easy testing
-    const isDev = process.env.NODE_ENV !== "production";
 
     return NextResponse.json({
       success: true,
       requestId,
       expiresAt: expiresAt.toISOString(),
       message: `OTP code sent successfully to ${sanitizedPhone}. Expires in 4 minutes.`,
-      debugCode: isDev ? rawCode : undefined,
     });
   } catch (error) {
     return NextResponse.json(

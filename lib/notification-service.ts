@@ -1,4 +1,5 @@
 import { dbRepository } from "./db-client";
+import { logSmsToFile } from "./sms-logger";
 import {
   NotificationItem,
   NotificationType,
@@ -939,10 +940,19 @@ export const notificationService = {
     }
 
     // 4. Mock / Fallback Delivery
+    const mockId = `mock-sms-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    logSmsToFile({
+      type: "SMS",
+      phone: cleanPhone,
+      message: smsText,
+      provider: provider || "mock",
+      status: "SIMULATED_SENT",
+      messageId: mockId,
+    });
     console.log(`[DAMII SMS - MOCK/DISPATCH] [${provider.toUpperCase()}] Sender: "${senderId}" -> To: "${cleanPhone}" | Message: "${smsText}"`);
     return {
       success: true,
-      messageId: `mock-sms-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      messageId: mockId,
       status: "mock_sent",
     };
   },

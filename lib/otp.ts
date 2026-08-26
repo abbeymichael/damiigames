@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { dbRepository } from "./db-client";
 import { OtpRequest } from "./types";
 import { notificationService } from "./notification-service";
+import { logSmsToFile } from "./sms-logger";
 
 const MIN_GAP_SECONDS = 60;
 const MAX_SENDS_PER_HOUR = 4;
@@ -103,6 +104,15 @@ export async function sendOtpSms(
     if (!smsConfig.enabled) {
       console.log(`[damii][sms-disabled] Admin SMS is disabled. OTP for ${cleanPhone}: ${code}`);
       const mockMsgId = `mock-otp-${Date.now()}`;
+      logSmsToFile({
+        type: "OTP",
+        phone: cleanPhone,
+        code,
+        message: smsText,
+        provider: smsConfig.provider || "disabled",
+        status: "SIMULATED_SENT",
+        messageId: mockMsgId,
+      });
       notificationService.recordDispatchedLog({
         id: `otp-log-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`,
         recipientToken: phoneNumber,
@@ -124,6 +134,16 @@ export async function sendOtpSms(
 
     // Execute provider dispatcher (Hubtel / Arkesel / Twilio / Mock)
     const result = await notificationService.executeSmsProvider(smsConfig, cleanPhone, smsText);
+
+    logSmsToFile({
+      type: "OTP",
+      phone: cleanPhone,
+      code,
+      message: smsText,
+      provider: smsConfig.provider || "hubtel",
+      status: result.status === "failed" ? "FAILED" : "SENT",
+      messageId: result.messageId,
+    });
 
     // Record audit log entry in dispatchedChannelLogs
     notificationService.recordDispatchedLog({
