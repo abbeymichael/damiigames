@@ -17,6 +17,49 @@
  * single, readable error instead of a scattered runtime failure.
  */
 
+import fs from "node:fs";
+import path from "node:path";
+
+/**
+ * Load .env files if not already in process.env (zero external dependencies).
+ * Ensures server.js, API routes, and passenger runtime have access to variables.
+ */
+function ensureEnvLoaded() {
+  if (typeof process === "undefined" || !process.cwd) return;
+  const projectRoot = process.cwd();
+  const envFiles = [".env", ".env.local", ".env.production", ".env.production.local"];
+  for (const file of envFiles) {
+    try {
+      const fullPath = path.join(projectRoot, file);
+      if (!fs.existsSync(fullPath)) continue;
+      const contents = fs.readFileSync(fullPath, "utf8");
+      for (const rawLine of contents.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line || line.startsWith("#")) continue;
+        const eq = line.indexOf("=");
+        if (eq === -1) continue;
+        const key = line.slice(0, eq).trim();
+        if (!key) continue;
+        let value = line.slice(eq + 1).trim();
+        if (
+          (value.startsWith('"') && value.endsWith('"') && value.length > 1) ||
+          (value.startsWith("'") && value.endsWith("'") && value.length > 1)
+        ) {
+          value = value.slice(1, -1);
+        }
+        if (process.env[key] === undefined) {
+          process.env[key] = value;
+        }
+      }
+    } catch {
+      // Best-effort loader; ignore read errors in edge runtimes
+    }
+  }
+}
+
+// Ensure env is populated on initial import
+ensureEnvLoaded();
+
 export type DatabaseDialect = "mysql";
 
 export interface MysqlConfig {
@@ -221,8 +264,8 @@ function buildEnv(): AppEnv {
   if (isProduction) {
     if (!appUrl) {
       problems.push("NEXT_PUBLIC_APP_URL is required in production (used for Paystack callbacks)");
-    } else if (!/^https:\/\//i.test(appUrl)) {
-      problems.push("NEXT_PUBLIC_APP_URL must use https:// in production");
+    } else if (!/^https:\/\//i.test(appUrl) && !/^http:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?/i.test(appUrl)) {
+      problems.push("NEXT_PUBLIC_APP_URL must use https:// in production (or http://localhost for local testing)");
     }
   }
 
