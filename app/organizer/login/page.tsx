@@ -110,18 +110,26 @@ export default function OrganizerLoginPage() {
         })
       );
 
+      const userRole = data.profile.role || "user";
+      const isAdminUser = ["admin", "super_admin", "treasurer"].includes(userRole) || Boolean(data.adminPermissions?.isSuperAdmin);
+      const isOrganizerUser = userRole === "organizer" || userRole === "facilitator";
+
       setToken(data.token);
       setUsername(data.profile.username);
-      setRole(data.profile.role || "user");
-      setSuccess(
-        authMode === "register"
-          ? `Account created! Welcome, ${data.profile.username}. Redirecting to Organizer Studio...`
-          : `Signed in as ${data.profile.username}. Redirecting...`
-      );
+      setRole(userRole);
+
+      setSuccess(`Signed in as ${data.profile.username}. Redirecting...`);
+
       window.dispatchEvent(new Event("damii-auth-changed"));
 
       setTimeout(() => {
-        safeNavigate(router, "/organizer");
+        if (isAdminUser) {
+          safeNavigate(router, "/admin");
+        } else if (isOrganizerUser) {
+          safeNavigate(router, "/organizer");
+        } else {
+          safeNavigate(router, "/arena");
+        }
       }, 1000);
     } catch {
       setError("Server connection failed. Please try again.");

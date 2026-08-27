@@ -11,7 +11,24 @@ export const walletService = {
   async getBalance(token: string) {
     const profile = await dbRepository.getProfile(token);
     if (!profile) {
-      return { points: 0, marbles: 0, marblesBalance: 0, rating: 1000, username: "", role: "user", roleTitle: undefined, isSuperAdmin: false, phoneNumber: "", wins: 0, losses: 0, draws: 0 };
+      return {
+        points: 0,
+        marbles: 0,
+        marblesBalance: 0,
+        escrowPoints: 0,
+        escrowMarbles: 0,
+        totalMarbles: 0,
+        activeEscrowLocks: [],
+        rating: 1000,
+        username: "",
+        role: "user",
+        roleTitle: undefined,
+        isSuperAdmin: false,
+        phoneNumber: "",
+        wins: 0,
+        losses: 0,
+        draws: 0,
+      };
     }
     const bal = Math.max(profile.points ?? 0, profile.marbles ?? 0);
 
@@ -28,10 +45,105 @@ export const walletService = {
       }
     }
 
+    // Calculate live active escrow locks for this player
+    let escrowPoints = 0;
+    let escrowMarbles = 0;
+    const activeEscrowLocks: Array<{
+      id: string;
+      type: "wager_match" | "tournament";
+      title: string;
+      reference: string;
+      amount: number;
+      role: "host" | "guest" | "participant";
+      status: string;
+      createdAt: string;
+      opponentName?: string;
+    }> = [];
+
+    try {
+      const allRooms = await dbRepository.listRooms(100).catch(() => []);
+      for (const room of allRooms) {
+        const isHost = room.hostToken === token;
+        const isGuest = room.guestToken === token;
+        if (!isHost && !isGuest) continue;
+
+        if (room.mode === "wager" && room.wagerAmount > 0) {
+          // If host of a waiting or playing wager room
+          if (isHost && (room.status === "waiting" || room.status === "playing" || room.status === "paused")) {
+            escrowPoints += room.wagerAmount;
+            escrowMarbles += room.wagerAmount;
+            activeEscrowLocks.push({
+              id: room.escrowId || `room-${room.code}`,
+              type: "wager_match",
+              title: `1-on-1 Wager Match (Room #${room.code})`,
+              reference: room.code,
+              amount: room.wagerAmount,
+              role: "host",
+              status: room.status === "waiting" ? "Waiting for Opponent" : "Match in Progress",
+              createdAt: room.createdAt || new Date().toISOString(),
+              opponentName: room.guestName || "Waiting for opponent...",
+            });
+          }
+          // If guest of an active playing wager room
+          else if (isGuest && (room.status === "playing" || room.status === "paused")) {
+            escrowPoints += room.wagerAmount;
+            escrowMarbles += room.wagerAmount;
+            activeEscrowLocks.push({
+              id: room.escrowId || `room-${room.code}`,
+              type: "wager_match",
+              title: `1-on-1 Wager Match (Room #${room.code})`,
+              reference: room.code,
+              amount: room.wagerAmount,
+              role: "guest",
+              status: "Match in Progress",
+              createdAt: room.createdAt || new Date().toISOString(),
+              opponentName: room.hostName || "Host",
+            });
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const allLeagues = await dbRepository.listLeagues().catch(() => []);
+      for (const league of allLeagues) {
+        if (
+          (league.status === "pending" || league.status === "registration" || league.status === "in_progress" || league.status === "active") &&
+          (league.entryFeePoints || 0) > 0
+        ) {
+          const participants = await dbRepository.getLeagueParticipants(league.id).catch(() => []);
+          const match = participants.find((p) => p.userToken === token);
+          if (match && match.status !== "cancelled" && match.status !== "rejected" && match.status !== "refunded") {
+            const fee = league.entryFeePoints || 0;
+            escrowPoints += fee;
+            escrowMarbles += fee;
+            activeEscrowLocks.push({
+              id: `league-${league.id}`,
+              type: "tournament",
+              title: `Tournament: ${league.title}`,
+              reference: league.id,
+              amount: fee,
+              role: "participant",
+              status: league.status === "in_progress" ? "Tournament in Progress" : "Registration Locked",
+              createdAt: match.createdAt || league.createdAt || new Date().toISOString(),
+            });
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+
     return {
       points: profile.points ?? 0,
       marbles: profile.marbles ?? 0,
       marblesBalance: bal,
+      escrowPoints,
+      escrowMarbles,
+      totalMarbles: bal + escrowMarbles,
+      activeEscrowLocks,
       rating: profile.rating,
       username: profile.username,
       role: profile.role,
@@ -1297,6 +1409,222 @@ export const walletService = {
   },
 
   // --- Wager Escrow Locking & Payouts ---
+  /**
+   * 1. Host creates a wager match:
+   * Immediately deduct the wager amount from the host's balance and place it into Escrow.
+   */
+  async createWagerEscrowHost(roomCode: string, wagerAmount: number, hostToken: string): Promise<WagerEscrow> {
+    return dbRepository.lockKey(`room_wager:${roomCode}`, async () => {
+      const host = await dbRepository.getProfile(hostToken);
+      const hostBalance = Math.max(host?.marbles ?? 0, host?.points ?? 0);
+
+      if (!host || hostBalance < wagerAmount) {
+        throw new Error(`Insufficient balance for GH₵ ${wagerAmount} Wager (Available: GH₵ ${hostBalance.toFixed(2)})`);
+      }
+
+      // Deduct wager from host immediately upon game creation
+      if ((host.marbles ?? 0) >= wagerAmount) {
+        await dbRepository.updateProfileMarblesBalance(hostToken, -wagerAmount);
+      } else {
+        await dbRepository.updateProfileBalance(hostToken, -wagerAmount);
+      }
+
+      const escrow: WagerEscrow = {
+        id: `escrow-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+        roomCode,
+        amountMarbles: wagerAmount, // Initially host's locked portion
+        amountPoints: wagerAmount,
+        player1Token: hostToken,
+        player2Token: null,
+        lockedAt: new Date().toISOString(),
+        status: "locked",
+        winnerToken: null,
+        disbursedAt: null,
+      };
+
+      await dbRepository.createEscrow(escrow);
+
+      const now = new Date().toISOString();
+      await dbRepository.createTransaction({
+        id: `tx-wager-host-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+        userToken: hostToken,
+        type: "wager_lock",
+        currency: "points",
+        amount: -wagerAmount,
+        reference: escrow.id,
+        status: "completed",
+        metaJson: JSON.stringify({ roomCode, role: "host" }),
+        createdAt: now,
+      });
+
+      await dbRepository.writeLedger([
+        {
+          userId: hostToken,
+          accountType: "available",
+          entryType: "wager_lock",
+          amount: String(-wagerAmount),
+          referenceType: "room",
+          referenceId: roomCode,
+        },
+        {
+          userId: hostToken,
+          accountType: "escrow",
+          entryType: "wager_lock",
+          amount: String(wagerAmount),
+          referenceType: "room",
+          referenceId: roomCode,
+        },
+      ]).catch(() => []);
+
+      return escrow;
+    });
+  },
+
+  /**
+   * 2. Guest joins the wager match:
+   * Immediately deduct the guest's wager amount upon clicking to join and place into Escrow, completing the total pot.
+   */
+  async joinWagerEscrowGuest(escrowId: string, guestToken: string, expectedWagerAmount?: number): Promise<WagerEscrow> {
+    return dbRepository.lockKey(`wager_escrow:${escrowId}`, async () => {
+      const escrow = await dbRepository.getEscrow(escrowId);
+      if (!escrow || escrow.status !== "locked") {
+        throw new Error("Wager escrow not found or is no longer active");
+      }
+
+      if (escrow.player1Token === guestToken) {
+        throw new Error("Host cannot join as their own opponent");
+      }
+
+      if (escrow.player2Token && escrow.player2Token !== guestToken) {
+        throw new Error("Another player has already joined this match escrow");
+      }
+
+      // If guest is already attached and escrow total is completed, return it
+      if (escrow.player2Token === guestToken) {
+        return escrow;
+      }
+
+      const wagerAmount = expectedWagerAmount || escrow.amountPoints;
+      const guest = await dbRepository.getProfile(guestToken);
+      const guestBalance = Math.max(guest?.marbles ?? 0, guest?.points ?? 0);
+
+      if (!guest || guestBalance < wagerAmount) {
+        throw new Error(`Insufficient balance. You need GH₵ ${wagerAmount} to join this wager match (Available: GH₵ ${guestBalance.toFixed(2)})`);
+      }
+
+      // Deduct wager from guest immediately upon clicking join
+      if ((guest.marbles ?? 0) >= wagerAmount) {
+        await dbRepository.updateProfileMarblesBalance(guestToken, -wagerAmount);
+      } else {
+        await dbRepository.updateProfileBalance(guestToken, -wagerAmount);
+      }
+
+      // Complete total escrow pot (Host stake + Guest stake)
+      escrow.player2Token = guestToken;
+      escrow.amountPoints = escrow.amountPoints + wagerAmount;
+      escrow.amountMarbles = escrow.amountMarbles + wagerAmount;
+      await dbRepository.saveEscrow(escrow);
+
+      const now = new Date().toISOString();
+      await dbRepository.createTransaction({
+        id: `tx-wager-guest-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+        userToken: guestToken,
+        type: "wager_lock",
+        currency: "points",
+        amount: -wagerAmount,
+        reference: escrow.id,
+        status: "completed",
+        metaJson: JSON.stringify({ roomCode: escrow.roomCode, role: "guest" }),
+        createdAt: now,
+      });
+
+      await dbRepository.writeLedger([
+        {
+          userId: guestToken,
+          accountType: "available",
+          entryType: "wager_lock",
+          amount: String(-wagerAmount),
+          referenceType: "room",
+          referenceId: escrow.roomCode,
+        },
+        {
+          userId: guestToken,
+          accountType: "escrow",
+          entryType: "wager_lock",
+          amount: String(wagerAmount),
+          referenceType: "room",
+          referenceId: escrow.roomCode,
+        },
+      ]).catch(() => []);
+
+      return escrow;
+    });
+  },
+
+  /**
+   * 3. Refund host if an unjoined room is cancelled, left, or expires.
+   */
+  async refundHostWagerEscrow(escrowId: string, hostToken?: string): Promise<WagerEscrow> {
+    return dbRepository.lockKey(`wager_escrow:${escrowId}`, async () => {
+      const escrow = await dbRepository.getEscrow(escrowId);
+      if (!escrow || escrow.status !== "locked") {
+        return escrow || ({} as WagerEscrow);
+      }
+
+      if (hostToken && escrow.player1Token !== hostToken) {
+        throw new Error("Unauthorized to refund this host escrow");
+      }
+
+      // If an opponent joined, handle standard two-player refund instead
+      if (escrow.player2Token) {
+        return this.disburseWagerEscrow(escrowId, null);
+      }
+
+      const refundAmount = escrow.amountPoints;
+      const now = new Date().toISOString();
+
+      escrow.status = "refunded";
+      escrow.disbursedAt = now;
+      await dbRepository.saveEscrow(escrow);
+
+      // Refund host full initial stake
+      await dbRepository.updateProfileBalance(escrow.player1Token, refundAmount);
+
+      await dbRepository.createTransaction({
+        id: `tx-wager-ref-host-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+        userToken: escrow.player1Token,
+        type: "wager_refund",
+        currency: "points",
+        amount: refundAmount,
+        reference: escrow.id,
+        status: "completed",
+        metaJson: JSON.stringify({ roomCode: escrow.roomCode, reason: "unjoined_room_cancelled" }),
+        createdAt: now,
+      });
+
+      await dbRepository.writeLedger([
+        {
+          userId: escrow.player1Token,
+          accountType: "escrow",
+          entryType: "wager_refund",
+          amount: String(-refundAmount),
+          referenceType: "room",
+          referenceId: escrow.roomCode,
+        },
+        {
+          userId: escrow.player1Token,
+          accountType: "available",
+          entryType: "wager_refund",
+          amount: String(refundAmount),
+          referenceType: "room",
+          referenceId: escrow.roomCode,
+        },
+      ]).catch(() => []);
+
+      return escrow;
+    });
+  },
+
   async lockWagerEscrow(roomCode: string, wagerAmount: number, player1Token: string, player2Token: string): Promise<WagerEscrow> {
     return dbRepository.lockKey(`room_wager:${roomCode}`, async () => {
       const p1 = await dbRepository.getProfile(player1Token);
@@ -1517,12 +1845,13 @@ export const walletService = {
           }] : []),
         ]).catch(() => []);
       } else {
-        // Refund both players full wager amount on draw
+        // Refund full wager amount on draw or cancellation
         escrow.status = "refunded";
         escrow.disbursedAt = now;
         await dbRepository.saveEscrow(escrow);
 
-        const refundPerPlayer = Math.floor(escrow.amountPoints / 2);
+        const isSinglePlayer = !escrow.player2Token;
+        const refundPerPlayer = isSinglePlayer ? escrow.amountPoints : Math.floor(escrow.amountPoints / 2);
         await dbRepository.updateProfileBalance(escrow.player1Token, refundPerPlayer);
         if (escrow.player2Token) {
           await dbRepository.updateProfileBalance(escrow.player2Token, refundPerPlayer);

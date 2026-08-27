@@ -412,7 +412,7 @@ export const adminSettings = mysqlTable(
 /* users — user account root with phone OTP verification & profile completion */
 /* ------------------------------------------------------------------------- */
 export const users = mysqlTable("users", {
-  id: varchar("id", { length: 36 }).primaryKey(),
+  id: varchar("id", { length: 191 }).primaryKey(),
   phoneNumber: varchar("phone_number", { length: 20 }).notNull().unique(),
   phoneVerifiedAt: timestamp("phone_verified_at"),
   fullName: varchar("full_name", { length: 120 }),
@@ -440,7 +440,7 @@ export const users = mysqlTable("users", {
 export const otpRequests = mysqlTable(
   "otp_requests",
   {
-    id: varchar("id", { length: 36 }).primaryKey(),
+    id: varchar("id", { length: 191 }).primaryKey(),
     phoneNumber: varchar("phone_number", { length: 20 }).notNull(),
     codeHash: varchar("code_hash", { length: 128 }).notNull(), // never store the raw code
     ipAddress: varchar("ip_address", { length: 45 }).notNull(),
@@ -460,8 +460,8 @@ export const otpRequests = mysqlTable(
 export const organizerApplications = mysqlTable(
   "organizer_applications",
   {
-    id: varchar("id", { length: 36 }).primaryKey(),
-    userId: varchar("user_id", { length: 36 }).notNull(),
+    id: varchar("id", { length: 191 }).primaryKey(),
+    userId: varchar("user_id", { length: 191 }).notNull(),
     applicantType: mysqlEnum("applicant_type", ["individual", "organization"]),
     organizationName: varchar("organization_name", { length: 160 }),
     organizationRegNumber: varchar("organization_reg_number", { length: 64 }),
@@ -476,11 +476,11 @@ export const organizerApplications = mysqlTable(
     priorExperience: varchar("prior_experience", { length: 500 }),
     termsAcceptedAt: timestamp("terms_accepted_at"),
     status: mysqlEnum("status", ["draft", "pending", "approved", "rejected", "needs_info"]).notNull().default("draft"),
-    previousApplicationId: varchar("previous_application_id", { length: 36 }),
+    previousApplicationId: varchar("previous_application_id", { length: 191 }),
     submittedAt: timestamp("submitted_at"),
     needsInfoRequestedAt: timestamp("needs_info_requested_at"),
     needsInfoNote: varchar("needs_info_note", { length: 500 }),
-    reviewedByAdminId: varchar("reviewed_by_admin_id", { length: 36 }),
+    reviewedByAdminId: varchar("reviewed_by_admin_id", { length: 191 }),
     reviewedAt: timestamp("reviewed_at"),
     reviewNote: varchar("review_note", { length: 500 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -499,9 +499,9 @@ export const organizerApplications = mysqlTable(
 export const organizerRevocations = mysqlTable(
   "organizer_revocations",
   {
-    id: varchar("id", { length: 36 }).primaryKey(),
-    userId: varchar("user_id", { length: 36 }).notNull(),
-    revokedByAdminId: varchar("revoked_by_admin_id", { length: 36 }).notNull(),
+    id: varchar("id", { length: 191 }).primaryKey(),
+    userId: varchar("user_id", { length: 191 }).notNull(),
+    revokedByAdminId: varchar("revoked_by_admin_id", { length: 191 }).notNull(),
     reason: varchar("reason", { length: 500 }).notNull(),
     evidenceUrl: varchar("evidence_url", { length: 255 }),
     reapplyEligibleAt: timestamp("reapply_eligible_at"),
@@ -538,13 +538,13 @@ export const regions = mysqlTable(
 export const matches = mysqlTable(
   "matches",
   {
-    id: varchar("id", { length: 36 }).primaryKey(),
+    id: varchar("id", { length: 191 }).primaryKey(),
     gameType: varchar("game_type", { length: 32 }).notNull(),
-    playerAId: varchar("player_a_id", { length: 36 }).notNull(),
-    playerBId: varchar("player_b_id", { length: 36 }),
+    playerAId: varchar("player_a_id", { length: 191 }).notNull(),
+    playerBId: varchar("player_b_id", { length: 191 }),
     wagerAmount: decimal("wager_amount", { precision: 14, scale: 2 }).notNull(),
     status: mysqlEnum("status", ["open", "in_progress", "completed", "cancelled"]).notNull().default("open"),
-    winnerId: varchar("winner_id", { length: 36 }),
+    winnerId: varchar("winner_id", { length: 191 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     settledAt: timestamp("settled_at"),
   },
@@ -562,8 +562,8 @@ export const matches = mysqlTable(
 export const tournaments = mysqlTable(
   "tournaments",
   {
-    id: varchar("id", { length: 36 }).primaryKey(),
-    organizerId: varchar("organizer_id", { length: 36 }).notNull(),
+    id: varchar("id", { length: 191 }).primaryKey(),
+    organizerId: varchar("organizer_id", { length: 191 }).notNull(),
     gameType: varchar("game_type", { length: 32 }).notNull(),
     entryFee: decimal("entry_fee", { precision: 14, scale: 2 }).notNull().default("0.00"),
     totalPrizePool: decimal("total_prize_pool", { precision: 14, scale: 2 }).notNull(),
@@ -581,8 +581,8 @@ export const tournaments = mysqlTable(
 export const tournamentPrizes = mysqlTable(
   "tournament_prizes",
   {
-    id: varchar("id", { length: 36 }).primaryKey(),
-    tournamentId: varchar("tournament_id", { length: 36 }).notNull(),
+    id: varchar("id", { length: 191 }).primaryKey(),
+    tournamentId: varchar("tournament_id", { length: 191 }).notNull(),
     placement: int("placement").notNull(), // 1, 2, 3...
     amount: decimal("amount", { precision: 14, scale: 2 }).notNull(),
   },
@@ -594,9 +594,9 @@ export const tournamentPrizes = mysqlTable(
 export const tournamentEntries = mysqlTable(
   "tournament_entries",
   {
-    id: varchar("id", { length: 36 }).primaryKey(),
-    tournamentId: varchar("tournament_id", { length: 36 }).notNull(),
-    userId: varchar("user_id", { length: 36 }).notNull(),
+    id: varchar("id", { length: 191 }).primaryKey(),
+    tournamentId: varchar("tournament_id", { length: 191 }).notNull(),
+    userId: varchar("user_id", { length: 191 }).notNull(),
     feePaid: decimal("fee_paid", { precision: 14, scale: 2 }).notNull().default("0.00"),
     finalPlacement: int("final_placement"),
     joinedAt: timestamp("joined_at").notNull().defaultNow(),
@@ -614,7 +614,7 @@ export const tournamentEntries = mysqlTable(
 export const gameTypeLimits = mysqlTable(
   "game_type_limits",
   {
-    id: varchar("id", { length: 36 }).primaryKey(),
+    id: varchar("id", { length: 191 }).primaryKey(),
     gameType: varchar("game_type", { length: 32 }).notNull().unique(),
     minWager: decimal("min_wager", { precision: 14, scale: 2 }).notNull(),
     maxWager: decimal("max_wager", { precision: 14, scale: 2 }).notNull(),
@@ -648,14 +648,14 @@ export const ledgerEntryType = mysqlEnum("entry_type", [
 export const ledgerEntries = mysqlTable(
   "ledger_entries",
   {
-    id: varchar("id", { length: 36 }).primaryKey(), // uuid
-    userId: varchar("user_id", { length: 36 }).notNull(),
+    id: varchar("id", { length: 191 }).primaryKey(), // uuid
+    userId: varchar("user_id", { length: 191 }).notNull(),
     accountType: ledgerAccountType.notNull(),
     entryType: ledgerEntryType.notNull(),
     amount: decimal("amount", { precision: 14, scale: 2 }).notNull(), // signed
     referenceType: varchar("reference_type", { length: 32 }).notNull(), // "match", "tournament", "wallet"
-    referenceId: varchar("reference_id", { length: 36 }).notNull(),
-    transactionGroupId: varchar("transaction_group_id", { length: 36 }).notNull(),
+    referenceId: varchar("reference_id", { length: 191 }).notNull(),
+    transactionGroupId: varchar("transaction_group_id", { length: 191 }).notNull(),
     balanceAfter: decimal("balance_after", { precision: 14, scale: 2 }).notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
@@ -670,7 +670,7 @@ export const ledgerEntries = mysqlTable(
 /* roles — RBAC Role Definitions (Section 1)                                  */
 /* ------------------------------------------------------------------------- */
 export const roles = mysqlTable("roles", {
-  id: varchar("id", { length: 36 }).primaryKey(),
+  id: varchar("id", { length: 191 }).primaryKey(),
   name: varchar("name", { length: 64 }).notNull().unique(), // "Super Admin", "Finance Admin", "Support Admin", "Reviewer"
   description: varchar("description", { length: 255 }),
   isSystemRole: tinyint("is_system_role").notNull().default(0), // true only for "Super Admin"
@@ -681,7 +681,7 @@ export const roles = mysqlTable("roles", {
 /* permissions — Granular system permissions (Section 1)                      */
 /* ------------------------------------------------------------------------- */
 export const permissions = mysqlTable("permissions", {
-  id: varchar("id", { length: 36 }).primaryKey(),
+  id: varchar("id", { length: 191 }).primaryKey(),
   key: varchar("key", { length: 96 }).notNull().unique(), // "users.suspend", "ledger.adjust", "disputes.resolve"
   category: varchar("category", { length: 32 }).notNull(), // "review" | "operations" | "admin" | "system"
   description: varchar("description", { length: 255 }).notNull(),
@@ -693,8 +693,8 @@ export const permissions = mysqlTable("permissions", {
 export const rolePermissions = mysqlTable(
   "role_permissions",
   {
-    roleId: varchar("role_id", { length: 36 }).notNull(),
-    permissionId: varchar("permission_id", { length: 36 }).notNull(),
+    roleId: varchar("role_id", { length: 191 }).notNull(),
+    permissionId: varchar("permission_id", { length: 191 }).notNull(),
   },
   (table) => [primaryKey({ columns: [table.roleId, table.permissionId] })],
 );
@@ -705,9 +705,9 @@ export const rolePermissions = mysqlTable(
 export const adminUserRoles = mysqlTable(
   "admin_user_roles",
   {
-    userId: varchar("user_id", { length: 36 }).notNull(),
-    roleId: varchar("role_id", { length: 36 }).notNull(),
-    assignedByAdminId: varchar("assigned_by_admin_id", { length: 36 }).notNull(),
+    userId: varchar("user_id", { length: 191 }).notNull(),
+    roleId: varchar("role_id", { length: 191 }).notNull(),
+    assignedByAdminId: varchar("assigned_by_admin_id", { length: 191 }).notNull(),
     assignedAt: timestamp("assigned_at").notNull().defaultNow(),
   },
   (table) => [primaryKey({ columns: [table.userId, table.roleId] })],
@@ -717,7 +717,7 @@ export const adminUserRoles = mysqlTable(
 /* games — Catalog of supported games (Section 2.2)                          */
 /* ------------------------------------------------------------------------- */
 export const games = mysqlTable("games", {
-  id: varchar("id", { length: 36 }).primaryKey(),
+  id: varchar("id", { length: 191 }).primaryKey(),
   name: varchar("name", { length: 64 }).notNull(),
   slug: varchar("slug", { length: 32 }).notNull().unique(), // "damii-10x10", "blitz-damii", etc.
   iconUrl: varchar("icon_url", { length: 255 }),
@@ -730,15 +730,15 @@ export const games = mysqlTable("games", {
 /* tournament_action_requests — Organizer requests approval queue (Section 2.3) */
 /* ------------------------------------------------------------------------- */
 export const tournamentActionRequests = mysqlTable("tournament_action_requests", {
-  id: varchar("id", { length: 36 }).primaryKey(),
-  tournamentId: varchar("tournament_id", { length: 36 }).notNull(),
-  organizerId: varchar("organizer_id", { length: 36 }).notNull(),
+  id: varchar("id", { length: 191 }).primaryKey(),
+  tournamentId: varchar("tournament_id", { length: 191 }).notNull(),
+  organizerId: varchar("organizer_id", { length: 191 }).notNull(),
   requestType: mysqlEnum("request_type", ["cancel_tournament", "disqualify_player", "result_override"]).notNull(),
-  targetUserId: varchar("target_user_id", { length: 36 }),
-  matchId: varchar("match_id", { length: 36 }),
+  targetUserId: varchar("target_user_id", { length: 191 }),
+  matchId: varchar("match_id", { length: 191 }),
   reason: varchar("reason", { length: 500 }).notNull(),
   status: mysqlEnum("status", ["pending", "approved", "rejected"]).notNull().default("pending"),
-  reviewedByAdminId: varchar("reviewed_by_admin_id", { length: 36 }),
+  reviewedByAdminId: varchar("reviewed_by_admin_id", { length: 191 }),
   reviewedAt: timestamp("reviewed_at"),
   reviewNote: varchar("review_note", { length: 500 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -750,11 +750,11 @@ export const tournamentActionRequests = mysqlTable("tournament_action_requests",
 export const systemSettings = mysqlTable(
   "system_settings",
   {
-    id: varchar("id", { length: 36 }).primaryKey(),
+    id: varchar("id", { length: 191 }).primaryKey(),
     category: mysqlEnum("category", ["sms", "email", "general", "backup", "security"]).notNull(),
     key: varchar("key", { length: 96 }).notNull(),
     value: text("value").notNull(), // JSON string payload
-    updatedByAdminId: varchar("updated_by_admin_id", { length: 36 }),
+    updatedByAdminId: varchar("updated_by_admin_id", { length: 191 }),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => [
@@ -768,7 +768,7 @@ export const systemSettings = mysqlTable(
 export const deposits = mysqlTable(
   "deposits",
   {
-    id: varchar("id", { length: 36 }).primaryKey(),
+    id: varchar("id", { length: 191 }).primaryKey(),
     userId: varchar("user_id", { length: 191 }).notNull(),
     amount: decimal("amount", { precision: 14, scale: 2 }).notNull(),
     currency: varchar("currency", { length: 16 }).notNull().default("GHS"),
@@ -792,7 +792,7 @@ export const deposits = mysqlTable(
     rejectedBy: varchar("rejected_by", { length: 191 }),
     rejectionReason: text("rejection_reason"),
     metadataJson: text("metadata_json"),
-    ledgerEntryId: varchar("ledger_entry_id", { length: 36 }),
+    ledgerEntryId: varchar("ledger_entry_id", { length: 191 }),
     walletTransactionId: varchar("wallet_transaction_id", { length: 191 }),
     createdAt: isoTimestamp("created_at").notNull(),
     updatedAt: isoTimestamp("updated_at").notNull(),
@@ -810,7 +810,7 @@ export const deposits = mysqlTable(
 export const withdrawals = mysqlTable(
   "withdrawals",
   {
-    id: varchar("id", { length: 36 }).primaryKey(),
+    id: varchar("id", { length: 191 }).primaryKey(),
     userId: varchar("user_id", { length: 191 }).notNull(),
     amount: decimal("amount", { precision: 14, scale: 2 }).notNull(),
     currency: varchar("currency", { length: 16 }).notNull().default("GHS"),
@@ -839,7 +839,7 @@ export const withdrawals = mysqlTable(
     rejectionReason: text("rejection_reason"),
     disbursedAt: isoTimestamp("disbursed_at"),
     metadataJson: text("metadata_json"),
-    ledgerEntryId: varchar("ledger_entry_id", { length: 36 }),
+    ledgerEntryId: varchar("ledger_entry_id", { length: 191 }),
     walletTransactionId: varchar("wallet_transaction_id", { length: 191 }),
     createdAt: isoTimestamp("created_at").notNull(),
     updatedAt: isoTimestamp("updated_at").notNull(),
@@ -858,8 +858,8 @@ export const withdrawals = mysqlTable(
 export const depositActions = mysqlTable(
   "deposit_actions",
   {
-    id: varchar("id", { length: 36 }).primaryKey(),
-    depositId: varchar("deposit_id", { length: 36 }).notNull(),
+    id: varchar("id", { length: 191 }).primaryKey(),
+    depositId: varchar("deposit_id", { length: 191 }).notNull(),
     action: varchar("action", { length: 32 }).notNull(),
     actorId: varchar("actor_id", { length: 191 }).notNull(),
     actorName: varchar("actor_name", { length: 191 }),
@@ -882,8 +882,8 @@ export const depositActions = mysqlTable(
 export const withdrawalActions = mysqlTable(
   "withdrawal_actions",
   {
-    id: varchar("id", { length: 36 }).primaryKey(),
-    withdrawalId: varchar("withdrawal_id", { length: 36 }).notNull(),
+    id: varchar("id", { length: 191 }).primaryKey(),
+    withdrawalId: varchar("withdrawal_id", { length: 191 }).notNull(),
     action: varchar("action", { length: 32 }).notNull(),
     actorId: varchar("actor_id", { length: 191 }).notNull(),
     actorName: varchar("actor_name", { length: 191 }),

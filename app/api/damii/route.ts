@@ -178,9 +178,13 @@ export async function GET(req: NextRequest) {
     if (now - createdMs > 10 * 60 * 1000) {
       room.status = "cancelled";
       await dbRepository.saveRoom(room);
+      // Refund host locked wager from escrow if applicable
+      if (room.escrowId) {
+        await walletService.refundHostWagerEscrow(room.escrowId, room.hostToken).catch(() => {});
+      }
       return NextResponse.json({
         room: formatRoomResponse(room, token),
-        message: "Room automatically expired after 10 minutes with no opponent.",
+        message: "Room automatically expired after 10 minutes with no opponent. Wager stake refunded.",
       });
     }
   }
@@ -280,17 +284,6 @@ export async function POST(req: NextRequest) {
       const ruleVariations = body.ruleVariations || undefined;
       const customConstraints = body.customConstraints || undefined;
 
-      if (mode === "wager" && wagerAmount > 0) {
-        const profile = await dbRepository.getProfile(token);
-        const availableBalance = Math.max(Number(profile?.points ?? 0), Number(profile?.marbles ?? 0));
-        if (!profile || availableBalance < wagerAmount) {
-          return NextResponse.json(
-            { error: `Insufficient balance for GH₵ ${wagerAmount} Wager (Available: GH₵ ${availableBalance.toFixed(2)})` },
-            { status: 400 }
-          );
-        }
-      }
-
       // Check rating limits on creation if customConstraints specify min/max rating
       if (customConstraints && existingProfile) {
         if (customConstraints.minRating !== undefined && customConstraints.minRating !== null && existingProfile.rating < customConstraints.minRating) {
@@ -319,6 +312,20 @@ export async function POST(req: NextRequest) {
       }
       if (!code) code = `DAM${Math.floor(100 + Math.random() * 900)}`;
 
+      // IMMEDIATELY deduct host's wager amount upon creating the 1-on-1 wager match and place into Escrow
+      let escrowId: string | null = null;
+      if (mode === "wager" && wagerAmount > 0) {
+        try {
+          const escrow = await walletService.createWagerEscrowHost(code, wagerAmount, token);
+          escrowId = escrow.id;
+        } catch (err) {
+          return NextResponse.json(
+            { error: err instanceof Error ? err.message : "Failed to deduct wager and create escrow" },
+            { status: 400 }
+          );
+        }
+      }
+
       const isPrivate = Boolean(body.isPrivate);
       const now = new Date().toISOString();
       const room: Room = {
@@ -338,7 +345,7 @@ export async function POST(req: NextRequest) {
         status: "waiting",
         mode,
         wagerAmount,
-        escrowId: null,
+        escrowId,
         leagueId: body.leagueId ? String(body.leagueId) : null,
         matchId: body.matchId ? String(body.matchId) : null,
         ruleVariations,
@@ -402,21 +409,24 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Validate wager requirement for guest and host
+      // IMMEDIATELY deduct guest wager upon clicking to join and place in Escrow to complete the total pot
       if (room.mode === "wager" && room.wagerAmount > 0) {
-        const guestProfile = await dbRepository.getProfile(token);
-        const hostProfile = await dbRepository.getProfile(room.hostToken);
-        const guestBalance = Math.max(Number(guestProfile?.points ?? 0), Number(guestProfile?.marbles ?? 0));
-        const hostBalance = Math.max(Number(hostProfile?.points ?? 0), Number(hostProfile?.marbles ?? 0));
-        if (guestBalance < room.wagerAmount) {
+        try {
+          if (room.escrowId) {
+            await walletService.joinWagerEscrowGuest(room.escrowId, token, room.wagerAmount);
+          } else {
+            // Fallback for legacy rooms without prior host escrow
+            const escrow = await walletService.lockWagerEscrow(
+              room.code,
+              room.wagerAmount,
+              room.hostToken,
+              token
+            );
+            room.escrowId = escrow.id;
+          }
+        } catch (err) {
           return NextResponse.json(
-            { error: `Insufficient balance. You need GH₵ ${room.wagerAmount} to accept this wager challenge (Available: GH₵ ${guestBalance.toFixed(2)}).` },
-            { status: 400 }
-          );
-        }
-        if (hostBalance < room.wagerAmount) {
-          return NextResponse.json(
-            { error: `Host has insufficient balance for this wager match (Host available: GH₵ ${hostBalance.toFixed(2)}).` },
+            { error: err instanceof Error ? err.message : "Failed to deduct joiner wager and lock escrow" },
             { status: 400 }
           );
         }
@@ -431,21 +441,6 @@ export async function POST(req: NextRequest) {
       room.lastMoveTime = Date.now();
       room.disconnectTime = null;
       room.disconnectedPlayer = null;
-
-      // Lock wager escrow if wager match
-      if (room.mode === "wager" && room.wagerAmount > 0 && !room.escrowId) {
-        try {
-          const escrow = await walletService.lockWagerEscrow(
-            room.code,
-            room.wagerAmount,
-            room.hostToken,
-            room.guestToken
-          );
-          room.escrowId = escrow.id;
-        } catch (err) {
-          return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to lock wager escrow" }, { status: 400 });
-        }
-      }
 
       await dbRepository.saveRoom(room);
       const profile = await dbRepository.getProfile(token);
@@ -475,7 +470,7 @@ export async function POST(req: NextRequest) {
         room.disconnectTime = null;
         room.disconnectedPlayer = null;
 
-        // Lock wager escrow if wager match
+        // Ensure wager escrow is complete
         if (room.mode === "wager" && room.wagerAmount > 0 && !room.escrowId) {
           try {
             const escrow = await walletService.lockWagerEscrow(
@@ -510,6 +505,9 @@ export async function POST(req: NextRequest) {
           await dbRepository.saveRoom(room);
         } else if (token === room.hostToken) {
           room.status = "cancelled";
+          if (room.escrowId) {
+            await walletService.refundHostWagerEscrow(room.escrowId, room.hostToken).catch(() => {});
+          }
           await dbRepository.saveRoom(room);
         }
       }
@@ -752,9 +750,9 @@ export async function POST(req: NextRequest) {
         room.status = "cancelled";
         await dbRepository.saveRoom(room);
 
-        // Refund any host wager lock if applicable
+        // Refund host wager lock immediately back to available balance
         if (room.escrowId) {
-          await walletService.disburseWagerEscrow(room.escrowId, null);
+          await walletService.refundHostWagerEscrow(room.escrowId, room.hostToken).catch(() => {});
         }
 
         const profile = await dbRepository.getProfile(token);

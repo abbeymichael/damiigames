@@ -94,6 +94,9 @@ export async function POST(req: NextRequest) {
       address,
       momoNetwork,
       referralCode,
+      accountType,
+      organizationName,
+      orgBio,
     } = body;
 
     // Validate Password if provided
@@ -284,11 +287,56 @@ export async function POST(req: NextRequest) {
       await dbRepository.saveProfile(profile);
     }
 
+    // If registering as organizer, initialize organizer profile & application
+    let organizerProfile = null;
+    if (accountType === "organizer" || organizationName) {
+      const orgName = String(organizationName || `${finalUsername} Tournaments`).trim();
+      const bioText = orgBio ? String(orgBio).trim() : `Tournament Facilitator & Organizer account for ${finalUsername}`;
+
+      organizerProfile = await dbRepository.saveOrganizerProfile({
+        userId,
+        username: finalUsername,
+        status: "pending",
+        requestedAt: now,
+        organizationName: orgName,
+        bio: bioText,
+        contactPhone: updatedUser.phoneNumber,
+      });
+
+      const existingApp = await dbRepository.getOrganizerApplicationByUserId(userId);
+      if (existingApp) {
+        await dbRepository.updateOrganizerApplication(existingApp.id, {
+          organizationName: orgName,
+          priorExperience: bioText,
+          status: "pending",
+        });
+      } else {
+        await dbRepository.createOrganizerApplication({
+          id: `app-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          userId,
+          applicantType: "individual",
+          organizationName: orgName,
+          ghanaCardFrontUrl: "https://damii.app/docs/gh-card-front.png",
+          ghanaCardBackUrl: "https://damii.app/docs/gh-card-back.png",
+          selfieUrl: "https://damii.app/docs/selfie.png",
+          physicalAddress: cleanFullName || "Ghana",
+          proofOfAddressUrl: "https://damii.app/docs/proof-of-address.pdf",
+          intendedGameTypes: JSON.stringify(["damii_10x10"]),
+          priorExperience: bioText,
+          termsAcceptedAt: now,
+          status: "pending",
+          createdAt: now,
+        });
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message: "Profile saved successfully",
       user: updatedUser,
       profileCompleted: true,
+      accountType: accountType || "player",
+      organizerProfile,
     });
   } catch (error) {
     return NextResponse.json(

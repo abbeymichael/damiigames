@@ -154,6 +154,7 @@ export function Header() {
 
   // Auth modal state
   const [authMode, setAuthMode] = useState<"login" | "register" | "complete_profile">("login");
+  const [regAccountType, setRegAccountType] = useState<"player" | "organizer">("player");
   const [regStep, setRegStep] = useState<1 | 2 | 3>(1);
   const [regPhone, setRegPhone] = useState("");
   const [regRequestId, setRegRequestId] = useState("");
@@ -165,6 +166,8 @@ export function Header() {
   const [hasCopiedUsername, setHasCopiedUsername] = useState(false);
   const [regExpiresAt, setRegExpiresAt] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [regOrgName, setRegOrgName] = useState("");
+  const [regOrgBio, setRegOrgBio] = useState("");
 
   // Profile completion state
   const [profFullName, setProfFullName] = useState("");
@@ -535,9 +538,12 @@ export function Header() {
     const handleOpenAuth = (e: Event) => {
       setAuthError("");
       setAuthSuccess("");
-      const customEvent = e as CustomEvent<{ mode?: "login" | "register" }>;
+      const customEvent = e as CustomEvent<{ mode?: "login" | "register" | "complete_profile"; accountType?: "player" | "organizer" }>;
       if (customEvent.detail?.mode) {
         setAuthMode(customEvent.detail.mode);
+      }
+      if (customEvent.detail?.accountType) {
+        setRegAccountType(customEvent.detail.accountType);
       }
       setIsAuthOpen(true);
     };
@@ -670,6 +676,10 @@ export function Header() {
       // If this was an existing user who already has a completed profile, log them straight in
       if (isCompleted && (data.username || data.user?.username)) {
         const uname = data.username || data.user?.username;
+        const userRole = data.user?.role || data.profile?.role || "player";
+        const isAdminUser = ["admin", "super_admin", "treasurer"].includes(userRole);
+        const isOrganizerUser = userRole === "organizer" || userRole === "facilitator";
+
         localStorage.setItem("damii-player-token", data.token);
         localStorage.setItem("damii-player-name", uname);
         localStorage.setItem(
@@ -678,20 +688,37 @@ export function Header() {
             token: data.token,
             username: uname,
             points: 500,
-            role: data.user?.role || "player",
+            role: userRole,
           })
         );
         setUsername(uname);
-        setAuthSuccess(`🎉 Welcome back, ${uname}!`);
+
+        if (isAdminUser) {
+          setAuthSuccess(`👑 Welcome Admin ${uname}! Redirecting to Admin Dashboard...`);
+        } else if (isOrganizerUser) {
+          setAuthSuccess(`🏆 Welcome Organizer ${uname}! Redirecting to Organizer Studio...`);
+        } else {
+          setAuthSuccess(`🎉 Welcome back, ${uname}! Redirecting to Arena...`);
+        }
+
         window.dispatchEvent(new Event("damii-auth-changed"));
         setTimeout(() => {
           setIsAuthOpen(false);
           setRegStep(1);
           setRegOtpCode("");
           setAuthSuccess("");
-        }, 1200);
+          if (isAdminUser) {
+            safeNavigate(router, "/admin");
+          } else if (isOrganizerUser) {
+            safeNavigate(router, "/organizer");
+          } else {
+            if (pathname === "/" || pathname === "/organizer/login" || pathname === "/admin") {
+              safeNavigate(router, "/arena");
+            }
+          }
+        }, 1000);
       } else {
-        // Move to Step 3: Complete Player Registration Details
+        // Move to Step 3: Complete Player or Organizer Registration Details
         if (data.user?.fullName) setProfFullName(data.user.fullName);
         if (data.user?.email) setProfEmail(data.user.email);
         const assignedGamerTag = data.username || data.user?.username || "";
@@ -699,7 +726,7 @@ export function Header() {
           setProfUsername(assignedGamerTag);
         }
         setRegStep(3);
-        setAuthSuccess("Phone verified successfully! Complete your player profile below.");
+        setAuthSuccess(`Phone verified! Complete your ${regAccountType === "organizer" ? "Organizer" : "Player"} profile below.`);
       }
     } catch {
       setAuthError("Verification failed. Please check your connection.");
@@ -736,8 +763,13 @@ export function Header() {
       return;
     }
 
+    if (regAccountType === "organizer" && !regOrgName.trim()) {
+      setAuthError("Organization / Club Name is required for Organizer accounts.");
+      return;
+    }
+
     if (!profDob) {
-      setAuthError("Date of birth is required to verify player eligibility.");
+      setAuthError("Date of birth is required to verify account eligibility.");
       return;
     }
 
@@ -775,6 +807,9 @@ export function Header() {
           dateOfBirth: new Date(profDob).toISOString(),
           password: regPassword.trim(),
           confirmPassword: regConfirmPassword.trim(),
+          accountType: regAccountType,
+          organizationName: regOrgName.trim() || undefined,
+          orgBio: regOrgBio.trim() || undefined,
         }),
       });
 
@@ -787,7 +822,14 @@ export function Header() {
       }
 
       const finalName = data.user?.username || profUsername.trim();
-      setAuthSuccess(`🎉 Welcome to DAMII Arena, ${finalName}! Your player profile is registered & verified.`);
+      const assignedRole = regAccountType === "organizer" ? "organizer" : (data.user?.role || "player");
+
+      if (regAccountType === "organizer") {
+        setAuthSuccess(`🏆 Welcome Organizer, ${finalName}! Your Organizer account is activated. Redirecting to Organizer Studio...`);
+      } else {
+        setAuthSuccess(`🎉 Welcome to DAMII Arena, ${finalName}! Your player profile is registered & verified. Redirecting to Arena...`);
+      }
+
       setProfileCompleted(true);
       setUsername(finalName);
 
@@ -800,7 +842,7 @@ export function Header() {
             token: userToken,
             username: finalName,
             points: 500,
-            role: data.user?.role || "player",
+            role: assignedRole,
           })
         );
       }
@@ -814,7 +856,12 @@ export function Header() {
         setRegPassword("");
         setRegConfirmPassword("");
         setAuthSuccess("");
-      }, 1400);
+        if (regAccountType === "organizer") {
+          safeNavigate(router, "/organizer");
+        } else {
+          safeNavigate(router, "/arena");
+        }
+      }, 1200);
     } catch {
       setAuthError("Failed to save profile. Please check your connection.");
     } finally {
@@ -828,7 +875,7 @@ export function Header() {
     setAuthSuccess("");
 
     if (!formUsername.trim() || !formPasscode.trim()) {
-      setAuthError("Username and passcode are required.");
+      setAuthError("Username/phone number and password are required.");
       return;
     }
 
@@ -867,13 +914,33 @@ export function Header() {
         })
       );
 
-      setAuthSuccess(`Welcome back, ${data.profile.username}!`);
+      const userRole = data.profile.role;
+      const isAdminUser = ["admin", "super_admin", "treasurer"].includes(userRole) || Boolean(data.adminPermissions?.isSuperAdmin) || Boolean(data.isSuperAdmin);
+      const isOrganizerUser = userRole === "organizer" || userRole === "facilitator";
+
+      if (isAdminUser) {
+        setAuthSuccess(`👑 Welcome Admin ${data.profile.username}! Redirecting to Admin Control Center...`);
+      } else if (isOrganizerUser) {
+        setAuthSuccess(`🏆 Welcome Organizer ${data.profile.username}! Redirecting to Organizer Studio...`);
+      } else {
+        setAuthSuccess(`🎉 Welcome back, ${data.profile.username}! Redirecting to Arena...`);
+      }
+
       window.dispatchEvent(new Event("damii-auth-changed"));
 
       setTimeout(() => {
         setIsAuthOpen(false);
         setFormPasscode("");
         setAuthSuccess("");
+        if (isAdminUser) {
+          safeNavigate(router, "/admin");
+        } else if (isOrganizerUser) {
+          safeNavigate(router, "/organizer");
+        } else {
+          if (pathname === "/" || pathname === "/organizer/login" || pathname === "/admin") {
+            safeNavigate(router, "/arena");
+          }
+        }
       }, 1000);
     } catch {
       setAuthError("Server communication error. Please try again.");
@@ -2248,25 +2315,25 @@ export function Header() {
                     {createdUsername
                       ? "Account Created Successfully!"
                       : authMode === "login"
-                      ? "Player Account Sign In"
+                      ? "Sign In"
                       : authMode === "complete_profile"
-                      ? "Complete Player Profile"
+                      ? "Complete Profile"
                       : regStep === 1
-                      ? "Register with Phone & OTP"
+                      ? "Create Account"
                       : regStep === 2
-                      ? "Verify Phone & Set Password"
-                      : "Complete Player Profile"}
+                      ? "Verify Phone via SMS OTP"
+                      : (regAccountType === "organizer" ? "Complete Organizer Profile" : "Complete Player Profile")}
                   </h3>
                   <p className="text-[11px] text-[#d6a735]">
                     {createdUsername
-                      ? "Your unique 6-character Gamer Tag has been generated"
+                      ? "Your Gamer Tag has been assigned"
                       : authMode === "login"
-                      ? "Sign in with your username or phone number and password"
+                      ? "Sign in to access your account"
                       : authMode === "complete_profile" || regStep === 3
-                      ? "Step 3 of 3: Identity & Payout Account"
+                      ? (regAccountType === "organizer" ? "Step 3 of 3: Organization & Details" : "Step 3 of 3: Gamer Tag & Password")
                       : regStep === 2
-                      ? "Step 2 of 2: Code Verification & Password"
-                      : "Step 1 of 2: Instant Phone Verification"}
+                      ? "Step 2 of 3: Enter 6-digit SMS verification code"
+                      : "Step 1 of 3: Select account type & verify mobile number"}
                   </p>
                 </div>
               </div>
@@ -2298,7 +2365,7 @@ export function Header() {
                       : "text-slate-300 hover:text-white hover:bg-[#0c3b2e]"
                   }`}
                 >
-                  <LogIn size={14} /> Sign In (Passcode)
+                  <LogIn size={14} /> Sign In
                 </button>
                 <button
                   type="button"
@@ -2313,7 +2380,7 @@ export function Header() {
                       : "text-slate-300 hover:text-white hover:bg-[#0c3b2e]"
                   }`}
                 >
-                  <Smartphone size={14} /> Register (Phone OTP)
+                  <UserPlus size={14} /> Register
                 </button>
               </div>
             )}
@@ -2333,21 +2400,64 @@ export function Header() {
                 </div>
               )}
 
-              {/* Registration Step 1: Phone Request OTP */}
+              {/* Registration Step 1: Account Type Selection & Phone Request OTP */}
               {authMode === "register" && regStep === 1 && (
                 <form onSubmit={handleRequestOtp} className="space-y-4">
-                  <div className="p-3 bg-[#0c3b2e]/70 border border-[#d6a735]/30 rounded-xl text-xs space-y-1">
-                    <span className="font-bold text-[#d6a735] flex items-center gap-1">
-                      <Sparkles size={14} /> Draughts Arena Registration
-                    </span>
-                    <p className="text-slate-300 text-[11px]">
-                      Enter your phone number to receive a one-time 6-digit SMS verification code. No password required.
-                    </p>
+                  {/* Account Type Selection */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-[#f5efdf]">
+                      Select Account Type:
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setRegAccountType("player")}
+                        className={`p-3 rounded-xl text-left border transition-all relative ${
+                          regAccountType === "player"
+                            ? "bg-[#0c3b2e] border-[#d6a735] shadow-md ring-1 ring-[#d6a735]"
+                            : "bg-[#06261f] border-[#184d3c] hover:border-[#d6a735]/40 opacity-80"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-xs text-[#f5efdf] flex items-center gap-1.5">
+                            <Users size={14} className="text-[#d6a735]" /> Player Account
+                          </span>
+                          <span className="text-[9px] bg-[#d6a735]/20 text-[#d6a735] px-1.5 py-0.5 rounded font-bold">
+                            Default
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-tight">
+                          Play 1v1 wagers, casual draughts, climb ranks &amp; join tournaments.
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setRegAccountType("organizer")}
+                        className={`p-3 rounded-xl text-left border transition-all relative ${
+                          regAccountType === "organizer"
+                            ? "bg-[#0c3b2e] border-[#d6a735] shadow-md ring-1 ring-[#d6a735]"
+                            : "bg-[#06261f] border-[#184d3c] hover:border-[#d6a735]/40 opacity-80"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-xs text-[#f5efdf] flex items-center gap-1.5">
+                            <Trophy size={14} className="text-[#d6a735]" /> Tournament Organizer
+                          </span>
+                          <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-bold">
+                            Host Leagues
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-tight">
+                          Host tournaments, manage brackets, register gaming venues &amp; clubs.
+                        </p>
+                      </button>
+                    </div>
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center gap-1">
-                      <Phone size={13} className="text-[#d6a735]" /> Phone Number (Payout &amp; Verification)
+                      <Phone size={13} className="text-[#d6a735]" /> Mobile Phone Number (Verification &amp; MoMo Payouts)
                     </label>
                     <div className="relative">
                       <input
@@ -2360,7 +2470,7 @@ export function Header() {
                       />
                     </div>
                     <small className="block text-[10px] text-slate-400 mt-1">
-                      Supports MTN, Telecel, and AT networks. This number will be your permanently verified payout destination.
+                      Supports MTN, Telecel, and AT networks. A 6-digit SMS verification code will be sent to this number.
                     </small>
                   </div>
 
@@ -2400,7 +2510,7 @@ export function Header() {
                       </button>
                     </div>
                     <p className="text-slate-300 text-[11px]">
-                      A 6-digit verification code was sent to <strong className="text-white">{regPhone}</strong>.
+                      A 6-digit verification code was sent to <strong className="text-white">{regPhone}</strong> ({regAccountType === "organizer" ? "Organizer Setup" : "Player Setup"}).
                     </p>
                   </div>
 
@@ -2456,18 +2566,53 @@ export function Header() {
                 <form onSubmit={handleCompleteProfile} className="space-y-3.5">
                   <div className="p-3 bg-emerald-950/80 border border-emerald-500/50 rounded-xl text-xs space-y-1">
                     <span className="font-bold text-emerald-300 flex items-center gap-1.5 text-xs">
-                      <CheckCircle2 size={15} className="text-emerald-400" /> Phone verified successfully! Complete your player profile below.
+                      <CheckCircle2 size={15} className="text-emerald-400" /> Phone verified successfully! Complete your {regAccountType === "organizer" ? "Organizer" : "Player"} profile below.
                     </span>
                   </div>
 
                   <div className="p-3 bg-[#0c3b2e]/70 border border-[#d6a735]/30 rounded-xl text-xs space-y-1">
                     <span className="font-bold text-[#d6a735] flex items-center gap-1">
-                      <UserCheck size={14} /> Player Registration Details
+                      {regAccountType === "organizer" ? <Trophy size={14} /> : <UserCheck size={14} />}
+                      {regAccountType === "organizer" ? "Tournament Organizer Credentials" : "Player Registration Details"}
                     </span>
                     <p className="text-slate-300 text-[11px]">
-                      Enter your official player details to complete registration. Players must be at least 18 years of age.
+                      {regAccountType === "organizer"
+                        ? "Enter your organization/club details to set up your organizer studio. Organizers must be at least 18 years old."
+                        : "Enter your official player details to complete registration. Players must be at least 18 years of age."}
                     </p>
                   </div>
+
+                  {/* Organizer specific fields */}
+                  {regAccountType === "organizer" && (
+                    <div className="p-3 bg-[#06261f] border border-[#184d3c] rounded-xl space-y-3">
+                      <div>
+                        <label className="block text-xs font-bold text-[#d6a735] mb-1 flex items-center gap-1">
+                          <Building2 size={12} /> Organization / Draughts Club Name *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={regOrgName}
+                          onChange={(e) => setRegOrgName(e.target.value)}
+                          placeholder="e.g. Greater Accra Draughts Guild or Tema Masters"
+                          className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1">
+                          <FileText size={12} className="text-[#d6a735]" /> Organizer Bio / Experience (Optional)
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={regOrgBio}
+                          onChange={(e) => setRegOrgBio(e.target.value)}
+                          placeholder="e.g. 5+ years organizing regional draughts tournaments in Accra &amp; Kumasi"
+                          className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
@@ -2487,12 +2632,12 @@ export function Header() {
                           maxLength={25}
                           value={profUsername}
                           onChange={(e) => setProfUsername(e.target.value)}
-                          placeholder="e.g. lemon264"
+                          placeholder={regAccountType === "organizer" ? "e.g. org_mensah" : "e.g. lemon264"}
                           className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#d6a735] font-mono font-bold text-xs focus:outline-none focus:border-[#d6a735]"
                         />
                       </div>
                       <small className="block text-[10px] text-slate-400 mt-1">
-                        Auto-assigned gamer tag. You can customize it now or in your profile anytime.
+                        Unique handle for identification on matches and leaderboards.
                       </small>
                     </div>
 
@@ -2537,11 +2682,11 @@ export function Header() {
                         type="email"
                         value={profEmail}
                         onChange={(e) => setProfEmail(e.target.value)}
-                        placeholder="player@example.com (optional)"
+                        placeholder="user@example.com (optional)"
                         className="w-full px-3 py-2 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-xs focus:outline-none focus:border-[#d6a735]"
                       />
                       <small className="block text-[10px] text-slate-400 mt-1">
-                        Optional for match notifications &amp; alerts.
+                        Optional for match &amp; tournament notifications.
                       </small>
                     </div>
                   </div>
@@ -2603,7 +2748,13 @@ export function Header() {
                     disabled={isLoading}
                     className="w-full py-3 bg-[#d6a735] hover:bg-[#b88c24] disabled:opacity-50 text-[#06261f] font-black rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer mt-2"
                   >
-                    {isLoading ? "Completing Profile..." : (
+                    {isLoading ? (
+                      "Completing Profile..."
+                    ) : regAccountType === "organizer" ? (
+                      <>
+                        <Trophy size={16} /> Complete Organizer Profile &amp; Open Studio
+                      </>
+                    ) : (
                       <>
                         <Sparkles size={16} /> Complete Profile &amp; Enter Arena
                       </>
@@ -2612,12 +2763,12 @@ export function Header() {
                 </form>
               )}
 
-              {/* Sign In Mode (Passcode / Token) */}
+              {/* Sign In Mode */}
               {authMode === "login" && (
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center gap-1">
-                      <User size={13} className="text-[#d6a735]" /> Gamer Tag or Phone Number
+                      <User size={13} className="text-[#d6a735]" /> Username or Phone Number
                     </label>
                     <input
                       type="text"
@@ -2631,14 +2782,14 @@ export function Header() {
 
                   <div>
                     <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center gap-1">
-                      <Lock size={13} className="text-[#d6a735]" /> Password / Passcode
+                      <Lock size={13} className="text-[#d6a735]" /> Password
                     </label>
                     <input
                       type="password"
                       required
                       value={formPasscode}
                       onChange={(e) => setFormPasscode(e.target.value)}
-                      placeholder="Enter your account password"
+                      placeholder="Enter your password"
                       className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] placeholder-slate-500 text-sm focus:outline-none focus:border-[#d6a735] transition-colors"
                     />
                   </div>
@@ -2648,9 +2799,11 @@ export function Header() {
                     disabled={isLoading}
                     className="w-full py-3 bg-[#d6a735] hover:bg-[#b88c24] disabled:opacity-50 text-[#06261f] font-black rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    {isLoading ? "Signing in..." : (
+                    {isLoading ? (
+                      "Signing in..."
+                    ) : (
                       <>
-                        <LogIn size={16} /> Sign In to Arena
+                        <LogIn size={16} /> Sign In
                       </>
                     )}
                   </button>
@@ -2666,7 +2819,7 @@ export function Header() {
                       }}
                       className="text-[#d6a735] hover:underline font-bold"
                     >
-                      Register via Phone OTP
+                      Register
                     </button>
                   </div>
                 </form>

@@ -28,6 +28,10 @@ import {
   HelpCircle,
   Clock,
   ExternalLink,
+  Swords,
+  Trophy,
+  Gamepad2,
+  AlertTriangle,
 } from "lucide-react";
 import type { WalletTransaction } from "@/lib/types";
 import { getAuthHeaders, getSessionToken, getCsrfToken } from "@/lib/client-auth";
@@ -40,13 +44,40 @@ export default function WalletPage() {
   const [token, setToken] = useState<string | null>(null);
   const [balance, setBalance] = useState<{
     points: number;
+    marbles?: number;
+    marblesBalance?: number;
+    escrowPoints?: number;
+    escrowMarbles?: number;
+    totalMarbles?: number;
+    activeEscrowLocks?: Array<{
+      id: string;
+      type: "wager_match" | "tournament";
+      title: string;
+      reference: string;
+      amount: number;
+      role: "host" | "guest" | "participant";
+      status: string;
+      createdAt: string;
+      opponentName?: string;
+    }>;
     rating: number;
     username: string;
     role: string;
     phoneNumber?: string;
-  }>({ points: 0, rating: 1000, username: "", role: "user" });
+  }>({
+    points: 0,
+    marbles: 0,
+    marblesBalance: 0,
+    escrowPoints: 0,
+    escrowMarbles: 0,
+    totalMarbles: 0,
+    activeEscrowLocks: [],
+    rating: 1000,
+    username: "",
+    role: "user",
+  });
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
-  const [activeTab, setActiveTab] = useState<"deposit" | "withdraw" | "history" | "security">("deposit");
+  const [activeTab, setActiveTab] = useState<"deposit" | "withdraw" | "escrow" | "history" | "security">("deposit");
 
   const [topupAmountGhs, setTopupAmountGhs] = useState(20);
   const [email, setEmail] = useState("");
@@ -506,14 +537,14 @@ export default function WalletPage() {
           <>
             {/* Primary KPI Balance Overview Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-              {/* Card 1: Available Marbles */}
+              {/* Card 1: Available Marbles (Liquid) */}
               <div className="p-6 bg-gradient-to-br from-[#081c15] to-[#06261f] border border-[#1a5e48] rounded-3xl shadow-xl flex flex-col justify-between space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-[#d6a735] flex items-center gap-1.5">
                     <Coins size={15} /> Available Marbles
                   </span>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#d6a735]/20 text-[#d6a735] border border-[#d6a735]/30">
-                    Live
+                    Liquid
                   </span>
                 </div>
                 <div>
@@ -524,32 +555,92 @@ export default function WalletPage() {
                     <span className="text-lg font-bold text-[#d6a735] ml-1.5">⚪</span>
                   </div>
                   <p className="text-xs text-slate-300 mt-1 font-mono">
-                    ≈ GH₵ {typeof balance.points === "number" ? balance.points.toFixed(2) : balance.points} Value
+                    ≈ GH₵ {typeof balance.points === "number" ? balance.points.toFixed(2) : balance.points} Available to play/cashout
                   </p>
                 </div>
                 <div className="flex items-center gap-2 pt-1 border-t border-[#1a5e48]/60">
                   <button
                     type="button"
                     onClick={() => setActiveTab("deposit")}
-                    className="flex-1 py-2 bg-[#d6a735] hover:bg-[#c4962b] text-[#06261f] font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
+                    className="flex-1 py-2 bg-[#d6a735] hover:bg-[#c4962b] text-[#06261f] font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer"
                   >
                     <ArrowDownLeft size={14} /> Top Up
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveTab("withdraw")}
-                    className="flex-1 py-2 bg-[#0c3b2e] hover:bg-[#114a3a] text-emerald-300 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-[#1a5e48] transition-all"
+                    className="flex-1 py-2 bg-[#0c3b2e] hover:bg-[#114a3a] text-emerald-300 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-[#1a5e48] transition-all cursor-pointer"
                   >
                     <ArrowUpRight size={14} /> Cashout
                   </button>
                 </div>
               </div>
 
-              {/* Card 2: Skill Rating & Rank */}
+              {/* Card 2: Locked in Escrow (Active Wagers & Tournaments) */}
+              <div className="p-6 bg-gradient-to-br from-[#041c17] via-[#062b22] to-[#041c17] border-2 border-cyan-500/40 rounded-3xl shadow-xl flex flex-col justify-between space-y-4 relative overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+                    <Lock size={15} className="text-cyan-400" /> Locked in Escrow
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                    (balance.escrowMarbles || balance.escrowPoints || 0) > 0
+                      ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 animate-pulse"
+                      : "bg-slate-800/60 text-slate-400 border-slate-700/50"
+                  }`}>
+                    {(balance.activeEscrowLocks?.length || 0)} Active Lock{(balance.activeEscrowLocks?.length || 0) === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <div>
+                  <div className="text-3xl sm:text-4xl font-extrabold text-cyan-300 font-serif tracking-tight flex items-center gap-1.5">
+                    {((balance.escrowMarbles ?? balance.escrowPoints ?? 0)).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                    <span className="text-lg font-bold text-cyan-400">⚪</span>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-1 font-mono">
+                    ≈ GH₵ {((balance.escrowMarbles ?? balance.escrowPoints ?? 0)).toFixed(2)} in Custodial Vault
+                  </p>
+                </div>
+                <div className="pt-1 border-t border-[#1a5e48]/60 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("escrow")}
+                    className="w-full py-2 bg-cyan-950/80 hover:bg-cyan-900/80 text-cyan-300 hover:text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-cyan-600/40 transition-all cursor-pointer"
+                  >
+                    <ShieldCheck size={14} /> View Escrow Vault &amp; Locks
+                  </button>
+                </div>
+              </div>
+
+              {/* Card 3: Total Portfolio (Net Assets) */}
+              <div className="p-6 bg-gradient-to-br from-[#081c15] to-[#06261f] border border-[#1a5e48] rounded-3xl shadow-xl flex flex-col justify-between space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                    <Layers size={15} /> Total Portfolio
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    Net Assets
+                  </span>
+                </div>
+                <div>
+                  <div className="text-3xl sm:text-4xl font-extrabold text-[#f5efdf] font-serif tracking-tight">
+                    {(((balance.points || 0) + (balance.escrowMarbles ?? balance.escrowPoints ?? 0))).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                    <span className="text-lg font-bold text-[#d6a735] ml-1.5">⚪</span>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-1 font-mono">
+                    ≈ GH₵ {(((balance.points || 0) + (balance.escrowMarbles ?? balance.escrowPoints ?? 0))).toFixed(2)} Total Holdings
+                  </p>
+                </div>
+                <div className="text-[11px] text-slate-400 pt-1 border-t border-[#1a5e48]/60 flex items-center justify-between font-mono">
+                  <span>Liq: <strong className="text-emerald-400">GH₵ {(balance.points || 0).toFixed(0)}</strong></span>
+                  <span>•</span>
+                  <span>Escrow: <strong className="text-cyan-400">GH₵ {((balance.escrowMarbles ?? balance.escrowPoints ?? 0)).toFixed(0)}</strong></span>
+                </div>
+              </div>
+
+              {/* Card 4: Competitive Rank & Career Payouts */}
               <div className="p-6 bg-gradient-to-br from-[#081c15] to-[#06261f] border border-[#1a5e48] rounded-3xl shadow-xl flex flex-col justify-between space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                    <Award size={15} /> Competitive Rank
+                    <Award size={15} /> Rank &amp; Payouts
                   </span>
                   <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${rankTier.bg} ${rankTier.color} border ${rankTier.border}`}>
                     {rankTier.name}
@@ -557,70 +648,52 @@ export default function WalletPage() {
                 </div>
                 <div>
                   <div className="text-3xl sm:text-4xl font-extrabold text-[#f5efdf] font-serif tracking-tight flex items-center gap-2">
-                    <Award className="text-amber-400" size={32} />
+                    <Award className="text-amber-400" size={30} />
                     {balance.rating || 1000}
-                    <span className="text-sm font-semibold text-slate-400 font-sans">DPI</span>
+                    <span className="text-xs font-semibold text-slate-400 font-sans">DPI</span>
                   </div>
-                  <p className="text-xs text-slate-300 mt-1">
-                    National Draughts Performance Index
+                  <p className="text-xs text-emerald-400 mt-1 font-mono font-semibold">
+                    +{totalWinnings.toFixed(2)} ⚪ Career Won
                   </p>
                 </div>
                 <div className="text-[11px] text-slate-400 pt-1 border-t border-[#1a5e48]/60 flex items-center justify-between">
                   <span>Player: <strong className="text-slate-200">{balance.username || "Challenger"}</strong></span>
-                  <span className="text-emerald-400 font-semibold">Tier Verified</span>
-                </div>
-              </div>
-
-              {/* Card 3: Career Winnings Won */}
-              <div className="p-6 bg-gradient-to-br from-[#081c15] to-[#06261f] border border-[#1a5e48] rounded-3xl shadow-xl flex flex-col justify-between space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                    <Sparkles size={15} /> Career Payouts
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    Won
-                  </span>
-                </div>
-                <div>
-                  <div className="text-3xl sm:text-4xl font-extrabold text-emerald-400 font-serif tracking-tight">
-                    +{totalWinnings.toFixed(2)}
-                    <span className="text-sm font-semibold text-slate-400 font-sans ml-1">⚪</span>
-                  </div>
-                  <p className="text-xs text-slate-300 mt-1">
-                    Cumulative tournament &amp; wager earnings
-                  </p>
-                </div>
-                <div className="text-[11px] text-slate-400 pt-1 border-t border-[#1a5e48]/60 flex items-center justify-between">
-                  <span>Ledger Status</span>
-                  <span className="text-emerald-300 font-semibold flex items-center gap-1">
-                    <CheckCircle2 size={12} /> Realized
-                  </span>
-                </div>
-              </div>
-
-              {/* Card 4: Escrow Protection */}
-              <div className="p-6 bg-gradient-to-br from-[#081c15] to-[#06261f] border border-[#1a5e48] rounded-3xl shadow-xl flex flex-col justify-between space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
-                    <ShieldCheck size={15} /> Escrow Safeguard
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                    Active
-                  </span>
-                </div>
-                <div>
-                  <div className="text-xl font-bold text-[#f5efdf] flex items-center gap-2">
-                    <Lock size={22} className="text-[#d6a735]" /> Atomic Lock
-                  </div>
-                  <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
-                    Pot stakes are secured in escrow and auto-settled to the winner immediately upon game conclusion.
-                  </p>
-                </div>
-                <div className="text-[11px] text-cyan-300 pt-1 border-t border-[#1a5e48]/60 flex items-center gap-1.5">
-                  <ShieldCheck size={13} /> 100% Refund on Cancellations
+                  <span className="text-emerald-400 font-semibold">Verified</span>
                 </div>
               </div>
             </div>
+
+            {/* Active Escrow Notification Banner (if any active locks) */}
+            {(balance.escrowMarbles || balance.escrowPoints || 0) > 0 && (
+              <div className="p-4 sm:p-5 bg-gradient-to-r from-cyan-950/90 via-[#062b22] to-cyan-950/90 border-2 border-cyan-500/50 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 flex items-center justify-center shrink-0 shadow-inner">
+                    <Lock size={20} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-cyan-300 flex items-center gap-2">
+                      <span>GH₵ {((balance.escrowMarbles ?? balance.escrowPoints ?? 0)).toFixed(2)} Currently Locked in Escrow</span>
+                      <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded-full bg-cyan-500/20 text-cyan-200 border border-cyan-500/40">
+                        Custodial Protection Active
+                      </span>
+                    </h4>
+                    <p className="text-xs text-slate-300 mt-0.5">
+                      Your stakes are locked in isolated smart vaults across {balance.activeEscrowLocks?.length || "active"} match(es) / tournament(s) and will auto-settle upon completion.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("escrow")}
+                    className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-cyan-950 font-black rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                  >
+                    <ExternalLink size={13} /> View Active Locks ({balance.activeEscrowLocks?.length || 0})
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* 1:1 Parity Callout Bar */}
             <div className="p-4 sm:p-5 bg-gradient-to-r from-[#081c15] via-[#0a2e24] to-[#081c15] border border-[#1a5e48] rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg">
@@ -652,7 +725,7 @@ export default function WalletPage() {
                 <button
                   type="button"
                   onClick={() => setActiveTab("deposit")}
-                  className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+                  className={`flex items-center gap-2 px-4 sm:px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
                     activeTab === "deposit"
                       ? "bg-[#d6a735] text-[#06261f] shadow-lg shadow-[#d6a735]/20"
                       : "text-slate-300 hover:text-white hover:bg-[#0c3b2e]"
@@ -664,7 +737,7 @@ export default function WalletPage() {
                 <button
                   type="button"
                   onClick={() => setActiveTab("withdraw")}
-                  className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+                  className={`flex items-center gap-2 px-4 sm:px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
                     activeTab === "withdraw"
                       ? "bg-[#d6a735] text-[#06261f] shadow-lg shadow-[#d6a735]/20"
                       : "text-slate-300 hover:text-white hover:bg-[#0c3b2e]"
@@ -675,8 +748,29 @@ export default function WalletPage() {
 
                 <button
                   type="button"
+                  onClick={() => setActiveTab("escrow")}
+                  className={`flex items-center gap-2 px-4 sm:px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
+                    activeTab === "escrow"
+                      ? "bg-cyan-500 text-[#06261f] shadow-lg shadow-cyan-500/20 font-black"
+                      : "text-cyan-400 hover:text-white hover:bg-cyan-950/60"
+                  }`}
+                >
+                  <Lock size={16} /> Escrow Vault
+                  {(balance.escrowMarbles || balance.escrowPoints || 0) > 0 ? (
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                      activeTab === "escrow"
+                        ? "bg-[#06261f] text-cyan-300"
+                        : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                    }`}>
+                      GH₵ {((balance.escrowMarbles ?? balance.escrowPoints ?? 0)).toFixed(0)}
+                    </span>
+                  ) : null}
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setActiveTab("history")}
-                  className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+                  className={`flex items-center gap-2 px-4 sm:px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
                     activeTab === "history"
                       ? "bg-[#d6a735] text-[#06261f] shadow-lg shadow-[#d6a735]/20"
                       : "text-slate-300 hover:text-white hover:bg-[#0c3b2e]"
@@ -688,7 +782,7 @@ export default function WalletPage() {
                 <button
                   type="button"
                   onClick={() => setActiveTab("security")}
-                  className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+                  className={`flex items-center gap-2 px-4 sm:px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
                     activeTab === "security"
                       ? "bg-[#d6a735] text-[#06261f] shadow-lg shadow-[#d6a735]/20"
                       : "text-slate-300 hover:text-white hover:bg-[#0c3b2e]"
@@ -1083,7 +1177,229 @@ export default function WalletPage() {
                   </div>
                 )}
 
-                {/* TAB 3: TRANSACTION AUDIT LEDGER */}
+                {/* TAB 3: ESCROW VAULT & ACTIVE LOCKS */}
+                {activeTab === "escrow" && (
+                  <div className="space-y-8">
+                    {/* Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <h3 className="text-xl font-bold text-[#f5efdf] flex items-center gap-2 font-serif">
+                          <Lock size={20} className="text-cyan-400" /> Custodial Escrow Vault &amp; Active Locks
+                        </h3>
+                        <p className="text-xs sm:text-sm text-slate-300 mt-1">
+                          Audited breakdown of all funds currently locked in smart escrow for active 1-on-1 wager challenges and tournament registrations.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const tok = token || getSessionToken();
+                            if (tok) loadWalletData(tok);
+                          }}
+                          disabled={refreshing}
+                          className="px-3 py-2 bg-[#041c17] hover:bg-[#0c3b2e] border border-[#1a5e48] text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <RefreshCw size={13} className={refreshing ? "animate-spin text-cyan-400" : ""} /> Refresh Vault
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Escrow Status Metrics Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                      <div className="p-5 bg-gradient-to-br from-cyan-950/70 to-[#041c17] border border-cyan-500/40 rounded-2xl space-y-2 shadow-lg">
+                        <span className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <Lock size={14} /> Total Amount Locked
+                        </span>
+                        <div className="text-3xl font-extrabold text-cyan-300 font-serif">
+                          {((balance.escrowMarbles ?? balance.escrowPoints ?? 0)).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                          <span className="text-sm font-bold text-cyan-400 ml-1">⚪</span>
+                        </div>
+                        <p className="text-xs text-slate-300 font-mono">
+                          ≈ GH₵ {((balance.escrowMarbles ?? balance.escrowPoints ?? 0)).toFixed(2)} in Escrow
+                        </p>
+                      </div>
+
+                      <div className="p-5 bg-[#06261f] border border-[#1a5e48] rounded-2xl space-y-2 shadow-lg">
+                        <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <Swords size={14} /> Active Locked Challenges
+                        </span>
+                        <div className="text-3xl font-extrabold text-[#f5efdf] font-serif">
+                          {balance.activeEscrowLocks?.length || 0}
+                          <span className="text-sm font-medium text-slate-400 ml-1.5">Pot{balance.activeEscrowLocks?.length === 1 ? "" : "s"}</span>
+                        </div>
+                        <p className="text-xs text-slate-300">
+                          {balance.activeEscrowLocks && balance.activeEscrowLocks.length > 0
+                            ? "Active match pots waiting or in progress"
+                            : "No active wager locks pending"}
+                        </p>
+                      </div>
+
+                      <div className="p-5 bg-[#06261f] border border-[#1a5e48] rounded-2xl space-y-2 shadow-lg">
+                        <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <ShieldCheck size={14} /> Cancellation Refund Status
+                        </span>
+                        <div className="text-base font-bold text-emerald-300 flex items-center gap-1.5 mt-1">
+                          <CheckCircle2 size={18} className="text-emerald-400" /> 100% Guaranteed
+                        </div>
+                        <p className="text-xs text-slate-300">
+                          Automatic 100% refund if match is cancelled, expired without an opponent, or drawn.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Active Escrow Locks Detail List */}
+                    <div className="space-y-4">
+                      <h4 className="text-sm font-bold text-[#f5efdf] uppercase tracking-wider flex items-center gap-2">
+                        <Lock size={16} className="text-cyan-400" /> Active Locked Matches &amp; Tournaments
+                      </h4>
+
+                      {balance.activeEscrowLocks && balance.activeEscrowLocks.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {balance.activeEscrowLocks.map((lock) => {
+                            const isMatch = lock.type === "wager_match";
+                            const isHost = lock.role === "host";
+
+                            return (
+                              <div
+                                key={lock.id}
+                                className="p-5 bg-gradient-to-br from-[#06261f] to-[#041c17] border-2 border-cyan-500/40 hover:border-cyan-400 rounded-3xl space-y-4 shadow-xl transition-all"
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-sm shadow-inner ${
+                                      isMatch ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40" : "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                    }`}>
+                                      {isMatch ? <Swords size={20} /> : <Trophy size={20} />}
+                                    </div>
+                                    <div>
+                                      <h5 className="font-bold text-[#f5efdf] text-sm flex items-center gap-2">
+                                        {lock.title}
+                                      </h5>
+                                      <span className="text-[11px] text-slate-400 font-mono">
+                                        Ref: #{lock.reference}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                                    lock.status.includes("waiting")
+                                      ? "bg-amber-950 text-amber-300 border border-amber-700/50"
+                                      : "bg-emerald-950 text-emerald-300 border border-emerald-700/50"
+                                  }`}>
+                                    {lock.status}
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 text-xs bg-[#041c17] p-3 rounded-2xl border border-[#1a5e48]">
+                                  <div>
+                                    <span className="text-slate-400 block text-[10px]">Your Locked Stake</span>
+                                    <span className="font-bold font-mono text-cyan-300 text-sm">
+                                      GH₵ {lock.amount.toFixed(2)} ({lock.amount.toFixed(0)} ⚪)
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-400 block text-[10px]">Role / Side</span>
+                                    <span className="font-bold text-slate-200 capitalize">
+                                      {isHost ? "Host (Created Game)" : lock.role === "guest" ? "Challenger (Joined)" : "Participant"}
+                                    </span>
+                                  </div>
+                                  {lock.opponentName && (
+                                    <div className="col-span-2 pt-1 border-t border-[#1a5e48]/50 flex items-center justify-between text-[11px]">
+                                      <span className="text-slate-400">Opponent:</span>
+                                      <span className="font-bold text-emerald-300">{lock.opponentName}</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center justify-between gap-3 pt-1">
+                                  <span className="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
+                                    <Clock size={12} /> {new Date(lock.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                  </span>
+
+                                  {isMatch ? (
+                                    <a
+                                      href={`/arena?room=${encodeURIComponent(lock.reference)}`}
+                                      className="px-4 py-2 bg-[#d6a735] hover:bg-[#c4962b] text-[#06261f] font-black rounded-xl text-xs flex items-center gap-1.5 shadow-md transition-all"
+                                    >
+                                      <Gamepad2 size={14} /> Enter Room
+                                    </a>
+                                  ) : (
+                                    <a
+                                      href={`/leagues/${encodeURIComponent(lock.reference)}`}
+                                      className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-[#06261f] font-black rounded-xl text-xs flex items-center gap-1.5 shadow-md transition-all"
+                                    >
+                                      <Trophy size={14} /> View League
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="p-8 bg-[#06261f] border border-[#1a5e48] rounded-3xl text-center space-y-4">
+                          <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-inner">
+                            <ShieldCheck size={28} />
+                          </div>
+                          <div className="max-w-md mx-auto space-y-1">
+                            <h5 className="text-base font-bold text-[#f5efdf]">No Marbles Currently Locked in Escrow</h5>
+                            <p className="text-xs text-slate-300 leading-relaxed">
+                              Your full balance of <strong>{typeof balance.points === "number" ? balance.points.toFixed(2) : balance.points} Marbles</strong> is completely liquid and available for wagering challenges or immediate Mobile Money cashout.
+                            </p>
+                          </div>
+                          <div className="pt-2">
+                            <a
+                              href="/arena"
+                              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#d6a735] hover:bg-[#c4962b] text-[#06261f] font-bold rounded-xl text-xs transition-all shadow-md"
+                            >
+                              <Swords size={15} /> Find 1-on-1 Wager Match
+                            </a>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* How Escrow Works Info Card */}
+                    <div className="p-6 bg-[#041c17] border border-[#1a5e48] rounded-3xl space-y-4">
+                      <h4 className="text-sm font-bold text-[#d6a735] uppercase tracking-wider flex items-center gap-2">
+                        <Info size={16} /> How DAMII Atomic Wager Escrow Works
+                      </h4>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-300">
+                        <div className="p-4 bg-[#06261f] border border-[#1a5e48] rounded-2xl space-y-2">
+                          <span className="font-bold text-amber-400 flex items-center gap-1.5">
+                            1. Match Creation
+                          </span>
+                          <p className="leading-relaxed">
+                            When you create a wager match, your stake is immediately deducted from your liquid balance and held safely in the custodial escrow vault.
+                          </p>
+                        </div>
+
+                        <div className="p-4 bg-[#06261f] border border-[#1a5e48] rounded-2xl space-y-2">
+                          <span className="font-bold text-cyan-400 flex items-center gap-1.5">
+                            2. Opponent Acceptance
+                          </span>
+                          <p className="leading-relaxed">
+                            When an opponent clicks to join your room, their matching stake is deducted and locked into the same escrow pot, completing the total prize pot.
+                          </p>
+                        </div>
+
+                        <div className="p-4 bg-[#06261f] border border-[#1a5e48] rounded-2xl space-y-2">
+                          <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                            3. Instant Settlement
+                          </span>
+                          <p className="leading-relaxed">
+                            Upon victory, the full escrow pot (minus standard platform arbiter fee) is disbursed directly into the winner's wallet. If drawn or cancelled, 100% of stakes are refunded.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 4: TRANSACTION AUDIT LEDGER */}
                 {activeTab === "history" && (
                   <div className="space-y-6">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

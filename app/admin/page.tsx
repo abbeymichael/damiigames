@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
-import Link from "@/components/NavLink";
+import Link, { safeNavigate } from "@/components/NavLink";
+import { useRouter } from "next/navigation";
 import { SharedHeader } from "@/components/SharedHeader";
 import {
   LayoutDashboard,
@@ -320,6 +321,7 @@ function hasAccess(
 }
 
 export default function AdminPage() {
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [token, setToken] = useState("");
   const [adminUsername, setAdminUsername] = useState("");
@@ -386,6 +388,9 @@ export default function AdminPage() {
   const [txFilter, setTxFilter] = useState<"all" | "completed" | "pending" | "failed">("all");
 
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
+
+  // Selected Comprehensive Match for Inspection
+  const [inspectMatch, setInspectMatch] = useState<ComprehensiveMatch | null>(null);
 
   // Selected Game Room for Inspection
   const [inspectRoom, setInspectRoom] = useState<RoomItem | null>(null);
@@ -678,10 +683,17 @@ export default function AdminPage() {
 
   function handleLogout() {
     clearSessionToken();
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("damii-player-token");
+      localStorage.removeItem("damii-player-name");
+      localStorage.removeItem("damii-auth-user");
+    }
     setIsAuthenticated(false);
     setToken("");
     setMetrics(null);
-    setSuccess("Logged out successfully.");
+    setSuccess("");
+    window.dispatchEvent(new Event("damii-auth-changed"));
+    safeNavigate(router, "/");
   }
 
   async function refreshAdminData() {
@@ -1526,67 +1538,25 @@ export default function AdminPage() {
       {!isAuthenticated ? (
         <>
           <SharedHeader />
-          <section className="max-w-lg mx-auto p-6 bg-[#081c15] border border-[#114232] text-[#f5efdf] rounded-2xl shadow-xl space-y-5 my-12">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-[#d6a735] font-bold">
-                <Key size={20} />
-                <h3 className="text-lg text-[#f5efdf] font-bold">Admin Portal Login</h3>
+          <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
+            <div className="p-8 max-w-md w-full bg-[#081c15] border border-[#114232] rounded-2xl shadow-xl space-y-4">
+              <div className="w-12 h-12 rounded-full bg-[#d6a735]/10 text-[#d6a735] flex items-center justify-center mx-auto">
+                <Lock size={24} />
+              </div>
+              <h2 className="text-lg font-bold text-[#f5efdf]">Access Restricted</h2>
+              <p className="text-xs text-slate-300">
+                Please sign in with an authorized account from the main navigation to access this dashboard.
+              </p>
+              <div className="pt-2 flex flex-col gap-2">
+                <Link
+                  href="/"
+                  className="w-full py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  Return to Home
+                </Link>
               </div>
             </div>
-
-            <p className="text-xs text-[#a3b8b0]">
-              Log in using your Admin Username and Password to access system administration and platform management.
-            </p>
-
-            {error && (
-              <p className="p-3 bg-red-950/80 border border-red-800 text-red-200 text-xs rounded-xl flex items-center gap-2">
-                <AlertTriangle size={15} /> {error}
-              </p>
-            )}
-            {success && (
-              <p className="p-3 bg-emerald-950/80 border border-emerald-800 text-emerald-200 text-xs rounded-xl flex items-center gap-2">
-                <CheckCircle size={15} /> {success}
-              </p>
-            )}
-
-            <form onSubmit={handleAdminAuth} className="space-y-4 pt-1">
-              <div>
-                <label className="block text-xs font-semibold text-[#f5efdf] mb-1">
-                  Admin Username
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={adminUsername}
-                  onChange={(e) => setAdminUsername(e.target.value)}
-                  placeholder="Enter admin username"
-                  className="w-full px-3.5 py-2.5 bg-[#06261f] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/60 text-sm focus:outline-none focus:border-[#d6a735]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#f5efdf] mb-1">
-                  Admin Password
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={adminPasscode}
-                  onChange={(e) => setAdminPasscode(e.target.value)}
-                  placeholder="Enter admin password"
-                  className="w-full px-3.5 py-2.5 bg-[#06261f] border border-[#114232] rounded-xl text-[#f5efdf] placeholder-[#a3b8b0]/60 text-sm focus:outline-none focus:border-[#d6a735]"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={busy}
-                className="w-full py-3 bg-[#d6a735] hover:bg-[#b88c24] disabled:opacity-50 text-[#06261f] font-bold text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 mt-2"
-              >
-                {busy ? "Authenticating..." : "Login to Admin Portal"}
-              </button>
-            </form>
-          </section>
+          </div>
         </>
       ) : (
         /* DEDICATED AUTHENTICATED ADMIN INTERFACE SHELL */
@@ -2145,18 +2115,32 @@ export default function AdminPage() {
               />
             )}
 
-            {/* TAB: DISPUTES */}
+            {/* TAB: DISPUTES & MATCHES */}
             {activeTab === "disputes" && (
-              <DisputesTable rooms={filteredRooms} onInspectRoom={setInspectRoom} />
-            )}
-
-            {/* TAB: TOURNAMENT REQUESTS */}
-            {activeTab === "tournament_requests" && (
-              <TournamentRequestsTable
-                requests={metrics?.tournamentRequests || []}
+              <DisputesTable
+                matches={metrics?.comprehensiveMatches || []}
+                onInspectMatch={(m) => setInspectMatch(m)}
                 token={token}
                 adminSecret={adminSecret}
                 onRefresh={refreshAdminData}
+              />
+            )}
+
+            {/* TAB: GAME REQUESTS & WAGER CHALLENGES */}
+            {(activeTab === "game_requests" || activeTab === "tournament_requests") && (
+              <GameRequestsTable
+                gameRequests={metrics?.gameRequests || []}
+                tournamentRequests={metrics?.tournamentRequests || []}
+                token={token}
+                adminSecret={adminSecret}
+                onRefresh={refreshAdminData}
+                busy={busy}
+                onInspectRoomCode={(code) => {
+                  const found = (metrics?.comprehensiveMatches || []).find((m) => m.roomCode === code || m.matchId === code);
+                  if (found) {
+                    setInspectMatch(found);
+                  }
+                }}
               />
             )}
 
@@ -3120,6 +3104,17 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* GAME & DISPUTE DETAIL INSPECTOR MODAL */}
+      {inspectMatch && (
+        <GameDetailModal
+          match={inspectMatch}
+          onClose={() => setInspectMatch(null)}
+          token={token}
+          adminSecret={adminSecret}
+          onRefresh={refreshAdminData}
+        />
       )}
 
       {/* USER DETAIL INSPECTOR MODAL */}
