@@ -101,7 +101,31 @@ export function packageStandalone() {
       console.log("  ✓ Bundled public assets (public/)");
     }
 
-    // 4. Copy Next.js Static Assets
+    // 4. Copy Build Outputs (dist/client and dist/server)
+    const distClientSrc = path.join(projectRoot, "dist", "client");
+    const distServerSrc = path.join(projectRoot, "dist", "server");
+    const distClientDest = path.join(targetDir, "dist", "client");
+    const distServerDest = path.join(targetDir, "dist", "server");
+
+    if (fs.existsSync(distClientSrc) && targetDir !== path.join(projectRoot, "dist")) {
+      copyRecursiveSync(distClientSrc, distClientDest);
+      console.log("  ✓ Bundled client assets & scripts (dist/client/)");
+      
+      // Also copy client assets to top-level assets/ so Apache/LiteSpeed/Nginx can serve them directly
+      const assetsSrc = path.join(distClientSrc, "assets");
+      const assetsDest = path.join(targetDir, "assets");
+      if (fs.existsSync(assetsSrc)) {
+        copyRecursiveSync(assetsSrc, assetsDest);
+        console.log("  ✓ Bundled direct static assets (assets/)");
+      }
+    }
+
+    if (fs.existsSync(distServerSrc) && targetDir !== path.join(projectRoot, "dist")) {
+      copyRecursiveSync(distServerSrc, distServerDest);
+      console.log("  ✓ Bundled server bundle (dist/server/)");
+    }
+
+    // 5. Copy Next.js Static Assets (if present)
     const staticSrc = path.join(projectRoot, ".next", "static");
     const staticDest = path.join(targetDir, ".next", "static");
     if (fs.existsSync(staticSrc)) {
@@ -115,7 +139,7 @@ export function packageStandalone() {
       copyRecursiveSync(staticSrc, nestedStaticDest);
     }
 
-    // 5. Copy Shared Hosting Server Entries & Configs
+    // 6. Copy Shared Hosting Server Entries & Configs
     const filesToCopy = [
       "server.js",
       "app.js",

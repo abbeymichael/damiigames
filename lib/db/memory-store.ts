@@ -1287,7 +1287,7 @@ export const memoryStore: DbRepository = {
 
     for (const [key, bal] of latestBalances.entries()) {
       const [userId, accType] = key.split(":");
-      if (userId === "platform-treasury") {
+      if (userId === "platform-treasury" || userId === "platform" || userId === "system-house" || userId === "system") {
         platformFeeFundTotal += bal;
       } else if (accType === "escrow") {
         escrowFundTotal += bal;

@@ -8,6 +8,8 @@ import type {
   AdminSettings,
   AppRole,
   ChartOfAccountsReport,
+  Deposit,
+  DepositAction,
   GameCatalogItem,
   GameTypeLimit,
   League,
@@ -42,6 +44,8 @@ import type {
   User,
   WagerEscrow,
   WalletTransaction,
+  Withdrawal,
+  WithdrawalAction,
 } from "../types";
 import { SYSTEM_PERMISSIONS, SEED_ROLES_CONFIG } from "../permissions-constants";
 import { securityService } from "../security";
@@ -55,6 +59,8 @@ import * as schema from "../../db/schema.mysql";
 import {
   adminLogToRow,
   adminProfileToRow,
+  depositActionToRow,
+  depositToRow,
   escrowToRow,
   gameToRow,
   gameTypeLimitToRow,
@@ -74,6 +80,8 @@ import {
   rowToAdminLog,
   rowToAdminProfile,
   rowToAdminSettings,
+  rowToDeposit,
+  rowToDepositAction,
   rowToEscrow,
   rowToGame,
   rowToGameTypeLimit,
@@ -98,6 +106,8 @@ import {
   rowToTournamentPrize,
   rowToTransaction,
   rowToUser,
+  rowToWithdrawal,
+  rowToWithdrawalAction,
   sessionToRow,
   systemSettingToRow,
   tournamentActionRequestToRow,
@@ -106,6 +116,8 @@ import {
   tournamentToRow,
   transactionToRow,
   userToRow,
+  withdrawalActionToRow,
+  withdrawalToRow,
 } from "./mysql-mappers";
 
 /**
@@ -260,6 +272,27 @@ async function ensureSchema(): Promise<void> {
           // ignore
         }
       }
+
+      // Ensure UTF8MB4 full Unicode/emoji support on audit, communication, and game tables
+      const tablesToEnsureUtf8mb4 = [
+        "admin_logs",
+        "notifications",
+        "rooms",
+        "matches",
+        "profiles",
+        "leagues",
+        "tournaments",
+        "disputes",
+        "organizer_applications",
+        "ledger_entries",
+      ];
+      for (const tbl of tablesToEnsureUtf8mb4) {
+        try {
+          await conn.query(`ALTER TABLE \`${tbl}\` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+        } catch {
+          // Ignore if table does not exist or user lacks alter privileges
+        }
+      }
     } finally {
       conn.release();
     }
@@ -396,8 +429,14 @@ export const mysqlStore: DbRepository = {
         }
       }
       return rowToSession(row);
-    } catch (err) {
-      console.warn(`[damii][db] getSession safe fallback:`, err instanceof Error ? err.message : err);
+    } catch {
+      // If MySQL is temporarily busy or reconnecting, check memoryStore fallback
+      try {
+        const fallbackSession = await memoryStore.getSession(token);
+        if (fallbackSession) return fallbackSession;
+      } catch {
+        // ignore
+      }
       return null;
     }
   },
@@ -964,6 +1003,136 @@ export const mysqlStore: DbRepository = {
     return rows.map(rowToTransaction);
   },
 
+  // --- Dedicated Deposits Table ---
+  async createDeposit(deposit: Deposit) {
+    const row = depositToRow(deposit);
+    await getDb().insert(schema.deposits).values(row);
+    return { ...deposit };
+  },
+
+  async getDeposit(idOrRef: string) {
+    const [row] = await getDb()
+      .select()
+      .from(schema.deposits)
+      .where(or(eq(schema.deposits.id, idOrRef), eq(schema.deposits.reference, idOrRef)))
+      .limit(1);
+    return row ? rowToDeposit(row) : null;
+  },
+
+  async getDepositByReference(reference: string) {
+    const [row] = await getDb()
+      .select()
+      .from(schema.deposits)
+      .where(eq(schema.deposits.reference, reference))
+      .limit(1);
+    return row ? rowToDeposit(row) : null;
+  },
+
+  async updateDeposit(id: string, updates: Partial<Deposit>) {
+    const existing = await this.getDeposit(id);
+    if (!existing) return null;
+    const merged: Deposit = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+    await getDb()
+      .update(schema.deposits)
+      .set(depositToRow(merged))
+      .where(eq(schema.deposits.id, id));
+    return merged;
+  },
+
+  async listDeposits(filter?: { userId?: string; status?: string; limit?: number }) {
+    let query = getDb().select().from(schema.deposits).$dynamic();
+    const conditions = [];
+    if (filter?.userId) conditions.push(eq(schema.deposits.userId, filter.userId));
+    if (filter?.status) conditions.push(eq(schema.deposits.status, filter.status));
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+    const rows = await query
+      .orderBy(desc(schema.deposits.createdAt))
+      .limit(filter?.limit ?? 50);
+    return rows.map(rowToDeposit);
+  },
+
+  async recordDepositAction(action: DepositAction) {
+    const row = depositActionToRow(action);
+    await getDb().insert(schema.depositActions).values(row);
+    return { ...action };
+  },
+
+  async listDepositActions(depositId: string) {
+    const rows = await getDb()
+      .select()
+      .from(schema.depositActions)
+      .where(eq(schema.depositActions.depositId, depositId))
+      .orderBy(asc(schema.depositActions.createdAt));
+    return rows.map(rowToDepositAction);
+  },
+
+  // --- Dedicated Withdrawals Table ---
+  async createWithdrawal(withdrawal: Withdrawal) {
+    const row = withdrawalToRow(withdrawal);
+    await getDb().insert(schema.withdrawals).values(row);
+    return { ...withdrawal };
+  },
+
+  async getWithdrawal(idOrRef: string) {
+    const [row] = await getDb()
+      .select()
+      .from(schema.withdrawals)
+      .where(or(eq(schema.withdrawals.id, idOrRef), eq(schema.withdrawals.reference, idOrRef)))
+      .limit(1);
+    return row ? rowToWithdrawal(row) : null;
+  },
+
+  async getWithdrawalByReference(reference: string) {
+    const [row] = await getDb()
+      .select()
+      .from(schema.withdrawals)
+      .where(eq(schema.withdrawals.reference, reference))
+      .limit(1);
+    return row ? rowToWithdrawal(row) : null;
+  },
+
+  async updateWithdrawal(id: string, updates: Partial<Withdrawal>) {
+    const existing = await this.getWithdrawal(id);
+    if (!existing) return null;
+    const merged: Withdrawal = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+    await getDb()
+      .update(schema.withdrawals)
+      .set(withdrawalToRow(merged))
+      .where(eq(schema.withdrawals.id, id));
+    return merged;
+  },
+
+  async listWithdrawals(filter?: { userId?: string; status?: string; limit?: number }) {
+    let query = getDb().select().from(schema.withdrawals).$dynamic();
+    const conditions = [];
+    if (filter?.userId) conditions.push(eq(schema.withdrawals.userId, filter.userId));
+    if (filter?.status) conditions.push(eq(schema.withdrawals.status, filter.status));
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+    const rows = await query
+      .orderBy(desc(schema.withdrawals.createdAt))
+      .limit(filter?.limit ?? 50);
+    return rows.map(rowToWithdrawal);
+  },
+
+  async recordWithdrawalAction(action: WithdrawalAction) {
+    const row = withdrawalActionToRow(action);
+    await getDb().insert(schema.withdrawalActions).values(row);
+    return { ...action };
+  },
+
+  async listWithdrawalActions(withdrawalId: string) {
+    const rows = await getDb()
+      .select()
+      .from(schema.withdrawalActions)
+      .where(eq(schema.withdrawalActions.withdrawalId, withdrawalId))
+      .orderBy(asc(schema.withdrawalActions.createdAt));
+    return rows.map(rowToWithdrawalAction);
+  },
+
   // --- Escrows ---
   async createEscrow(escrow) {
     await getDb().insert(schema.escrows).values(escrowToRow(escrow));
@@ -1190,7 +1359,22 @@ export const mysqlStore: DbRepository = {
 
   // --- Audit log ---
   async createAdminLog(log) {
-    await getDb().insert(schema.adminLogs).values(adminLogToRow(log));
+    try {
+      await getDb().insert(schema.adminLogs).values(adminLogToRow(log));
+    } catch (err: any) {
+      console.warn("[damii][db] createAdminLog standard insert notice:", err?.message || err);
+      try {
+        const row = adminLogToRow(log);
+        // Strip 4-byte astral characters if MySQL table collation is legacy utf8mb3
+        row.detailsJson = row.detailsJson.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, "");
+        row.target = row.target.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, "");
+        row.adminName = row.adminName.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, "");
+        row.action = row.action.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, "");
+        await getDb().insert(schema.adminLogs).values(row);
+      } catch (retryErr) {
+        console.error("[damii][db] createAdminLog fallback insert error:", retryErr);
+      }
+    }
     return { ...log };
   },
 
@@ -1950,7 +2134,7 @@ export const mysqlStore: DbRepository = {
 
     for (const [key, bal] of latestBalances.entries()) {
       const [userId, accType] = key.split(":");
-      if (userId === "platform-treasury") {
+      if (userId === "platform-treasury" || userId === "platform" || userId === "system-house" || userId === "system") {
         platformFeeFundTotal += bal;
       } else if (accType === "escrow") {
         escrowFundTotal += bal;

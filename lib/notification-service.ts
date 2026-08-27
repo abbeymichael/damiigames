@@ -61,6 +61,23 @@ function cleanOldNotifications() {
   }
 }
 
+/**
+ * Remove all emojis, surrogate pairs, and non-GSM/non-ASCII symbols from SMS text.
+ * Prevents telecom carrier encoding issues, unexpected multi-part billing (UCS-2 vs GSM-7),
+ * and database insertion problems with SMS logs.
+ */
+export function sanitizeSmsText(text: string): string {
+  if (!text) return "";
+  return text
+    // Remove 4-byte surrogate pairs (emojis)
+    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, "")
+    // Remove Unicode emoji symbols & pictographs
+    .replace(/[\u2600-\u27BF\u2300-\u23FF\u2B50\u200D\uFE0F]/g, "")
+    // Collapse multiple whitespaces
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export const notificationService = {
   /**
    * Get dynamic in-app settings
@@ -976,11 +993,11 @@ export const notificationService = {
       cleanPhone = "233" + cleanPhone.substring(1);
     }
 
-    let smsText = payload.message;
+    let smsText = sanitizeSmsText(payload.message);
     if (payload.type === "game_request" && smsConfig.matchInviteTemplate) {
-      smsText = this.interpolateTemplate(smsConfig.matchInviteTemplate, payload.templateData || {});
+      smsText = sanitizeSmsText(this.interpolateTemplate(smsConfig.matchInviteTemplate, payload.templateData || {}));
     } else if (payload.type === "tournament_match" && smsConfig.tournamentAlertTemplate) {
-      smsText = this.interpolateTemplate(smsConfig.tournamentAlertTemplate, payload.templateData || {});
+      smsText = sanitizeSmsText(this.interpolateTemplate(smsConfig.tournamentAlertTemplate, payload.templateData || {}));
     }
 
     const execResult = await this.executeSmsProvider(smsConfig, cleanPhone, smsText);

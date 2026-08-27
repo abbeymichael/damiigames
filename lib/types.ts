@@ -328,6 +328,130 @@ export type WalletTransaction = {
   createdAt: string;
 };
 
+/* ------------------------------------------------------------------------- */
+/* Dedicated Deposits Table & Lifecycle Types                                */
+/* ------------------------------------------------------------------------- */
+export type DepositStatus =
+  | "pending"
+  | "verifying"
+  | "verified"
+  | "approved"
+  | "completed"
+  | "failed"
+  | "rejected"
+  | "cancelled";
+
+export type DepositMethod = "momo" | "card" | "bank_transfer" | "manual";
+
+export interface Deposit {
+  id: string;
+  userId: string;
+  amount: number;
+  currency: string;
+  method: DepositMethod | string;
+  provider: string; // e.g. "Paystack", "MTN", "Telecel", "AT"
+  reference: string;
+  gatewayReference?: string | null;
+  status: DepositStatus;
+  phoneNumber?: string | null;
+  accountName?: string | null;
+  fee: number;
+  netAmount: number;
+  gatewayResponse?: string | null;
+  verifiedAt?: string | null;
+  verifiedBy?: string | null;
+  approvedAt?: string | null;
+  approvedBy?: string | null;
+  processedAt?: string | null;
+  processedBy?: string | null;
+  rejectedAt?: string | null;
+  rejectedBy?: string | null;
+  rejectionReason?: string | null;
+  metadataJson?: string | null;
+  ledgerEntryId?: string | null;
+  walletTransactionId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DepositAction {
+  id: string;
+  depositId: string;
+  action: "create" | "verify" | "approve" | "process" | "reject" | "cancel" | "gateway_webhook" | string;
+  actorId: string;
+  actorName?: string | null;
+  previousStatus?: string | null;
+  newStatus?: string | null;
+  notes?: string | null;
+  metadataJson?: string | null;
+  createdAt: string;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Dedicated Withdrawals Table & Lifecycle Types                             */
+/* ------------------------------------------------------------------------- */
+export type WithdrawalStatus =
+  | "pending"
+  | "verifying"
+  | "approved"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "rejected"
+  | "cancelled"
+  | "reversed";
+
+export type WithdrawalMethod = "momo" | "bank" | "manual";
+
+export interface Withdrawal {
+  id: string;
+  userId: string;
+  amount: number;
+  currency: string;
+  method: WithdrawalMethod | string;
+  provider: string; // e.g. "MTN", "Telecel", "AT", "Paystack"
+  accountNumber: string;
+  accountName?: string | null;
+  bankCode?: string | null;
+  recipientCode?: string | null;
+  transferCode?: string | null;
+  transferId?: string | null;
+  reference: string;
+  status: WithdrawalStatus;
+  fee: number;
+  netAmount: number;
+  gatewayResponse?: string | null;
+  failureReason?: string | null;
+  verifiedAt?: string | null;
+  verifiedBy?: string | null;
+  approvedAt?: string | null;
+  approvedBy?: string | null;
+  processedAt?: string | null;
+  processedBy?: string | null;
+  rejectedAt?: string | null;
+  rejectedBy?: string | null;
+  rejectionReason?: string | null;
+  disbursedAt?: string | null;
+  metadataJson?: string | null;
+  ledgerEntryId?: string | null;
+  walletTransactionId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WithdrawalAction {
+  id: string;
+  withdrawalId: string;
+  action: "create" | "verify" | "approve" | "process" | "disburse" | "reject" | "refund" | "cancel" | "gateway_webhook" | "retry" | string;
+  actorId: string;
+  actorName?: string | null;
+  previousStatus?: string | null;
+  newStatus?: string | null;
+  notes?: string | null;
+  metadataJson?: string | null;
+  createdAt: string;
+}
+
 export type LeagueStatus = "draft" | "registration" | "active" | "completed" | "cancelled" | "under_review";
 
 export type PrizeDistribution = {

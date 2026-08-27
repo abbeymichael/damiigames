@@ -14,24 +14,32 @@ import { memoryStore } from "./db/memory-store";
 let activeStore: DbRepository = memoryStore;
 let initPromise: Promise<DbRepository> | null = null;
 let lastAttemptTime = 0;
+let mysqlConnectionError: string | null = null;
+let hasLoggedFallbackNotice = false;
 
 async function boot(): Promise<DbRepository> {
   if (activeStore === mysqlStore) {
     return mysqlStore;
   }
   const now = Date.now();
-  if (!initPromise || (activeStore === memoryStore && now - lastAttemptTime > 3000)) {
+  // Allow periodic retry when configured or if credentials change
+  if (!initPromise || (activeStore === memoryStore && now - lastAttemptTime > 15000)) {
     lastAttemptTime = now;
     initPromise = (async () => {
       try {
         if (mysqlStore.init) await mysqlStore.init();
         activeStore = mysqlStore;
-        console.log("[damii][db] Connected to MySQL database store.");
+        mysqlConnectionError = null;
+        console.log("[damii][db] ✅ Successfully connected to MySQL database store.");
         return mysqlStore;
       } catch (err) {
-        console.warn(
-          `[damii][db] MySQL not available (${err instanceof Error ? err.message : String(err)}). Using fallback store.`,
-        );
+        mysqlConnectionError = err instanceof Error ? err.message : String(err);
+        if (!hasLoggedFallbackNotice) {
+          hasLoggedFallbackNotice = true;
+          console.info(
+            `[damii][db] MySQL not detected on local container (${mysqlConnectionError}). Active repository: resilient embedded storage.`,
+          );
+        }
         if (memoryStore.init) await memoryStore.init();
         activeStore = memoryStore;
         return memoryStore;

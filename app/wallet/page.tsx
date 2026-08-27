@@ -397,8 +397,15 @@ export default function WalletPage() {
             <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
-                onClick={() => loadWalletData()}
-                disabled={refreshing || !token}
+                onClick={() => {
+                  const tok = token || getSessionToken();
+                  if (!tok) {
+                    window.dispatchEvent(new CustomEvent("damii-open-auth"));
+                    return;
+                  }
+                  loadWalletData(tok);
+                }}
+                disabled={refreshing}
                 className="px-4 py-2.5 rounded-xl bg-[#081c15] hover:bg-[#0c3b2e] text-slate-200 hover:text-white border border-[#1a5e48] text-xs font-bold transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
                 title="Refresh balances and transaction history"
               >

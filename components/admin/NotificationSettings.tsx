@@ -1907,7 +1907,7 @@ export function NotificationSettings({ token, adminSecret }: NotificationSetting
               <button
                 type="button"
                 onClick={() => {
-                  setTestTitle("🏆 Tournament Round 2 Match Ready");
+                  setTestTitle("Tournament Round 2 Match Ready");
                   setTestMessage("Your DAMII Grandmasters Round 2 match vs Ama_Queen is ready in Room #44102. Click to enter!");
                   setTestActionUrl("/arena?code=44102&mode=league");
                   setTestActionLabel("Join Tournament Match");

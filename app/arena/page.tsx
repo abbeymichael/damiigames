@@ -676,7 +676,7 @@ export default function ArenaPage() {
     };
 
     fetchLobbyData();
-    const interval = window.setInterval(fetchLobbyData, 4000);
+    const interval = window.setInterval(fetchLobbyData, 2500);
     return () => window.clearInterval(interval);
   }, [token, username]);
 
@@ -696,7 +696,7 @@ export default function ArenaPage() {
     setShowPregameModal(true);
   }
 
-  // Poll online room state when in online mode
+  // Poll online room state when in online mode (responsive 800ms polling for smooth shared-hosting synchronization)
   useEffect(() => {
     if (mode !== "online" || !room || !token) return;
     const update = async () => {
@@ -711,7 +711,7 @@ export default function ArenaPage() {
         /* Retain last confirmed state */
       }
     };
-    const timer = window.setInterval(update, 1500);
+    const timer = window.setInterval(update, 800);
     return () => window.clearInterval(timer);
   }, [mode, room?.code, token]);
 

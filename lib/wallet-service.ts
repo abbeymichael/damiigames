@@ -1,6 +1,6 @@
 import { dbRepository } from "./db-client";
 import { securityService } from "./security";
-import { WalletTransaction, WagerEscrow } from "./types";
+import { WalletTransaction, WagerEscrow, Deposit, Withdrawal, DepositAction, WithdrawalAction } from "./types";
 import { notificationService } from "./notification-service";
 import { getAdminPermissions } from "./permissions";
 
@@ -66,31 +66,80 @@ export const walletService = {
     const pointsToAdd = Math.floor(amountGhs);
 
     const ref = `PAYSTACK-${Date.now()}-${securityService.generateCsprngToken(8).toUpperCase()}`;
+    const txId = `tx-${securityService.generateUUID()}`;
+    const depositId = `dep-${securityService.generateUUID()}`;
 
     // Create pending deposit transaction
     const tx: WalletTransaction = {
-      id: `tx-${securityService.generateUUID()}`,
+      id: txId,
       userToken,
       type: "deposit",
       currency: "points",
       amount: pointsToAdd,
       reference: ref,
       status: "pending",
-      metaJson: JSON.stringify({ amountGhs: pointsToAdd, rate: 1, email: email || `${profile.username.toLowerCase().replace(/\s+/g, "")}@damii.gh` }),
+      metaJson: JSON.stringify({
+        amountGhs: pointsToAdd,
+        rate: 1,
+        email: email || `${profile.username.toLowerCase().replace(/\s+/g, "")}@damii.gh`,
+        depositId,
+      }),
       createdAt: new Date().toISOString(),
     };
 
     await dbRepository.createTransaction(tx);
+
+    // Create dedicated record in deposits table
+    const deposit: Deposit = {
+      id: depositId,
+      userId: userToken,
+      amount: pointsToAdd,
+      currency: "GHS",
+      method: "momo",
+      provider: "Paystack",
+      reference: ref,
+      status: "pending",
+      phoneNumber: profile.phoneNumber || null,
+      accountName: profile.username || null,
+      fee: 0,
+      netAmount: pointsToAdd,
+      metadataJson: JSON.stringify({
+        email: email || `${profile.username.toLowerCase().replace(/\s+/g, "")}@damii.gh`,
+        callbackUrl: customCallbackUrl || "",
+      }),
+      walletTransactionId: txId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await dbRepository.createDeposit(deposit);
+
+    // Record initial action trail
+    await dbRepository.recordDepositAction({
+      id: `act-${securityService.generateUUID()}`,
+      depositId: deposit.id,
+      action: "create",
+      actorId: userToken,
+      actorName: profile.username,
+      previousStatus: null,
+      newStatus: "pending",
+      notes: `Initiated Paystack deposit topup of GH₵ ${pointsToAdd} (${pointsToAdd} Marbles)`,
+      createdAt: new Date().toISOString(),
+    }).catch(() => {});
 
     const secretKey = (process.env.PAYSTACK_SECRET_KEY || "").trim();
     if (!secretKey) {
       throw new Error("PAYSTACK_SECRET_KEY is not configured on the server. Please configure your Paystack secret key in Settings.");
     }
 
-    const baseCallback = customCallbackUrl || process.env.NEXT_PUBLIC_APP_URL || "https://damii.gh";
-    const callbackUrl = baseCallback.includes("?")
-      ? `${baseCallback}&ref=${encodeURIComponent(ref)}`
-      : `${baseCallback.replace(/\/$/, "")}/wallet?ref=${encodeURIComponent(ref)}`;
+    const rawBase = (customCallbackUrl || process.env.NEXT_PUBLIC_APP_URL || "https://damii.gh").trim().replace(/\/+$/, "");
+    let callbackUrl: string;
+    if (rawBase.includes("?")) {
+      callbackUrl = `${rawBase}&ref=${encodeURIComponent(ref)}`;
+    } else {
+      const pathWithWallet = rawBase.endsWith("/wallet") ? rawBase : `${rawBase}/wallet`;
+      callbackUrl = `${pathWithWallet}?ref=${encodeURIComponent(ref)}`;
+    }
 
     let authorizationUrl = "";
     let accessCode = "";
@@ -112,6 +161,7 @@ export const walletService = {
           metadata: {
             userToken,
             username: profile.username,
+            depositId,
             points: pointsToAdd,
             custom_fields: [
               {
@@ -141,7 +191,7 @@ export const walletService = {
       throw new Error("Paystack Gateway Error: " + (err instanceof Error ? err.message : String(err)));
     }
 
-    return { reference: ref, authorizationUrl, accessCode, pointsToAdd, amountGhs: pointsToAdd };
+    return { reference: ref, authorizationUrl, accessCode, pointsToAdd, amountGhs: pointsToAdd, depositId };
   },
 
   async verifyAndCreditPaystack(reference: string) {
@@ -157,14 +207,18 @@ export const walletService = {
 
       const all = await dbRepository.getAllTransactions(500);
       const tx = all.find((t) => t.reference === cleanRef);
+      let deposit = await dbRepository.getDepositByReference(cleanRef);
 
-      if (!tx) {
+      if (!tx && !deposit) {
         throw new Error("Transaction reference not found in system database");
       }
 
-      if (tx.status === "completed" || alreadyProcessed) {
-        return { success: true, message: "Transaction already credited", tx };
+      if (tx?.status === "completed" || deposit?.status === "completed" || alreadyProcessed) {
+        return { success: true, message: "Transaction already credited", tx, deposit };
       }
+
+      const userToken = tx?.userToken || deposit?.userId || "";
+      const expectedAmount = tx?.amount ?? deposit?.amount ?? 0;
 
       const secretKey = (process.env.PAYSTACK_SECRET_KEY || "").trim();
       if (!secretKey) {
@@ -183,42 +237,116 @@ export const walletService = {
 
       const paystackStatus = json.data?.status; // "success" | "failed" | "abandoned" | "ongoing" | "pending"
       const paidPesewas = json.data?.amount;
-      const expectedPesewas = Math.round(tx.amount * 100);
+      const expectedPesewas = Math.round(expectedAmount * 100);
 
       if (paystackStatus === "success") {
         if (typeof paidPesewas === "number" && paidPesewas >= expectedPesewas) {
           await dbRepository.markPaystackRefProcessed(cleanRef);
-          tx.status = "completed";
-          await dbRepository.createTransaction(tx);
-          await dbRepository.updateProfileBalance(tx.userToken, tx.amount);
-          await dbRepository.writeLedger([
+          
+          if (tx) {
+            tx.status = "completed";
+            await dbRepository.createTransaction(tx);
+          }
+          
+          await dbRepository.updateProfileBalance(userToken, expectedAmount);
+          
+          // Write double-entry ledger entries referencing the deposit
+          const ledgerEntries = await dbRepository.writeLedger([
             {
-              userId: tx.userToken,
+              userId: userToken,
               accountType: "available",
               entryType: "deposit",
-              amount: String(tx.amount),
-              referenceType: "paystack",
-              referenceId: cleanRef,
+              amount: String(expectedAmount),
+              referenceType: "deposit",
+              referenceId: deposit ? deposit.id : cleanRef,
             },
           ]).catch(() => []);
 
+          const ledgerEntryId = ledgerEntries[0]?.id;
+
+          // Update dedicated deposits table
+          if (deposit) {
+            deposit = await dbRepository.updateDeposit(deposit.id, {
+              status: "completed",
+              gatewayResponse: json.data?.gateway_response || "Successful",
+              gatewayReference: json.data?.reference || cleanRef,
+              verifiedAt: new Date().toISOString(),
+              verifiedBy: "Paystack Gateway",
+              approvedAt: new Date().toISOString(),
+              approvedBy: "System Gateway",
+              processedAt: new Date().toISOString(),
+              ledgerEntryId: ledgerEntryId || null,
+            });
+          }
+
+          // Record audit action trail on deposit
+          if (deposit) {
+            await dbRepository.recordDepositAction({
+              id: `act-${securityService.generateUUID()}`,
+              depositId: deposit.id,
+              action: "verify",
+              actorId: "paystack_gateway",
+              actorName: "Paystack Verification API",
+              previousStatus: "pending",
+              newStatus: "verified",
+              notes: `Gateway verified payment of GH₵ ${(paidPesewas / 100).toFixed(2)}. Channel: ${json.data?.channel || "Mobile Money"}`,
+              createdAt: new Date().toISOString(),
+            }).catch(() => {});
+
+            await dbRepository.recordDepositAction({
+              id: `act-${securityService.generateUUID()}`,
+              depositId: deposit.id,
+              action: "process",
+              actorId: "system",
+              actorName: "DAMII Settlement Engine",
+              previousStatus: "verified",
+              newStatus: "completed",
+              notes: `Credited ${expectedAmount} Marbles to user wallet. Double-entry ledger #${ledgerEntryId || "auto"} created.`,
+              createdAt: new Date().toISOString(),
+            }).catch(() => {});
+          }
+
           // Notify user of successful deposit
           notificationService.sendNotification({
-            userToken: tx.userToken,
+            userToken,
             type: "account_alert",
             title: "💳 Mobile Money Deposit Confirmed",
-            message: `GH₵ ${tx.amount}.00 (${tx.amount} Marbles) has been credited to your wallet.`,
+            message: `GH₵ ${expectedAmount}.00 (${expectedAmount} Marbles) has been credited to your wallet.`,
             link: "/wallet",
             actionLabel: "View Balance",
           }).catch(() => {});
 
-          return { success: true, message: `Successfully added GH₵ ${tx.amount}.00 (${tx.amount} Marbles) to your wallet!`, tx };
+          return {
+            success: true,
+            message: `Successfully added GH₵ ${expectedAmount}.00 (${expectedAmount} Marbles) to your wallet!`,
+            tx,
+            deposit,
+          };
         } else {
-          throw new Error(`Payment amount mismatch: Expected GH₵ ${tx.amount}, received GH₵ ${(paidPesewas || 0) / 100}`);
+          throw new Error(`Payment amount mismatch: Expected GH₵ ${expectedAmount}, received GH₵ ${(paidPesewas || 0) / 100}`);
         }
       } else if (paystackStatus === "failed") {
-        tx.status = "failed";
-        await dbRepository.createTransaction(tx);
+        if (tx) {
+          tx.status = "failed";
+          await dbRepository.createTransaction(tx);
+        }
+        if (deposit) {
+          await dbRepository.updateDeposit(deposit.id, {
+            status: "failed",
+            gatewayResponse: json.data?.gateway_response || "Payment declined",
+          });
+          await dbRepository.recordDepositAction({
+            id: `act-${securityService.generateUUID()}`,
+            depositId: deposit.id,
+            action: "reject",
+            actorId: "paystack_gateway",
+            actorName: "Paystack Gateway",
+            previousStatus: deposit.status,
+            newStatus: "failed",
+            notes: `Payment declined: ${json.data?.gateway_response || "Failed"}`,
+            createdAt: new Date().toISOString(),
+          }).catch(() => {});
+        }
         throw new Error(`Paystack Payment Failed: ${json.data?.gateway_response || "Payment was declined by provider"}`);
       } else {
         // Payment is still awaiting user authorization on phone/card
@@ -228,9 +356,205 @@ export const walletService = {
           status: paystackStatus || "pending",
           message: `Payment is currently ${paystackStatus || "pending"}. Please complete the payment on Paystack.`,
           tx,
+          deposit,
         };
       }
     });
+  },
+
+  // --- Explicit Deposit Lifecycle Actions ---
+  async verifyDeposit(depositIdOrRef: string, adminToken?: string) {
+    let deposit = await dbRepository.getDeposit(depositIdOrRef);
+    if (!deposit) {
+      deposit = await dbRepository.getDepositByReference(depositIdOrRef);
+    }
+    if (!deposit) throw new Error("Deposit record not found.");
+
+    if (deposit.status === "completed") {
+      return { success: true, message: "Deposit is already verified and completed.", deposit };
+    }
+
+    const caller = adminToken ? await dbRepository.getProfile(adminToken) : null;
+    const actorId = adminToken || "system";
+    const actorName = caller?.username || "Admin / Gateway";
+
+    const prevStatus = deposit.status;
+    const updated = await dbRepository.updateDeposit(deposit.id, {
+      status: "verified",
+      verifiedAt: new Date().toISOString(),
+      verifiedBy: actorName,
+    });
+
+    await dbRepository.recordDepositAction({
+      id: `act-${securityService.generateUUID()}`,
+      depositId: deposit.id,
+      action: "verify",
+      actorId,
+      actorName,
+      previousStatus: prevStatus,
+      newStatus: "verified",
+      notes: `Deposit of GH₵ ${deposit.amount} verified by ${actorName}`,
+      createdAt: new Date().toISOString(),
+    });
+
+    return { success: true, message: `Deposit #${deposit.id} verified.`, deposit: updated };
+  },
+
+  async approveDeposit(depositIdOrRef: string, adminToken: string, notes?: string) {
+    let deposit = await dbRepository.getDeposit(depositIdOrRef);
+    if (!deposit) deposit = await dbRepository.getDepositByReference(depositIdOrRef);
+    if (!deposit) throw new Error("Deposit record not found.");
+
+    if (deposit.status === "completed") {
+      return { success: true, message: "Deposit has already been completed.", deposit };
+    }
+
+    const caller = await dbRepository.getProfile(adminToken);
+    const actorName = caller?.username || "Admin";
+
+    const prevStatus = deposit.status;
+    const updated = await dbRepository.updateDeposit(deposit.id, {
+      status: "approved",
+      approvedAt: new Date().toISOString(),
+      approvedBy: actorName,
+    });
+
+    await dbRepository.recordDepositAction({
+      id: `act-${securityService.generateUUID()}`,
+      depositId: deposit.id,
+      action: "approve",
+      actorId: adminToken,
+      actorName,
+      previousStatus: prevStatus,
+      newStatus: "approved",
+      notes: notes || `Deposit approved by ${actorName}`,
+      createdAt: new Date().toISOString(),
+    });
+
+    return { success: true, message: `Deposit #${deposit.id} approved.`, deposit: updated };
+  },
+
+  async processDeposit(depositIdOrRef: string, actorToken: string, notes?: string) {
+    let deposit = await dbRepository.getDeposit(depositIdOrRef);
+    if (!deposit) deposit = await dbRepository.getDepositByReference(depositIdOrRef);
+    if (!deposit) throw new Error("Deposit record not found.");
+
+    if (deposit.status === "completed") {
+      return { success: true, message: "Deposit has already been processed.", deposit };
+    }
+
+    const caller = await dbRepository.getProfile(actorToken);
+    const actorName = caller?.username || "Admin";
+
+    // Credit user balance
+    await dbRepository.updateProfileBalance(deposit.userId, deposit.amount);
+
+    // Write ledger entries
+    const ledgerEntries = await dbRepository.writeLedger([
+      {
+        userId: deposit.userId,
+        accountType: "available",
+        entryType: "deposit",
+        amount: String(deposit.amount),
+        referenceType: "deposit",
+        referenceId: deposit.id,
+      },
+    ]).catch(() => []);
+
+    const ledgerEntryId = ledgerEntries[0]?.id;
+    const prevStatus = deposit.status;
+
+    const updated = await dbRepository.updateDeposit(deposit.id, {
+      status: "completed",
+      processedAt: new Date().toISOString(),
+      ledgerEntryId: ledgerEntryId || null,
+    });
+
+    await dbRepository.recordDepositAction({
+      id: `act-${securityService.generateUUID()}`,
+      depositId: deposit.id,
+      action: "process",
+      actorId: actorToken,
+      actorName,
+      previousStatus: prevStatus,
+      newStatus: "completed",
+      notes: notes || `Processed and credited GH₵ ${deposit.amount} (${deposit.amount} Marbles) to user.`,
+      createdAt: new Date().toISOString(),
+    });
+
+    // Notify user
+    notificationService.sendNotification({
+      userToken: deposit.userId,
+      type: "account_alert",
+      title: "💳 Deposit Approved & Processed",
+      message: `GH₵ ${deposit.amount}.00 (${deposit.amount} Marbles) has been credited to your wallet balance.`,
+      link: "/wallet",
+      actionLabel: "View Balance",
+    }).catch(() => {});
+
+    return { success: true, message: `Deposit #${deposit.id} processed and credited.`, deposit: updated };
+  },
+
+  async rejectDeposit(depositIdOrRef: string, adminToken: string, reason: string) {
+    let deposit = await dbRepository.getDeposit(depositIdOrRef);
+    if (!deposit) deposit = await dbRepository.getDepositByReference(depositIdOrRef);
+    if (!deposit) throw new Error("Deposit record not found.");
+
+    if (deposit.status === "completed") {
+      throw new Error("Cannot reject a completed deposit.");
+    }
+
+    const caller = await dbRepository.getProfile(adminToken);
+    const actorName = caller?.username || "Admin";
+
+    const prevStatus = deposit.status;
+    const updated = await dbRepository.updateDeposit(deposit.id, {
+      status: "rejected",
+      metadataJson: JSON.stringify({
+        ...JSON.parse(deposit.metadataJson || "{}"),
+        rejectionReason: reason,
+        rejectedBy: actorName,
+        rejectedAt: new Date().toISOString(),
+      }),
+    });
+
+    await dbRepository.recordDepositAction({
+      id: `act-${securityService.generateUUID()}`,
+      depositId: deposit.id,
+      action: "reject",
+      actorId: adminToken,
+      actorName,
+      previousStatus: prevStatus,
+      newStatus: "rejected",
+      notes: `Rejected deposit: ${reason}`,
+      createdAt: new Date().toISOString(),
+    });
+
+    return { success: true, message: `Deposit #${deposit.id} rejected.`, deposit: updated };
+  },
+
+  async getDepositDetails(depositIdOrRef: string) {
+    let deposit = await dbRepository.getDeposit(depositIdOrRef);
+    if (!deposit) deposit = await dbRepository.getDepositByReference(depositIdOrRef);
+    if (!deposit) return null;
+
+    const actions = await dbRepository.listDepositActions(deposit.id);
+    const userProfile = await dbRepository.getProfile(deposit.userId);
+
+    return {
+      deposit,
+      actions,
+      user: userProfile ? {
+        token: userProfile.token,
+        username: userProfile.username,
+        phoneNumber: userProfile.phoneNumber,
+        status: userProfile.status,
+      } : null,
+    };
+  },
+
+  async listDeposits(filter?: { userId?: string; status?: string; limit?: number }) {
+    return dbRepository.listDeposits(filter);
   },
 
   /**

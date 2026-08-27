@@ -14,12 +14,24 @@
     # RewriteCond %{HTTPS} off
     # RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
-    # 2. WebSocket Reverse Proxy Support
+    # 2. Directly serve existing files from assets, dist/client, or public if they exist
+    RewriteCond %{REQUEST_URI} ^/assets/(.*)$
+    RewriteCond %{DOCUMENT_ROOT}/assets/%1 -f
+    RewriteRule ^assets/(.*)$ assets/$1 [L]
+
+    RewriteCond %{REQUEST_URI} ^/assets/(.*)$
+    RewriteCond %{DOCUMENT_ROOT}/dist/client/assets/%1 -f
+    RewriteRule ^assets/(.*)$ dist/client/assets/$1 [L]
+
+    RewriteCond %{DOCUMENT_ROOT}/public/$1 -f
+    RewriteRule ^(.*)$ public/$1 [L]
+
+    # 3. WebSocket Reverse Proxy Support
     RewriteCond %{HTTP:Upgrade} websocket [NC]
     RewriteCond %{HTTP:Connection} upgrade [NC]
     RewriteRule ^(.*)$ ws://127.0.0.1:3000/$1 [P,L]
 
-    # 3. HTTP Reverse Proxy to Node.js backend
+    # 4. HTTP Reverse Proxy to Node.js backend
     # If not accessing an existing physical file, pass to Node.js server
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d

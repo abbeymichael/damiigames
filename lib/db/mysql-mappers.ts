@@ -4,6 +4,10 @@ import type {
   AdminProfile,
   AdminSettings,
   AppRole,
+  Deposit,
+  DepositAction,
+  DepositMethod,
+  DepositStatus,
   GameCatalogItem,
   GameTypeLimit,
   League,
@@ -35,6 +39,10 @@ import type {
   User,
   WagerEscrow,
   WalletTransaction,
+  Withdrawal,
+  WithdrawalAction,
+  WithdrawalMethod,
+  WithdrawalStatus,
 } from "../types";
 import type * as schema from "../../db/schema.mysql";
 
@@ -59,6 +67,10 @@ export type AdminProfileRow = Row<typeof schema.adminProfiles>;
 export type OrganizerProfileRow = Row<typeof schema.organizerProfiles>;
 export type RoomRow = Row<typeof schema.rooms>;
 export type WalletTransactionRow = Row<typeof schema.walletTransactions>;
+export type DepositRow = Row<typeof schema.deposits>;
+export type WithdrawalRow = Row<typeof schema.withdrawals>;
+export type DepositActionRow = Row<typeof schema.depositActions>;
+export type WithdrawalActionRow = Row<typeof schema.withdrawalActions>;
 export type MatchRow = Row<typeof schema.matches>;
 export type TournamentRow = Row<typeof schema.tournaments>;
 export type TournamentPrizeRow = Row<typeof schema.tournamentPrizes>;
@@ -350,6 +362,216 @@ export function transactionToRow(t: WalletTransaction): WalletTransactionRow {
     status: t.status || "completed",
     metaJson: t.metaJson || "{}",
     createdAt: t.createdAt,
+  };
+}
+
+/* ---------------------------- dedicated deposits ------------------------- */
+
+export function rowToDeposit(row: DepositRow): Deposit {
+  return {
+    id: row.id,
+    userId: row.userId,
+    amount: Number(row.amount),
+    currency: row.currency || "GHS",
+    method: (row.method || "momo") as DepositMethod,
+    provider: row.provider || "Paystack",
+    reference: row.reference,
+    gatewayReference: orUndefined(row.gatewayReference),
+    status: (row.status || "pending") as DepositStatus,
+    phoneNumber: orUndefined(row.phoneNumber),
+    accountName: orUndefined(row.accountName),
+    fee: Number(row.fee || 0),
+    netAmount: Number(row.netAmount || 0),
+    gatewayResponse: orUndefined(row.gatewayResponse),
+    verifiedAt: orUndefined(row.verifiedAt),
+    verifiedBy: orUndefined(row.verifiedBy),
+    approvedAt: orUndefined(row.approvedAt),
+    approvedBy: orUndefined(row.approvedBy),
+    processedAt: orUndefined(row.processedAt),
+    processedBy: orUndefined(row.processedBy),
+    rejectedAt: orUndefined(row.rejectedAt),
+    rejectedBy: orUndefined(row.rejectedBy),
+    rejectionReason: orUndefined(row.rejectionReason),
+    metadataJson: orUndefined(row.metadataJson),
+    ledgerEntryId: orUndefined(row.ledgerEntryId),
+    walletTransactionId: orUndefined(row.walletTransactionId),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+export function depositToRow(d: Deposit): DepositRow {
+  return {
+    id: d.id,
+    userId: d.userId,
+    amount: String(d.amount),
+    currency: d.currency || "GHS",
+    method: d.method || "momo",
+    provider: d.provider || "Paystack",
+    reference: d.reference.slice(0, 191),
+    gatewayReference: orNull(d.gatewayReference),
+    status: d.status || "pending",
+    phoneNumber: orNull(d.phoneNumber),
+    accountName: orNull(d.accountName),
+    fee: String(d.fee ?? 0),
+    netAmount: String(d.netAmount ?? d.amount),
+    gatewayResponse: orNull(d.gatewayResponse),
+    verifiedAt: orNull(d.verifiedAt),
+    verifiedBy: orNull(d.verifiedBy),
+    approvedAt: orNull(d.approvedAt),
+    approvedBy: orNull(d.approvedBy),
+    processedAt: orNull(d.processedAt),
+    processedBy: orNull(d.processedBy),
+    rejectedAt: orNull(d.rejectedAt),
+    rejectedBy: orNull(d.rejectedBy),
+    rejectionReason: orNull(d.rejectionReason),
+    metadataJson: orNull(d.metadataJson),
+    ledgerEntryId: orNull(d.ledgerEntryId),
+    walletTransactionId: orNull(d.walletTransactionId),
+    createdAt: d.createdAt,
+    updatedAt: d.updatedAt,
+  };
+}
+
+/* ---------------------------- dedicated withdrawals ---------------------- */
+
+export function rowToWithdrawal(row: WithdrawalRow): Withdrawal {
+  return {
+    id: row.id,
+    userId: row.userId,
+    amount: Number(row.amount),
+    currency: row.currency || "GHS",
+    method: (row.method || "momo") as WithdrawalMethod,
+    provider: row.provider || "MTN",
+    accountNumber: row.accountNumber,
+    accountName: orUndefined(row.accountName),
+    bankCode: orUndefined(row.bankCode),
+    recipientCode: orUndefined(row.recipientCode),
+    transferCode: orUndefined(row.transferCode),
+    transferId: orUndefined(row.transferId),
+    reference: row.reference,
+    status: (row.status || "pending") as WithdrawalStatus,
+    fee: Number(row.fee || 0),
+    netAmount: Number(row.netAmount || 0),
+    gatewayResponse: orUndefined(row.gatewayResponse),
+    failureReason: orUndefined(row.failureReason),
+    verifiedAt: orUndefined(row.verifiedAt),
+    verifiedBy: orUndefined(row.verifiedBy),
+    approvedAt: orUndefined(row.approvedAt),
+    approvedBy: orUndefined(row.approvedBy),
+    processedAt: orUndefined(row.processedAt),
+    processedBy: orUndefined(row.processedBy),
+    rejectedAt: orUndefined(row.rejectedAt),
+    rejectedBy: orUndefined(row.rejectedBy),
+    rejectionReason: orUndefined(row.rejectionReason),
+    disbursedAt: orUndefined(row.disbursedAt),
+    metadataJson: orUndefined(row.metadataJson),
+    ledgerEntryId: orUndefined(row.ledgerEntryId),
+    walletTransactionId: orUndefined(row.walletTransactionId),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+export function withdrawalToRow(w: Withdrawal): WithdrawalRow {
+  return {
+    id: w.id,
+    userId: w.userId,
+    amount: String(w.amount),
+    currency: w.currency || "GHS",
+    method: w.method || "momo",
+    provider: w.provider || "MTN",
+    accountNumber: w.accountNumber,
+    accountName: orNull(w.accountName),
+    bankCode: orNull(w.bankCode),
+    recipientCode: orNull(w.recipientCode),
+    transferCode: orNull(w.transferCode),
+    transferId: orNull(w.transferId),
+    reference: w.reference.slice(0, 191),
+    status: w.status || "pending",
+    fee: String(w.fee ?? 0),
+    netAmount: String(w.netAmount ?? w.amount),
+    gatewayResponse: orNull(w.gatewayResponse),
+    failureReason: orNull(w.failureReason),
+    verifiedAt: orNull(w.verifiedAt),
+    verifiedBy: orNull(w.verifiedBy),
+    approvedAt: orNull(w.approvedAt),
+    approvedBy: orNull(w.approvedBy),
+    processedAt: orNull(w.processedAt),
+    processedBy: orNull(w.processedBy),
+    rejectedAt: orNull(w.rejectedAt),
+    rejectedBy: orNull(w.rejectedBy),
+    rejectionReason: orNull(w.rejectionReason),
+    disbursedAt: orNull(w.disbursedAt),
+    metadataJson: orNull(w.metadataJson),
+    ledgerEntryId: orNull(w.ledgerEntryId),
+    walletTransactionId: orNull(w.walletTransactionId),
+    createdAt: w.createdAt,
+    updatedAt: w.updatedAt,
+  };
+}
+
+/* ---------------------------- deposit actions ---------------------------- */
+
+export function rowToDepositAction(row: DepositActionRow): DepositAction {
+  return {
+    id: row.id,
+    depositId: row.depositId,
+    action: row.action,
+    actorId: row.actorId,
+    actorName: orUndefined(row.actorName),
+    previousStatus: orUndefined(row.previousStatus),
+    newStatus: orUndefined(row.newStatus),
+    notes: orUndefined(row.notes),
+    metadataJson: orUndefined(row.metadataJson),
+    createdAt: row.createdAt,
+  };
+}
+
+export function depositActionToRow(a: DepositAction): DepositActionRow {
+  return {
+    id: a.id,
+    depositId: a.depositId,
+    action: a.action,
+    actorId: a.actorId,
+    actorName: orNull(a.actorName),
+    previousStatus: orNull(a.previousStatus),
+    newStatus: orNull(a.newStatus),
+    notes: orNull(a.notes),
+    metadataJson: orNull(a.metadataJson),
+    createdAt: a.createdAt,
+  };
+}
+
+/* ---------------------------- withdrawal actions ------------------------- */
+
+export function rowToWithdrawalAction(row: WithdrawalActionRow): WithdrawalAction {
+  return {
+    id: row.id,
+    withdrawalId: row.withdrawalId,
+    action: row.action,
+    actorId: row.actorId,
+    actorName: orUndefined(row.actorName),
+    previousStatus: orUndefined(row.previousStatus),
+    newStatus: orUndefined(row.newStatus),
+    notes: orUndefined(row.notes),
+    metadataJson: orUndefined(row.metadataJson),
+    createdAt: row.createdAt,
+  };
+}
+
+export function withdrawalActionToRow(a: WithdrawalAction): WithdrawalActionRow {
+  return {
+    id: a.id,
+    withdrawalId: a.withdrawalId,
+    action: a.action,
+    actorId: a.actorId,
+    actorName: orNull(a.actorName),
+    previousStatus: orNull(a.previousStatus),
+    newStatus: orNull(a.newStatus),
+    notes: orNull(a.notes),
+    metadataJson: orNull(a.metadataJson),
+    createdAt: a.createdAt,
   };
 }
 

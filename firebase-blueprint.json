@@ -1,0 +1,68 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile, balance, credentials and platform role",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["player", "organizer", "admin", "super_admin"] },
+        "status": { "type": "string", "enum": ["active", "suspended", "banned"] },
+        "balanceGhs": { "type": "number" },
+        "rating": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "username", "role", "status", "balanceGhs"]
+    },
+    "GameMatch": {
+      "title": "GameMatch",
+      "description": "Damii 1v1 draughts match or tournament fixture",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "roomCode": { "type": "string" },
+        "player1Id": { "type": "string" },
+        "player2Id": { "type": "string" },
+        "status": { "type": "string", "enum": ["waiting", "playing", "completed", "cancelled"] },
+        "stakeGhs": { "type": "number" },
+        "winnerId": { "type": "string" },
+        "outcome": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "player1Id", "status", "stakeGhs"]
+    },
+    "LedgerEntry": {
+      "title": "LedgerEntry",
+      "description": "Double-entry accounting transaction record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "journalId": { "type": "string" },
+        "type": { "type": "string" },
+        "userId": { "type": "string" },
+        "accountType": { "type": "string" },
+        "amountGhs": { "type": "number" },
+        "direction": { "type": "string", "enum": ["debit", "credit"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "journalId", "type", "userId", "accountType", "amountGhs", "direction"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Registered player and admin profiles"
+    },
+    "/matches/{matchId}": {
+      "schema": "GameMatch",
+      "description": "Active and completed game fixtures"
+    },
+    "/ledger/{entryId}": {
+      "schema": "LedgerEntry",
+      "description": "Auditable financial ledger entries"
+    }
+  }
+}

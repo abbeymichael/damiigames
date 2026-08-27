@@ -84,28 +84,125 @@ export default function LandingPage() {
           compulsory capture rules, automated escrow protection, and official tournament leagues.
         </p>
 
-        <div className="hero-ctas">
+        <div className="max-w-3xl mx-auto mb-8 px-2">
           {isAdmin ? (
-            <>
-              <NavLink href="/admin" className="btn-primary">
-                <ShieldCheck size={18} /> Admin Control Center <ArrowRight size={16} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <NavLink
+                href="/admin"
+                className="group relative flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-[#0c3b2e] to-[#08291f] text-white shadow-lg shadow-emerald-950/20 border border-[#d6a735]/40 hover:border-[#d6a735] hover:scale-[1.01] transition-all duration-200"
+              >
+                <div className="flex items-center gap-3.5 text-left">
+                  <div className="w-11 h-11 rounded-xl bg-[#d6a735]/20 border border-[#d6a735]/40 text-[#f6d884] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                    <ShieldCheck size={22} />
+                  </div>
+                  <div>
+                    <div className="font-extrabold text-sm sm:text-base text-[#fffdf7] tracking-tight flex items-center gap-2">
+                      Admin Control Center
+                    </div>
+                    <div className="text-[11px] text-emerald-200/80 font-medium">
+                      Platform regulation, users & payouts
+                    </div>
+                  </div>
+                </div>
+                <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-[#f6d884] group-hover:translate-x-1 transition-transform">
+                  <ArrowRight size={16} />
+                </div>
               </NavLink>
-              <NavLink href="/leagues" className="btn-secondary">
-                <Trophy size={18} /> Tournament Hub
+
+              <NavLink
+                href="/leagues"
+                className="group relative flex items-center justify-between p-4 rounded-2xl bg-white/90 text-[#0c3b2e] shadow-md shadow-emerald-950/5 border border-[#0c3b2e]/15 hover:border-[#d6a735]/70 hover:bg-[#fffef8] hover:scale-[1.01] transition-all duration-200"
+              >
+                <div className="flex items-center gap-3.5 text-left">
+                  <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[#b45309] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                    <Trophy size={22} />
+                  </div>
+                  <div>
+                    <div className="font-extrabold text-sm sm:text-base text-[#0c3b2e] tracking-tight">
+                      Tournament Hub
+                    </div>
+                    <div className="text-[11px] text-[#63716b] font-medium">
+                      Supervise league brackets & match days
+                    </div>
+                  </div>
+                </div>
+                <div className="w-8 h-8 rounded-lg bg-emerald-950/5 flex items-center justify-center text-[#0c3b2e] group-hover:translate-x-1 transition-transform">
+                  <ArrowRight size={16} />
+                </div>
               </NavLink>
-            </>
+            </div>
           ) : (
-            <>
-              <NavLink href="/arena" onClick={handleArenaClick} className="btn-primary">
-                <Swords size={18} /> Enter Game Arena <ArrowRight size={16} />
+            <div className="flex flex-col sm:flex-row items-stretch justify-center gap-3">
+              {/* Primary: Enter Game Arena */}
+              <NavLink
+                href="/arena"
+                onClick={handleArenaClick}
+                className="group relative flex-1 flex items-center justify-between p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-[#0c3b2e] via-[#0e4435] to-[#072a20] text-white shadow-xl shadow-emerald-950/25 border border-[#d6a735]/50 hover:border-[#d6a735] hover:shadow-emerald-950/35 hover:-translate-y-0.5 transition-all duration-200"
+              >
+                <div className="flex items-center gap-3 text-left">
+                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-[#d6a735]/20 border border-[#d6a735]/40 text-[#f6d884] flex items-center justify-center shrink-0 group-hover:scale-110 group-hover:bg-[#d6a735] group-hover:text-[#06261f] transition-all">
+                    <Swords size={20} />
+                  </div>
+                  <div>
+                    <div className="font-extrabold text-sm sm:text-base text-[#fffdf7] tracking-tight flex items-center gap-1.5">
+                      <span>Enter Game Arena</span>
+                    </div>
+                    <div className="text-[11px] text-emerald-200/80 font-medium">
+                      PvP Rooms, AI Bots & Local
+                    </div>
+                  </div>
+                </div>
+                <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center text-[#f6d884] group-hover:translate-x-1 group-hover:bg-[#d6a735] group-hover:text-[#06261f] transition-all ml-2">
+                  <ArrowRight size={15} />
+                </div>
               </NavLink>
-              <NavLink href="/leagues" className="btn-secondary">
-                <Trophy size={18} /> Tournament Hub
+
+              {/* Companion 1: Tournament Hub */}
+              <NavLink
+                href="/leagues"
+                className="group flex-1 flex items-center justify-between p-3.5 sm:p-4 rounded-2xl bg-white/95 text-[#0c3b2e] shadow-md shadow-emerald-950/5 border border-[#0c3b2e]/15 hover:border-[#d6a735]/80 hover:bg-[#fffef8] hover:-translate-y-0.5 transition-all duration-200"
+              >
+                <div className="flex items-center gap-3 text-left">
+                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[#b45309] flex items-center justify-center shrink-0 group-hover:scale-110 group-hover:bg-[#b45309] group-hover:text-white transition-all">
+                    <Trophy size={20} />
+                  </div>
+                  <div>
+                    <div className="font-extrabold text-sm sm:text-base text-[#0c3b2e] tracking-tight">
+                      Tournament Hub
+                    </div>
+                    <div className="text-[11px] text-[#63716b] font-medium">
+                      Leagues, Brackets & Prizes
+                    </div>
+                  </div>
+                </div>
+                <div className="w-8 h-8 rounded-xl bg-emerald-950/5 flex items-center justify-center text-[#0c3b2e] group-hover:translate-x-1 group-hover:bg-[#0c3b2e] group-hover:text-[#d6a735] transition-all ml-2">
+                  <ArrowRight size={15} />
+                </div>
               </NavLink>
-              <NavLink href="/wallet" className="btn-outline">
-                <Wallet size={18} /> Wallet & Rewards
+
+              {/* Companion 2: Wallet & Rewards */}
+              <NavLink
+                href="/wallet"
+                className="group flex-1 flex items-center justify-between p-3.5 sm:p-4 rounded-2xl bg-white/95 text-[#0c3b2e] shadow-md shadow-emerald-950/5 border border-[#0c3b2e]/15 hover:border-[#d6a735]/80 hover:bg-[#fffef8] hover:-translate-y-0.5 transition-all duration-200"
+              >
+                <div className="flex items-center gap-3 text-left">
+                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-teal-950/5 border border-teal-900/15 text-[#0f766e] flex items-center justify-center shrink-0 group-hover:scale-110 group-hover:bg-[#0f766e] group-hover:text-white transition-all">
+                    <Wallet size={20} />
+                  </div>
+                  <div>
+                    <div className="font-extrabold text-sm sm:text-base text-[#0c3b2e] tracking-tight">
+                      Wallet & Rewards
+                    </div>
+                    <div className="text-[11px] text-[#63716b] font-medium">
+                      Escrow, Balance & Payouts
+                    </div>
+                  </div>
+                </div>
+                <div className="w-8 h-8 rounded-xl bg-emerald-950/5 flex items-center justify-center text-[#0c3b2e] group-hover:translate-x-1 group-hover:bg-[#0c3b2e] group-hover:text-[#d6a735] transition-all ml-2">
+                  <ArrowRight size={15} />
+                </div>
               </NavLink>
-            </>
+            </div>
           )}
         </div>
 

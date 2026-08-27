@@ -762,6 +762,144 @@ export const systemSettings = mysqlTable(
   ],
 );
 
+/* ------------------------------------------------------------------------- */
+/* deposits — dedicated deposit records & gateway lifecycle                   */
+/* ------------------------------------------------------------------------- */
+export const deposits = mysqlTable(
+  "deposits",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    userId: varchar("user_id", { length: 191 }).notNull(),
+    amount: decimal("amount", { precision: 14, scale: 2 }).notNull(),
+    currency: varchar("currency", { length: 16 }).notNull().default("GHS"),
+    method: varchar("method", { length: 32 }).notNull().default("momo"),
+    provider: varchar("provider", { length: 32 }).notNull().default("Paystack"),
+    reference: varchar("reference", { length: 191 }).notNull().unique(),
+    gatewayReference: varchar("gateway_reference", { length: 191 }),
+    status: varchar("status", { length: 32 }).notNull().default("pending"),
+    phoneNumber: varchar("phone_number", { length: 32 }),
+    accountName: varchar("account_name", { length: 191 }),
+    fee: decimal("fee", { precision: 14, scale: 2 }).notNull().default("0.00"),
+    netAmount: decimal("net_amount", { precision: 14, scale: 2 }).notNull().default("0.00"),
+    gatewayResponse: text("gateway_response"),
+    verifiedAt: isoTimestamp("verified_at"),
+    verifiedBy: varchar("verified_by", { length: 191 }),
+    approvedAt: isoTimestamp("approved_at"),
+    approvedBy: varchar("approved_by", { length: 191 }),
+    processedAt: isoTimestamp("processed_at"),
+    processedBy: varchar("processed_by", { length: 191 }),
+    rejectedAt: isoTimestamp("rejected_at"),
+    rejectedBy: varchar("rejected_by", { length: 191 }),
+    rejectionReason: text("rejection_reason"),
+    metadataJson: text("metadata_json"),
+    ledgerEntryId: varchar("ledger_entry_id", { length: 36 }),
+    walletTransactionId: varchar("wallet_transaction_id", { length: 191 }),
+    createdAt: isoTimestamp("created_at").notNull(),
+    updatedAt: isoTimestamp("updated_at").notNull(),
+  },
+  (t) => [
+    index("deposits_user_id_idx").on(t.userId),
+    index("deposits_status_idx").on(t.status),
+    index("deposits_created_at_idx").on(t.createdAt),
+  ],
+);
+
+/* ------------------------------------------------------------------------- */
+/* withdrawals — dedicated withdrawal records & payout lifecycle              */
+/* ------------------------------------------------------------------------- */
+export const withdrawals = mysqlTable(
+  "withdrawals",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    userId: varchar("user_id", { length: 191 }).notNull(),
+    amount: decimal("amount", { precision: 14, scale: 2 }).notNull(),
+    currency: varchar("currency", { length: 16 }).notNull().default("GHS"),
+    method: varchar("method", { length: 32 }).notNull().default("momo"),
+    provider: varchar("provider", { length: 32 }).notNull().default("MTN"),
+    accountNumber: varchar("account_number", { length: 32 }).notNull(),
+    accountName: varchar("account_name", { length: 191 }),
+    bankCode: varchar("bank_code", { length: 32 }),
+    recipientCode: varchar("recipient_code", { length: 191 }),
+    transferCode: varchar("transfer_code", { length: 191 }),
+    transferId: varchar("transfer_id", { length: 64 }),
+    reference: varchar("reference", { length: 191 }).notNull().unique(),
+    status: varchar("status", { length: 32 }).notNull().default("pending"),
+    fee: decimal("fee", { precision: 14, scale: 2 }).notNull().default("0.00"),
+    netAmount: decimal("net_amount", { precision: 14, scale: 2 }).notNull().default("0.00"),
+    gatewayResponse: text("gateway_response"),
+    failureReason: text("failure_reason"),
+    verifiedAt: isoTimestamp("verified_at"),
+    verifiedBy: varchar("verified_by", { length: 191 }),
+    approvedAt: isoTimestamp("approved_at"),
+    approvedBy: varchar("approved_by", { length: 191 }),
+    processedAt: isoTimestamp("processed_at"),
+    processedBy: varchar("processed_by", { length: 191 }),
+    rejectedAt: isoTimestamp("rejected_at"),
+    rejectedBy: varchar("rejected_by", { length: 191 }),
+    rejectionReason: text("rejection_reason"),
+    disbursedAt: isoTimestamp("disbursed_at"),
+    metadataJson: text("metadata_json"),
+    ledgerEntryId: varchar("ledger_entry_id", { length: 36 }),
+    walletTransactionId: varchar("wallet_transaction_id", { length: 191 }),
+    createdAt: isoTimestamp("created_at").notNull(),
+    updatedAt: isoTimestamp("updated_at").notNull(),
+  },
+  (t) => [
+    index("withdrawals_user_id_idx").on(t.userId),
+    index("withdrawals_status_idx").on(t.status),
+    index("withdrawals_transfer_code_idx").on(t.transferCode),
+    index("withdrawals_created_at_idx").on(t.createdAt),
+  ],
+);
+
+/* ------------------------------------------------------------------------- */
+/* deposit_actions — action audit trail on deposits (verify, approve, etc.)    */
+/* ------------------------------------------------------------------------- */
+export const depositActions = mysqlTable(
+  "deposit_actions",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    depositId: varchar("deposit_id", { length: 36 }).notNull(),
+    action: varchar("action", { length: 32 }).notNull(),
+    actorId: varchar("actor_id", { length: 191 }).notNull(),
+    actorName: varchar("actor_name", { length: 191 }),
+    previousStatus: varchar("previous_status", { length: 32 }),
+    newStatus: varchar("new_status", { length: 32 }),
+    notes: text("notes"),
+    metadataJson: text("metadata_json"),
+    createdAt: isoTimestamp("created_at").notNull(),
+  },
+  (t) => [
+    index("deposit_actions_deposit_id_idx").on(t.depositId),
+    index("deposit_actions_action_idx").on(t.action),
+    index("deposit_actions_created_at_idx").on(t.createdAt),
+  ],
+);
+
+/* ------------------------------------------------------------------------- */
+/* withdrawal_actions — action audit trail on withdrawals (verify, disburse) */
+/* ------------------------------------------------------------------------- */
+export const withdrawalActions = mysqlTable(
+  "withdrawal_actions",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    withdrawalId: varchar("withdrawal_id", { length: 36 }).notNull(),
+    action: varchar("action", { length: 32 }).notNull(),
+    actorId: varchar("actor_id", { length: 191 }).notNull(),
+    actorName: varchar("actor_name", { length: 191 }),
+    previousStatus: varchar("previous_status", { length: 32 }),
+    newStatus: varchar("new_status", { length: 32 }),
+    notes: text("notes"),
+    metadataJson: text("metadata_json"),
+    createdAt: isoTimestamp("created_at").notNull(),
+  },
+  (t) => [
+    index("withdrawal_actions_withdrawal_id_idx").on(t.withdrawalId),
+    index("withdrawal_actions_action_idx").on(t.action),
+    index("withdrawal_actions_created_at_idx").on(t.createdAt),
+  ],
+);
+
 export type ProfileRow = typeof profiles.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
 export type OtpRequestRow = typeof otpRequests.$inferSelect;
@@ -771,6 +909,10 @@ export type AdminProfileRow = typeof adminProfiles.$inferSelect;
 export type OrganizerProfileRow = typeof organizerProfiles.$inferSelect;
 export type RoomRow = typeof rooms.$inferSelect;
 export type WalletTransactionRow = typeof walletTransactions.$inferSelect;
+export type DepositRow = typeof deposits.$inferSelect;
+export type WithdrawalRow = typeof withdrawals.$inferSelect;
+export type DepositActionRow = typeof depositActions.$inferSelect;
+export type WithdrawalActionRow = typeof withdrawalActions.$inferSelect;
 export type EscrowRow = typeof escrows.$inferSelect;
 export type LeagueRow = typeof leagues.$inferSelect;
 export type LeagueParticipantRow = typeof leagueParticipants.$inferSelect;

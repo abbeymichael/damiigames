@@ -170,7 +170,16 @@ function parseMysqlConfig(problems: string[]): MysqlConfig | null {
         parsed.searchParams.get("sslmode") ||
         parsed.searchParams.get("ssl-mode") ||
         parsed.searchParams.get("sslaccept");
-      if (
+      const explicitSslFalse =
+        process.env.MYSQL_SSL === "false" ||
+        process.env.DB_SSL === "false" ||
+        sslParam === "false" ||
+        sslParam === "disable" ||
+        sslParam === "0";
+
+      if (explicitSslFalse) {
+        ssl = false;
+      } else if (
         sslParam &&
         sslParam.toLowerCase() !== "false" &&
         sslParam.toLowerCase() !== "disable" &&
@@ -183,15 +192,20 @@ function parseMysqlConfig(problems: string[]): MysqlConfig | null {
         host !== "localhost" &&
         host !== "::1" &&
         !host.startsWith("192.168.") &&
-        !host.startsWith("10.")
+        !host.startsWith("10.") &&
+        !host.includes("freedb.tech")
       ) {
-        // Cloud-hosted databases typically require TLS/SSL connections
+        // Cloud-hosted databases typically require TLS/SSL connections (unless explicitly disabled)
         ssl = true;
       }
     } catch {
       problems.push("DATABASE_URL could not be parsed as a URL");
       return null;
     }
+  }
+
+  if (process.env.MYSQL_SSL === "false" || process.env.DB_SSL === "false") {
+    ssl = false;
   }
 
   if (!host) problems.push("MySQL host is missing (set DATABASE_URL or MYSQL_HOST)");
@@ -203,13 +217,21 @@ function parseMysqlConfig(problems: string[]): MysqlConfig | null {
 
   if (!host || !user || !database) return null;
 
+  const connectionLimit = Math.max(
+    1,
+    int(
+      process.env.MYSQL_CONNECTION_LIMIT || process.env.MYSQL_POOL_SIZE || process.env.DB_POOL_SIZE,
+      host.includes("freedb.tech") ? 2 : 5,
+    ),
+  );
+
   return {
     host,
     port,
     user,
     password,
     database,
-    connectionLimit: Math.max(1, int(process.env.MYSQL_POOL_SIZE, 10)),
+    connectionLimit,
     ssl,
   };
 }

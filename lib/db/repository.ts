@@ -5,6 +5,8 @@ import type {
   AdminSettings,
   AppRole,
   ChartOfAccountsReport,
+  Deposit,
+  DepositAction,
   GameCatalogItem,
   GameTypeLimit,
   League,
@@ -37,6 +39,8 @@ import type {
   User,
   WagerEscrow,
   WalletTransaction,
+  Withdrawal,
+  WithdrawalAction,
 } from "../types";
 
 /**
@@ -125,6 +129,24 @@ export interface DbRepository {
   updateTransaction(id: string, updates: Partial<WalletTransaction>): Promise<WalletTransaction | null>;
   getUserTransactions(token: string, limit?: number): Promise<WalletTransaction[]>;
   getAllTransactions(limit?: number): Promise<WalletTransaction[]>;
+
+  // --- Dedicated Deposits Table ---
+  createDeposit(deposit: Deposit): Promise<Deposit>;
+  getDeposit(idOrRef: string): Promise<Deposit | null>;
+  getDepositByReference(reference: string): Promise<Deposit | null>;
+  updateDeposit(id: string, updates: Partial<Deposit>): Promise<Deposit | null>;
+  listDeposits(filter?: { userId?: string; status?: string; limit?: number }): Promise<Deposit[]>;
+  recordDepositAction(action: DepositAction): Promise<DepositAction>;
+  listDepositActions(depositId: string): Promise<DepositAction[]>;
+
+  // --- Dedicated Withdrawals Table ---
+  createWithdrawal(withdrawal: Withdrawal): Promise<Withdrawal>;
+  getWithdrawal(idOrRef: string): Promise<Withdrawal | null>;
+  getWithdrawalByReference(reference: string): Promise<Withdrawal | null>;
+  updateWithdrawal(id: string, updates: Partial<Withdrawal>): Promise<Withdrawal | null>;
+  listWithdrawals(filter?: { userId?: string; status?: string; limit?: number }): Promise<Withdrawal[]>;
+  recordWithdrawalAction(action: WithdrawalAction): Promise<WithdrawalAction>;
+  listWithdrawalActions(withdrawalId: string): Promise<WithdrawalAction[]>;
 
   // --- Escrows ---
   createEscrow(escrow: WagerEscrow): Promise<WagerEscrow>;

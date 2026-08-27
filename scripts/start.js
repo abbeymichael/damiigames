@@ -78,6 +78,14 @@ async function startApplication() {
   const isNumericPort = !isNaN(Number(port));
   const serverPort = isNumericPort ? parseInt(port, 10) : port;
 
+  // Determine build output directory: check dist/ or projectRoot
+  let outDir = path.join(projectRoot, "dist");
+  if (!fs.existsSync(path.join(outDir, "server", "index.js")) && !fs.existsSync(path.join(outDir, "server", "entry.js"))) {
+    if (fs.existsSync(path.join(projectRoot, "server", "index.js")) || fs.existsSync(path.join(projectRoot, "server", "entry.js"))) {
+      outDir = projectRoot;
+    }
+  }
+
   // 1. Primary: Run in-process via vinext prod server.
   // CRITICAL for Phusion Passenger / cPanel / LiteSpeed: Passenger intercepts the main process's http.createServer().listen()
   const prodServerModulePath = path.join(projectRoot, "node_modules", "vinext", "dist", "server", "prod-server.js");
@@ -87,7 +95,7 @@ async function startApplication() {
       await startProdServer({
         port: serverPort,
         host,
-        outDir: path.join(projectRoot, "dist"),
+        outDir,
       });
       return;
     } catch (err) {
