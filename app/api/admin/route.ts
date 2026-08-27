@@ -94,6 +94,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, ...seedResult });
     }
 
+    if (action === "get_bot_fleet" || action === "list_bots" || action === "bots") {
+      const { search, status, tier } = body;
+      const res = await adminService.getBotFleetData(token, {
+        search: search ? String(search) : undefined,
+        status: status ? String(status) : undefined,
+        tier: tier ? String(tier) : undefined,
+      });
+      return NextResponse.json({ success: true, ...res });
+    }
+
+    if (action === "update_bot_account" || action === "update_bot") {
+      const { botToken, updates } = body;
+      if (!botToken) return NextResponse.json({ error: "botToken is required" }, { status: 400 });
+      const updated = await adminService.updateBotAccount(token, String(botToken), updates || {});
+      return NextResponse.json({ success: true, bot: updated });
+    }
+
+    if (action === "update_bot_settings" || action === "update_bot_fleet_settings") {
+      const { settings } = body;
+      if (!settings || typeof settings !== "object") {
+        return NextResponse.json({ error: "settings object is required" }, { status: 400 });
+      }
+      const updated = await adminService.updateBotFleetSettings(token, settings);
+      return NextResponse.json({ success: true, settings: updated });
+    }
+
+    if (action === "bulk_fund_bots" || action === "fund_bots") {
+      const { points, marbles, tier } = body;
+      const res = await adminService.bulkFundBotFleet(token, Number(points || 0), Number(marbles || 0), tier ? String(tier) : undefined);
+      return NextResponse.json({ success: true, ...res });
+    }
+
+    if (action === "reset_bot_fleet") {
+      const res = await adminService.resetBotFleet(token);
+      return NextResponse.json({ success: true, ...res });
+    }
+
     if (action === "get_admin_profile" || action === "admin_profile") {
       const res = await adminService.getAdminSelfProfile(token);
       return NextResponse.json({ success: true, ...res });

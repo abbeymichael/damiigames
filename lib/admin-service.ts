@@ -17,6 +17,7 @@ import { leagueService } from "./league-service";
 import { notificationService } from "./notification-service";
 import { hasPermission, getAdminPermissions } from "./permissions";
 import { buildComprehensiveMatches, buildGameRequests } from "./match-analytics";
+import { botService } from "./bot-service";
 
 export const adminService = {
   async verifyAdminAccessAsync(token: string): Promise<boolean> {
@@ -123,6 +124,52 @@ export const adminService = {
         marbles: p.marbles,
       })),
     };
+  },
+
+  async getBotFleetData(adminToken: string, options?: { search?: string; status?: string; tier?: string }) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const [metrics, bots] = await Promise.all([
+      botService.getFleetMetrics(),
+      botService.listBots(options),
+    ]);
+    return {
+      metrics,
+      bots,
+      settings: botService.getSettings(),
+    };
+  },
+
+  async updateBotAccount(adminToken: string, botToken: string, updates: any) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const updated = await botService.updateBot(botToken, updates);
+    if (!updated) throw new Error("Bot account not found");
+    const admin = await this.resolveAdminProfile(adminToken);
+    await this.logAdminAction(adminToken, admin?.username || "Admin", "UPDATE_BOT_ACCOUNT", botToken, updates);
+    return updated;
+  },
+
+  async updateBotFleetSettings(adminToken: string, settings: any) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const updated = botService.updateSettings(settings);
+    const admin = await this.resolveAdminProfile(adminToken);
+    await this.logAdminAction(adminToken, admin?.username || "Admin", "UPDATE_BOT_FLEET_SETTINGS", "BotFleet", settings);
+    return updated;
+  },
+
+  async bulkFundBotFleet(adminToken: string, points: number, marbles: number, tier?: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const res = await botService.bulkFundFleet(Number(points || 0), Number(marbles || 0), tier);
+    const admin = await this.resolveAdminProfile(adminToken);
+    await this.logAdminAction(adminToken, admin?.username || "Admin", "BULK_FUND_BOTS", "BotFleet", { points, marbles, tier });
+    return res;
+  },
+
+  async resetBotFleet(adminToken: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const res = await botService.resetFleet();
+    const admin = await this.resolveAdminProfile(adminToken);
+    await this.logAdminAction(adminToken, admin?.username || "Admin", "RESET_BOT_FLEET", "BotFleet", {});
+    return res;
   },
 
   async createAdminAccount(adminToken: string, newAdminUsername: string, newAdminPasscode: string, newRole: Role = "admin") {

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { SharedHeader } from "@/components/SharedHeader";
 import { NavLink } from "@/components/NavLink";
 import { MatchSummaryModal } from "@/components/MatchSummaryModal";
+import { WaitingRoom } from "@/components/WaitingRoom";
 import {
   applyMove,
   createBoard,
@@ -1219,7 +1220,7 @@ export default function ArenaPage() {
 
   const copyChallengeLink = () => {
     if (!room) return;
-    const url = `${window.location.origin}/arena?join=${room.code}`;
+    const url = `${window.location.origin}/arena?room=${room.code}`;
     navigator.clipboard.writeText(url);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
@@ -2030,6 +2031,17 @@ export default function ArenaPage() {
               )}
             </div>
           )}
+        </section>
+      ) : mode === "online" && room && room.status === "waiting" && !room.guestToken ? (
+        <section className="flex-1 max-w-6xl w-full mx-auto p-2 sm:p-4 flex flex-col items-center justify-center">
+          <WaitingRoom
+            room={room}
+            currentUsername={username}
+            isHost={room.role === "white"}
+            onCancelRoom={cancelRoomOnline}
+            onPracticeAi={() => startBotMatch("easy")}
+            busy={onlineBusy}
+          />
         </section>
       ) : (
         /* Main Arena Game Layout Container */

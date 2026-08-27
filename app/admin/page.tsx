@@ -52,6 +52,7 @@ import {
   Gamepad2,
   Inbox,
   MessageSquare,
+  Bot,
 } from "lucide-react";
 import { getSessionToken, saveSessionToken, clearSessionToken } from "@/lib/client-auth";
 import type {
@@ -95,6 +96,7 @@ import { TournamentRequestsTable } from "@/components/admin/TournamentRequestsTa
 import { GameRequestsTable } from "@/components/admin/GameRequestsTable";
 import { LegalPagesEditor } from "@/components/admin/LegalPagesEditor";
 import { CommunicationsCenter } from "@/components/admin/CommunicationsCenter";
+import { BotFleetManagement } from "@/components/admin/BotFleetManagement";
 import {
   ResponsiveContainer,
   LineChart,
@@ -236,6 +238,7 @@ const NAV_SECTIONS: NavSection[] = [
       { key: "communications", label: "Communications", icon: MessageSquare, permission: "communications.view" },
       { key: "limits", label: "Game Limits & Escrow", icon: SlidersHorizontal, permission: "limits.manage" },
       { key: "users", label: "Players & Users", icon: Users, permission: "users.view" },
+      { key: "bots", label: "Bot Accounts (100)", icon: Bot, permission: "system.settings.view" },
     ],
   },
   {
@@ -275,6 +278,7 @@ const TAB_ITEMS_CONFIG: Record<
   limits: { key: "limits", label: "Game Limits & Escrow", permission: "limits.manage", icon: SlidersHorizontal, moduleName: "Game Limits & Escrow" },
   users: { key: "users", label: "Players & Users", permission: "users.view", icon: Users, moduleName: "Player Management" },
   players: { key: "users", label: "Players & Users", permission: "users.view", icon: Users, moduleName: "Player Management" },
+  bots: { key: "bots", label: "Bot Accounts (100)", permission: "system.settings.view", icon: Bot, moduleName: "Bot Fleet Management" },
   admins: { key: "admins", label: "Admin Staff", permission: "admins.view", icon: UserCheck, moduleName: "Admin Staff Accounts" },
   roles: { key: "roles", label: "Roles & Permissions", permission: "roles.view", icon: ShieldCheck, moduleName: "Roles & Granular Permissions" },
   audit: { key: "audit", label: "Audit Trail", permission: "audit.view", icon: ScrollText, moduleName: "Audit Trail & Compliance Logs" },
@@ -2296,6 +2300,11 @@ export default function AdminPage() {
                 onToggleBan={handleToggleBan}
                 onDeleteUser={handleDeleteUser}
               />
+            )}
+
+            {/* TAB: BOT FLEET MANAGEMENT */}
+            {activeTab === "bots" && (
+              <BotFleetManagement token={token} />
             )}
 
             {/* TAB: ADMIN STAFF */}
