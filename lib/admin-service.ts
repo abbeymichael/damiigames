@@ -110,11 +110,11 @@ export const adminService = {
       "system-seeder",
       "System Seeder",
       "SEED_INITIAL_DATA",
-      "All Accounts",
+      "Admin Accounts",
       { profileCount: seededProfiles.length }
     );
     return {
-      message: "Initial admin and player accounts seeded successfully!",
+      message: "Database seeded successfully with primary administrator account!",
       accounts: seededProfiles.map((p) => ({
         username: p.username,
         role: p.role,

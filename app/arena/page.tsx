@@ -227,6 +227,9 @@ type Room = {
   winner: Player | null;
   status: string;
   mode: RoomMode;
+  isPrivate?: boolean;
+  hostReady?: boolean;
+  guestReady?: boolean;
   wagerAmount: number;
   escrowId: string | null;
   leagueId?: string | null;
@@ -240,6 +243,7 @@ type Room = {
     remainingDisconnectSeconds: number | null;
     warning: string | null;
   };
+  createdAt?: string;
   updatedAt?: string;
 };
 
@@ -576,13 +580,29 @@ export default function ArenaPage() {
       }
     }
 
-    // Check URL search params for direct 1-on-1 invite or vs bot
+    // Check URL search params for direct 1-on-1 invite, room landing link, or vs bot
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
+      const roomParam = params.get("room") || params.get("code");
       const joinParam = params.get("join");
       const botParam = params.get("bot");
       const modeParam = params.get("mode");
-      if (joinParam) {
+      if (roomParam) {
+        const targetCode = roomParam.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+        setJoinCode(targetCode);
+        setMode("online");
+        // Fetch room directly so player or spectator lands straight in the room
+        fetch(`/api/damii?code=${encodeURIComponent(targetCode)}&token=${encodeURIComponent(savedToken || "")}`)
+          .then((r) => r.json())
+          .then((d) => {
+            if (d.room) {
+              loadRoom(d.room);
+            } else {
+              setShowPregameModal(true);
+            }
+          })
+          .catch(() => setShowPregameModal(true));
+      } else if (joinParam) {
         setJoinCode(joinParam.toUpperCase());
         setMode("online");
         setShowPregameModal(true);
@@ -2515,37 +2535,113 @@ export default function ArenaPage() {
               </div>
             )}
 
-            <div className="space-y-3">
-                {/* Online Room Waiting & Handshake Banner */}
-                {mode === "online" && room && room.status === "waiting" && (
-                  <div className="p-3.5 sm:p-4 bg-gradient-to-br from-[#0c3b2e] to-[#06261f] border-2 border-[#d6a735]/70 rounded-2xl shadow-xl space-y-3 animate-in fade-in zoom-in-95 duration-200">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
+            {/* Dedicated Online Waiting Room Experience (Separated from the Game Board) */}
+            {mode === "online" && room && room.status === "waiting" ? (
+              <div className="w-full bg-gradient-to-b from-[#0c3b2e] via-[#06261f] to-[#041c17] border-2 border-[#d6a735]/70 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-6 animate-in fade-in zoom-in-95 duration-300 text-center">
+                    {/* Header: Room Info & Expiry Timer */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[#184d3c]">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="px-2.5 py-1 bg-[#06261f] border border-[#184d3c] text-[#d6a735] font-mono font-black text-xs rounded-lg">
+                        <span className="px-3 py-1 bg-[#041913] border border-[#d6a735]/50 text-[#d6a735] font-mono font-black text-sm rounded-xl tracking-wider shadow-inner">
                           ROOM {room.code}
                         </span>
-                        <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md flex items-center gap-1 ${
+                        <span className={`px-2.5 py-1 text-xs font-bold rounded-lg flex items-center gap-1.5 ${
                           room.isPrivate
                             ? "bg-purple-950/80 text-purple-300 border border-purple-500/40"
                             : "bg-emerald-950/80 text-emerald-300 border border-emerald-500/40"
                         }`}>
-                          {room.isPrivate ? <Lock size={11} /> : <Globe size={11} />}
-                          {room.isPrivate ? "Private Room (Invite-only)" : "Public Match (Visible in Lobby)"}
+                          {room.isPrivate ? <Lock size={13} /> : <Globe size={13} />}
+                          {room.isPrivate ? "Private Match (Invite Only)" : "Public Match (Lobby Listed)"}
                         </span>
                         {room.mode === "wager" && (
-                          <span className="px-2 py-0.5 bg-[#d6a735]/20 text-[#d6a735] border border-[#d6a735]/40 text-[10px] font-bold rounded-md flex items-center gap-1">
-                            <Zap size={11} /> Pot: GH₵ {(room.wagerAmount * 2).toFixed(2)}
+                          <span className="px-2.5 py-1 bg-[#d6a735]/20 text-[#d6a735] border border-[#d6a735]/40 text-xs font-black rounded-lg flex items-center gap-1">
+                            <Zap size={13} /> Stake: GH₵ {room.wagerAmount.toFixed(2)} (Pot: GH₵ {(room.wagerAmount * 2).toFixed(2)})
                           </span>
                         )}
                       </div>
 
+                      {/* 10-Minute Waiting Room Expiry Clock */}
+                      {room.createdAt && (
+                        <div className="flex items-center gap-1.5 px-3 py-1 bg-[#041913] border border-amber-500/40 rounded-xl text-amber-300 text-xs font-mono font-bold shadow-inner">
+                          <Clock size={13} className="text-amber-400 animate-spin" />
+                          <span>
+                            {(() => {
+                              const createdMs = new Date(room.createdAt).getTime();
+                              const elapsedSec = Math.floor((Date.now() - createdMs) / 1000);
+                              const remainingSec = Math.max(0, 10 * 60 - elapsedSec);
+                              const m = Math.floor(remainingSec / 60);
+                              const s = remainingSec % 60;
+                              return `Expires in ${m}:${s < 10 ? "0" : ""}${s}`;
+                            })()}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Waiting Lounge Graphic & Status */}
+                    <div className="py-4 space-y-4 max-w-md mx-auto">
+                      <div className="relative mx-auto w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-gradient-to-tr from-[#06261f] via-[#0c3b2e] to-[#144435] border-4 border-[#d6a735]/40 flex items-center justify-center shadow-2xl">
+                        <div className="absolute inset-0 rounded-full border-2 border-emerald-400/30 animate-ping" />
+                        <div className="text-3xl sm:text-4xl text-[#d6a735]">
+                          {room.guestName ? "⚔️" : "⏳"}
+                        </div>
+                      </div>
+
+                      <div>
+                        <h3 className="text-lg sm:text-xl font-black text-[#f5efdf] tracking-tight">
+                          {room.guestName ? "Opponent Joined & Ready!" : "Waiting in Room Lounge..."}
+                        </h3>
+                        <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-sm mx-auto">
+                          {room.guestName
+                            ? `${room.guestName} has entered the room. Click start when you're ready to duel!`
+                            : room.isPrivate
+                            ? "Share the room link or 6-character code with your friend to connect."
+                            : "Your match is live in the arena lobby. Online players will join shortly."}
+                        </p>
+                      </div>
+
+                      {/* Opponent / Challenger Roster Preview */}
+                      <div className="grid grid-cols-2 gap-3 p-3 bg-[#041913]/90 border border-[#184d3c] rounded-2xl text-left">
+                        <div className="p-2.5 bg-[#0c3b2e]/60 rounded-xl border border-[#184d3c]/70">
+                          <small className="block text-[9px] uppercase font-bold text-[#d6a735]">Host (White)</small>
+                          <strong className="text-xs sm:text-sm text-[#f5efdf] block truncate">{room.hostName}</strong>
+                          <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1 mt-0.5">
+                            ● Connected
+                          </span>
+                        </div>
+                        <div className={`p-2.5 rounded-xl border ${
+                          room.guestName
+                            ? "bg-emerald-950/40 border-emerald-500/40"
+                            : "bg-[#0c3b2e]/30 border-dashed border-[#184d3c]"
+                        }`}>
+                          <small className="block text-[9px] uppercase font-bold text-[#d6a735]">Guest (Black)</small>
+                          <strong className="text-xs sm:text-sm text-[#f5efdf] block truncate">
+                            {room.guestName || "Awaiting player..."}
+                          </strong>
+                          <span className={`text-[10px] font-bold flex items-center gap-1 mt-0.5 ${
+                            room.guestName ? "text-emerald-400" : "text-amber-400 animate-pulse"
+                          }`}>
+                            {room.guestName ? "● Ready" : "○ Searching..."}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Room Invitation Sharing Toolbar */}
+                    <div className="p-3.5 bg-[#041913]/70 border border-[#184d3c] rounded-2xl flex flex-wrap items-center justify-between gap-2 text-left">
+                      <div className="flex items-center gap-2 text-xs text-slate-300">
+                        <Share2 size={15} className="text-[#d6a735] shrink-0" />
+                        <span>Direct Room Link:</span>
+                        <code className="px-2 py-0.5 bg-[#06261f] border border-[#184d3c] text-[#d6a735] rounded font-mono text-[11px]">
+                          {typeof window !== "undefined" ? `${window.location.origin}/arena?room=${room.code}` : `.../arena?room=${room.code}`}
+                        </code>
+                      </div>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
                           onClick={copyChallengeLink}
-                          className="px-2.5 py-1 bg-[#144435] hover:bg-[#1f5e4a] text-[#f5efdf] text-[11px] font-bold rounded-lg flex items-center gap-1 transition-colors"
+                          className="px-3 py-1.5 bg-[#144435] hover:bg-[#1f5e4a] text-[#f5efdf] text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors"
                         >
-                          <Share2 size={12} /> {copiedLink ? "Link Copied!" : "Share Link"}
+                          <Share2 size={13} /> {copiedLink ? "Copied!" : "Copy Link"}
                         </button>
                         <button
                           type="button"
@@ -2556,104 +2652,49 @@ export default function ArenaPage() {
                               setTimeout(() => setCopiedCode(false), 2000);
                             }
                           }}
-                          className="px-2.5 py-1 bg-[#144435] hover:bg-[#1f5e4a] text-[#f5efdf] text-[11px] font-bold rounded-lg flex items-center gap-1 transition-colors"
+                          className="px-3 py-1.5 bg-[#144435] hover:bg-[#1f5e4a] text-[#f5efdf] text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors"
                         >
-                          <Copy size={12} /> {copiedCode ? "Code Copied!" : "Copy Code"}
+                          <Copy size={13} /> {copiedCode ? "Code Copied!" : "Copy Code"}
                         </button>
                       </div>
                     </div>
 
-                    {/* Handshake Status Section */}
-                    {!room.guestName ? (
-                      /* Waiting for challenger to join */
-                      <div className="p-3 bg-[#081c15]/90 border border-[#184d3c] rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 text-left">
-                          <div className="w-9 h-9 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 animate-pulse">
-                            <Clock size={18} />
+                    {/* Action Buttons: Ready vs Cancel */}
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                      {room.guestName ? (
+                        room.role === "white" ? (
+                          <button
+                            type="button"
+                            disabled={onlineBusy}
+                            onClick={() => void onlineAction("ready", { code: room.code })}
+                            className="w-full sm:w-auto px-8 py-3 bg-gradient-to-r from-emerald-500 to-[#d6a735] hover:brightness-110 text-slate-950 font-black text-sm rounded-2xl shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all animate-pulse"
+                          >
+                            <Play size={16} className="fill-current" /> Start Match Now
+                          </button>
+                        ) : (
+                          <div className="px-6 py-2.5 bg-emerald-950/80 border border-emerald-500/50 rounded-2xl text-emerald-300 text-xs font-bold flex items-center gap-2 animate-pulse">
+                            <Clock size={14} /> Waiting for host ({room.hostName}) to launch match...
                           </div>
-                          <div>
-                            <strong className="text-xs sm:text-sm text-[#f5efdf] block font-extrabold">
-                              Waiting for an Opponent to Accept
-                            </strong>
-                            <p className="text-[11px] text-slate-300">
-                              {room.isPrivate
-                                ? "Share the 6-character room code or invite link with your opponent to connect."
-                                : "Your challenge is publicly listed in the Arena Lobby for any online player to accept."}
-                            </p>
-                          </div>
+                        )
+                      ) : (
+                        <div className="text-xs text-amber-300/90 font-medium flex items-center gap-1.5 animate-pulse">
+                          <Clock size={14} /> Room is waiting for an opponent. You will be matched automatically!
                         </div>
-                        <button
-                          type="button"
-                          disabled={onlineBusy}
-                          onClick={() => void onlineAction("leave_room", { code: room.code })}
-                          className="px-3 py-1.5 bg-red-950/80 hover:bg-red-900 text-red-200 border border-red-500/40 text-xs font-bold rounded-xl transition-all shrink-0"
-                        >
-                          Cancel Room
-                        </button>
-                      </div>
-                    ) : (
-                      /* Guest connected: Handshake & Ready Section */
-                      <div className="p-3.5 bg-gradient-to-r from-emerald-950/90 to-[#081c15] border-2 border-emerald-500/50 rounded-xl space-y-3">
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-9 h-9 rounded-full bg-emerald-500/20 border border-emerald-400 flex items-center justify-center text-emerald-300 shrink-0">
-                              <Swords size={18} className="animate-bounce text-emerald-300" />
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs sm:text-sm font-black text-emerald-300">
-                                  Challenger Connected!
-                                </span>
-                                <span className="px-1.5 py-0.2 bg-emerald-900 text-emerald-200 text-[9px] font-extrabold rounded">
-                                  ● Ready
-                                </span>
-                              </div>
-                              <p className="text-[11px] text-slate-200">
-                                <strong>{room.guestName}</strong> accepted your challenge and is in the room.
-                              </p>
-                            </div>
-                          </div>
+                      )}
 
-                          {/* Ready & Start Action for Host / Status for Guest */}
-                          {room.role === "white" ? (
-                            <div className="flex items-center gap-2 w-full sm:w-auto">
-                              <button
-                                type="button"
-                                disabled={onlineBusy}
-                                onClick={() => void onlineAction("ready", { code: room.code })}
-                                className="flex-1 sm:flex-initial px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-[#d6a735] hover:brightness-110 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 transition-all animate-pulse"
-                              >
-                                <Play size={14} className="fill-current" /> Ready — Start Match
-                              </button>
-                              <button
-                                type="button"
-                                disabled={onlineBusy}
-                                onClick={() => void onlineAction("leave_room", { code: room.code })}
-                                className="px-3 py-2 bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800/60 text-xs font-bold rounded-xl transition-all"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2 w-full sm:w-auto">
-                              <span className="text-xs text-amber-300 font-bold animate-pulse flex items-center gap-1">
-                                <Clock size={12} /> Waiting for host to click Ready...
-                              </span>
-                              <button
-                                type="button"
-                                disabled={onlineBusy}
-                                onClick={() => void onlineAction("leave_room", { code: room.code })}
-                                className="px-3 py-1.5 bg-[#144435] hover:bg-[#1f5e4a] text-slate-300 text-xs font-bold rounded-xl border border-[#184d3c] transition-all"
-                              >
-                                Leave Room
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
+                      <button
+                        type="button"
+                        disabled={onlineBusy}
+                        onClick={() => void onlineAction("leave_room", { code: room.code })}
+                        className="w-full sm:w-auto px-5 py-2.5 bg-red-950/70 hover:bg-red-900 text-red-200 border border-red-800/60 rounded-2xl text-xs font-bold transition-all"
+                      >
+                        {room.role === "white" ? "Cancel Room" : "Leave Room"}
+                      </button>
+                    </div>
                   </div>
-                )}
+            ) : (
+              /* Active 10x10 Board & Gameplay View */
+              <div className="w-full space-y-2.5 sm:space-y-4">
 
               {/* Active 10x10 Board Container with Touch Prevention & Adaptive Zoom */}
               <div
@@ -2791,7 +2832,6 @@ export default function ArenaPage() {
                   </div>
                 </div>
               </div>
-            </div>
 
             {/* Dynamic Turn Status & Message Banner */}
             <div className={`flex flex-wrap items-center justify-between p-2.5 sm:p-3 rounded-xl text-xs gap-2 min-h-[42px] sm:min-h-[46px] transition-all border ${
@@ -2920,7 +2960,8 @@ export default function ArenaPage() {
               </div>
             </div>
           </div>
-        </div>
+        )}
+      </div>
 
           {/* Dedicated Side Panel Move History */}
           {showHistory && (

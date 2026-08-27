@@ -7,6 +7,7 @@ import { leagueService } from "@/lib/league-service";
 import { presenceService } from "@/lib/presence-service";
 import { securityService } from "@/lib/security";
 import { getAuthContext, validateCsrfToken } from "@/lib/auth-guard";
+import { botService } from "@/lib/bot-service";
 import { Room, GameMode, Player, MoveLogEntry, Profile } from "@/lib/types";
 
 const cleanName = (value: unknown) => String(value ?? "").trim().replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 20);
@@ -172,10 +173,15 @@ export async function GET(req: NextRequest) {
 
   const now = Date.now();
 
-  // 1. Unjoined match 10-minute auto-expiry
+  // 1. Unjoined match 10-minute auto-expiry & bot matchmaking for casual games
   if (room.status === "waiting" && !room.guestToken) {
     const createdMs = new Date(room.createdAt).getTime();
-    if (now - createdMs > 10 * 60 * 1000) {
+    const elapsedMs = now - createdMs;
+
+    // For casual free public games: match with one of the 100 realistic player accounts after a short natural waiting delay (e.g. 5 seconds)
+    if (room.mode === "casual" && !room.isPrivate && elapsedMs >= 5000) {
+      await botService.matchmakeBotIfEligible(room);
+    } else if (elapsedMs > 10 * 60 * 1000) {
       room.status = "cancelled";
       await dbRepository.saveRoom(room);
       // Refund host locked wager from escrow if applicable
@@ -186,6 +192,20 @@ export async function GET(req: NextRequest) {
         room: formatRoomResponse(room, token),
         message: "Room automatically expired after 10 minutes with no opponent. Wager stake refunded.",
       });
+    }
+  }
+
+  // 1b. If the room is playing and it's a bot's turn, execute their move with realistic human-like pacing
+  if (room.status === "playing") {
+    const isBotTurn =
+      (room.turn === "white" && botService.isBot(room.hostToken)) ||
+      (room.turn === "black" && botService.isBot(room.guestToken));
+    if (isBotTurn) {
+      const timeSinceLastMove = now - (room.lastMoveTime || 0);
+      // Add slight delay (1.2s) so moves feel natural and animated
+      if (timeSinceLastMove >= 1200) {
+        await botService.triggerBotMoveIfTurn(room);
+      }
     }
   }
 

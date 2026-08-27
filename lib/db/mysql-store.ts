@@ -318,15 +318,6 @@ async function seedIfEmpty(): Promise<void> {
   
   const seed = buildSeedDataset();
   if (Number(existing?.count ?? 0) > 0) {
-    // If profiles already exist, ensure organizer applications are seeded as well
-    const [appCount] = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(schema.organizerApplications);
-    if (Number(appCount?.count ?? 0) === 0) {
-      for (const app of seed.organizerApplications) {
-        await mysqlStore.createOrganizerApplication(app);
-      }
-    }
     return;
   }
 
@@ -337,17 +328,11 @@ async function seedIfEmpty(): Promise<void> {
     for (const a of seed.adminProfiles) {
       await db.insert(schema.adminProfiles).values(adminProfileToRow(a));
     }
-    for (const o of seed.organizerProfiles) {
-      await db.insert(schema.organizerProfiles).values(organizerProfileToRow(o));
+    for (const r of seed.regions || []) {
+      await mysqlStore.saveRegion(r);
     }
-    for (const app of seed.organizerApplications) {
-      await mysqlStore.createOrganizerApplication(app);
-    }
-    for (const l of seed.leagues) {
-      await db.insert(schema.leagues).values(leagueToRow(l));
-    }
-    for (const p of seed.leagueParticipants) {
-      await db.insert(schema.leagueParticipants).values(participantToRow(p));
+    for (const g of seed.gameTypeLimits) {
+      await mysqlStore.saveGameTypeLimit(g);
     }
     await db
       .insert(schema.adminSettings)
@@ -2747,18 +2732,16 @@ export const mysqlStore: DbRepository = {
         }
       }
 
-      // Assign Super Admin role to admin and superadmin user accounts
+      // Assign Super Admin role to admin user account
       const superAdminRoleId = "role-super-admin";
-      for (const adminToken of ["token-admin", "token-superadmin"]) {
-        await getDb()
-          .insert(schema.adminUserRoles)
-          .values({
-            userId: adminToken,
-            roleId: superAdminRoleId,
-            assignedByAdminId: "system-bootstrap",
-          })
-          .onDuplicateKeyUpdate({ set: { assignedAt: new Date() } });
-      }
+      await getDb()
+        .insert(schema.adminUserRoles)
+        .values({
+          userId: "admin-token-001",
+          roleId: superAdminRoleId,
+          assignedByAdminId: "system-bootstrap",
+        })
+        .onDuplicateKeyUpdate({ set: { assignedAt: new Date() } });
 
       // Seed default games catalog
       const defaultGames: GameCatalogItem[] = [
@@ -2837,27 +2820,7 @@ export const mysqlStore: DbRepository = {
         ipAllowlist: [],
         flagDefaultCredentials: true,
       }, "system");
-
-      // Seed standard organizer applications across all statuses
-      for (const sapp of seed.organizerApplications) {
-        await mysqlStore.createOrganizerApplication(sapp);
-      }
     });
-
-    // Recompute participant counters after seeding (they mutate leagues).
-    const [countRow] = await getDb()
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(schema.leagueParticipants)
-      .where(
-        and(
-          eq(schema.leagueParticipants.leagueId, "league-open-2026"),
-          ne(schema.leagueParticipants.status, "rejected"),
-        ),
-      );
-    await getDb()
-      .update(schema.leagues)
-      .set({ participantCount: Number(countRow?.count ?? 0) })
-      .where(eq(schema.leagues.id, "league-open-2026"));
 
     return mysqlStore.getAllProfiles();
   },

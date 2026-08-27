@@ -180,8 +180,13 @@ export const memoryStore: DbRepository = {
         data.gameTypeLimits.set(g.id, { ...g });
       }
       data.adminSettings = { ...seed.adminSettings };
+
+      // Ensure super admin role assignment
+      const superAdminRoleId = "role-super-admin";
+      data.userRoles.set("admin-token-001", new Set([superAdminRoleId]));
+
       data.initialized = true;
-      console.log("[damii][db] Memory store initialized with seed accounts");
+      console.log("[damii][db] Memory store initialized with admin account");
     }
   },
 
@@ -2006,6 +2011,37 @@ export const memoryStore: DbRepository = {
   // --- Seeder ---
   async seedDatabase() {
     const data = getMemoryData();
+
+    // Completely clear all runtime maps & arrays
+    data.sessions.clear();
+    data.profiles.clear();
+    data.users.clear();
+    data.otpRequests.clear();
+    data.organizerApplications.clear();
+    data.organizerRevocations.clear();
+    data.adminProfiles.clear();
+    data.organizerProfiles.clear();
+    data.paystackEvents.clear();
+    data.rooms.clear();
+    data.walletTransactions = [];
+    data.deposits.clear();
+    data.depositActions = [];
+    data.withdrawals.clear();
+    data.withdrawalActions = [];
+    data.escrows.clear();
+    data.leagues.clear();
+    data.leagueParticipants.clear();
+    data.leagueMatches.clear();
+    data.adminLogs = [];
+    data.matches.clear();
+    data.tournaments.clear();
+    data.tournamentPrizes.clear();
+    data.tournamentEntries.clear();
+    data.ledgerEntries = [];
+    data.tournamentActionRequests.clear();
+    data.systemSettings.clear();
+    data.userRoles.clear();
+
     const seed = buildSeedDataset();
     for (const p of seed.profiles) {
       data.profiles.set(p.token, { ...p });
@@ -2013,26 +2049,19 @@ export const memoryStore: DbRepository = {
     for (const a of seed.adminProfiles) {
       data.adminProfiles.set(a.userId, { ...a });
     }
-    for (const o of seed.organizerProfiles) {
-      data.organizerProfiles.set(o.userId, { ...o });
+    for (const r of seed.regions) {
+      data.regions.set(r.id, { ...r });
     }
-    for (const l of seed.leagues) {
-      data.leagues.set(l.id, { ...l });
-    }
-    for (const p of seed.leagueParticipants) {
-      data.leagueParticipants.set(p.id, { ...p });
+    for (const g of seed.gameTypeLimits) {
+      data.gameTypeLimits.set(g.id, { ...g });
     }
     data.adminSettings = { ...seed.adminSettings };
-    data.initialized = true;
 
-    const count = Array.from(data.leagueParticipants.values()).filter(
-      (p) => p.leagueId === "league-open-2026" && p.status !== "rejected",
-    ).length;
-    const l = data.leagues.get("league-open-2026");
-    if (l) {
-      l.participantCount = count;
-      data.leagues.set(l.id, { ...l });
-    }
+    // Assign Super Admin role to the admin profile
+    const superAdminRoleId = "role-super-admin";
+    data.userRoles.set("admin-token-001", new Set([superAdminRoleId]));
+
+    data.initialized = true;
 
     return memoryStore.getAllProfiles();
   },
