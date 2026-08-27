@@ -2962,6 +2962,7 @@ export default function ArenaPage() {
           </div>
         )}
       </div>
+    </div>
 
           {/* Dedicated Side Panel Move History */}
           {showHistory && (
