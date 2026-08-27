@@ -86,7 +86,10 @@ export async function GET(req: NextRequest) {
 
     const now = Date.now();
     const validRooms = rawRooms.filter((r) => {
-      if (r.status === "cancelled" || r.status === "forfeited") return false;
+      // Completed, ended, forfeited, cancelled, abandoned, or closed games are not live
+      if (r.winner !== null && r.winner !== undefined) return false;
+      if (r.status !== "playing" && r.status !== "waiting") return false;
+
       if (r.status === "waiting") {
         const createdMs = new Date(r.createdAt).getTime();
         if (now - createdMs >= 10 * 60 * 1000) return false;
@@ -96,7 +99,15 @@ export async function GET(req: NextRequest) {
         }
         return true;
       }
-      return true;
+
+      if (r.status === "playing") {
+        if (r.isPrivate) {
+          return Boolean(rawToken && (rawToken === r.hostToken || rawToken === r.guestToken));
+        }
+        return true;
+      }
+
+      return false;
     });
 
     const nonPlayerRoles = new Set(["admin", "super_admin", "organizer", "facilitator", "treasurer"]);
@@ -148,11 +159,12 @@ export async function GET(req: NextRequest) {
   }
 
   if (!code) {
-    const activeRooms = await dbRepository.listRooms(20);
+    const activeRooms = await dbRepository.listRooms(30);
     const now = Date.now();
-    // Filter out expired unjoined rooms (>10 mins) and private rooms for non-participants
+    // Filter out ended/completed matches, expired unjoined rooms (>10 mins), and private rooms for non-participants
     const validRooms = activeRooms.filter((r) => {
-      if (r.status === "cancelled" || r.status === "forfeited") return false;
+      if (r.winner !== null && r.winner !== undefined) return false;
+      if (r.status !== "playing" && r.status !== "waiting") return false;
       if (r.status === "waiting") {
         const createdMs = new Date(r.createdAt).getTime();
         if (now - createdMs >= 10 * 60 * 1000) return false;
@@ -161,7 +173,13 @@ export async function GET(req: NextRequest) {
         }
         return true;
       }
-      return true;
+      if (r.status === "playing") {
+        if (r.isPrivate) {
+          return Boolean(token && (token === r.hostToken || token === r.guestToken));
+        }
+        return true;
+      }
+      return false;
     });
     return NextResponse.json({ activeRooms: validRooms });
   }
@@ -512,7 +530,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
     }
 
-    if (action === "leave_room") {
+    if (action === "leave_room" || action === "close_room") {
       const code = cleanCode(body.code);
       const room = await dbRepository.getRoom(code);
       if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -529,6 +547,23 @@ export async function POST(req: NextRequest) {
           if (room.escrowId) {
             await walletService.refundHostWagerEscrow(room.escrowId, room.hostToken).catch(() => {});
           }
+          await dbRepository.saveRoom(room);
+        }
+      } else if (room.status === "playing") {
+        // If a player leaves an ongoing match, mark them as forfeited
+        const isHost = token === room.hostToken;
+        const isGuest = token === room.guestToken;
+        if (isHost || isGuest) {
+          const forfeitingPlayer: Player = isHost ? "white" : "black";
+          room.winner = forfeitingPlayer === "white" ? "black" : "white";
+          room.status = "forfeited";
+          await dbRepository.saveRoom(room);
+          await applyGameFinishEffects(room);
+        }
+      } else if (room.status === "completed" || room.status === "forfeited" || room.status === "draw") {
+        // Already finished match being closed
+        if (room.status !== "completed" && room.status !== "forfeited" && room.status !== "cancelled") {
+          room.status = "completed";
           await dbRepository.saveRoom(room);
         }
       }

@@ -290,9 +290,23 @@ export default function ArenaPage() {
   const [winner, setWinner] = useState<Player | null>(null);
   const [message, setMessage] = useState("Setup your match to start playing!");
   const [rotated, setRotated] = useState(false);
-  const [captures, setCaptures] = useState<Record<Player, number>>({ white: 0, black: 0 });
   const [localMoves, setLocalMoves] = useState<MoveLogEntry[]>([]);
   const [localGameStarted, setLocalGameStarted] = useState(false);
+
+  // Dynamically compute captures (takes) directly from the board state for 100% sync in both online and local modes
+  const captures = useMemo<Record<Player, number>>(() => {
+    let whiteCount = 0;
+    let blackCount = 0;
+    for (let i = 0; i < board.length; i++) {
+      const piece = board[i];
+      if (piece?.player === "white") whiteCount++;
+      else if (piece?.player === "black") blackCount++;
+    }
+    return {
+      white: Math.max(0, 20 - blackCount),
+      black: Math.max(0, 20 - whiteCount),
+    };
+  }, [board]);
 
   const [token, setToken] = useState("");
   const [username, setUsername] = useState("");
@@ -678,7 +692,12 @@ export default function ArenaPage() {
         const res = await fetch(`/api/damii?${queryParams.toString()}`);
         if (!res.ok) return;
         const data = await res.json();
-        if (data.activeRooms) setLobbyRooms(data.activeRooms);
+        if (data.activeRooms) {
+          const liveOnly = (data.activeRooms as Room[]).filter(
+            (r) => !r.winner && (r.status === "playing" || r.status === "waiting")
+          );
+          setLobbyRooms(liveOnly);
+        }
         if (data.leaderboard) {
           const nonPlayerRoles = new Set(["admin", "super_admin", "organizer", "facilitator", "treasurer"]);
           const mapped: LobbyPlayer[] = (data.leaderboard as LobbyPlayer[])
@@ -758,25 +777,38 @@ export default function ArenaPage() {
     } else {
       setSecondsLeft(turnTimerLimit > 0 ? turnTimerLimit : 60);
     }
-  }, [turn, room?.moveCount, mode, turnTimerLimit]);
+  }, [turn, room?.moveCount, mode, turnTimerLimit, localGameStarted]);
 
   useEffect(() => {
-    const matchReady = mode === "local" || room?.status === "playing";
-    if (!matchReady || winner || turnTimerLimit === 0) return;
+    // Only run the countdown timer if an actual match is actively in progress
+    const isOnlinePlaying = mode === "online" && room !== null && room.status === "playing" && !room.winner && !winner;
+    const isLocalPlaying = mode === "local" && localGameStarted && !winner;
+
+    if ((!isOnlinePlaying && !isLocalPlaying) || turnTimerLimit === 0) {
+      return;
+    }
+
+    // Determine if audio tick / reminder should be allowed for THIS specific client:
+    // - In local mode: user is actively playing on device -> sound allowed
+    // - In online mode: ONLY when it is THIS player's turn (not spectator, not opponent's turn)
+    const isMyTurn = mode === "local" || (mode === "online" && room !== null && room.role === room.turn);
+
     const timer = window.setInterval(() => {
       setSecondsLeft((current) => {
         const next = current > 0 ? current - 1 : 0;
-        if (next < 10 && next > 0) {
-          soundService.playUrgentTick(next);
-        }
-        if (next === 9) {
-          soundService.playTurnReminder();
+        if (isMyTurn) {
+          if (next < 10 && next > 0) {
+            soundService.playUrgentTick(next);
+          }
+          if (next === 9) {
+            soundService.playTurnReminder();
+          }
         }
         return next;
       });
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [mode, room?.status, winner, turn, turnTimerLimit]);
+  }, [mode, localGameStarted, room?.status, room?.winner, room?.role, room?.turn, winner, turn, turnTimerLimit]);
 
   // Auto CPU move trigger for simulation mode
   useEffect(() => {
@@ -867,8 +899,6 @@ export default function ArenaPage() {
           soundService.playMove();
         }
       }
-    } else if (isNewRoom && next.winner) {
-      soundService.playVictory();
     }
 
     setRoom(next);
@@ -923,7 +953,6 @@ export default function ArenaPage() {
     setSelected(null);
     setForcedFrom(null);
     setWinner(null);
-    setCaptures({ white: 0, black: 0 });
     setLocalMoves([]);
     setIsCpuThinking(false);
     setLastCaptureSquare(null);
@@ -1053,8 +1082,6 @@ export default function ArenaPage() {
     const pieceBefore = board[move.from];
 
     const result = applyMove(board, turn, forcedFrom, move.from, move.to, activeRuleVariations);
-    if (result.captured)
-      setCaptures((current) => ({ ...current, [turn]: current[turn] + 1 }));
 
     // Append move to local history log with dynamic player name
     const formatted = formatMoveNotation(move.from, move.to, result.captured);
@@ -2046,16 +2073,10 @@ export default function ArenaPage() {
         </section>
       ) : (
         /* Main Arena Game Layout Container */
-        <section className="flex-1 max-w-6xl w-full mx-auto p-1.5 sm:p-4 flex flex-col items-center justify-center">
-          <div
-            className={`w-full grid gap-3 sm:gap-6 transition-all duration-300 ${
-              showHistory
-                ? "lg:grid-cols-[1fr_340px] items-start"
-                : "max-w-[580px] mx-auto"
-            }`}
-          >
-            {/* Left / Central Game Stage Column */}
-            <div className="w-full max-w-[580px] mx-auto space-y-2.5 sm:space-y-4">
+        <section className="flex-1 max-w-[1480px] w-full mx-auto p-1.5 sm:p-3 md:p-4 lg:p-6 flex flex-col items-center justify-center">
+          <div className="w-full grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_420px] 2xl:grid-cols-[minmax(0,1fr)_460px] gap-4 sm:gap-6 items-start">
+            {/* Left / Primary Board Stage Column */}
+            <div className="w-full flex flex-col items-center space-y-2.5 sm:space-y-4">
 
             {/* Unjoined Waiting Room Cancellation Banner */}
             {mode === "online" && room?.status === "waiting" && room?.role === "white" && !room.guestToken && (
@@ -2222,8 +2243,8 @@ export default function ArenaPage() {
               </div>
             )}
 
-            {/* Detached Players Panel - Isolated from Board Zoom & Layout Shifts */}
-            <div className="w-full bg-[#06261f] border border-[#184d3c] rounded-2xl p-2.5 sm:p-3.5 shadow-xl">
+            {/* Detached Players Panel - Isolated from Board Zoom & Layout Shifts (Mobile Only) */}
+            <div className="w-full lg:hidden bg-[#06261f] border border-[#184d3c] rounded-2xl p-2.5 sm:p-3.5 shadow-xl">
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1 sm:gap-3 min-h-[52px] sm:min-h-[60px]">
                 
                 {/* Player 1 Card */}
@@ -2975,12 +2996,284 @@ export default function ArenaPage() {
           </div>
         )}
       </div>
-    </div>
 
-          {/* Dedicated Side Panel Move History */}
-          {showHistory && (
-            <div className="w-full max-w-[580px] mx-auto bg-[#06261f] border border-[#184d3c] rounded-2xl p-3 sm:p-4 shadow-2xl flex flex-col h-[400px] sm:h-[600px] animate-in fade-in zoom-in-95 duration-200">
-              <div className="flex items-center justify-between pb-2.5 border-b border-[#184d3c]">
+            {/* Mobile / Tablet Collapsible Move History */}
+            {showHistory && (
+              <div className="w-full lg:hidden bg-[#06261f] border border-[#184d3c] rounded-2xl p-3 sm:p-4 shadow-2xl flex flex-col h-[400px] animate-in fade-in zoom-in-95 duration-200">
+                <div className="flex items-center justify-between pb-2.5 border-b border-[#184d3c]">
+                  <div className="flex items-center gap-2">
+                    <ListOrdered size={16} className="text-[#d6a735]" />
+                    <h3 className="text-xs sm:text-sm font-bold text-[#f5efdf]">Match Move History</h3>
+                    <span className="px-2 py-0.5 bg-[#0c3b2e] border border-[#184d3c] text-[#d6a735] rounded-full text-[10px] font-extrabold">
+                      {activeMoves.length}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setShowHistory(false)}
+                    className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-[#0c3b2e] transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <div className="py-2 flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-800/80">
+                  <div className="flex items-center gap-1 bg-slate-950 p-0.5 sm:p-1 rounded-lg border border-slate-800 overflow-x-auto max-w-full">
+                    <button
+                      onClick={() => setNotationStyle("alg")}
+                      className={`px-2 py-1 text-[9px] sm:text-[10px] font-bold rounded transition-colors whitespace-nowrap ${
+                        notationStyle === "alg" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      Algebraic
+                    </button>
+                    <button
+                      onClick={() => setNotationStyle("sq")}
+                      className={`px-2 py-1 text-[9px] sm:text-[10px] font-bold rounded transition-colors whitespace-nowrap ${
+                        notationStyle === "sq" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      Squares
+                    </button>
+                    <button
+                      onClick={() => setNotationStyle("both")}
+                      className={`px-2 py-1 text-[9px] sm:text-[10px] font-bold rounded transition-colors whitespace-nowrap ${
+                        notationStyle === "both" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      Both
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={copyMoveLog}
+                    disabled={activeMoves.length === 0}
+                    className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 disabled:opacity-40 rounded-lg text-[10px] sm:text-[11px] font-semibold border border-slate-700 flex items-center gap-1 transition-colors ml-auto"
+                  >
+                    {copiedHistory ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                    <span>{copiedHistory ? "Copied" : "Export"}</span>
+                  </button>
+                </div>
+
+                <div
+                  ref={historyScrollRef}
+                  className="flex-1 overflow-y-auto py-2 pr-1 space-y-1.5 scrollbar-thin scrollbar-thumb-slate-800"
+                >
+                  {activeMoves.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500 space-y-2">
+                      <FileText size={32} className="opacity-40 text-amber-400" />
+                      <p className="text-xs font-medium">No moves played yet.</p>
+                      <span className="text-[10px]">Move history with custom player names will appear here.</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <div className="grid grid-cols-[36px_1fr_1fr] text-[10px] font-bold text-slate-500 uppercase px-2 py-1 border-b border-slate-800/50">
+                        <span>#</span>
+                        <span className="truncate flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-300" /> {whiteDisplayName}</span>
+                        <span className="truncate flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> {blackDisplayName}</span>
+                      </div>
+
+                      {pairedMoves.map((pair) => (
+                        <div
+                          key={pair.turnNum}
+                          className="grid grid-cols-[36px_1fr_1fr] items-center text-xs px-2 py-1.5 rounded-lg bg-slate-950/40 hover:bg-slate-800/50 border border-slate-800/40 transition-colors font-mono"
+                        >
+                          <span className="text-slate-500 font-bold text-[11px]">{pair.turnNum}.</span>
+                          <div>
+                            {pair.white ? (
+                              <span className={`inline-flex items-center gap-1 font-bold ${pair.white.isCapture ? "text-amber-300" : "text-slate-200"}`}>
+                                {notationStyle === "alg" ? pair.white.algNotation : notationStyle === "sq" ? pair.white.sqNotation : pair.white.notation}
+                                {pair.white.isCapture && <span className="text-[10px] text-amber-400">💥</span>}
+                              </span>
+                            ) : (
+                              <span className="text-slate-700">-</span>
+                            )}
+                          </div>
+                          <div>
+                            {pair.black ? (
+                              <span className={`inline-flex items-center gap-1 font-bold ${pair.black.isCapture ? "text-emerald-300" : "text-slate-200"}`}>
+                                {notationStyle === "alg" ? pair.black.algNotation : notationStyle === "sq" ? pair.black.sqNotation : pair.black.notation}
+                                {pair.black.isCapture && <span className="text-[10px] text-emerald-400">💥</span>}
+                              </span>
+                            ) : (
+                              <span className="text-slate-700">-</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right Column: Desktop Widescreen Match Cockpit & Move Log (Always visible on Desktop) */}
+          <div className="hidden lg:flex flex-col gap-4 w-full sticky top-4">
+            
+            {/* Match Cockpit Duel Card */}
+            <div className="w-full bg-[#06261f] border border-[#184d3c] rounded-2xl p-4 shadow-xl space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-[#184d3c]">
+                <div className="flex items-center gap-1.5 text-xs font-black text-[#d6a735] uppercase tracking-wider">
+                  <Swords size={15} />
+                  <span>Live Match Cockpit</span>
+                </div>
+                {mode === "online" && room && (
+                  <span className="px-2 py-0.5 bg-[#0c3b2e] border border-[#184d3c] text-slate-300 rounded-md text-[10px] font-mono">
+                    Room {room.code}
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-2.5">
+                {/* Player 2 (Black) Desktop Card */}
+                <div
+                  className={`relative flex items-center justify-between p-3 rounded-xl transition-all border ${
+                    turn === "black" && !winner
+                      ? secondsLeft < 10 && turnTimerLimit > 0 && (mode === "local" || room?.status === "playing")
+                        ? "bg-red-950/40 border-red-500/90 ring-2 ring-red-500/70 shadow-lg shadow-red-500/20 animate-urgent-card"
+                        : "bg-[#0c3b2e] border-[#d6a735] ring-2 ring-[#d6a735]/40 shadow-lg shadow-[#d6a735]/10"
+                      : "bg-[#0c3b2e]/60 border-[#184d3c] opacity-85"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="w-10 h-10 rounded-full bg-gradient-to-br from-[#0c3b2e] via-[#06261f] to-slate-950 border-2 border-[#184d3c] shadow-md flex items-center justify-center text-[#f5efdf] font-black text-sm shrink-0">
+                      {subMode === "vs_cpu" ? <Bot size={16} /> : "♚"}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <small className="text-[10px] font-bold tracking-wider text-[#d6a735] uppercase">
+                          BLACK (PLAYER 2)
+                        </small>
+                        {turn === "black" && !winner && (
+                          <span className="px-1.5 py-0.2 bg-[#d6a735] text-[#06261f] text-[9px] font-extrabold rounded-full uppercase tracking-tighter animate-pulse">
+                            TURN
+                          </span>
+                        )}
+                      </div>
+                      <strong className="block text-sm font-extrabold text-[#f5efdf] truncate">
+                        {blackDisplayName}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-end shrink-0 pl-2">
+                    <small className="text-[9px] font-bold text-slate-400 uppercase">Takes</small>
+                    <span className="text-sm font-black text-[#d6a735]">{captures.black}</span>
+                  </div>
+                </div>
+
+                {/* VS Divider with Live Countdown Clock */}
+                <div className="flex items-center justify-between px-3 py-1.5 bg-[#041913] rounded-lg border border-[#184d3c]/60">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    TURN CLOCK
+                  </span>
+                  {turnTimerLimit > 0 ? (
+                    secondsLeft < 10 && !winner && (mode === "local" || room?.status === "playing") ? (
+                      <div className="flex items-center gap-1 px-2 py-0.5 bg-red-950 border border-red-500 rounded text-red-200 animate-timer-urgent shadow-sm">
+                        <Flame size={11} className="text-red-400 animate-bounce" />
+                        <span className="font-mono font-black text-xs">{secondsLeft}s URGENT</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 text-slate-300 font-mono text-xs font-bold">
+                        <Clock size={12} className="text-[#d6a735]" />
+                        <span>{secondsLeft}s / {turnTimerLimit}s</span>
+                      </div>
+                    )
+                  ) : (
+                    <span className="text-xs text-slate-500 font-mono">No Limit (∞)</span>
+                  )}
+                </div>
+
+                {/* Dynamic Turn Progress Bar */}
+                {turnTimerLimit > 0 && !winner && (mode === "local" || room?.status === "playing") && (
+                  <div className="w-full bg-[#041913] rounded-full h-1.5 overflow-hidden border border-[#184d3c]/80 shadow-inner">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ease-linear ${
+                        secondsLeft < 10
+                          ? "bg-gradient-to-r from-red-600 via-rose-500 to-red-400 urgent-bar-animated shadow-[0_0_10px_rgba(239,68,68,0.9)]"
+                          : secondsLeft <= 15
+                          ? "bg-gradient-to-r from-amber-500 to-yellow-400"
+                          : "bg-gradient-to-r from-emerald-500 via-[#10b981] to-[#d6a735]"
+                      }`}
+                      style={{ width: `${Math.max(0, Math.min(100, (secondsLeft / turnTimerLimit) * 100))}%` }}
+                    />
+                  </div>
+                )}
+
+                {/* Player 1 (White) Desktop Card */}
+                <div
+                  className={`relative flex items-center justify-between p-3 rounded-xl transition-all border ${
+                    turn === "white" && !winner
+                      ? secondsLeft < 10 && turnTimerLimit > 0 && (mode === "local" || room?.status === "playing")
+                        ? "bg-red-950/40 border-red-500/90 ring-2 ring-red-500/70 shadow-lg shadow-red-500/20 animate-urgent-card"
+                        : "bg-[#0c3b2e] border-[#d6a735] ring-2 ring-[#d6a735]/40 shadow-lg shadow-[#d6a735]/10"
+                      : "bg-[#0c3b2e]/60 border-[#184d3c] opacity-85"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-100 via-amber-200 to-amber-400 border-2 border-amber-200 shadow-md flex items-center justify-center text-slate-950 font-black text-sm shrink-0">
+                      ♔
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <small className="text-[10px] font-bold tracking-wider text-[#d6a735] uppercase">
+                          WHITE (PLAYER 1)
+                        </small>
+                        {turn === "white" && !winner && (
+                          <span className="px-1.5 py-0.2 bg-[#d6a735] text-[#06261f] text-[9px] font-extrabold rounded-full uppercase tracking-tighter animate-pulse">
+                            TURN
+                          </span>
+                        )}
+                      </div>
+                      <strong className="block text-sm font-extrabold text-[#f5efdf] truncate">
+                        {whiteDisplayName}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-end shrink-0 pl-2">
+                    <small className="text-[9px] font-bold text-slate-400 uppercase">Takes</small>
+                    <span className="text-sm font-black text-[#d6a735]">{captures.white}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Tournament Rules & Active Constraints (Desktop) */}
+            {mode === "online" && room && (room.ruleVariations || room.customConstraints) && (
+              <div className="w-full p-3 bg-[#06261f] border border-[#184d3c] rounded-2xl text-xs space-y-2 shadow-md">
+                <div className="flex items-center gap-2 text-slate-200 font-bold">
+                  <ShieldCheck size={16} className="text-[#d6a735]" />
+                  <span>Rules & Constraints Active</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {room.ruleVariations?.captureRule && (
+                    <span className="px-2 py-0.5 bg-[#0c3b2e] border border-[#184d3c] text-[#d6a735] rounded-md text-[11px] font-semibold">
+                      Capture: {room.ruleVariations.captureRule === "majority" ? "Majority" : room.ruleVariations.captureRule === "any" ? "Any" : "Standard"}
+                    </span>
+                  )}
+                  {room.ruleVariations?.flyingKings !== undefined && (
+                    <span className="px-2 py-0.5 bg-[#0c3b2e] border border-[#184d3c] text-emerald-300 rounded-md text-[11px] font-semibold">
+                      Flying Kings: {room.ruleVariations.flyingKings ? "Enabled" : "Step Only"}
+                    </span>
+                  )}
+                  {room.customConstraints?.turnTimerSeconds !== undefined && room.customConstraints.turnTimerSeconds !== null && (
+                    <span className="px-2 py-0.5 bg-[#0c3b2e] border border-[#184d3c] text-sky-300 rounded-md text-[11px] font-semibold">
+                      Clock: {room.customConstraints.turnTimerSeconds}s
+                    </span>
+                  )}
+                  {room.customConstraints?.disconnectionGraceSeconds !== undefined && room.customConstraints.disconnectionGraceSeconds !== null && (
+                    <span className="px-2 py-0.5 bg-[#0c3b2e] border border-[#184d3c] text-amber-300 rounded-md text-[11px] font-semibold">
+                      Grace: {room.customConstraints.disconnectionGraceSeconds}s
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Match Move History (Desktop Permanent Panel) */}
+            <div className="w-full bg-[#06261f] border border-[#184d3c] rounded-2xl p-4 shadow-2xl flex flex-col h-[380px] xl:h-[430px]">
+              <div className="flex items-center justify-between pb-2 border-b border-[#184d3c]">
                 <div className="flex items-center gap-2">
                   <ListOrdered size={16} className="text-[#d6a735]" />
                   <h3 className="text-xs sm:text-sm font-bold text-[#f5efdf]">Match Move History</h3>
@@ -2989,54 +3282,39 @@ export default function ArenaPage() {
                   </span>
                 </div>
                 <button
-                  onClick={() => setShowHistory(false)}
-                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-[#0c3b2e] transition-colors"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-
-              <div className="py-2 flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-800/80">
-                <div className="flex items-center gap-1 bg-slate-950 p-0.5 sm:p-1 rounded-lg border border-slate-800 overflow-x-auto max-w-full">
-                  <button
-                    onClick={() => setNotationStyle("alg")}
-                    className={`px-2 py-1 text-[9px] sm:text-[10px] font-bold rounded transition-colors whitespace-nowrap ${
-                      notationStyle === "alg"
-                        ? "bg-amber-500 text-slate-950"
-                        : "text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    Algebraic (D4-E5)
-                  </button>
-                  <button
-                    onClick={() => setNotationStyle("sq")}
-                    className={`px-2 py-1 text-[9px] sm:text-[10px] font-bold rounded transition-colors whitespace-nowrap ${
-                      notationStyle === "sq"
-                        ? "bg-amber-500 text-slate-950"
-                        : "text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    Squares (32-28)
-                  </button>
-                  <button
-                    onClick={() => setNotationStyle("both")}
-                    className={`px-2 py-1 text-[9px] sm:text-[10px] font-bold rounded transition-colors whitespace-nowrap ${
-                      notationStyle === "both"
-                        ? "bg-amber-500 text-slate-950"
-                        : "text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    Both
-                  </button>
-                </div>
-
-                <button
                   onClick={copyMoveLog}
                   disabled={activeMoves.length === 0}
-                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 disabled:opacity-40 rounded-lg text-[10px] sm:text-[11px] font-semibold border border-slate-700 flex items-center gap-1 transition-colors ml-auto"
+                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 disabled:opacity-40 rounded-lg text-[10px] font-semibold border border-slate-700 flex items-center gap-1 transition-colors"
                 >
                   {copiedHistory ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
                   <span>{copiedHistory ? "Copied" : "Export"}</span>
+                </button>
+              </div>
+
+              <div className="py-2 flex items-center gap-1 border-b border-slate-800/80 overflow-x-auto">
+                <button
+                  onClick={() => setNotationStyle("alg")}
+                  className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors whitespace-nowrap ${
+                    notationStyle === "alg" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  Algebraic
+                </button>
+                <button
+                  onClick={() => setNotationStyle("sq")}
+                  className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors whitespace-nowrap ${
+                    notationStyle === "sq" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  Squares
+                </button>
+                <button
+                  onClick={() => setNotationStyle("both")}
+                  className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors whitespace-nowrap ${
+                    notationStyle === "both" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  Both
                 </button>
               </div>
 
@@ -3048,11 +3326,11 @@ export default function ArenaPage() {
                   <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500 space-y-2">
                     <FileText size={32} className="opacity-40 text-amber-400" />
                     <p className="text-xs font-medium">No moves played yet.</p>
-                    <span className="text-[10px]">Move history with custom player names will appear here.</span>
+                    <span className="text-[10px]">Live move coordinates will record here.</span>
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    <div className="grid grid-cols-[36px_1fr_1fr] text-[10px] font-bold text-slate-500 uppercase px-2 py-1 border-b border-slate-800/50">
+                    <div className="grid grid-cols-[32px_1fr_1fr] text-[10px] font-bold text-slate-500 uppercase px-2 py-1 border-b border-slate-800/50">
                       <span>#</span>
                       <span className="truncate flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-300" /> {whiteDisplayName}</span>
                       <span className="truncate flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> {blackDisplayName}</span>
@@ -3061,50 +3339,24 @@ export default function ArenaPage() {
                     {pairedMoves.map((pair) => (
                       <div
                         key={pair.turnNum}
-                        className="grid grid-cols-[36px_1fr_1fr] items-center text-xs px-2 py-1.5 rounded-lg bg-slate-950/40 hover:bg-slate-800/50 border border-slate-800/40 transition-colors font-mono"
+                        className="grid grid-cols-[32px_1fr_1fr] items-center text-xs px-2 py-1 rounded-lg bg-slate-950/40 hover:bg-slate-800/50 border border-slate-800/40 transition-colors font-mono"
                       >
-                        <span className="text-slate-500 font-bold text-[11px]">{pair.turnNum}.</span>
-
+                        <span className="text-slate-500 font-bold text-[10px]">{pair.turnNum}.</span>
                         <div>
                           {pair.white ? (
-                            <span
-                              className={`inline-flex items-center gap-1 font-bold ${
-                                pair.white.isCapture ? "text-amber-300" : "text-slate-200"
-                              }`}
-                            >
-                              {notationStyle === "alg"
-                                ? pair.white.algNotation
-                                : notationStyle === "sq"
-                                ? pair.white.sqNotation
-                                : pair.white.notation}
-                              {pair.white.isCapture && (
-                                <span className="text-[10px] text-amber-400" title="Compulsory Capture">
-                                  💥
-                                </span>
-                              )}
+                            <span className={`inline-flex items-center gap-1 font-bold ${pair.white.isCapture ? "text-amber-300" : "text-slate-200"}`}>
+                              {notationStyle === "alg" ? pair.white.algNotation : notationStyle === "sq" ? pair.white.sqNotation : pair.white.notation}
+                              {pair.white.isCapture && <span className="text-[10px] text-amber-400">💥</span>}
                             </span>
                           ) : (
                             <span className="text-slate-700">-</span>
                           )}
                         </div>
-
                         <div>
                           {pair.black ? (
-                            <span
-                              className={`inline-flex items-center gap-1 font-bold ${
-                                pair.black.isCapture ? "text-emerald-300" : "text-slate-200"
-                              }`}
-                            >
-                              {notationStyle === "alg"
-                                ? pair.black.algNotation
-                                : notationStyle === "sq"
-                                ? pair.black.sqNotation
-                                : pair.black.notation}
-                              {pair.black.isCapture && (
-                                <span className="text-[10px] text-emerald-400" title="Compulsory Capture">
-                                  💥
-                                </span>
-                              )}
+                            <span className={`inline-flex items-center gap-1 font-bold ${pair.black.isCapture ? "text-emerald-300" : "text-slate-200"}`}>
+                              {notationStyle === "alg" ? pair.black.algNotation : notationStyle === "sq" ? pair.black.sqNotation : pair.black.notation}
+                              {pair.black.isCapture && <span className="text-[10px] text-emerald-400">💥</span>}
                             </span>
                           ) : (
                             <span className="text-slate-700">-</span>
@@ -3117,11 +3369,12 @@ export default function ArenaPage() {
               </div>
 
               <div className="pt-2 border-t border-slate-800/80 text-[10px] text-slate-400 flex items-center justify-between">
-                <span>FMJD 10x10 Standard Notation</span>
+                <span>FMJD 10x10 Standard</span>
                 <span className="text-amber-400 font-bold">compulsory capture &apos;x&apos;</span>
               </div>
             </div>
-          )}
+
+          </div>
         </div>
       </section>
       )}
