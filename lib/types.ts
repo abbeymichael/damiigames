@@ -1122,3 +1122,108 @@ export interface WhatsAppSettings {
   enabled: boolean;
 }
 
+/* ------------------------------------------------------------------------- */
+/* Comprehensive Match History, Network Disconnect Logs & Game Requests     */
+/* ------------------------------------------------------------------------- */
+export type MatchLossReason =
+  | "board_win"
+  | "voluntary_resignation"
+  | "disconnect_timeout"
+  | "clock_timeout"
+  | "draw_agreed"
+  | "admin_ruling"
+  | "cancelled_unjoined"
+  | "abandoned"
+  | "unknown";
+
+export interface ConnectionEventLog {
+  event: "disconnect" | "reconnect" | "timeout_warning" | "forfeit_timeout" | "ping_drop";
+  player: Player;
+  playerName: string;
+  playerToken?: string;
+  timestamp: number;
+  formattedTime?: string;
+  durationSeconds?: number;
+  remainingGraceSeconds?: number;
+  note?: string;
+}
+
+export interface ComprehensiveMatch {
+  id: string;
+  roomCode: string;
+  matchId?: string | null;
+  leagueId?: string | null;
+  leagueMatchId?: string | null;
+  tournamentTitle?: string | null;
+  tournamentRound?: number | string | null;
+  mode: GameMode | "custom_wager" | "tournament";
+  status: RoomStatus;
+  hostName: string;
+  hostToken: string;
+  hostPhone?: string | null;
+  hostRating?: number | null;
+  guestName: string | null;
+  guestToken: string | null;
+  guestPhone?: string | null;
+  guestRating?: number | null;
+  winner: Player | "draw" | null;
+  winnerName: string | null;
+  winnerToken: string | null;
+  loserName: string | null;
+  loserToken: string | null;
+  isDraw: boolean;
+  wagerAmount: number;
+  potAmount: number;
+  platformFee: number;
+  netPayout: number;
+  escrowId: string | null;
+  startedAt: string;
+  completedAt: string;
+  durationSeconds: number;
+  durationFormatted: string;
+  moveCount: number;
+  moves: MoveLogEntry[];
+  terminationReason: MatchLossReason;
+  lossExplanation: string;
+  connectionEvents: ConnectionEventLog[];
+  reconnectCount: number;
+  totalDisconnectedSeconds: number;
+  hasConnectionIssues: boolean;
+  disputeStatus: "none" | "under_review" | "resolved" | "voided" | string;
+  disputeNotes?: string | null;
+  boardJson: string;
+  board?: (Player | null)[];
+  ledgerEntries?: LedgerEntry[];
+  walletTransactions?: WalletTransaction[];
+  ruleVariations?: TournamentRuleVariations;
+  customConstraints?: TournamentCustomConstraints;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GameRequestItem {
+  id: string;
+  type: "wager_challenge" | "open_lobby" | "tournament_action" | "bracket_match";
+  title: string;
+  creatorName: string;
+  creatorToken: string;
+  creatorPhone?: string;
+  targetOpponentName?: string | null;
+  targetOpponentToken?: string | null;
+  wagerAmount: number;
+  currency: string;
+  mode: GameMode;
+  roomCode?: string | null;
+  tournamentId?: string | null;
+  tournamentTitle?: string | null;
+  status: "waiting" | "playing" | "completed" | "cancelled" | "expired" | "pending_review" | "approved" | "rejected";
+  timeLimitSeconds?: number;
+  turnLimitSeconds?: number;
+  disconnectionGraceSeconds?: number;
+  ruleVariations?: TournamentRuleVariations;
+  reason?: string;
+  actionRequestId?: string;
+  createdAt: string;
+  expiresAt?: string;
+}
+

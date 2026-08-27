@@ -10,10 +10,13 @@ import {
   NotificationChannel,
   NotificationType,
   NotificationUrgency,
+  ComprehensiveMatch,
+  GameRequestItem,
 } from "./types";
 import { leagueService } from "./league-service";
 import { notificationService } from "./notification-service";
 import { hasPermission, getAdminPermissions } from "./permissions";
+import { buildComprehensiveMatches, buildGameRequests } from "./match-analytics";
 
 export const adminService = {
   async verifyAdminAccessAsync(token: string): Promise<boolean> {
@@ -453,6 +456,30 @@ export const adminService = {
       return { ...le, fundType, accountCode, accountName };
     });
 
+    // Load league matches for all tournaments
+    const allLeagueMatchesNested = await Promise.all(
+      leagues.map((l) => dbRepository.getLeagueMatches(l.id).catch(() => []))
+    );
+    const allLeagueMatches = allLeagueMatchesNested.flat();
+
+    // Reconcile comprehensive match history with detailed loss reasons, connection audits, and ledger bindings
+    const comprehensiveMatches = buildComprehensiveMatches({
+      rooms: roomsWithMoves,
+      leagues,
+      leagueMatches: allLeagueMatches,
+      users: allUsers,
+      transactions,
+      ledgerEntries,
+    });
+
+    // Build unified game requests (wager challenges, casual lobby requests, and organizer action requests)
+    const gameRequests = buildGameRequests({
+      rooms: roomsWithMoves,
+      tournamentRequests: tournamentRequestsList,
+      leagues,
+      users: allUsers,
+    });
+
     return {
       userCount: allUsers.length || leaderboard.length,
       activeRoomsCount: activeRooms.length,
@@ -468,6 +495,8 @@ export const adminService = {
       allUsers: allUsers.map((p) => securityService.sanitizeProfile(p)).filter(Boolean),
       settings,
       recentRooms: roomsWithMoves.slice(0, 100),
+      comprehensiveMatches,
+      gameRequests,
       recentTransactions: transactions.slice(0, 100),
       transactions: transactions,
       deposits: rawDeposits,

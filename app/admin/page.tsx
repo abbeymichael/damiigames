@@ -67,6 +67,8 @@ import type {
   SystemFundsReport,
   ChartOfAccountsReport,
   TreasuryFundDetails,
+  ComprehensiveMatch,
+  GameRequestItem,
 } from "@/lib/types";
 import { ActionMenu } from "@/components/ActionMenu";
 import { AdminTable } from "@/components/AdminTable";
@@ -80,6 +82,7 @@ import { WithdrawalsTable } from "@/components/admin/WithdrawalsTable";
 import { OrganizersTable } from "@/components/admin/OrganizersTable";
 import { OrganizerApplicationDetailModal } from "@/components/admin/OrganizerApplicationDetailModal";
 import { DisputesTable } from "@/components/admin/DisputesTable";
+import { GameDetailModal } from "@/components/admin/GameDetailModal";
 import { AuditLogsTable } from "@/components/admin/AuditLogsTable";
 import { AdminRolesTable } from "@/components/admin/AdminRolesTable";
 import { GameLimitsTable } from "@/components/admin/GameLimitsTable";
@@ -88,6 +91,7 @@ import { RolesManagement } from "@/components/admin/RolesManagement";
 import { AdminStaffTable } from "@/components/admin/AdminStaffTable";
 import { GamesCatalogTable } from "@/components/admin/GamesCatalogTable";
 import { TournamentRequestsTable } from "@/components/admin/TournamentRequestsTable";
+import { GameRequestsTable } from "@/components/admin/GameRequestsTable";
 import { LegalPagesEditor } from "@/components/admin/LegalPagesEditor";
 import { CommunicationsCenter } from "@/components/admin/CommunicationsCenter";
 import {
@@ -186,6 +190,11 @@ type SystemMetrics = {
   chartOfAccounts?: ChartOfAccountsReport | null;
   treasuryDetails?: TreasuryFundDetails | null;
   ledgerEntries?: LedgerEntry[];
+  comprehensiveMatches?: ComprehensiveMatch[];
+  gameRequests?: GameRequestItem[];
+  deposits?: any[];
+  withdrawals?: any[];
+  transactions?: any[];
 };
 
 interface NavItem {
@@ -212,7 +221,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { key: "organizers", label: "Organizer Requests", icon: UserCheck, permission: "organizers.view", badgeKey: "pendingOrganizers" },
       { key: "disputes", label: "Disputes & Matches", icon: Gavel, permission: "disputes.view", badgeKey: "openDisputes" },
-      { key: "tournament_requests", label: "Tournament Requests", icon: Inbox, permission: "tournaments.requests", badgeKey: "pendingTournamentRequests" },
+      { key: "game_requests", label: "Game Requests", icon: Gamepad2, permission: "tournaments.requests", badgeKey: "pendingGameRequests" },
     ],
   },
   {
@@ -251,11 +260,12 @@ const TAB_ITEMS_CONFIG: Record<
 > = {
   overview: { key: "overview", label: "Overview", permission: null, icon: LayoutDashboard, moduleName: "Dashboard Overview" },
   organizers: { key: "organizers", label: "Organizer Requests", permission: "organizers.view", icon: UserCheck, moduleName: "Organizer Applications & KYC" },
-  disputes: { key: "disputes", label: "Disputes & Matches", permission: "disputes.view", icon: Gavel, moduleName: "Match Disputes & Resolution" },
-  tournament_requests: { key: "tournament_requests", label: "Tournament Requests", permission: "tournaments.requests", icon: Inbox, moduleName: "Tournament Requests" },
+  disputes: { key: "disputes", label: "Disputes & Matches", permission: "disputes.view", icon: Gavel, moduleName: "Match History & Dispute Intelligence" },
+  game_requests: { key: "game_requests", label: "Game Requests", permission: "tournaments.requests", icon: Gamepad2, moduleName: "Game Requests & Wager Challenges" },
+  tournament_requests: { key: "game_requests", label: "Game Requests", permission: "tournaments.requests", icon: Gamepad2, moduleName: "Game Requests & Wager Challenges" },
   tournaments: { key: "tournaments", label: "Tournaments", permission: "tournaments.view", icon: Trophy, moduleName: "Tournaments & Brackets" },
   games: { key: "games", label: "Game Catalog", permission: "games.view", icon: Gamepad2, moduleName: "Games & Rules Catalog" },
-  deposits: { key: "deposits", label: "Deposits", permission: "deposits.view", icon: ArrowDownLeft, moduleName: "Deposits & Paystack" },
+  deposits: { key: "deposits", label: "Deposits", permission: "deposits.view", icon: ArrowDownLeft, moduleName: "Deposits & Paystack Reconciliation" },
   withdrawals: { key: "withdrawals", label: "Withdrawals & Payouts", permission: "withdrawals.view", icon: ArrowUpRight, moduleName: "Withdrawals & Payouts" },
   wallet: { key: "wallet", label: "Financial Ledger", permission: "wallet.view", icon: Wallet, moduleName: "Financial Ledger & Treasury" },
   payments: { key: "wallet", label: "Financial Ledger", permission: "wallet.view", icon: Wallet, moduleName: "Financial Ledger & Treasury" },

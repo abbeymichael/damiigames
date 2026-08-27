@@ -17,12 +17,14 @@ import {
   Calendar,
   Layers,
   FileSpreadsheet,
+  Plus,
 } from "lucide-react";
-import type { WalletTransaction, Profile } from "@/lib/types";
+import type { WalletTransaction, Profile, LedgerEntry } from "@/lib/types";
 
 export interface DepositsTableProps {
   transactions?: WalletTransaction[];
   deposits?: any[];
+  ledgerEntries?: LedgerEntry[];
   users?: Profile[];
   token: string;
   adminSecret?: string;
@@ -34,6 +36,7 @@ export interface DepositsTableProps {
 export function DepositsTable({
   transactions = [],
   deposits = [],
+  ledgerEntries = [],
   users = [],
   token,
   adminSecret,
@@ -52,53 +55,94 @@ export function DepositsTable({
   const depositTransactions = useMemo(() => {
     const txMap = new Map<string, WalletTransaction>();
 
-    // Add transactions that represent deposits
+    // 1. Add transactions that represent deposits
     for (const tx of transactions) {
+      const typeLower = String(tx.type || "").toLowerCase();
       const isDeposit =
-        tx.type === "deposit" ||
+        typeLower === "deposit" ||
+        typeLower === "credit" ||
+        typeLower === "topup" ||
         (tx.reference && (tx.reference.startsWith("PAYSTACK-") || tx.reference.startsWith("DEP-") || tx.reference.startsWith("MOMO-"))) ||
-        (tx.amount > 0 && tx.type !== "winnings" && tx.type !== "refund");
+        (tx.amount > 0 && typeLower !== "winnings" && typeLower !== "refund" && typeLower !== "wager_win");
+
       if (isDeposit) {
-        txMap.set(tx.reference || tx.id, tx);
-        if (tx.id) txMap.set(tx.id, tx);
+        const key = tx.reference || tx.id || `tx-${Math.random()}`;
+        txMap.set(key, { ...tx, id: tx.id || key, type: "deposit" });
       }
     }
 
-    // Add any deposits from dedicated deposits list if not present
+    // 2. Add any deposits from dedicated deposits collection
     for (const dep of deposits) {
-      const key = dep.reference || dep.id;
-      if (!txMap.has(key)) {
+      const key = dep.reference || dep.id || dep.walletTransactionId;
+      const existing = txMap.get(key) || (dep.id ? txMap.get(dep.id) : undefined);
+      
+      const meta = dep.metadataJson ? (() => { try { return JSON.parse(dep.metadataJson); } catch { return {}; } })() : {};
+      const consolidatedMeta = {
+        amountGhs: dep.amount,
+        provider: dep.provider || meta.provider || "Paystack",
+        method: dep.method || meta.method || "momo",
+        phone: dep.phoneNumber || meta.phone || meta.phoneNumber,
+        phoneNumber: dep.phoneNumber || meta.phoneNumber,
+        accountName: dep.accountName || meta.accountName,
+        depositId: dep.id,
+      };
+
+      if (!existing) {
         txMap.set(key, {
-          id: dep.walletTransactionId || dep.id,
-          userToken: dep.userId,
+          id: dep.walletTransactionId || dep.id || key,
+          userToken: dep.userId || dep.userToken || "unknown",
           type: "deposit",
           currency: "points",
           amount: Number(dep.amount) || 0,
-          reference: dep.reference,
-          status: dep.status === "rejected" ? "failed" : dep.status,
-          metaJson: dep.metadataJson || JSON.stringify({
-            amountGhs: dep.amount,
-            provider: dep.provider,
-            method: dep.method,
-            phone: dep.phoneNumber,
-            phoneNumber: dep.phoneNumber,
-            accountName: dep.accountName,
-            depositId: dep.id,
-          }),
-          createdAt: dep.createdAt,
+          reference: dep.reference || dep.id,
+          status: dep.status === "rejected" ? "failed" : dep.status || "completed",
+          metaJson: JSON.stringify(consolidatedMeta),
+          createdAt: dep.createdAt || new Date().toISOString(),
         });
+      } else {
+        // Merge richer metadata from dedicated deposit row
+        try {
+          const oldMeta = existing.metaJson ? JSON.parse(existing.metaJson) : {};
+          existing.metaJson = JSON.stringify({ ...oldMeta, ...consolidatedMeta });
+          if (dep.status === "completed") existing.status = "completed";
+        } catch {}
+      }
+    }
+
+    // 3. Add deposits recorded in double-entry ledger
+    for (const le of ledgerEntries) {
+      if (le.entryType === "deposit" && le.userId !== "platform-treasury") {
+        const key = le.referenceId || le.id;
+        if (!txMap.has(key)) {
+          txMap.set(key, {
+            id: le.id,
+            userToken: le.userId,
+            type: "deposit",
+            currency: "points",
+            amount: Number(le.amount) || 0,
+            reference: le.referenceId || le.id,
+            status: "completed",
+            metaJson: JSON.stringify({
+              amountGhs: le.amount,
+              provider: "Double-Entry Ledger",
+              description: le.description,
+            }),
+            createdAt: le.createdAt || new Date().toISOString(),
+          });
+        }
       }
     }
 
     const uniqueMap = new Map<string, WalletTransaction>();
     for (const tx of txMap.values()) {
-      uniqueMap.set(tx.id || tx.reference, tx);
+      const primaryKey = tx.reference || tx.id;
+      uniqueMap.set(primaryKey, tx);
     }
 
     return Array.from(uniqueMap.values()).sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
-  }, [transactions, deposits]);
+  }, [transactions, deposits, ledgerEntries]);
 
   // Create user lookup map for fast details
   const userMap = useMemo(() => {
