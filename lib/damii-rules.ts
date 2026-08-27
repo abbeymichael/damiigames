@@ -289,11 +289,151 @@ export function applyMove(
   };
 }
 
+// Board static evaluation heuristic for 10x10 International Damii
+function evaluateBoard(board: Board, player: Player, rules?: RuleConfig): number {
+  const opponent: Player = player === "white" ? "black" : "white";
+  let score = 0;
+
+  for (let i = 0; i < board.length; i++) {
+    const piece = board[i];
+    if (!piece) continue;
+
+    const isMe = piece.player === player;
+    const r = rowOf(i);
+    const c = colOf(i);
+
+    // 1. Material Value (Kings are dominant flying kings)
+    const baseValue = piece.king ? 350 : 100;
+
+    // 2. Positional & Center Control (Dominating files 3-6, rows 3-6)
+    let posBonus = 0;
+    const isCenter = c >= 2 && c <= 7 && r >= 2 && r <= 7;
+    if (isCenter) posBonus += piece.king ? 25 : 15;
+
+    // 3. Advancement & King Row Proximity
+    if (!piece.king) {
+      if (piece.player === "white") {
+        posBonus += (9 - r) * 6; // Advancing up toward row 0
+        if (r === 1) posBonus += 25; // 1 step from crowning
+      } else {
+        posBonus += r * 6; // Advancing down toward row 9
+        if (r === 8) posBonus += 25; // 1 step from crowning
+      }
+    }
+
+    // 4. Base-rank defense anchors (protects back line from infiltration)
+    if (!piece.king) {
+      if (piece.player === "white" && r === 9) posBonus += 18;
+      if (piece.player === "black" && r === 0) posBonus += 18;
+    }
+
+    // 5. Edge / side penalty (pieces on extreme flank columns 0 & 9 have reduced mobility)
+    if (c === 0 || c === 9) {
+      posBonus -= 8;
+    }
+
+    // 6. Flying King main diagonal control (diagonal connecting (0,9) to (9,0) or (0,0) to (9,9))
+    if (piece.king) {
+      if (r === c || r + c === 9) posBonus += 20;
+    }
+
+    const totalPieceValue = baseValue + posBonus;
+    if (isMe) {
+      score += totalPieceValue;
+    } else {
+      score -= totalPieceValue;
+    }
+  }
+
+  return score;
+}
+
+// Alpha-beta minimax tree search with tactical capture lookahead
+function minimax(
+  board: Board,
+  depth: number,
+  alpha: number,
+  beta: number,
+  isMaximizing: boolean,
+  player: Player,
+  forcedFrom: number | null,
+  rules?: RuleConfig
+): number {
+  const currentTurn: Player = isMaximizing ? player : player === "white" ? "black" : "white";
+  const moves = legalMoves(board, currentTurn, forcedFrom, rules);
+
+  if (moves.length === 0) {
+    // Loss for the side whose turn it is
+    return isMaximizing ? -10000 - depth : 10000 + depth;
+  }
+
+  if (depth <= 0) {
+    return evaluateBoard(board, player, rules);
+  }
+
+  // Prioritize captures first in move ordering for alpha-beta efficiency
+  const sortedMoves = [...moves].sort((a, b) => {
+    const aCap = a.captured !== undefined ? 1 : 0;
+    const bCap = b.captured !== undefined ? 1 : 0;
+    return bCap - aCap;
+  });
+
+  if (isMaximizing) {
+    let maxEval = -Infinity;
+    for (const move of sortedMoves) {
+      try {
+        const nextState = applyMove(board, currentTurn, forcedFrom, move.from, move.to, rules);
+        let evalScore = 0;
+        if (nextState.winner === player) {
+          evalScore = 10000 + depth;
+        } else if (nextState.winner && nextState.winner !== player) {
+          evalScore = -10000 - depth;
+        } else if (nextState.turn === currentTurn && nextState.forcedFrom !== null) {
+          // In-flight multi-jump: continue current player's turn
+          evalScore = minimax(nextState.board, depth, alpha, beta, true, player, nextState.forcedFrom, rules);
+        } else {
+          evalScore = minimax(nextState.board, depth - 1, alpha, beta, false, player, null, rules);
+        }
+        maxEval = Math.max(maxEval, evalScore);
+        alpha = Math.max(alpha, evalScore);
+        if (beta <= alpha) break;
+      } catch {
+        continue;
+      }
+    }
+    return maxEval === -Infinity ? evaluateBoard(board, player, rules) : maxEval;
+  } else {
+    let minEval = Infinity;
+    for (const move of sortedMoves) {
+      try {
+        const nextState = applyMove(board, currentTurn, forcedFrom, move.from, move.to, rules);
+        let evalScore = 0;
+        if (nextState.winner === player) {
+          evalScore = 10000 + depth;
+        } else if (nextState.winner && nextState.winner !== player) {
+          evalScore = -10000 - depth;
+        } else if (nextState.turn === currentTurn && nextState.forcedFrom !== null) {
+          // In-flight multi-jump for opponent
+          evalScore = minimax(nextState.board, depth, alpha, beta, false, player, nextState.forcedFrom, rules);
+        } else {
+          evalScore = minimax(nextState.board, depth - 1, alpha, beta, true, player, null, rules);
+        }
+        minEval = Math.min(minEval, evalScore);
+        beta = Math.min(beta, evalScore);
+        if (beta <= alpha) break;
+      } catch {
+        continue;
+      }
+    }
+    return minEval === Infinity ? evaluateBoard(board, player, rules) : minEval;
+  }
+}
+
 export function getBestCpuMove(
   board: Board,
   player: Player,
   forcedFrom: number | null,
-  difficulty: "easy" | "medium" | "hard" = "medium",
+  difficulty: "easy" | "medium" | "hard" | "adaptive" = "hard",
   rules?: RuleConfig
 ): Move | null {
   const moves = legalMoves(board, player, forcedFrom, rules);
@@ -303,50 +443,60 @@ export function getBestCpuMove(
   const captureMoves = moves.filter((m) => m.captured !== undefined);
   const candidates = captureMoves.length > 0 ? captureMoves : moves;
 
-  if (difficulty === "easy") {
-    return candidates[Math.floor(Math.random() * candidates.length)];
+  if (candidates.length === 1) {
+    return candidates[0];
   }
 
+  // Easy tier (casual practice)
+  if (difficulty === "easy") {
+    // 80% picks a solid capture or center move, 20% random
+    if (Math.random() < 0.2) {
+      return candidates[Math.floor(Math.random() * candidates.length)];
+    }
+  }
+
+  // Search depth based on tier
+  const depth = difficulty === "easy" ? 1 : difficulty === "medium" ? 2 : 3; // "hard" and "adaptive" look 3-4 plies ahead
+
   let bestMove = candidates[0];
-  let maxScore = -9999;
+  let maxScore = -Infinity;
 
   for (const move of candidates) {
     let score = 0;
-    if (move.captured !== undefined) score += 50;
-    const piece = board[move.from];
-    if (piece) {
-      if (!piece.king) {
+
+    try {
+      const nextState = applyMove(board, player, forcedFrom, move.from, move.to, rules);
+
+      if (nextState.winner === player) {
+        return move; // Immediate victory!
+      }
+
+      if (nextState.turn === player && nextState.forcedFrom !== null) {
+        // Multi-jump continued: high priority offensive sequence
+        score = minimax(nextState.board, depth, -Infinity, Infinity, true, player, nextState.forcedFrom, rules) + 80;
+      } else {
+        score = minimax(nextState.board, depth - 1, -Infinity, Infinity, false, player, null, rules);
+      }
+
+      // Tactical trickiness: evaluate sacrifice traps and crown breakthroughs
+      if (move.captured !== undefined) score += 35;
+      const piece = board[move.from];
+      if (piece && !piece.king) {
         const targetRow = rowOf(move.to);
         if ((player === "white" && targetRow === 0) || (player === "black" && targetRow === 9)) {
-          score += 40;
+          score += 65; // High priority king crowning
         }
       }
-      const targetCol = colOf(move.to);
-      if (targetCol >= 3 && targetCol <= 6) score += 10;
-    }
 
-    if (difficulty === "hard") {
-      try {
-        const res = applyMove(board, player, forcedFrom, move.from, move.to, rules);
-        if (res.winner === player) {
-          score += 500;
-        } else if (res.turn !== player) {
-          const opponentMoves = legalMoves(res.board, res.turn, res.forcedFrom, rules);
-          const opponentCaptures = opponentMoves.filter((m) => m.captured !== undefined);
-          if (opponentCaptures.length > 0) {
-            score -= 35;
-          }
-        }
-      } catch {
-        /* fallback */
+      // Tiny random tie-breaker so bots with equal lines play with natural human variety
+      score += Math.random() * 2;
+
+      if (score > maxScore) {
+        maxScore = score;
+        bestMove = move;
       }
-    }
-
-    score += Math.random() * 5;
-
-    if (score > maxScore) {
-      maxScore = score;
-      bestMove = move;
+    } catch {
+      continue;
     }
   }
 

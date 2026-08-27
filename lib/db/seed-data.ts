@@ -185,9 +185,11 @@ export function buildSeedDataset(now = new Date().toISOString()): SeedDataset {
     }),
     ...BOT_ACCOUNTS.map((bot) =>
       profile(bot.token, bot.username, playerCreds, {
+        fullName: bot.fullName,
+        region: bot.region,
         rating: bot.rating,
-        marbles: 250,
-        points: 250,
+        marbles: 0,
+        points: 0,
         wins: bot.wins,
         losses: bot.losses,
         draws: bot.draws,

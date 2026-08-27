@@ -583,6 +583,7 @@ export default function ArenaPage() {
 
     // Check URL search params for direct 1-on-1 invite, room landing link, or vs bot
     if (typeof window !== "undefined") {
+      const currentAuthToken = localStorage.getItem("damii-player-token") || "";
       const params = new URLSearchParams(window.location.search);
       const roomParam = params.get("room") || params.get("code");
       const joinParam = params.get("join");
@@ -593,7 +594,7 @@ export default function ArenaPage() {
         setJoinCode(targetCode);
         setMode("online");
         // Fetch room directly so player or spectator lands straight in the room
-        fetch(`/api/damii?code=${encodeURIComponent(targetCode)}&token=${encodeURIComponent(savedToken || "")}`)
+        fetch(`/api/damii?code=${encodeURIComponent(targetCode)}&token=${encodeURIComponent(currentAuthToken)}`)
           .then((r) => r.json())
           .then((d) => {
             if (d.room) {
