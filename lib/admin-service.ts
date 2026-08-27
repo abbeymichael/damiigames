@@ -192,12 +192,116 @@ export const adminService = {
     if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
 
     const allUsers = await dbRepository.getAllProfiles();
-    const leaderboard = await dbRepository.getLeaderboard(100);
-    const rooms = await dbRepository.listRooms(100);
-    const transactions = await dbRepository.getAllTransactions(100);
-    const leagues = await dbRepository.listLeagues();
-    const logs = await dbRepository.listAdminLogs(50);
-    const settings = await dbRepository.getAdminSettings();
+    const leaderboard = await dbRepository.getLeaderboard(200);
+    const rooms = await dbRepository.listRooms(200);
+    const [rawTransactions, rawDeposits, rawWithdrawals, leagues, logs, settings] = await Promise.all([
+      dbRepository.getAllTransactions(500).catch(() => []),
+      dbRepository.listDeposits({ limit: 500 }).catch(() => []),
+      dbRepository.listWithdrawals({ limit: 500 }).catch(() => []),
+      dbRepository.listLeagues().catch(() => []),
+      dbRepository.listAdminLogs(100).catch(() => []),
+      dbRepository.getAdminSettings().catch(() => null),
+    ]);
+
+    // Build unified transactions map ensuring every deposit & withdrawal is represented
+    const txMap = new Map<string, WalletTransaction>();
+    for (const tx of rawTransactions) {
+      const key = tx.reference || tx.id;
+      txMap.set(key, tx);
+      if (tx.id) txMap.set(tx.id, tx);
+    }
+
+    for (const dep of rawDeposits) {
+      const key = dep.reference || dep.id;
+      const existing = txMap.get(key) || (dep.id ? txMap.get(dep.id) : undefined) || (dep.walletTransactionId ? txMap.get(dep.walletTransactionId) : undefined);
+      if (!existing) {
+        const newTx: WalletTransaction = {
+          id: dep.walletTransactionId || dep.id,
+          userToken: dep.userId,
+          type: "deposit",
+          currency: "points",
+          amount: Number(dep.amount) || 0,
+          reference: dep.reference,
+          status: dep.status === "rejected" ? "failed" : dep.status,
+          metaJson: dep.metadataJson || JSON.stringify({
+            amountGhs: dep.amount,
+            provider: dep.provider || "Paystack",
+            method: dep.method || "momo",
+            phone: dep.phoneNumber,
+            phoneNumber: dep.phoneNumber,
+            accountName: dep.accountName,
+            depositId: dep.id,
+          }),
+          createdAt: dep.createdAt,
+        };
+        txMap.set(key, newTx);
+      } else {
+        // Augment metadata with deposit details
+        try {
+          const meta = existing.metaJson ? JSON.parse(existing.metaJson) : {};
+          meta.amountGhs = meta.amountGhs ?? dep.amount;
+          meta.phoneNumber = meta.phoneNumber || dep.phoneNumber;
+          meta.phone = meta.phone || dep.phoneNumber;
+          meta.provider = meta.provider || dep.provider || "Paystack";
+          meta.channel = meta.channel || dep.provider || "Paystack";
+          meta.accountName = meta.accountName || dep.accountName;
+          meta.depositId = meta.depositId || dep.id;
+          existing.metaJson = JSON.stringify(meta);
+          if (dep.status === "completed" && existing.status !== "completed") {
+            existing.status = "completed";
+          }
+        } catch {}
+      }
+    }
+
+    for (const w of rawWithdrawals) {
+      const key = w.reference || w.id;
+      const existing = txMap.get(key) || (w.id ? txMap.get(w.id) : undefined) || (w.walletTransactionId ? txMap.get(w.walletTransactionId) : undefined);
+      if (!existing) {
+        const newTx: WalletTransaction = {
+          id: w.walletTransactionId || w.id,
+          userToken: w.userId,
+          type: "withdrawal",
+          currency: "points",
+          amount: -Math.abs(Number(w.amount) || 0),
+          reference: w.reference,
+          status: w.status === "rejected" ? "failed" : w.status,
+          metaJson: w.metadataJson || JSON.stringify({
+            amountGhs: w.amount,
+            provider: w.provider || "MTN",
+            method: w.method || "momo",
+            phone: w.phoneNumber,
+            phoneNumber: w.phoneNumber,
+            accountName: w.accountName,
+            withdrawalId: w.id,
+          }),
+          createdAt: w.createdAt,
+        };
+        txMap.set(key, newTx);
+      } else {
+        try {
+          const meta = existing.metaJson ? JSON.parse(existing.metaJson) : {};
+          meta.amountGhs = meta.amountGhs ?? w.amount;
+          meta.phoneNumber = meta.phoneNumber || w.phoneNumber;
+          meta.phone = meta.phone || w.phoneNumber;
+          meta.provider = meta.provider || w.provider;
+          meta.channel = meta.channel || w.provider;
+          meta.accountName = meta.accountName || w.accountName;
+          meta.withdrawalId = meta.withdrawalId || w.id;
+          existing.metaJson = JSON.stringify(meta);
+        } catch {}
+      }
+    }
+
+    // Deduplicate transaction objects by ID
+    const uniqueTxMap = new Map<string, WalletTransaction>();
+    for (const tx of txMap.values()) {
+      uniqueTxMap.set(tx.id || tx.reference, tx);
+    }
+
+    const transactions = Array.from(uniqueTxMap.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
 
     // Parse moves for each room so admin can view move history per game
     const roomsWithMoves = rooms.map((r) => {
@@ -365,6 +469,9 @@ export const adminService = {
       settings,
       recentRooms: roomsWithMoves.slice(0, 100),
       recentTransactions: transactions.slice(0, 100),
+      transactions: transactions,
+      deposits: rawDeposits,
+      withdrawals: rawWithdrawals,
       leagues,
       logs,
       roles: rolesList,

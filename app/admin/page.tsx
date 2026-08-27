@@ -2182,7 +2182,8 @@ export default function AdminPage() {
             {/* TAB: DEPOSITS */}
             {activeTab === "deposits" && (
               <DepositsTable
-                transactions={metrics?.transactions || []}
+                transactions={metrics?.transactions || metrics?.recentTransactions || []}
+                deposits={metrics?.deposits || []}
                 users={metrics?.allUsers || []}
                 token={token}
                 adminSecret={adminSecret}
@@ -2195,7 +2196,7 @@ export default function AdminPage() {
             {/* TAB: WITHDRAWALS & PAYOUTS */}
             {activeTab === "withdrawals" && (
               <WithdrawalsTable
-                transactions={metrics?.transactions || []}
+                transactions={metrics?.transactions || metrics?.recentTransactions || []}
                 users={metrics?.allUsers || []}
                 token={token}
                 adminSecret={adminSecret}

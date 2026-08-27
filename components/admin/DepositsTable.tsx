@@ -21,7 +21,8 @@ import {
 import type { WalletTransaction, Profile } from "@/lib/types";
 
 export interface DepositsTableProps {
-  transactions: WalletTransaction[];
+  transactions?: WalletTransaction[];
+  deposits?: any[];
   users?: Profile[];
   token: string;
   adminSecret?: string;
@@ -31,7 +32,8 @@ export interface DepositsTableProps {
 }
 
 export function DepositsTable({
-  transactions,
+  transactions = [],
+  deposits = [],
   users = [],
   token,
   adminSecret,
@@ -46,17 +48,65 @@ export function DepositsTable({
   const [verifyingRef, setVerifyingRef] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Filter strictly to deposits
+  // Filter strictly to deposits and combine with any direct deposit models
   const depositTransactions = useMemo(() => {
-    return transactions.filter((tx) => tx.type === "deposit" || tx.amount > 0);
-  }, [transactions]);
+    const txMap = new Map<string, WalletTransaction>();
+
+    // Add transactions that represent deposits
+    for (const tx of transactions) {
+      const isDeposit =
+        tx.type === "deposit" ||
+        (tx.reference && (tx.reference.startsWith("PAYSTACK-") || tx.reference.startsWith("DEP-") || tx.reference.startsWith("MOMO-"))) ||
+        (tx.amount > 0 && tx.type !== "winnings" && tx.type !== "refund");
+      if (isDeposit) {
+        txMap.set(tx.reference || tx.id, tx);
+        if (tx.id) txMap.set(tx.id, tx);
+      }
+    }
+
+    // Add any deposits from dedicated deposits list if not present
+    for (const dep of deposits) {
+      const key = dep.reference || dep.id;
+      if (!txMap.has(key)) {
+        txMap.set(key, {
+          id: dep.walletTransactionId || dep.id,
+          userToken: dep.userId,
+          type: "deposit",
+          currency: "points",
+          amount: Number(dep.amount) || 0,
+          reference: dep.reference,
+          status: dep.status === "rejected" ? "failed" : dep.status,
+          metaJson: dep.metadataJson || JSON.stringify({
+            amountGhs: dep.amount,
+            provider: dep.provider,
+            method: dep.method,
+            phone: dep.phoneNumber,
+            phoneNumber: dep.phoneNumber,
+            accountName: dep.accountName,
+            depositId: dep.id,
+          }),
+          createdAt: dep.createdAt,
+        });
+      }
+    }
+
+    const uniqueMap = new Map<string, WalletTransaction>();
+    for (const tx of txMap.values()) {
+      uniqueMap.set(tx.id || tx.reference, tx);
+    }
+
+    return Array.from(uniqueMap.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [transactions, deposits]);
 
   // Create user lookup map for fast details
   const userMap = useMemo(() => {
     const map = new Map<string, Profile>();
     for (const u of users) {
-      map.set(u.token, u);
+      if (u.token) map.set(u.token, u);
       if (u.id) map.set(u.id, u);
+      if (u.username) map.set(u.username, u);
     }
     return map;
   }, [users]);
@@ -380,12 +430,12 @@ export function DepositsTable({
                       {/* Player */}
                       <td className="py-3 px-3.5">
                         <div className="font-bold text-[#f5efdf]">
-                          {user?.username || (
-                            <span className="font-mono text-slate-300">{tx.userToken.slice(0, 10)}...</span>
+                          {user?.username || meta.accountName || meta.username || (
+                            <span className="font-mono text-slate-300">{tx.userToken.slice(0, 14)}...</span>
                           )}
                         </div>
                         <div className="text-[10px] text-slate-300">
-                          {user?.phoneNumber || meta.phone || "No verified phone"}
+                          {user?.phoneNumber || meta.phoneNumber || meta.phone || meta.email || "Player account"}
                         </div>
                       </td>
 
