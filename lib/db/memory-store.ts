@@ -36,6 +36,10 @@ import type {
   User,
   WagerEscrow,
   WalletTransaction,
+  Deposit,
+  DepositAction,
+  Withdrawal,
+  WithdrawalAction,
   ChartOfAccount,
   ChartOfAccountsReport,
   TreasuryFundDetails,
@@ -71,6 +75,10 @@ interface MemoryData {
   paystackEvents: Set<string>;
   rooms: Map<string, Room>;
   walletTransactions: WalletTransaction[];
+  deposits: Map<string, Deposit>;
+  depositActions: DepositAction[];
+  withdrawals: Map<string, Withdrawal>;
+  withdrawalActions: WithdrawalAction[];
   escrows: Map<string, WagerEscrow>;
   leagues: Map<string, League>;
   leagueParticipants: Map<string, LeagueParticipant>;
@@ -110,6 +118,10 @@ function getMemoryData(): MemoryData {
       paystackEvents: new Set(),
       rooms: new Map(),
       walletTransactions: [],
+      deposits: new Map(),
+      depositActions: [],
+      withdrawals: new Map(),
+      withdrawalActions: [],
       escrows: new Map(),
       leagues: new Map(),
       leagueParticipants: new Map(),
@@ -649,6 +661,136 @@ export const memoryStore: DbRepository = {
   async getAllTransactions(limit = 50) {
     const data = getMemoryData();
     return data.walletTransactions.slice(0, limit).map((t) => ({ ...t }));
+  },
+
+  // --- Dedicated Deposits Table ---
+  async createDeposit(deposit: Deposit) {
+    const data = getMemoryData();
+    data.deposits.set(deposit.id, { ...deposit });
+    return { ...deposit };
+  },
+
+  async getDeposit(idOrRef: string) {
+    const data = getMemoryData();
+    for (const d of data.deposits.values()) {
+      if (d.id === idOrRef || d.reference === idOrRef || (d as any).gatewayReference === idOrRef) {
+        return { ...d };
+      }
+    }
+    return null;
+  },
+
+  async getDepositByReference(reference: string) {
+    const data = getMemoryData();
+    for (const d of data.deposits.values()) {
+      if (d.reference === reference || (d as any).gatewayReference === reference) {
+        return { ...d };
+      }
+    }
+    return null;
+  },
+
+  async updateDeposit(id: string, updates: Partial<Deposit>) {
+    const data = getMemoryData();
+    const existing = data.deposits.get(id);
+    if (!existing) return null;
+    const merged: Deposit = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+    data.deposits.set(id, merged);
+    return { ...merged };
+  },
+
+  async listDeposits(filter?: { userId?: string; status?: string; limit?: number }) {
+    const data = getMemoryData();
+    let list = Array.from(data.deposits.values());
+    if (filter?.userId) {
+      list = list.filter((d) => d.userId === filter.userId || (d as any).userToken === filter.userId);
+    }
+    if (filter?.status) {
+      list = list.filter((d) => d.status === filter.status);
+    }
+    return list
+      .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+      .slice(0, filter?.limit ?? 50)
+      .map((d) => ({ ...d }));
+  },
+
+  async recordDepositAction(action: DepositAction) {
+    const data = getMemoryData();
+    data.depositActions.push({ ...action });
+    return { ...action };
+  },
+
+  async listDepositActions(depositId: string) {
+    const data = getMemoryData();
+    return data.depositActions
+      .filter((a) => a.depositId === depositId)
+      .sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime())
+      .map((a) => ({ ...a }));
+  },
+
+  // --- Dedicated Withdrawals Table ---
+  async createWithdrawal(withdrawal: Withdrawal) {
+    const data = getMemoryData();
+    data.withdrawals.set(withdrawal.id, { ...withdrawal });
+    return { ...withdrawal };
+  },
+
+  async getWithdrawal(idOrRef: string) {
+    const data = getMemoryData();
+    for (const w of data.withdrawals.values()) {
+      if (w.id === idOrRef || (w as any).reference === idOrRef || (w as any).transferReference === idOrRef) {
+        return { ...w };
+      }
+    }
+    return null;
+  },
+
+  async getWithdrawalByReference(reference: string) {
+    const data = getMemoryData();
+    for (const w of data.withdrawals.values()) {
+      if ((w as any).reference === reference || (w as any).transferReference === reference) {
+        return { ...w };
+      }
+    }
+    return null;
+  },
+
+  async updateWithdrawal(id: string, updates: Partial<Withdrawal>) {
+    const data = getMemoryData();
+    const existing = data.withdrawals.get(id);
+    if (!existing) return null;
+    const merged: Withdrawal = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+    data.withdrawals.set(id, merged);
+    return { ...merged };
+  },
+
+  async listWithdrawals(filter?: { userId?: string; status?: string; limit?: number }) {
+    const data = getMemoryData();
+    let list = Array.from(data.withdrawals.values());
+    if (filter?.userId) {
+      list = list.filter((w) => w.userId === filter.userId || (w as any).userToken === filter.userId);
+    }
+    if (filter?.status) {
+      list = list.filter((w) => w.status === filter.status);
+    }
+    return list
+      .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+      .slice(0, filter?.limit ?? 50)
+      .map((w) => ({ ...w }));
+  },
+
+  async recordWithdrawalAction(action: WithdrawalAction) {
+    const data = getMemoryData();
+    data.withdrawalActions.push({ ...action });
+    return { ...action };
+  },
+
+  async listWithdrawalActions(withdrawalId: string) {
+    const data = getMemoryData();
+    return data.withdrawalActions
+      .filter((a) => a.withdrawalId === withdrawalId)
+      .sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime())
+      .map((a) => ({ ...a }));
   },
 
   // --- Escrows ---

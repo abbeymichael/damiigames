@@ -1,6 +1,6 @@
 import mysql from "mysql2/promise";
 import { drizzle, type MySql2Database } from "drizzle-orm/mysql2";
-import * as schema from "../../db/schema.mysql";
+import * as schema from "../../db/schema.mysql.ts";
 import { getEnv } from "../env";
 
 /**

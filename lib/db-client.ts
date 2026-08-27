@@ -109,6 +109,24 @@ export const dbRepository: DbRepository = {
   getUserTransactions: withStore("getUserTransactions"),
   getAllTransactions: withStore("getAllTransactions"),
 
+  // Dedicated Deposits
+  createDeposit: withStore("createDeposit"),
+  getDeposit: withStore("getDeposit"),
+  getDepositByReference: withStore("getDepositByReference"),
+  updateDeposit: withStore("updateDeposit"),
+  listDeposits: withStore("listDeposits"),
+  recordDepositAction: withStore("recordDepositAction"),
+  listDepositActions: withStore("listDepositActions"),
+
+  // Dedicated Withdrawals
+  createWithdrawal: withStore("createWithdrawal"),
+  getWithdrawal: withStore("getWithdrawal"),
+  getWithdrawalByReference: withStore("getWithdrawalByReference"),
+  updateWithdrawal: withStore("updateWithdrawal"),
+  listWithdrawals: withStore("listWithdrawals"),
+  recordWithdrawalAction: withStore("recordWithdrawalAction"),
+  listWithdrawalActions: withStore("listWithdrawalActions"),
+
   createEscrow: withStore("createEscrow"),
   getEscrow: withStore("getEscrow"),
   saveEscrow: withStore("saveEscrow"),

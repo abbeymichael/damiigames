@@ -31,6 +31,8 @@ import {
 } from "lucide-react";
 import type { WalletTransaction } from "@/lib/types";
 import { getAuthHeaders, getSessionToken, getCsrfToken } from "@/lib/client-auth";
+import { PaystackModal } from "@/components/PaystackModal";
+import { loadPaystackScript, openPaystackInlinePopup } from "@/lib/paystack-client";
 
 const PRESET_AMOUNTS = [10, 20, 50, 100, 200, 500];
 
@@ -73,7 +75,12 @@ export default function WalletPage() {
     amountGhs: number;
     points: number;
   } | null>(null);
+  const [showPaystackModal, setShowPaystackModal] = useState(false);
   const [verifyingPayment, setVerifyingPayment] = useState(false);
+
+  useEffect(() => {
+    loadPaystackScript().catch(() => {});
+  }, []);
 
   // Search & Filter for History
   const [historyFilter, setHistoryFilter] = useState<string>("all");
@@ -248,18 +255,29 @@ export default function WalletPage() {
           points: topupAmountGhs,
         });
 
-        setMessage(`Paystack invoice created for GH₵ ${topupAmountGhs}.00. Please complete payment on Paystack.`);
+        // Open on-page Paystack popup modal
+        setShowPaystackModal(true);
+        setMessage(`Paystack checkout ready for GH₵ ${topupAmountGhs}.00. Complete your payment in the popup.`);
 
-        // Attempt to launch Paystack checkout in new window/tab
-        try {
-          const win = window.open(data.authorizationUrl, "_blank", "noopener,noreferrer");
-          if (!win || win.closed || typeof win.closed === "undefined") {
-            // Popup was blocked by browser
-            setMessage("Please click 'Open Paystack Gateway' below to complete your Mobile Money / Card payment.");
+        // Attempt Paystack Pop inline trigger if available
+        openPaystackInlinePopup({
+          accessCode: data.accessCode,
+          reference: data.reference,
+          authorizationUrl: data.authorizationUrl,
+          email: email || undefined,
+          amountGhs: topupAmountGhs,
+          onSuccess: (ref) => {
+            setShowPaystackModal(false);
+            verifyPaymentRef(activeTok, ref);
+          },
+          onCancel: () => {
+            // User closed native popup
+          },
+        }).then((openedInline) => {
+          if (openedInline) {
+            setShowPaystackModal(false);
           }
-        } catch {
-          setMessage("Please click 'Open Paystack Gateway' below to complete your payment.");
-        }
+        });
       } else {
         throw new Error("No authorization URL returned by Paystack");
       }
@@ -716,14 +734,13 @@ export default function WalletPage() {
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <a
-                            href={pendingPayment.authorizationUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="py-3 px-5 bg-[#d6a735] hover:bg-[#c4962b] text-[#06261f] font-black rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-[#d6a735]/20 transition-all text-center"
+                          <button
+                            type="button"
+                            onClick={() => setShowPaystackModal(true)}
+                            className="py-3 px-5 bg-[#d6a735] hover:bg-[#c4962b] text-[#06261f] font-black rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-[#d6a735]/20 transition-all text-center cursor-pointer"
                           >
-                            <ExternalLink size={16} /> Open Paystack Gateway Page
-                          </a>
+                            <CreditCard size={16} /> Open Paystack Popup
+                          </button>
 
                           <button
                             type="button"
@@ -1242,6 +1259,25 @@ export default function WalletPage() {
       </div>
 
       <Footer />
+
+      {pendingPayment && (
+        <PaystackModal
+          isOpen={showPaystackModal}
+          onClose={() => setShowPaystackModal(false)}
+          authorizationUrl={pendingPayment.authorizationUrl}
+          reference={pendingPayment.reference}
+          amountGhs={pendingPayment.amountGhs}
+          points={pendingPayment.points}
+          token={token || getSessionToken()}
+          onSuccess={(ref, msg) => {
+            setShowPaystackModal(false);
+            setMessage(msg || `GH₵ ${pendingPayment.amountGhs}.00 successfully credited!`);
+            const tok = token || getSessionToken();
+            if (tok) loadWalletData(tok);
+            setPendingPayment(null);
+          }}
+        />
+      )}
     </main>
   );
 }
