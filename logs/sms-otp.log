@@ -1,0 +1,2 @@
+[2026-08-27T19:09:19.713Z] [SMS] [PROVIDER: HUBTEL] [STATUS: SIMULATED_SENT] To: 233553340130 | MsgId: mock-sms-1787857759712-kvby | Message: "Your DAMII verification code is 123465. Valid for 5 minutes."
+[2026-08-27T19:09:19.714Z] [OTP] [PROVIDER: HUBTEL] [STATUS: SENT] To: 233553340130 | OTP_CODE: [123465] | MsgId: mock-sms-1787857759712-kvby | Message: "Your DAMII verification code is 123465. Valid for 5 minutes."
