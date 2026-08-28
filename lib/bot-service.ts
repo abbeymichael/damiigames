@@ -1,6 +1,14 @@
-import { Board, Player, Move, getBestCpuMove, applyMove, formatMoveNotation, legalMoves } from "./damii-rules";
+import {
+  type Board,
+  type Player,
+  type Move,
+  getBestCpuMove,
+  applyMove,
+  formatMoveNotation,
+  legalMoves,
+} from "./damii-rules";
 import { dbRepository } from "./db-client";
-import { Room, MoveLogEntry, Profile } from "./types";
+import type { Room, MoveLogEntry, Profile } from "./types";
 import { securityService } from "./security";
 
 // 100 realistic, authentic Ghanaian player profiles for automated casual matchmaking and practice

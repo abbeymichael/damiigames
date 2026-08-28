@@ -523,7 +523,7 @@ export async function POST(req: NextRequest) {
         winnerToken === "draw" ? "draw" : String(winnerToken),
         String(disputeNotes || "")
       );
-      return NextResponse.json({ success: true, ...res });
+      return NextResponse.json(res);
     }
 
     if (action === "dispute" || action === "resolve_dispute") {
@@ -739,7 +739,7 @@ export async function POST(req: NextRequest) {
         String(reason || ""),
         tournamentHandling === "cancel_and_refund" ? "cancel_and_refund" : "reassign_to_system"
       );
-      return NextResponse.json({ success: true, ...res });
+      return NextResponse.json(res);
     }
 
     if (action === "delete_organizer" || action === "delete_organizer_application") {
@@ -747,7 +747,7 @@ export async function POST(req: NextRequest) {
       const target = targetIdentifier || applicationId || targetToken || targetUserId;
       if (!target) return NextResponse.json({ error: "target identifier required" }, { status: 400 });
       const res = await adminService.deleteOrganizer(token, String(target));
-      return NextResponse.json({ success: true, ...res });
+      return NextResponse.json(res);
     }
 
     /* ------------------------------------------------------------------------- */

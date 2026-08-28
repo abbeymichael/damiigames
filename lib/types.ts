@@ -11,6 +11,7 @@ export type OrganizerApplicantType = "individual" | "organization";
 
 export interface User {
   id: string;
+  token?: string;
   phoneNumber: string;
   phoneVerifiedAt?: string | null;
   fullName?: string | null;
@@ -140,6 +141,7 @@ export interface OrganizerProfile {
 }
 
 export type Profile = {
+  id?: string;
   token: string;
   username: string;
   fullName?: string;
@@ -165,11 +167,17 @@ export type Profile = {
   opponentRatingAvg?: number;
   totalOpponentsFaced?: number;
   role: Role;
+  roleTitle?: string;
+  isSuperAdmin?: boolean;
+  permissionKeys?: string[];
+  roleNames?: string[];
+  momoNumber?: string;
+  momoNetwork?: string;
   status?: "active" | "suspended" | "banned";
   bannedAt?: string;
   bannedReason?: string;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string | Date;
 };
 
 export interface UserDetailPayload {
@@ -224,10 +232,12 @@ export type AdminSettings = {
   tournamentFeePercent: number; // Default: 10% platform fee per tournament prize pool
   pointsPerGhsBuy?: number;
   pointsPerGhsWithdraw?: number;
-  minDepositGhs: number;        // Default: 5 GHS
-  maxDepositGhs: number;        // Default: 5000 GHS
-  minWithdrawalGhs: number;     // Default: 10 GHS
-  maxWithdrawalGhs: number;     // Default: 2000 GHS
+  pointsPerCediDeposit?: number;
+  pointsPerCediWithdrawal?: number;
+  minDepositGhs?: number;        // Default: 5 GHS
+  maxDepositGhs?: number;        // Default: 5000 GHS
+  minWithdrawalGhs?: number;     // Default: 10 GHS
+  maxWithdrawalGhs?: number;     // Default: 2000 GHS
   maxDailyWithdrawalGhs?: number; // Default: 5000 GHS
   turnTimerSeconds?: number;    // Default: 60 seconds
   disconnectGraceSeconds?: number; // Default: 90 seconds
@@ -241,13 +251,13 @@ export type AdminSettings = {
   ratingKFactor?: number;       // Default: 32
   minWagerGhs?: number;         // Default: 5 GHS
   maxWagerGhs?: number;         // Default: 1000 GHS
-  updatedAt: string;
+  updatedAt?: string | Date;
   updatedBy?: string;
 };
 
 export type GameMode = "casual" | "wager" | "league";
 
-export type RoomStatus = "waiting" | "playing" | "completed" | "abandoned" | "forfeited" | "draw" | "cancelled" | "under_review";
+export type RoomStatus = "waiting" | "playing" | "completed" | "abandoned" | "forfeited" | "draw" | "cancelled" | "under_review" | "disputed" | "finished" | "expired" | "pending_review" | "approved" | "rejected" | "paused" | string;
 
 export type TournamentFormat = "single_elimination" | "double_elimination" | "round_robin" | "swiss";
 
@@ -264,6 +274,15 @@ export type MoveLogEntry = {
   timestamp: number;
 };
 
+export type ChatMessage = {
+  id: string;
+  roomCode?: string;
+  sender: string;
+  senderRole: "white" | "black" | "spectator" | "system";
+  text: string;
+  timestamp: number;
+};
+
 export type Room = {
   code: string;
   hostName: string;
@@ -273,7 +292,7 @@ export type Room = {
   boardJson: string;
   turn: Player;
   forcedFrom: number | null;
-  winner: Player | null;
+  winner: Player | "draw" | null;
   status: RoomStatus;
   mode: GameMode;
   wagerAmount: number;
@@ -290,13 +309,17 @@ export type Room = {
   lastMoveTime: number;
   disconnectTime: number | null;
   disconnectedPlayer: Player | null;
-  drawOfferedBy?: Player | null;
+  drawOfferedBy?: Player | string | null;
   disputeStatus?: "none" | "under_review" | "resolved" | "voided" | string;
   disputeNotes?: string;
+  isDisputed?: boolean;
+  disputeReason?: string;
   ruleVariations?: TournamentRuleVariations;
   customConstraints?: TournamentCustomConstraints;
   movesJson?: string;
   moves?: MoveLogEntry[];
+  chatJson?: string;
+  chat?: ChatMessage[];
   role?: "white" | "black" | "spectator";
   timerState?: any;
   board?: (Player | null)[];
@@ -412,6 +435,7 @@ export interface Withdrawal {
   provider: string; // e.g. "MTN", "Telecel", "AT", "Paystack"
   accountNumber: string;
   accountName?: string | null;
+  phoneNumber?: string | null;
   bankCode?: string | null;
   recipientCode?: string | null;
   transferCode?: string | null;
@@ -452,7 +476,7 @@ export interface WithdrawalAction {
   createdAt: string;
 }
 
-export type LeagueStatus = "draft" | "registration" | "active" | "completed" | "cancelled" | "under_review";
+export type LeagueStatus = "draft" | "registration" | "active" | "in_progress" | "pending" | "completed" | "cancelled" | "under_review";
 
 export type PrizeDistribution = {
   first: number; // Percentage e.g. 50%
@@ -478,6 +502,11 @@ export interface TournamentRuleVariations {
 export interface TournamentCustomConstraints {
   minRatingRequired?: number;
   maxRatingCap?: number;
+  minRating?: number;
+  maxRating?: number;
+  timeLimitSeconds?: number;
+  turnLimitSeconds?: number;
+  turnTimerSeconds?: number;
   checkInWindowMinutes?: number;
   disconnectionGraceSeconds?: number;
   matchTimeCapMinutes?: number;
@@ -491,13 +520,17 @@ export type League = {
   description: string;
   entryFeeMarbles: number;
   entryFeePoints: number;
+  prizePool?: number;
   prizePoolPoints: number;
   status: LeagueStatus;
   format: TournamentFormat;
   facilitatorToken: string;
   facilitatorName: string;
+  organizerToken?: string;
   minParticipants?: number; // Published minimum viable player quorum
   maxParticipants: number;
+  maxPlayers?: number;
+  participants?: number | LeagueParticipant[];
   participantCount: number;
   winnerToken: string | null;
   winnerName: string | null;
@@ -772,13 +805,14 @@ export interface LedgerEntry {
   amount: number | string;
   referenceType: string;
   referenceId: string;
+  description?: string;
   transactionGroupId?: string;
   currency?: string;
   direction?: "credit" | "debit";
   balanceBefore?: string;
   balanceAfter?: string;
   metadataJson?: string;
-  fundType?: SystemFundType;
+  fundType?: SystemFundType | string;
   accountCode?: string;
   accountName?: string;
   recordedAt?: string;
@@ -795,7 +829,7 @@ export interface LedgerEntryInput {
   currency?: string;
   direction?: "credit" | "debit";
   metadataJson?: string;
-  fundType?: SystemFundType;
+  fundType?: SystemFundType | string;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -874,6 +908,7 @@ export interface GameCatalogItem {
   slug: string;
   boardSize?: number;
   minTimerSeconds?: number;
+  maxTimerSeconds?: number;
   iconUrl?: string;
   status: GameStatus;
   description?: string;
@@ -993,24 +1028,20 @@ export interface InAppNotificationSettings {
 }
 
 export interface NotificationChannelRouting {
-  game_request: NotificationChannel[];
-  tournament_match: NotificationChannel[];
-  tournament_alert: NotificationChannel[];
-  turn_reminder: NotificationChannel[];
-  league_invite: NotificationChannel[];
-  wager_settlement: NotificationChannel[];
-  system: NotificationChannel[];
+  [key: string]: NotificationChannel[];
 }
 
 export interface NotificationDispatchedLog {
   id: string;
   recipientToken?: string;
   recipientContact?: string;
+  recipient?: string;
   channel: NotificationChannel;
   title: string;
   message?: string;
   actionUrl?: string;
   type?: NotificationType;
+  providerMessageId?: string;
   status: "delivered" | "sent" | "queued" | "failed" | "mock_sent";
   error?: string;
   timestamp: string;
@@ -1052,7 +1083,15 @@ export type NotificationType =
   | "league_invite"
   | "wager_settlement"
   | "system"
-  | "admin";
+  | "admin"
+  | "account_alert"
+  | "wager_result"
+  | "system_alert"
+  | "admin_notice"
+  | "payout_alert"
+  | "payout"
+  | "dispute_alert"
+  | string;
 
 export type NotificationChannel = "in_app" | "whatsapp" | "sms" | "email";
 
@@ -1063,6 +1102,8 @@ export interface NotificationItem {
   recipientId?: string;
   recipientToken?: string;
   recipientUsername?: string;
+  recipientPhone?: string;
+  recipientEmail?: string;
   senderId?: string;
   senderName?: string;
   type: NotificationType;
@@ -1070,7 +1111,7 @@ export interface NotificationItem {
   title: string;
   message: string;
   timestamp: string;
-  link: string; // Direct link to action or game room
+  link?: string; // Direct link to action or game room
   actionLabel?: string;
   actionPayload?: {
     roomCode?: string;
@@ -1093,8 +1134,8 @@ export interface NotificationItem {
 }
 
 export interface UserNotificationPreferences {
-  inAppSound: boolean;
-  inAppToast: boolean;
+  inAppSound?: boolean;
+  inAppToast?: boolean;
   gameRequestsInApp: boolean;
   tournamentAlertsInApp: boolean;
   turnRemindersInApp: boolean;
@@ -1109,17 +1150,6 @@ export interface UserNotificationPreferences {
   emailAddress?: string;
   emailTournamentAlerts: boolean;
   emailSettlements: boolean;
-}
-
-export interface WhatsAppSettings {
-  provider: "whatsapp_cloud_api" | "twilio_whatsapp" | "mock";
-  phoneNumberId?: string;
-  businessAccountId?: string;
-  accessTokenMasked?: string;
-  gameRequestTemplate: string;
-  tournamentAlertTemplate: string;
-  turnReminderTemplate: string;
-  enabled: boolean;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -1159,7 +1189,7 @@ export interface ComprehensiveMatch {
   mode: GameMode | "custom_wager" | "tournament";
   status: RoomStatus;
   hostName: string;
-  hostToken: string;
+  hostToken: string | null;
   hostPhone?: string | null;
   hostRating?: number | null;
   guestName: string | null;
@@ -1216,7 +1246,7 @@ export interface GameRequestItem {
   roomCode?: string | null;
   tournamentId?: string | null;
   tournamentTitle?: string | null;
-  status: "waiting" | "playing" | "completed" | "cancelled" | "expired" | "pending_review" | "approved" | "rejected";
+  status: "waiting" | "playing" | "completed" | "cancelled" | "expired" | "pending_review" | "approved" | "rejected" | "draw" | string;
   timeLimitSeconds?: number;
   turnLimitSeconds?: number;
   disconnectionGraceSeconds?: number;

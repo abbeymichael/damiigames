@@ -8,6 +8,7 @@ import { presenceService } from "@/lib/presence-service";
 import { securityService } from "@/lib/security";
 import { getAuthContext, validateCsrfToken } from "@/lib/auth-guard";
 import { botService } from "@/lib/bot-service";
+import { chatService } from "@/lib/chat-service";
 import { Room, GameMode, Player, MoveLogEntry, Profile } from "@/lib/types";
 
 const cleanName = (value: unknown) => String(value ?? "").trim().replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 20);
@@ -28,6 +29,8 @@ function formatRoomResponse(room: Room, token: string) {
   } catch {
     moves = [];
   }
+
+  const chat = chatService.getMessages(room.code);
 
   return {
     code: room.code,
@@ -53,6 +56,7 @@ function formatRoomResponse(room: Room, token: string) {
     disputeStatus: room.disputeStatus || "none",
     disputeNotes: room.disputeNotes || null,
     moves,
+    chat,
     role,
     timerState,
     createdAt: room.createdAt,
@@ -562,10 +566,6 @@ export async function POST(req: NextRequest) {
         }
       } else if (room.status === "completed" || room.status === "forfeited" || room.status === "draw") {
         // Already finished match being closed
-        if (room.status !== "completed" && room.status !== "forfeited" && room.status !== "cancelled") {
-          room.status = "completed";
-          await dbRepository.saveRoom(room);
-        }
       }
 
       const profile = await dbRepository.getProfile(token);
@@ -855,6 +855,32 @@ export async function POST(req: NextRequest) {
 
       const profile = await dbRepository.getProfile(token);
       return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile), message: "Match placed under review. Preserving all move logs and connection records." });
+    }
+
+    if (action === "chat") {
+      const code = cleanCode(body.code);
+      const text = String(body.text ?? "").trim().slice(0, 140);
+      if (!text) {
+        return NextResponse.json({ error: "Message cannot be empty" }, { status: 400 });
+      }
+
+      const room = await dbRepository.getRoom(code);
+      if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
+
+      let senderRole: "white" | "black" | "spectator" = "spectator";
+      let senderName = username || "Spectator";
+
+      if (token === room.hostToken) {
+        senderRole = "white";
+        senderName = room.hostName;
+      } else if (token === room.guestToken) {
+        senderRole = "black";
+        senderName = room.guestName || "Guest";
+      }
+
+      chatService.addMessage(room.code, senderName, senderRole, text);
+      const profile = await dbRepository.getProfile(token);
+      return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
     }
 
     if (action === "forfeit") {

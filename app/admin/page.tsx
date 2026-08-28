@@ -57,6 +57,8 @@ import {
 import { getSessionToken, saveSessionToken, clearSessionToken } from "@/lib/client-auth";
 import type {
   AdminLog,
+  AdminSettings,
+  Profile,
   Role,
   AppRole,
   Permission,
@@ -108,24 +110,7 @@ import {
   Legend,
 } from "recharts";
 
-type UserProfileItem = {
-  token: string;
-  username: string;
-  fullName?: string;
-  email?: string;
-  role: Role;
-  points: number;
-  marbles?: number;
-  status?: "active" | "suspended" | "banned";
-  rating: number;
-  wins: number;
-  losses: number;
-  draws: number;
-  phoneNumber?: string;
-  phoneVerifiedAt?: string | null;
-  region?: string;
-  createdAt?: string;
-};
+type UserProfileItem = Profile;
 
 type MoveItem = {
   from: number;
@@ -173,19 +158,16 @@ type SystemMetrics = {
   resolvedDisputesVolume?: number;
   totalEscrowProcessed?: number;
   dailyActivity?: Array<{ date: string; users: number; transactions: number; volume: number }>;
-  allUsers?: UserProfileItem[];
+  allUsers?: Profile[];
   recentRooms: RoomItem[];
   recentTransactions: TransactionItem[];
-  settings?: {
-    wagerFeePercent?: number;
-    tournamentFeePercent?: number;
-    pointsPerCediDeposit?: number;
-    pointsPerCediWithdrawal?: number;
-  };
+  settings?: AdminSettings;
   logs: AdminLog[];
   roles?: AppRole[];
   permissions?: Permission[];
   adminAccounts?: AdminAccount[];
+  adminPermissions?: any;
+  adminRoleTitle?: string;
   games?: GameCatalogItem[];
   tournamentRequests?: TournamentActionRequest[];
   systemSettings?: any;
@@ -2153,7 +2135,7 @@ export default function AdminPage() {
               <TournamentsTable
                 leagues={leaguesList}
                 leagueStatusFilter={leagueStatusFilter}
-                setLeagueStatusFilter={setLeagueStatusFilter}
+                setLeagueStatusFilter={(status: string) => setLeagueStatusFilter(status as any)}
                 busy={busy}
                 onRefresh={fetchLeaguesList}
                 onCreateClick={() => setCreateTournamentModalOpen(true)}
@@ -2171,8 +2153,8 @@ export default function AdminPage() {
             {activeTab === "games" && (
               <GamesCatalogTable
                 games={metrics?.games || []}
+                busy={busy}
                 token={token}
-                adminSecret={adminSecret}
                 onRefresh={refreshAdminData}
               />
             )}
@@ -2277,7 +2259,7 @@ export default function AdminPage() {
                     chartOfAccounts={metrics?.chartOfAccounts || null}
                     treasuryDetails={metrics?.treasuryDetails || null}
                     txFilter={txFilter}
-                    setTxFilter={setTxFilter}
+                    setTxFilter={(filter: string) => setTxFilter(filter as any)}
                     busy={busy}
                     onRefresh={refreshAdminData}
                     onReconcileFunds={handleReconcileSystemFunds}
@@ -2312,8 +2294,8 @@ export default function AdminPage() {
               <AdminStaffTable
                 adminAccounts={metrics?.adminAccounts || []}
                 roles={metrics?.roles || []}
+                busy={busy}
                 token={token}
-                adminSecret={adminSecret}
                 onRefresh={refreshAdminData}
                 onDeleteAdmin={handleDeleteAdmin}
               />
