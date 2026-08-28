@@ -57,7 +57,7 @@ export async function POST(
       // 4. Update organizer_profiles status
       await dbRepository.saveOrganizerProfile({
         userId: application.userId,
-        username: profile?.username || user?.username,
+        username: profile?.username || user?.username || "unknown",
         status: "approved",
         requestedAt: new Date(application.createdAt).toISOString(),
         reviewedBy: adminToken,
