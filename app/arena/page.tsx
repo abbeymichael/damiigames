@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { SharedHeader } from "@/components/SharedHeader";
 import { NavLink } from "@/components/NavLink";
 import { MatchSummaryModal } from "@/components/MatchSummaryModal";
@@ -300,6 +300,7 @@ export default function ArenaPage() {
   const [showPregameModal, setShowPregameModal] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showTrainingIntel, setShowTrainingIntel] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"themes" | "audio" | "rules" | "display">("themes");
   const [showHistory, setShowHistory] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
@@ -382,7 +383,6 @@ export default function ArenaPage() {
   ]);
   const [sendingChat, setSendingChat] = useState(false);
   const [showHistoryCollapsed, setShowHistoryCollapsed] = useState(false);
-  const [showTrainingIntel, setShowTrainingIntel] = useState(true);
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
   const activeMoves = useMemo(
@@ -454,23 +454,52 @@ export default function ArenaPage() {
     return { whiteProb, blackProb };
   }, [captures?.white, captures?.black, winner, turn]);
 
+  const activeRuleVariations = useMemo(() => {
+    if (mode === "online" && room?.ruleVariations) return room.ruleVariations;
+    return undefined;
+  }, [mode, room?.ruleVariations]);
+
+  const moves = useMemo(
+    () => (winner ? [] : legalMoves(board, turn, forcedFrom, activeRuleVariations)),
+    [board, turn, forcedFrom, winner, activeRuleVariations]
+  );
+
+  const selectable = useMemo(() => {
+    const allowed = new Set(moves.map((move) => move.from));
+    if (mode === "online" && room?.role !== turn) return new Set<number>();
+    if (mode === "local" && subMode === "vs_cpu" && turn === "black") return new Set<number>();
+    return allowed;
+  }, [moves, mode, room?.role, turn, subMode]);
+
+  const destinations = useMemo(
+    () =>
+      new Map(
+        moves
+          .filter((move) => move.from === selected)
+          .map((move) => [move.to, move])
+      ),
+    [moves, selected]
+  );
+
   // Live Tactical Intel / Suggested Training Move
   const suggestedHint = useMemo(() => {
-    if (winner) return null;
+    if (winner || moves.length === 0) return null;
     try {
-      const possible = legalMoves(board, turn, forcedFrom, activeRuleVariations);
-      if (possible.length === 0) return "No legal moves available.";
-      const captureMove = possible.find((m) => m.isCapture);
-      if (captureMove) {
-        const not = formatMoveNotation(captureMove, "alg");
-        return `Compulsory Capture: ${not} (${captureMove.captures.length} marble${captureMove.captures.length > 1 ? "s" : ""})`;
-      }
-      const firstMove = possible[0];
-      return `Suggested: ${formatMoveNotation(firstMove, "alg")}`;
+      const best = getBestCpuMove(board, turn, forcedFrom, "medium", activeRuleVariations);
+      if (!best) return null;
+      const formatted = formatMoveNotation(best.from, best.to, best.isCapture);
+      return {
+        from: best.from,
+        to: best.to,
+        notation: formatted.notation,
+        algNotation: formatted.algNotation,
+        sqNotation: formatted.sqNotation,
+        isCapture: best.isCapture,
+      };
     } catch {
       return null;
     }
-  }, [board, turn, forcedFrom, activeRuleVariations, winner]);
+  }, [board, turn, forcedFrom, activeRuleVariations, moves.length, winner]);
 
   // Chat message selector
   const displayChatMessages = useMemo(() => {
@@ -709,11 +738,28 @@ export default function ArenaPage() {
       }
     }
 
-    // Check URL search params for direct 1-on-1 invite, room landing link, or vs bot
+    // Check URL search params or path structure for direct 1-on-1 invite, room landing link, or vs bot
     if (typeof window !== "undefined") {
       const currentAuthToken = localStorage.getItem("damii-player-token") || "";
       const params = new URLSearchParams(window.location.search);
-      const roomParam = params.get("room") || params.get("code");
+      let roomParam = params.get("room") || params.get("code");
+
+      // Support path-based room routes such as /arena/room/ABC12345 or /room/ABC12345
+      if (!roomParam) {
+        const pathMatches = window.location.pathname.match(/\/(?:arena\/)?room\/([a-zA-Z0-9]+)/i);
+        if (pathMatches && pathMatches[1]) {
+          roomParam = pathMatches[1];
+        }
+      }
+
+      // If user refreshed during an active online match without query params, restore from session storage
+      if (!roomParam && !params.get("mode")) {
+        const savedRoom = sessionStorage.getItem("damii_active_room");
+        if (savedRoom) {
+          roomParam = savedRoom;
+        }
+      }
+
       const joinParam = params.get("join");
       const botParam = params.get("bot");
       const modeParam = params.get("mode");
@@ -728,10 +774,14 @@ export default function ArenaPage() {
             if (d.room) {
               loadRoom(d.room);
             } else {
+              sessionStorage.removeItem("damii_active_room");
               setShowPregameModal(true);
             }
           })
-          .catch(() => setShowPregameModal(true));
+          .catch(() => {
+            sessionStorage.removeItem("damii_active_room");
+            setShowPregameModal(true);
+          });
       } else if (joinParam) {
         setJoinCode(joinParam.toUpperCase());
         setMode("online");
@@ -955,33 +1005,6 @@ export default function ArenaPage() {
     }
   }, [activeMoves.length]);
 
-  const activeRuleVariations = useMemo(() => {
-    if (mode === "online" && room?.ruleVariations) return room.ruleVariations;
-    return undefined;
-  }, [mode, room?.ruleVariations]);
-
-  const moves = useMemo(
-    () => (winner ? [] : legalMoves(board, turn, forcedFrom, activeRuleVariations)),
-    [board, turn, forcedFrom, winner, activeRuleVariations]
-  );
-
-  const selectable = useMemo(() => {
-    const allowed = new Set(moves.map((move) => move.from));
-    if (mode === "online" && room?.role !== turn) return new Set<number>();
-    if (mode === "local" && subMode === "vs_cpu" && turn === "black") return new Set<number>();
-    return allowed;
-  }, [moves, mode, room?.role, turn, subMode]);
-
-  const destinations = useMemo(
-    () =>
-      new Map(
-        moves
-          .filter((move) => move.from === selected)
-          .map((move) => [move.to, move])
-      ),
-    [moves, selected]
-  );
-
   function loadRoom(next: Room) {
     // Sound & Event Animation Triggers for Online Room Updates
     const isNewRoom = lastProcessedRoomCodeRef.current !== next.code;
@@ -1016,6 +1039,14 @@ export default function ArenaPage() {
     }
 
     setRoom(next);
+
+    if (typeof window !== "undefined" && next?.code) {
+      sessionStorage.setItem("damii_active_room", next.code);
+      const targetQuery = `/arena?room=${next.code}`;
+      if (window.location.pathname + window.location.search !== targetQuery && !window.location.pathname.startsWith(`/arena/room/${next.code}`)) {
+        window.history.replaceState({ roomCode: next.code }, "", targetQuery);
+      }
+    }
 
     // Only overwrite board and turn if there is a new room or a move has landed on the server
     if (moveCountChanged) {
@@ -1061,7 +1092,37 @@ export default function ArenaPage() {
     }
   }
 
+  const handleReturnToArenaLobby = useCallback(() => {
+    setShowMatchSummaryModal(false);
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("damii_active_room");
+      if (window.location.search.includes("room=")) {
+        window.history.replaceState({}, "", "/arena");
+      }
+    }
+    setRoom(null);
+    setMode("local");
+    setWinner(null);
+    setLocalMoves([]);
+    setLocalGameStarted(false);
+    setSelected(null);
+    setForcedFrom(null);
+    setBoard(createBoard());
+    setTurn("white");
+    setIsCpuThinking(false);
+    setLastCaptureSquare(null);
+    setPromotedKingEffect(null);
+    setMessage("Setup your match to start playing!");
+    hasShownSummaryForMatchRef.current = null;
+  }, []);
+
   function resetLocalMatch() {
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("damii_active_room");
+      if (window.location.search.includes("room=")) {
+        window.history.replaceState({}, "", "/arena");
+      }
+    }
     setBoard(createBoard());
     setTurn("white");
     setSelected(null);
@@ -1463,126 +1524,6 @@ export default function ArenaPage() {
   return (
     <main className="app-shell flex flex-col min-h-screen">
       <SharedHeader />
-
-      {/* Arena Screen Control Toolbar */}
-      <div className="w-full max-w-6xl mx-auto px-2 sm:px-4 py-2 sm:py-3 border border-[#184d3c] bg-[#06261f] text-[#f5efdf] rounded-2xl shadow-xl mt-2 sm:mt-3 mb-2">
-        <div className="flex items-center justify-between gap-2">
-          {/* Active Mode & Player Profile Indicator */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none max-w-full shrink">
-            {mode === "local" ? (
-              <span className="px-2.5 py-1 bg-[#0c3b2e] border border-[#184d3c] text-[#f5efdf] rounded-full text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 shrink-0">
-                {subMode === "vs_cpu" ? (
-                  <>
-                    <Bot size={13} className="text-[#d6a735]" />
-                    <span className="truncate">AI ({cpuDifficulty})</span>
-                  </>
-                ) : (
-                  <>
-                    <Monitor size={13} className="text-[#d6a735]" />
-                    <span className="truncate">Local 2P</span>
-                  </>
-                )}
-              </span>
-            ) : room ? (
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className="px-2.5 py-1 bg-[#0c3b2e] border border-[#184d3c] text-[#f5efdf] rounded-full text-[11px] sm:text-xs font-semibold flex items-center gap-1">
-                  <Globe size={13} className="text-[#d6a735] shrink-0" />
-                  <span>Room:</span>
-                  <strong className="tracking-wider text-[#d6a735] font-mono">{room.code}</strong>
-                  <button
-                    onClick={copyRoomCode}
-                    title="Copy Room Code"
-                    className="hover:text-white transition-colors ml-0.5"
-                  >
-                    {copiedCode ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
-                  </button>
-                </span>
-                {room.mode === "wager" && (
-                  <span className="px-2 py-1 bg-amber-950/80 border border-amber-800 text-amber-300 rounded-full text-[11px] sm:text-xs font-semibold flex items-center gap-1">
-                    <Zap size={12} className="text-amber-400" /> GH₵ {(room.wagerAmount * 2).toFixed(2)} Pot
-                  </span>
-                )}
-              </div>
-            ) : (
-              <span className="px-2.5 py-1 bg-[#0c3b2e] border border-[#184d3c] text-[#d6a735] rounded-full text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 shrink-0">
-                <Globe size={13} className="text-[#d6a735]" />
-                <span>Online Arena</span>
-              </span>
-            )}
-
-            {/* Logged in User Badge */}
-            {username && (
-              <span className="px-2.5 py-1 bg-[#0c3b2e] border border-[#184d3c] text-[#d6a735] rounded-full text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 shrink-0">
-                <User size={12} className="text-[#d6a735]" />
-                <span className="truncate max-w-[80px] xs:max-w-[110px] sm:max-w-none">{username}</span>
-                {profile && (
-                  <span className="text-[10px] text-[#cbd5e1] border-l border-[#184d3c] pl-1.5 hidden sm:inline">
-                    {profile.rating} ELO
-                  </span>
-                )}
-              </span>
-            )}
-          </div>
-
-          {/* Action Toolbar Buttons */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {profile?.role !== "admin" && profile?.role !== "super_admin" && (
-              <button
-                onClick={() => setShowPregameModal(true)}
-                className="px-3 py-1.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-md shadow-[#d6a735]/15 active:scale-95"
-              >
-                <Swords size={14} />
-                <span>{hasActiveGame ? "Match Setup" : "Create Match"}</span>
-              </button>
-            )}
-
-            {hasActiveGame && (
-              <button
-                onClick={() => {
-                  setRoom(null);
-                  setMode("local");
-                  setWinner(null);
-                  setLocalMoves([]);
-                  setLocalGameStarted(false);
-                }}
-                className="px-2.5 sm:px-3 py-1.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] border border-[#184d3c] rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all"
-                title="Return to Arena Lobby"
-              >
-                <Gamepad2 size={13} />
-                <span className="hidden sm:inline">Lobby</span>
-              </button>
-            )}
-
-            {hasActiveGame && (
-              <button
-                onClick={() => setShowHistory((prev) => !prev)}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 sm:gap-1.5 transition-all border ${
-                  showHistory
-                    ? "bg-[#d6a735] text-[#06261f] border-[#d6a735] font-bold"
-                    : "bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] border-[#184d3c]"
-                }`}
-              >
-                <ListOrdered size={13} />
-                <span className="hidden sm:inline">Log</span>
-                {activeMoves.length > 0 && (
-                  <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${showHistory ? "bg-[#06261f] text-[#d6a735]" : "bg-[#d6a735]/20 text-[#d6a735]"}`}>
-                    {activeMoves.length}
-                  </span>
-                )}
-              </button>
-            )}
-
-            <button
-              onClick={() => setShowSettings(true)}
-              className="p-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all border bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] border-[#184d3c]"
-              title="Arena Preferences, Themes, Audio & Rules"
-            >
-              <Settings size={14} />
-              <span className="hidden sm:inline">Options</span>
-            </button>
-          </div>
-        </div>
-      </div>
 
       {/* LOBBY VIEW vs GAME BOARD VIEW */}
       {!hasActiveGame ? (
@@ -2149,11 +2090,11 @@ export default function ArenaPage() {
         </section>
       ) : (
         /* Main Arena Game Layout Container (Feature-Rich 3-Column Desktop Layout) */
-        <section className="flex-1 max-w-[1440px] 2xl:max-w-[1560px] w-full mx-auto p-1.5 sm:p-3 md:p-4 lg:p-5 flex flex-col items-center justify-start">
-          <div className="w-full grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)_320px] xl:grid-cols-[270px_minmax(0,1fr)_360px] 2xl:grid-cols-[290px_minmax(0,1fr)_390px] gap-3.5 xl:gap-5 items-start justify-center">
+        <section className="flex-1 max-w-[1360px] 2xl:max-w-[1480px] w-full mx-auto p-1.5 sm:p-2.5 md:p-3 flex flex-col items-center justify-start">
+          <div className="w-full grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)_280px] xl:grid-cols-[240px_minmax(0,1fr)_310px] 2xl:grid-cols-[260px_minmax(0,1fr)_340px] gap-2.5 xl:gap-3.5 items-start justify-center">
             
             {/* Left Column: Match Navigation & Settings (Desktop) */}
-            <div className="hidden lg:flex flex-col gap-3.5 w-full sticky top-4 select-none">
+            <div className="hidden lg:flex flex-col gap-2.5 w-full sticky top-2 select-none">
               <MatchNavigationCard
                 mode={mode}
                 subMode={subMode}
@@ -2166,11 +2107,9 @@ export default function ArenaPage() {
                 boardTheme={boardTheme}
                 soundEnabled={soundEnabled}
                 rotated={rotated}
-                showTrainingIntel={showTrainingIntel}
                 onThemeChange={(t) => saveCustomTheme(t, marbleTheme)}
                 onToggleSound={toggleAudioSound}
                 onToggleFlip={() => setRotated((v) => !v)}
-                onToggleTrainingIntel={() => setShowTrainingIntel((v) => !v)}
                 onOpenRules={() => {
                   setSettingsTab("rules");
                   setShowSettings(true);
@@ -2205,11 +2144,9 @@ export default function ArenaPage() {
               turnTimerLimit={turnTimerLimit}
               whiteDisplayName={whiteDisplayName}
               blackDisplayName={blackDisplayName}
-              spectatorCount={mode === "online" && room ? (room.moveCount && room.moveCount > 4 ? 3 : 1) : 1}
+              spectatorCount={mode === "online" && room ? (room.spectatorCount ?? 0) : 0}
               message={message}
               mustCapture={mustCapture}
-              showTrainingIntel={showTrainingIntel}
-              suggestedHint={suggestedHint}
               showGameActions={showGameActions}
               setShowGameActions={setShowGameActions}
               onlineBusy={onlineBusy}
@@ -2228,7 +2165,6 @@ export default function ArenaPage() {
               saveCustomTheme={saveCustomTheme}
               soundEnabled={soundEnabled}
               toggleAudioSound={toggleAudioSound}
-              setShowTrainingIntel={setShowTrainingIntel}
               setSettingsTab={setSettingsTab}
               setShowSettings={setShowSettings}
               setShowDisputeModal={setShowDisputeModal}
@@ -2237,16 +2173,23 @@ export default function ArenaPage() {
               displayChatMessages={displayChatMessages}
               handleSendChat={handleSendChat}
               sendingChat={sendingChat}
+              currentUsername={username}
+              userRole={mode === "online" && room ? room.role : "white"}
               activeMoves={activeMoves}
               pairedMoves={pairedMoves}
               notationStyle={notationStyle}
               setNotationStyle={setNotationStyle}
               copyMoveLog={copyMoveLog}
               copiedHistory={copiedHistory}
+              showTrainingIntel={showTrainingIntel}
+              onToggleTrainingIntel={() => setShowTrainingIntel((v) => !v)}
+              suggestedHint={suggestedHint}
+              onReturnToLobby={handleReturnToArenaLobby}
+              onOpenSummary={() => setShowMatchSummaryModal(true)}
             />
 
             {/* Right Column: Game Intelligence Hub & Live Match Chat (Desktop) */}
-            <div className="hidden lg:flex flex-col gap-3.5 w-full sticky top-4 select-none">
+            <div className="hidden lg:flex flex-col gap-2.5 w-full sticky top-2 select-none">
               <GameIntelligenceHub
                 whiteDisplayName={whiteDisplayName}
                 blackDisplayName={blackDisplayName}
@@ -2265,12 +2208,16 @@ export default function ArenaPage() {
                 onCopyHistory={copyMoveLog}
                 copiedHistory={copiedHistory}
                 historyScrollRef={historyScrollRef}
+                showTrainingIntel={showTrainingIntel}
+                onToggleTrainingIntel={() => setShowTrainingIntel((v) => !v)}
+                suggestedHint={suggestedHint}
               />
               <LiveMatchChat
                 messages={displayChatMessages}
                 onSendMessage={handleSendChat}
                 sending={sendingChat}
                 userRole={mode === "online" && room ? room.role : "white"}
+                currentUsername={username}
                 isMatchFinished={!!winner}
               />
             </div>
@@ -3535,7 +3482,9 @@ export default function ArenaPage() {
       {/* Match Summary Modal */}
       <MatchSummaryModal
         isOpen={showMatchSummaryModal}
-        onClose={() => setShowMatchSummaryModal(false)}
+        onClose={handleReturnToArenaLobby}
+        onLobby={handleReturnToArenaLobby}
+        onExamineBoard={() => setShowMatchSummaryModal(false)}
         winner={winner}
         board={board}
         totalMoves={activeMoves.length}
@@ -3558,13 +3507,13 @@ export default function ArenaPage() {
                 void requestRematch();
               }
         }
-        onNewGame={() => setShowPregameModal(true)}
-        onReviewLog={() => setShowHistory(true)}
-        onLobby={() => {
-          setRoom(null);
-          setWinner(null);
-          setLocalMoves([]);
-          setLocalGameStarted(false);
+        onNewGame={() => {
+          handleReturnToArenaLobby();
+          setShowPregameModal(true);
+        }}
+        onReviewLog={() => {
+          setShowMatchSummaryModal(false);
+          setShowHistory(true);
         }}
         boardThemeBg={activeBoardConfig.boardBg}
         playableBg={activeBoardConfig.playableBg}

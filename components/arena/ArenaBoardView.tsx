@@ -21,6 +21,7 @@ import {
   Lightbulb,
   Clock,
   Trophy,
+  Gamepad2,
 } from "lucide-react";
 import {
   rowOf,
@@ -80,8 +81,6 @@ interface ArenaBoardViewProps {
   spectatorCount?: number;
   message: string;
   mustCapture: boolean;
-  showTrainingIntel: boolean;
-  suggestedHint: string | null;
   showGameActions: boolean;
   setShowGameActions: React.Dispatch<React.SetStateAction<boolean>>;
   onlineBusy: boolean;
@@ -100,7 +99,6 @@ interface ArenaBoardViewProps {
   saveCustomTheme: (b: any, m: any) => void;
   soundEnabled: boolean;
   toggleAudioSound: () => void;
-  setShowTrainingIntel: React.Dispatch<React.SetStateAction<boolean>>;
   setSettingsTab: (tab: any) => void;
   setShowSettings: (v: boolean) => void;
   setShowDisputeModal: (v: boolean) => void;
@@ -110,6 +108,8 @@ interface ArenaBoardViewProps {
   displayChatMessages: ChatMessage[];
   handleSendChat: (text: string) => Promise<void>;
   sendingChat: boolean;
+  currentUsername?: string;
+  userRole?: "white" | "black" | "spectator";
   activeMoves: MoveLogEntry[];
   pairedMoves: Array<{
     turnNum: number;
@@ -120,6 +120,18 @@ interface ArenaBoardViewProps {
   setNotationStyle: (st: NotationStyle) => void;
   copyMoveLog: () => void;
   copiedHistory: boolean;
+  showTrainingIntel?: boolean;
+  onToggleTrainingIntel?: () => void;
+  suggestedHint?: {
+    from: number;
+    to: number;
+    notation: string;
+    algNotation?: string;
+    sqNotation?: string;
+    isCapture?: boolean;
+  } | null;
+  onReturnToLobby?: () => void;
+  onOpenSummary?: () => void;
 }
 
 export function ArenaBoardView({
@@ -148,11 +160,9 @@ export function ArenaBoardView({
   turnTimerLimit,
   whiteDisplayName,
   blackDisplayName,
-  spectatorCount = 1,
+  spectatorCount = 0,
   message,
   mustCapture,
-  showTrainingIntel,
-  suggestedHint,
   showGameActions,
   setShowGameActions,
   onlineBusy,
@@ -171,7 +181,6 @@ export function ArenaBoardView({
   saveCustomTheme,
   soundEnabled,
   toggleAudioSound,
-  setShowTrainingIntel,
   setSettingsTab,
   setShowSettings,
   setShowDisputeModal,
@@ -180,15 +189,22 @@ export function ArenaBoardView({
   displayChatMessages,
   handleSendChat,
   sendingChat,
+  currentUsername,
+  userRole,
   activeMoves,
   pairedMoves,
   notationStyle,
   setNotationStyle,
   copyMoveLog,
   copiedHistory,
+  showTrainingIntel = false,
+  onToggleTrainingIntel,
+  suggestedHint,
+  onReturnToLobby,
+  onOpenSummary,
 }: ArenaBoardViewProps) {
   return (
-    <div className="w-full max-w-full lg:max-w-[560px] xl:max-w-[620px] mx-auto flex flex-col items-center space-y-2.5 sm:space-y-3.5">
+    <div className="w-full max-w-full lg:max-w-[480px] xl:max-w-[520px] mx-auto flex flex-col items-center space-y-2">
       {/* Unjoined Waiting Room Cancellation Banner */}
       {mode === "online" && room?.status === "waiting" && room?.role === "white" && !room.guestToken && (
         <div className="w-full p-3 bg-[#0c3b2e] border border-[#d6a735]/40 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 shadow-lg animate-in fade-in">
@@ -381,8 +397,12 @@ export function ArenaBoardView({
         <div className="flex items-center justify-between mb-2 px-1 text-xs select-none">
           <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[#041913]/90 border border-[#184d3c] rounded-full text-[10px] sm:text-xs text-slate-300 font-bold shadow-sm">
             <Eye size={12} className="text-emerald-400 animate-pulse" />
-            <span className="text-slate-300">ACTIVE SPECTATORS:</span>
-            <span className="font-mono text-[#d6a735]">{spectatorCount}</span>
+            <span className="text-slate-300">
+              {mode === "online" ? "ACTIVE SPECTATORS:" : "MODE:"}
+            </span>
+            <span className="font-mono text-[#d6a735]">
+              {mode === "online" ? spectatorCount : (subMode === "vs_cpu" ? "VS CPU" : "LOCAL 2P")}
+            </span>
           </div>
 
           <div className="flex items-center gap-1 bg-[#06261f] p-1 rounded-lg border border-[#184d3c]">
@@ -503,70 +523,71 @@ export function ArenaBoardView({
         </div>
       </div>
 
+      {/* Suggested Move (Training Mode) Pill - EXACTLY matching reference design */}
+      <div className="w-full flex flex-col items-center justify-center space-y-1 my-1">
+        <button
+          type="button"
+          onClick={onToggleTrainingIntel}
+          className={`px-3 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1.5 transition-all shadow border ${
+            showTrainingIntel
+              ? "bg-[#d6a735] text-[#06261f] border-[#d6a735] shadow-[#d6a735]/20 ring-2 ring-[#d6a735]/30"
+              : "bg-[#06261f] hover:bg-[#0c3b2e] text-[#d6a735] border-[#184d3c]"
+          }`}
+        >
+          <Lightbulb size={12} className={showTrainingIntel ? "text-[#06261f]" : "text-[#d6a735]"} />
+          <span>SUGGESTED MOVE (Training Mode)</span>
+        </button>
+
+        {showTrainingIntel && (
+          <div className="text-[10px] text-slate-300 font-mono flex items-center gap-1 animate-in fade-in">
+            <span className="text-slate-400">Hint:</span>
+            {suggestedHint ? (
+              <span className="text-amber-300 font-bold bg-[#06261f] px-2 py-0.5 rounded border border-[#184d3c]">
+                {suggestedHint.algNotation || `sq ${suggestedHint.from} ➔ sq ${suggestedHint.to}`}
+                {suggestedHint.isCapture ? " (Capture)" : ""}
+              </span>
+            ) : (
+              <span className="text-slate-500 italic">Analyzing position...</span>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Dynamic Turn Status & Message Banner */}
-      <div className={`w-full flex flex-wrap items-center justify-between p-2.5 sm:p-3 rounded-xl text-xs gap-2 min-h-[42px] sm:min-h-[46px] transition-all border ${
+      <div className={`w-full flex flex-wrap items-center justify-between p-2 rounded-lg text-xs gap-1.5 transition-all border ${
         secondsLeft < 10 && turnTimerLimit > 0 && !winner && (mode === "local" || room?.status === "playing")
-          ? "bg-red-950/60 border-red-500/80 shadow-md shadow-red-500/10"
+          ? "bg-red-950/60 border-red-500/80 shadow-sm"
           : "bg-[#0c3b2e]/90 border-[#184d3c]"
       }`}>
-        <div className="flex items-center gap-1.5 sm:gap-2 text-[#f5efdf] font-medium min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 text-[#f5efdf] font-medium min-w-0 flex-1">
           <span className={`turn-dot ${turn} shrink-0`} />
-          <span className="truncate font-semibold text-[11px] sm:text-xs">{message}</span>
+          <span className="truncate font-semibold text-[11px]">{message}</span>
         </div>
 
-        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[#06261f] border border-[#184d3c] rounded-lg text-[10px] sm:text-xs text-[#f5efdf] shrink-0 min-h-[24px]">
-          <span className="font-bold text-[#d6a735]">Last Move:</span>
+        <div className="flex items-center gap-1 px-1.5 py-0.2 bg-[#06261f] border border-[#184d3c] rounded text-[10px] text-[#f5efdf] shrink-0">
+          <span className="font-bold text-[#d6a735]">Last:</span>
           <span className="font-mono text-[#f5efdf]">
             {lastMove
-              ? `${lastMove.playerName || (lastMove.player === "white" ? whiteDisplayName : blackDisplayName)}: sq ${lastMove.from} ➔ sq ${lastMove.to}`
+              ? `${lastMove.playerName || (lastMove.player === "white" ? "Red" : "Black")}: ${lastMove.from}➔${lastMove.to}`
               : "Start"}
           </span>
         </div>
 
         {mustCapture && !winner && (
-          <span className="px-1.5 sm:px-2 py-0.5 bg-red-950 text-red-300 border border-red-800 text-[9px] sm:text-[10px] font-extrabold rounded uppercase tracking-wider shrink-0 animate-pulse">
+          <span className="px-1.5 py-0.2 bg-red-950 text-red-300 border border-red-800 text-[9px] font-extrabold rounded uppercase tracking-wider shrink-0 animate-pulse">
             Compulsory Capture!
           </span>
         )}
       </div>
 
-      {/* Live Tactical Intel / Suggested Training Move Banner */}
-      {showTrainingIntel && (
-        <div className="w-full p-2.5 sm:p-3 bg-gradient-to-r from-[#0c3b2e] via-[#082a20] to-[#0c3b2e] border border-[#d6a735]/60 rounded-xl shadow-md flex items-center justify-between gap-2 animate-in fade-in">
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <div className="w-6 h-6 rounded-full bg-[#d6a735]/20 border border-[#d6a735] flex items-center justify-center text-[#d6a735] shrink-0">
-              <Lightbulb size={13} className="animate-pulse" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <strong className="text-[10px] sm:text-xs font-black text-[#d6a735] uppercase tracking-wider">
-                  {subMode === "vs_cpu" || mode === "local" ? "SUGGESTED MOVE (Training Mode)" : "TACTICAL MATCH INTEL"}
-                </strong>
-                {mustCapture && (
-                  <span className="px-1.5 py-0.2 bg-red-950 text-red-300 border border-red-800 text-[8px] font-extrabold rounded uppercase">
-                    Capture Compulsory
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] sm:text-xs text-slate-200 truncate font-mono mt-0.5">
-                {suggestedHint || (turn === "white" ? "White's turn: Select a piece to calculate routes" : "Black's turn: Analyzing tactical lines")}
-              </p>
-            </div>
-          </div>
-          <span className="text-[9px] px-2 py-0.5 bg-[#06261f] border border-[#184d3c] text-emerald-400 font-mono font-bold rounded-md shrink-0">
-            FMJD 10x10
-          </span>
-        </div>
-      )}
-
       {/* Match Actions Toolbar */}
-      <div className="w-full pt-1 space-y-1.5">
-        <div className="flex items-center justify-between gap-2 w-full">
+      <div className="w-full space-y-1">
+        <div className="flex items-center justify-between gap-1.5 w-full">
           {/* Secondary Controls Disclosure Toggle */}
           <button
             type="button"
             onClick={() => setShowGameActions((prev) => !prev)}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 transition-all border ${
+            className={`px-2 py-0.5 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-all border ${
               showGameActions
                 ? "bg-[#0c3b2e] text-[#d6a735] border-[#d6a735]/60"
                 : "bg-[#0c3b2e]/60 hover:bg-[#0c3b2e] text-[#cbd5e1] hover:text-[#f5efdf] border-[#184d3c]"
@@ -574,56 +595,80 @@ export function ArenaBoardView({
             title="Toggle board tools: Theme, Flip, Rules & Restart"
             aria-expanded={showGameActions}
           >
-            <Sliders size={12} className={showGameActions ? "text-[#d6a735]" : "text-slate-400"} />
+            <Sliders size={11} className={showGameActions ? "text-[#d6a735]" : "text-slate-400"} />
             <span>Controls</span>
-            {showGameActions ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            {showGameActions ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
           </button>
 
           {/* Essential Direct Actions */}
-          <div className="flex items-center gap-1.5 justify-end">
+          <div className="flex items-center gap-1 justify-end">
             {mode === "online" && room?.status === "playing" && !winner && (
               <>
                 <button
                   type="button"
                   disabled={onlineBusy || Boolean(room?.drawOfferedBy)}
                   onClick={() => void offerDrawOnline()}
-                  className="px-2.5 py-1 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 border border-[#184d3c] transition-colors disabled:opacity-50"
-                  title="Offer a mutual draw to opponent"
+                  className="px-2 py-0.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] rounded text-[10px] font-bold flex items-center justify-center gap-0.5 border border-[#184d3c] transition-colors disabled:opacity-50"
+                  title="Offer a mutual draw"
                 >
-                  <Handshake size={12} /> Draw
+                  <Handshake size={11} /> Draw
                 </button>
 
                 <button
                   type="button"
                   onClick={() => void forfeitOnline()}
-                  className="px-2.5 py-1 bg-red-950/80 hover:bg-red-900 text-red-200 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 border border-red-800 transition-colors"
+                  className="px-2 py-0.5 bg-red-950/80 hover:bg-red-900 text-red-200 rounded text-[10px] font-bold flex items-center justify-center gap-0.5 border border-red-800 transition-colors"
                 >
-                  <AlertTriangle size={12} /> Forfeit
+                  <AlertTriangle size={11} /> Forfeit
                 </button>
               </>
             )}
 
             {winner && (
-              <button
-                type="button"
-                disabled={onlineBusy}
-                onClick={() => void requestRematch()}
-                className="px-3 py-1.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] rounded-lg text-[11px] sm:text-xs font-extrabold flex items-center justify-center gap-1 transition-all shadow-md shadow-[#d6a735]/10"
-              >
-                <RefreshCw size={13} /> Play Again
-              </button>
+              <div className="flex items-center gap-1">
+                {onOpenSummary && (
+                  <button
+                    type="button"
+                    onClick={onOpenSummary}
+                    className="px-2 py-0.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] rounded text-[10px] font-bold flex items-center justify-center gap-0.5 border border-[#184d3c] transition-colors"
+                    title="View match conclusion summary"
+                  >
+                    <Trophy size={11} /> Summary
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  disabled={onlineBusy}
+                  onClick={() => void requestRematch()}
+                  className="px-2.5 py-1 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] rounded text-[10px] font-extrabold flex items-center justify-center gap-1 transition-all shadow"
+                >
+                  <RefreshCw size={11} /> Play Again
+                </button>
+
+                {onReturnToLobby && (
+                  <button
+                    type="button"
+                    onClick={onReturnToLobby}
+                    className="px-2 py-0.5 bg-[#081c15] hover:bg-[#0c3b2e] text-slate-300 hover:text-white rounded text-[10px] font-bold flex items-center justify-center gap-0.5 border border-[#184d3c] transition-colors"
+                    title="Return to Arena lobby"
+                  >
+                    <Gamepad2 size={11} /> Arena
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>
 
         {/* Collapsible Secondary Control Drawer */}
         {showGameActions && (
-          <div className="w-full bg-[#06261f]/95 border border-[#184d3c] rounded-xl p-2 sm:p-2.5 shadow-lg flex flex-wrap items-center justify-between gap-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
-            <div className="flex flex-wrap items-center gap-1.5 w-full xs:w-auto">
+          <div className="w-full bg-[#06261f]/95 border border-[#184d3c] rounded-lg p-1.5 shadow-md flex flex-wrap items-center justify-between gap-1 animate-in fade-in slide-in-from-top-1 duration-150">
+            <div className="flex flex-wrap items-center gap-1 w-full xs:w-auto">
               <button
                 type="button"
                 onClick={() => setRotated((v) => !v)}
-                className="flex-1 xs:flex-initial px-2.5 py-1 bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 border border-[#184d3c] transition-colors"
+                className="flex-1 xs:flex-initial px-2 py-0.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] rounded text-[10px] font-semibold flex items-center justify-center gap-0.5 border border-[#184d3c] transition-colors"
                 title="Flip board orientation 180°"
               >
                 ⇅ Flip
@@ -635,10 +680,10 @@ export function ArenaBoardView({
                   setSettingsTab("themes");
                   setShowSettings(true);
                 }}
-                className="flex-1 xs:flex-initial px-2.5 py-1 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 border border-[#184d3c] transition-colors"
+                className="flex-1 xs:flex-initial px-2 py-0.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] rounded text-[10px] font-semibold flex items-center justify-center gap-0.5 border border-[#184d3c] transition-colors"
                 title="Change board and piece themes"
               >
-                <Palette size={12} /> Theme
+                <Palette size={11} /> Theme
               </button>
 
               <button
@@ -647,22 +692,22 @@ export function ArenaBoardView({
                   setSettingsTab("rules");
                   setShowSettings(true);
                 }}
-                className="flex-1 xs:flex-initial px-2.5 py-1 bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 border border-[#184d3c] transition-colors"
+                className="flex-1 xs:flex-initial px-2 py-0.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] rounded text-[10px] font-semibold flex items-center justify-center gap-0.5 border border-[#184d3c] transition-colors"
                 title="View Ghanaian Damii game rules"
               >
-                <HelpCircle size={12} /> Rules
+                <HelpCircle size={11} /> Rules
               </button>
             </div>
 
-            <div className="flex items-center gap-1.5 w-full xs:w-auto justify-end">
+            <div className="flex items-center gap-1 w-full xs:w-auto justify-end">
               {mode === "local" && (
                 <button
                   type="button"
                   onClick={resetLocalMatch}
-                  className="w-full xs:w-auto px-2.5 py-1 bg-[#d6a735]/15 hover:bg-[#d6a735]/25 text-[#d6a735] rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 border border-[#d6a735]/40 transition-colors"
-                  title="Restart current match from move 1"
+                  className="w-full xs:w-auto px-2 py-0.5 bg-[#d6a735]/15 hover:bg-[#d6a735]/25 text-[#d6a735] rounded text-[10px] font-bold flex items-center justify-center gap-0.5 border border-[#d6a735]/40 transition-colors"
+                  title="Restart current match"
                 >
-                  <RotateCcw size={12} /> Reset Game
+                  <RotateCcw size={11} /> Reset
                 </button>
               )}
 
@@ -670,10 +715,10 @@ export function ArenaBoardView({
                 <button
                   type="button"
                   onClick={() => setShowDisputeModal(true)}
-                  className="w-full xs:w-auto px-2 py-1 bg-[#0c3b2e] hover:bg-[#144435] text-indigo-300 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 border border-[#184d3c] transition-colors"
+                  className="w-full xs:w-auto px-1.5 py-0.5 bg-[#0c3b2e] hover:bg-[#144435] text-indigo-300 rounded text-[10px] font-bold flex items-center justify-center gap-0.5 border border-[#184d3c] transition-colors"
                   title="Report issue for administrative review"
                 >
-                  <Scale size={12} /> Dispute Review
+                  <Scale size={11} /> Dispute
                 </button>
               )}
             </div>
@@ -727,7 +772,8 @@ export function ArenaBoardView({
             messages={displayChatMessages}
             onSendMessage={handleSendChat}
             sending={sendingChat}
-            userRole={mode === "online" && room ? room.role : "white"}
+            userRole={mode === "online" && room ? room.role : userRole || "white"}
+            currentUsername={currentUsername}
             isMatchFinished={!!winner}
           />
         )}
@@ -766,11 +812,9 @@ export function ArenaBoardView({
             boardTheme={boardTheme}
             soundEnabled={soundEnabled}
             rotated={rotated}
-            showTrainingIntel={showTrainingIntel}
             onThemeChange={(t) => saveCustomTheme(t, marbleTheme)}
             onToggleSound={toggleAudioSound}
             onToggleFlip={() => setRotated((v) => !v)}
-            onToggleTrainingIntel={() => setShowTrainingIntel((v) => !v)}
             onOpenRules={() => {
               setSettingsTab("rules");
               setShowSettings(true);

@@ -46,6 +46,7 @@ export interface MatchSummaryModalProps {
   onRematch?: () => void;
   onNewGame?: () => void;
   onReviewLog?: () => void;
+  onExamineBoard?: () => void;
   onLobby?: () => void;
   boardThemeBg?: string;
   playableBg?: string;
@@ -73,6 +74,7 @@ export function MatchSummaryModal({
   onRematch,
   onNewGame,
   onReviewLog,
+  onExamineBoard,
   onLobby,
   boardThemeBg = "#0b2b22",
   playableBg = "#184d3c",
@@ -255,7 +257,8 @@ export function MatchSummaryModal({
           type="button"
           className="absolute top-4 right-4 text-slate-400 hover:text-white p-2 rounded-xl bg-[#0c3b2e] hover:bg-[#144435] border border-[#184d3c] transition-colors z-20"
           onClick={onClose}
-          aria-label="Close match summary"
+          aria-label="Close match summary and return to Arena"
+          title="Return to Arena"
         >
           <X size={18} />
         </button>
@@ -607,25 +610,26 @@ export function MatchSummaryModal({
         {/* Modal Action Controls / Footer */}
         <div className="border-t border-[#184d3c] pt-4 flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex items-center gap-2">
-            <button
-              id="match-summary-examine-board-btn"
-              type="button"
-              onClick={onClose}
-              className="px-3.5 py-2 bg-[#0c3b2e] hover:bg-[#144435] text-slate-300 hover:text-white font-bold text-xs rounded-xl border border-[#184d3c] flex items-center gap-1.5 transition-colors"
-            >
-              <Eye size={14} className="text-[#d6a735]" />
-              <span>Examine Board</span>
-            </button>
+            {onExamineBoard && (
+              <button
+                id="match-summary-examine-board-btn"
+                type="button"
+                onClick={onExamineBoard}
+                className="px-3.5 py-2 bg-[#0c3b2e] hover:bg-[#144435] text-slate-300 hover:text-white font-bold text-xs rounded-xl border border-[#184d3c] flex items-center gap-1.5 transition-colors"
+                title="Examine final board position"
+              >
+                <Eye size={14} className="text-[#d6a735]" />
+                <span>Examine Board</span>
+              </button>
+            )}
 
             {onReviewLog && (
               <button
                 id="match-summary-review-log-btn"
                 type="button"
-                onClick={() => {
-                  onClose();
-                  onReviewLog();
-                }}
+                onClick={onReviewLog}
                 className="px-3.5 py-2 bg-[#0c3b2e] hover:bg-[#144435] text-slate-300 hover:text-white font-bold text-xs rounded-xl border border-[#184d3c] flex items-center gap-1.5 transition-colors"
+                title="Inspect move history log"
               >
                 <ListOrdered size={14} className="text-[#d6a735]" />
                 <span>Move Log</span>
@@ -638,10 +642,7 @@ export function MatchSummaryModal({
               <button
                 id="match-summary-rematch-btn"
                 type="button"
-                onClick={() => {
-                  onClose();
-                  onRematch();
-                }}
+                onClick={onRematch}
                 className="px-4 py-2 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black text-xs rounded-xl flex items-center gap-1.5 shadow-md shadow-[#d6a735]/20 transition-all hover:scale-105"
               >
                 <RotateCcw size={14} />
@@ -653,31 +654,23 @@ export function MatchSummaryModal({
               <button
                 id="match-summary-new-game-btn"
                 type="button"
-                onClick={() => {
-                  onClose();
-                  onNewGame();
-                }}
+                onClick={onNewGame}
                 className="px-4 py-2 bg-[#144435] hover:bg-[#1f5e4a] text-[#f5efdf] font-bold text-xs rounded-xl border border-[#184d3c] flex items-center gap-1.5 transition-colors"
               >
                 <Swords size={14} className="text-[#d6a735]" />
-                <span>New Match Setup</span>
+                <span>New Match</span>
               </button>
             )}
 
-            {onLobby && (
-              <button
-                id="match-summary-lobby-btn"
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onLobby();
-                }}
-                className="px-3.5 py-2 bg-[#081c15] hover:bg-[#0c3b2e] text-slate-300 font-bold text-xs rounded-xl border border-[#184d3c] flex items-center gap-1.5 transition-colors"
-              >
-                <Gamepad2 size={14} />
-                <span>Return to Lobby</span>
-              </button>
-            )}
+            <button
+              id="match-summary-lobby-btn"
+              type="button"
+              onClick={onLobby || onClose}
+              className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white font-extrabold text-xs rounded-xl shadow-md flex items-center gap-1.5 transition-all hover:scale-105"
+            >
+              <Gamepad2 size={14} />
+              <span>Return to Arena</span>
+            </button>
           </div>
         </div>
       </section>
