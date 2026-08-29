@@ -264,9 +264,12 @@ export async function GET(req: NextRequest) {
       (room.turn === "black" && botService.isBot(room.guestToken));
     if (isBotTurn) {
       const timeSinceLastMove = now - (room.lastMoveTime || 0);
-      // Add slight delay (1.2s) so moves feel natural and animated
-      if (timeSinceLastMove >= 1200) {
-        await botService.triggerBotMoveIfTurn(room);
+      // Add slight delay (1.0s) so moves feel natural and animated
+      if (timeSinceLastMove >= 1000) {
+        const moved = await botService.triggerBotMoveIfTurn(room);
+        if (moved && room.winner) {
+          await applyGameFinishEffects(room);
+        }
       }
     }
   }
@@ -454,6 +457,34 @@ export async function POST(req: NextRequest) {
         createdAt: now,
         updatedAt: now,
       };
+
+      const targetUsername = body.targetUsername ? String(body.targetUsername).trim() : "";
+      if (targetUsername) {
+        const botAccount = await botService.findBot(targetUsername);
+        if (botAccount) {
+          if (mode === "wager" && wagerAmount > 0 && escrowId) {
+            try {
+              let botProf = await dbRepository.getProfile(botAccount.token);
+              if (!botProf) {
+                await dbRepository.upsertProfile(botAccount.token, botAccount.username);
+                botProf = await dbRepository.getProfile(botAccount.token);
+              }
+              if (botProf) {
+                const bal = Math.max(botProf.points || 0, botProf.marbles || 0);
+                if (bal < wagerAmount) {
+                  botProf.points = Math.max(wagerAmount * 5, 2000);
+                  botProf.marbles = botProf.points;
+                  await dbRepository.saveProfile(botProf);
+                }
+              }
+              await walletService.joinWagerEscrowGuest(escrowId, botAccount.token, wagerAmount);
+            } catch (err) {
+              console.error("Failed to fund bot escrow:", err);
+            }
+          }
+          await botService.setupBotDirectChallenge(room, botAccount);
+        }
+      }
 
       await dbRepository.saveRoom(room);
       const profile = await dbRepository.getProfile(token);
@@ -982,7 +1013,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Ensure room is finished before rematching
-      if (room.status !== "finished" && room.status !== "forfeited" && room.status !== "cancelled") {
+      if (room.status !== "completed" && room.status !== "finished" && room.status !== "forfeited" && room.status !== "cancelled" && !room.winner) {
         return NextResponse.json({ error: "Cannot trigger rematch while a match is in progress" }, { status: 400 });
       }
 

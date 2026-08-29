@@ -271,6 +271,60 @@ export const botService = {
     return filtered;
   },
 
+  isBot(token?: string | null): boolean {
+    if (!token) return false;
+    return token.startsWith("bot-player-") || BOT_ACCOUNTS.some((b) => b.token === token || b.username === token);
+  },
+
+  async findBot(identifier: string): Promise<BotAccountConfig | null> {
+    if (!identifier) return null;
+    const clean = identifier.trim().toLowerCase();
+    const base = BOT_ACCOUNTS.find(
+      (b) => b.token.toLowerCase() === clean || b.username.toLowerCase() === clean || b.fullName.toLowerCase() === clean
+    );
+    if (!base) return null;
+    const ov = botOverrides.get(base.token);
+    return { ...base, ...ov };
+  },
+
+  async setupBotDirectChallenge(room: Room, botAccount: BotAccountConfig): Promise<boolean> {
+    // Ensure bot profile in DB
+    let profile = await dbRepository.getProfile(botAccount.token);
+    if (!profile) {
+      await dbRepository.upsertProfile(botAccount.token, botAccount.username);
+      profile = await dbRepository.getProfile(botAccount.token);
+    }
+    if (profile) {
+      profile.fullName = botAccount.fullName;
+      profile.username = botAccount.username;
+      profile.region = botAccount.region;
+      profile.rating = botAccount.rating;
+      profile.wins = botAccount.wins;
+      profile.losses = botAccount.losses;
+      profile.draws = botAccount.draws;
+      if (room.mode === "wager" && room.wagerAmount > 0) {
+        const curBal = Math.max(profile.points || 0, profile.marbles || 0);
+        if (curBal < room.wagerAmount) {
+          profile.points = Math.max(room.wagerAmount * 5, 2000);
+          profile.marbles = profile.points;
+        }
+      }
+      await dbRepository.saveProfile(profile);
+    }
+
+    room.guestName = botAccount.username;
+    room.guestToken = botAccount.token;
+    room.guestReady = true;
+    room.hostReady = true;
+    room.status = "playing";
+    room.lastMoveTime = Date.now();
+    room.disconnectTime = null;
+    room.disconnectedPlayer = null;
+
+    await dbRepository.saveRoom(room);
+    return true;
+  },
+
   async getBot(token: string): Promise<BotAccountConfig | null> {
     const base = BOT_ACCOUNTS.find((b) => b.token === token);
     if (!base) return null;

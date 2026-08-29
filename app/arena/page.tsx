@@ -2829,6 +2829,7 @@ export default function ArenaPage() {
                                 mode: roomMode,
                                 wagerAmount: roomMode === "wager" ? wagerInput : 0,
                                 isPrivate: isPrivateRoom,
+                                targetUsername: challengeTargetUser.trim(),
                               })
                             }
                             className="w-full py-2.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-extrabold rounded-xl text-xs transition-all shadow-md shadow-[#d6a735]/15 flex items-center justify-center gap-2"
