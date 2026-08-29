@@ -768,20 +768,31 @@ export default function ArenaPage() {
         const targetCode = roomParam.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
         setJoinCode(targetCode);
         setMode("online");
-        // Fetch room directly so player or spectator lands straight in the room
         fetch(`/api/damii?code=${encodeURIComponent(targetCode)}&token=${encodeURIComponent(currentAuthToken)}`)
           .then((r) => r.json())
           .then((d) => {
-            if (d.room) {
+            if (d.room && d.room.status !== "cancelled" && d.room.status !== "completed" && !d.room.winner) {
               loadRoom(d.room);
             } else {
               sessionStorage.removeItem("damii_active_room");
-              setShowPregameModal(true);
+              localStorage.removeItem("damii_hosted_room");
+              if (window.location.search.includes("room=") || window.location.search.includes("code=")) {
+                window.history.replaceState({}, "", "/arena");
+              }
+              setRoom(null);
+              setMode("local");
+              setShowPregameModal(false);
             }
           })
           .catch(() => {
             sessionStorage.removeItem("damii_active_room");
-            setShowPregameModal(true);
+            localStorage.removeItem("damii_hosted_room");
+            if (window.location.search.includes("room=") || window.location.search.includes("code=")) {
+              window.history.replaceState({}, "", "/arena");
+            }
+            setRoom(null);
+            setMode("local");
+            setShowPregameModal(false);
           });
       } else if (joinParam) {
         setJoinCode(joinParam.toUpperCase());
@@ -906,15 +917,28 @@ export default function ArenaPage() {
   useEffect(() => {
     const targetCode =
       room?.code || (typeof window !== "undefined" ? localStorage.getItem("damii_hosted_room") : null);
-    if (!targetCode || !token) return;
+    if (!targetCode) return;
     const update = async () => {
       try {
         const response = await fetch(
-          `/api/damii?code=${encodeURIComponent(targetCode)}&token=${encodeURIComponent(token)}`
+          `/api/damii?code=${encodeURIComponent(targetCode)}&token=${encodeURIComponent(token || "")}`
         );
         if (!response.ok) return;
         const data = await response.json();
         if (data.room) {
+          if (data.room.status === "cancelled") {
+            if (typeof window !== "undefined") {
+              localStorage.removeItem("damii_hosted_room");
+              sessionStorage.removeItem("damii_active_room");
+              if (window.location.search.includes("room=") || window.location.search.includes("code=")) {
+                window.history.replaceState({}, "", "/arena");
+              }
+            }
+            setRoom(null);
+            setMode("local");
+            setMessage("This match room was cancelled by the host.");
+            return;
+          }
           loadRoom(data.room);
         }
       } catch {
@@ -1116,8 +1140,9 @@ export default function ArenaPage() {
   const handleReturnToArenaLobby = useCallback(() => {
     setShowMatchSummaryModal(false);
     if (typeof window !== "undefined") {
+      localStorage.removeItem("damii_hosted_room");
       sessionStorage.removeItem("damii_active_room");
-      if (window.location.search.includes("room=")) {
+      if (window.location.search.includes("room=") || window.location.search.includes("code=")) {
         window.history.replaceState({}, "", "/arena");
       }
     }
@@ -1225,6 +1250,39 @@ export default function ArenaPage() {
     }
   }
 
+  async function spectateRoom(code: string) {
+    const cleanCode = code.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+    if (!cleanCode) return;
+    setOnlineBusy(true);
+    setOnlineError("");
+    try {
+      const response = await fetch(
+        `/api/damii?code=${encodeURIComponent(cleanCode)}&token=${encodeURIComponent(token || "")}`
+      );
+      const data = await response.json();
+      if (!response.ok || !data.room) {
+        throw new Error(data.error || "Room not found or no longer available.");
+      }
+      if (data.room.status === "cancelled") {
+        throw new Error("This game was cancelled by the host.");
+      }
+      setMode("online");
+      setLocalGameStarted(false);
+      setShowPregameModal(false);
+      setShowSettings(false);
+      loadRoom(data.room);
+      setMessage(`👁 Spectating Match ${cleanCode}: ${data.room.hostName} vs ${data.room.guestName || "Waiting for Opponent..."}`);
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("damii_active_room", cleanCode);
+        window.history.replaceState({}, "", `/arena?room=${cleanCode}`);
+      }
+    } catch (err) {
+      setOnlineError(err instanceof Error ? err.message : "Failed to spectate room");
+    } finally {
+      setOnlineBusy(false);
+    }
+  }
+
   async function playOnline(move: Move) {
     if (!room) return;
     setSelected(null);
@@ -1263,11 +1321,19 @@ export default function ArenaPage() {
 
   async function cancelRoomOnline() {
     if (!room) return;
+    const roomCode = room.code;
     if (typeof window !== "undefined") {
       localStorage.removeItem("damii_hosted_room");
       sessionStorage.removeItem("damii_active_room");
+      if (window.location.search.includes("room=") || window.location.search.includes("code=")) {
+        window.history.replaceState({}, "", "/arena");
+      }
     }
-    await onlineAction("cancel_room", { code: room.code });
+    setRoom(null);
+    setMode("local");
+    setShowPregameModal(false);
+    setMessage("Room cancelled and returned to arena lobby.");
+    await onlineAction("cancel_room", { code: roomCode });
   }
 
   async function reportDisputeOnline(notes: string) {
@@ -1888,14 +1954,8 @@ export default function ArenaPage() {
                           ) : (
                             <button
                               type="button"
-                              onClick={async () => {
-                                if (!token) {
-                                  window.dispatchEvent(new CustomEvent("damii-open-auth"));
-                                  return;
-                                }
-                                setMode("online");
-                                await onlineAction("join", { code: r.code });
-                              }}
+                              disabled={onlineBusy}
+                              onClick={() => void spectateRoom(r.code)}
                               className="w-full py-2 bg-[#0c3b2e] hover:bg-[#144435] text-[#f5efdf] border border-[#184d3c] font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all"
                             >
                               <Eye size={14} className="text-[#d6a735]" /> Spectate Live Game
@@ -1954,8 +2014,13 @@ export default function ArenaPage() {
                     {activePlayers.map((p, idx) => {
                       const isSelf = p.username === username;
                       const isAdmin = p.role === "admin" || p.role === "super_admin";
-                      const isOnline = Boolean(p.isOnline || p.presenceStatus === "online" || p.presenceStatus === "in_match");
-                      const isInMatch = p.presenceStatus === "in_match";
+                      const isBot = p.token?.startsWith("bot-player-") || (!p.token && p.username && p.username.includes("_"));
+                      // Check if in active live game
+                      const inActiveRoom = lobbyRooms.some(
+                        (r) => !r.winner && r.status === "playing" && (r.hostName === p.username || r.guestName === p.username)
+                      );
+                      const isInMatch = p.presenceStatus === "in_match" || inActiveRoom;
+                      const isOnline = isBot ? true : Boolean(p.isOnline || p.presenceStatus === "online" || isInMatch);
 
                       return (
                         <div
@@ -1984,11 +2049,11 @@ export default function ArenaPage() {
                                 </div>
                               </div>
 
-                              {/* Online / In Match / Offline Status Badge */}
+                              {/* Online / In Game / Offline Status Badge */}
                               {isInMatch ? (
                                 <span className="text-[10px] px-2.5 py-0.5 bg-amber-950/80 border border-amber-500/40 text-amber-300 font-bold rounded-full flex items-center gap-1.5 shrink-0">
                                   <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-ping" />
-                                  In Match
+                                  In Game
                                 </span>
                               ) : isOnline ? (
                                 <span className="text-[10px] px-2.5 py-0.5 bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-bold rounded-full flex items-center gap-1.5 shrink-0">

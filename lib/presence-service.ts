@@ -91,6 +91,17 @@ class PresenceService {
       }
     }
 
+    const cleanUid = String(userIdOrToken || username || "").trim();
+    if (cleanUid.startsWith("bot-player-")) {
+      const isInMatch = Boolean(record?.currentRoomCode);
+      return {
+        isOnline: true,
+        presenceStatus: isInMatch ? "in_match" : "online",
+        lastSeenAt: new Date().toISOString(),
+        currentRoomCode: record?.currentRoomCode ?? null,
+      };
+    }
+
     if (!record || !record.lastSeenMs) {
       return { isOnline: false, presenceStatus: "offline" };
     }

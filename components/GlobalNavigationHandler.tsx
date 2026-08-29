@@ -18,7 +18,11 @@ export function GlobalNavigationHandler() {
           );
           if (!res.ok) return;
           const data = await res.json();
-          if (data.room && data.room.guestToken && data.room.status !== "cancelled") {
+          if (!data.room || data.room.status === "cancelled" || data.room.status === "completed" || data.room.winner) {
+            localStorage.removeItem("damii_hosted_room");
+            return;
+          }
+          if (data.room && data.room.guestToken && (data.room.status === "playing" || data.room.status === "waiting")) {
             // Opponent joined while user was browsing elsewhere!
             soundService.playOpponentJoined();
             localStorage.removeItem("damii_hosted_room");

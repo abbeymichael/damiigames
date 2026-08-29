@@ -10,7 +10,7 @@ import {
   ShieldCheck,
   Zap,
   Users,
-  Bot,
+  Gamepad2,
   AlertTriangle,
   ArrowLeft,
   Crown,
@@ -199,7 +199,7 @@ export function WaitingRoom({
                 <div>
                   <h3 className="text-sm font-bold text-slate-200">Waiting for Challenger...</h3>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    {room.mode === "casual" ? "Matching with online players or authentic bot..." : "Share room link to invite a player."}
+                    {room.mode === "casual" ? "Matching with online players across Ghana & Africa..." : "Share room link to invite a player."}
                   </p>
                 </div>
               </div>
@@ -313,15 +313,15 @@ export function WaitingRoom({
             <span>While You Wait</span>
           </div>
           <p className="text-slate-300 leading-relaxed">
-            Practice opening moves vs training bot or wait for a live challenger. If unjoined after 10 minutes, the room automatically cancels and 100% of any wager stake is instantly refunded.
+            Practice opening moves or wait for a live challenger. If unjoined after 10 minutes, the room automatically cancels and 100% of any wager stake is instantly refunded.
           </p>
           {onPracticeAi && (
             <button
               onClick={onPracticeAi}
               className="mt-1 px-3 py-1.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] border border-[#184d3c] font-bold rounded-lg flex items-center gap-1.5 transition-colors"
             >
-              <Bot className="w-3.5 h-3.5" />
-              <span>Practice vs Training Bot</span>
+              <Gamepad2 className="w-3.5 h-3.5" />
+              <span>Practice Match (Warm-up)</span>
             </button>
           )}
         </div>

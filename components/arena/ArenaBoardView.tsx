@@ -18,7 +18,6 @@ import {
   Palette,
   HelpCircle,
   RotateCcw,
-  Lightbulb,
   Clock,
   Trophy,
   Gamepad2,
@@ -208,6 +207,42 @@ export function ArenaBoardView({
 }: ArenaBoardViewProps) {
   return (
     <div className="w-full max-w-full lg:max-w-[450px] xl:max-w-[480px] mx-auto flex flex-col items-center space-y-2">
+      {/* Live Spectator Header HUD */}
+      {mode === "online" && room && room.role === "spectator" && (
+        <div className="w-full p-2.5 bg-[#06261f] border border-[#d6a735]/70 rounded-xl text-xs flex items-center justify-between gap-2 shadow-md">
+          <div className="flex items-center gap-2 text-[#f5efdf]">
+            <span className="p-1 rounded-md bg-[#d6a735]/20 text-[#d6a735]">
+              <Eye size={14} className="animate-pulse" />
+            </span>
+            <div>
+              <div className="flex items-center gap-1.5 font-bold">
+                <span className="text-[#d6a735]">SPECTATOR MODE</span>
+                <span className="text-[10px] px-1.5 py-0.2 bg-[#0c3b2e] text-slate-300 font-mono rounded">
+                  Room {room.code}
+                </span>
+                {room.status === "playing" && !winner && (
+                  <span className="text-[9px] px-1.5 py-0.2 bg-emerald-950 text-emerald-300 border border-emerald-500/30 rounded font-bold">
+                    LIVE
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-300">
+                Watching {whiteDisplayName} (White) vs {blackDisplayName} (Black)
+              </p>
+            </div>
+          </div>
+          {onReturnToLobby && (
+            <button
+              type="button"
+              onClick={onReturnToLobby}
+              className="px-2.5 py-1 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] hover:text-white border border-[#184d3c] rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 shrink-0"
+            >
+              <Gamepad2 size={12} /> Exit to Lobby
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Connected Opponent Ready-Up Banner */}
       {mode === "online" && room?.status === "waiting" && room?.guestToken && (
         <div className="w-full p-3 sm:p-3.5 bg-gradient-to-r from-[#06261f] via-[#0c3b2e] to-[#081c15] border-2 border-[#d6a735] rounded-xl text-xs flex flex-wrap items-center justify-between gap-2.5 shadow-2xl animate-in fade-in zoom-in-95">
@@ -275,7 +310,16 @@ export function ArenaBoardView({
 
       {/* Incoming / Active Draw Offer Banner */}
       {mode === "online" && room?.status === "playing" && room?.drawOfferedBy && (
-        room.drawOfferedBy !== room.role ? (
+        room.role === "spectator" ? (
+          <div className="w-full p-2.5 bg-[#0c3b2e]/70 border border-[#d6a735]/50 rounded-xl text-xs flex items-center justify-between gap-2 text-[#f5efdf]">
+            <div className="flex items-center gap-2">
+              <Handshake size={16} className="text-[#d6a735]" />
+              <span>
+                Draw offered by {room.drawOfferedBy === "white" ? room.hostName : room.guestName || "Black"}. Pending response...
+              </span>
+            </div>
+          </div>
+        ) : room.drawOfferedBy !== room.role ? (
           <div className="w-full p-3 bg-[#0c3b2e] border-2 border-[#d6a735] rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 shadow-xl animate-in fade-in zoom-in-95">
             <div className="flex items-center gap-2 text-[#f5efdf]">
               <Handshake size={20} className="text-[#d6a735] animate-bounce shrink-0" />
@@ -321,15 +365,19 @@ export function ArenaBoardView({
           <div className="flex items-center gap-2 text-amber-200">
             <AlertTriangle size={18} className="text-amber-400 animate-pulse shrink-0" />
             <div>
-              <strong className="text-amber-300">Opponent Disconnected!</strong>
+              <strong className="text-amber-300">
+                {room.role === "spectator"
+                  ? `${room.disconnectedPlayer === "white" ? room.hostName : room.guestName || "Player"} Disconnected!`
+                  : "Opponent Disconnected!"}
+              </strong>
               <p className="text-[11px] text-amber-100/80">
                 {room.timerState.remainingDisconnectSeconds > 0
                   ? `90-second reconnection grace period active (${room.timerState.remainingDisconnectSeconds}s remaining). Turn timer paused.`
-                  : "Reconnection grace period expired (90s exceeded). Opponent forfeit eligible."}
+                  : "Reconnection grace period expired (90s exceeded)."}
               </p>
             </div>
           </div>
-          {(room.timerState.remainingDisconnectSeconds <= 0 || room.timerState.timedOut) && (
+          {room.role !== "spectator" && (room.timerState.remainingDisconnectSeconds <= 0 || room.timerState.timedOut) && (
             <button
               type="button"
               onClick={claimTimeoutOnline}
@@ -570,36 +618,6 @@ export function ArenaBoardView({
         </div>
       </div>
 
-      {/* Suggested Move (Training Mode) Pill - EXACTLY matching reference design */}
-      <div className="w-full flex flex-col items-center justify-center space-y-1 my-1">
-        <button
-          type="button"
-          onClick={onToggleTrainingIntel}
-          className={`px-3 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1.5 transition-all shadow border ${
-            showTrainingIntel
-              ? "bg-[#d6a735] text-[#06261f] border-[#d6a735] shadow-[#d6a735]/20 ring-2 ring-[#d6a735]/30"
-              : "bg-[#06261f] hover:bg-[#0c3b2e] text-[#d6a735] border-[#184d3c]"
-          }`}
-        >
-          <Lightbulb size={12} className={showTrainingIntel ? "text-[#06261f]" : "text-[#d6a735]"} />
-          <span>SUGGESTED MOVE (Training Mode)</span>
-        </button>
-
-        {showTrainingIntel && (
-          <div className="text-[10px] text-slate-300 font-mono flex items-center gap-1 animate-in fade-in">
-            <span className="text-slate-400">Hint:</span>
-            {suggestedHint ? (
-              <span className="text-amber-300 font-bold bg-[#06261f] px-2 py-0.5 rounded border border-[#184d3c]">
-                {suggestedHint.algNotation || `sq ${suggestedHint.from} ➔ sq ${suggestedHint.to}`}
-                {suggestedHint.isCapture ? " (Capture)" : ""}
-              </span>
-            ) : (
-              <span className="text-slate-500 italic">Analyzing position...</span>
-            )}
-          </div>
-        )}
-      </div>
-
       {/* Dynamic Turn Status & Message Banner */}
       <div className={`w-full flex flex-wrap items-center justify-between p-2 rounded-lg text-xs gap-1.5 transition-all border ${
         secondsLeft < 10 && turnTimerLimit > 0 && !winner && (mode === "local" || room?.status === "playing")
@@ -650,25 +668,43 @@ export function ArenaBoardView({
           {/* Essential Direct Actions */}
           <div className="flex items-center gap-1 justify-end">
             {mode === "online" && room?.status === "playing" && !winner && (
-              <>
-                <button
-                  type="button"
-                  disabled={onlineBusy || Boolean(room?.drawOfferedBy)}
-                  onClick={() => void offerDrawOnline()}
-                  className="px-2 py-0.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] rounded text-[10px] font-bold flex items-center justify-center gap-0.5 border border-[#184d3c] transition-colors disabled:opacity-50"
-                  title="Offer a mutual draw"
-                >
-                  <Handshake size={11} /> Draw
-                </button>
+              room.role === "spectator" ? (
+                <div className="flex items-center gap-1">
+                  <span className="px-2 py-0.5 bg-[#0c3b2e] text-[#d6a735] border border-[#184d3c] rounded text-[10px] font-bold flex items-center gap-1">
+                    <Eye size={11} className="text-[#d6a735]" /> Spectating
+                  </span>
+                  {onReturnToLobby && (
+                    <button
+                      type="button"
+                      onClick={onReturnToLobby}
+                      className="px-2 py-0.5 bg-[#081c15] hover:bg-[#0c3b2e] text-slate-300 hover:text-white rounded text-[10px] font-bold flex items-center gap-0.5 border border-[#184d3c] transition-colors"
+                      title="Exit Spectator Mode"
+                    >
+                      <Gamepad2 size={11} /> Exit
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    disabled={onlineBusy || Boolean(room?.drawOfferedBy)}
+                    onClick={() => void offerDrawOnline()}
+                    className="px-2 py-0.5 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] rounded text-[10px] font-bold flex items-center justify-center gap-0.5 border border-[#184d3c] transition-colors disabled:opacity-50"
+                    title="Offer a mutual draw"
+                  >
+                    <Handshake size={11} /> Draw
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => void forfeitOnline()}
-                  className="px-2 py-0.5 bg-red-950/80 hover:bg-red-900 text-red-200 rounded text-[10px] font-bold flex items-center justify-center gap-0.5 border border-red-800 transition-colors"
-                >
-                  <AlertTriangle size={11} /> Forfeit
-                </button>
-              </>
+                  <button
+                    type="button"
+                    onClick={() => void forfeitOnline()}
+                    className="px-2 py-0.5 bg-red-950/80 hover:bg-red-900 text-red-200 rounded text-[10px] font-bold flex items-center justify-center gap-0.5 border border-red-800 transition-colors"
+                  >
+                    <AlertTriangle size={11} /> Forfeit
+                  </button>
+                </>
+              )
             )}
 
             {winner && (
@@ -684,14 +720,16 @@ export function ArenaBoardView({
                   </button>
                 )}
 
-                <button
-                  type="button"
-                  disabled={onlineBusy}
-                  onClick={() => void requestRematch()}
-                  className="px-2.5 py-1 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] rounded text-[10px] font-extrabold flex items-center justify-center gap-1 transition-all shadow"
-                >
-                  <RefreshCw size={11} /> Play Again
-                </button>
+                {(!room || room.role !== "spectator") && (
+                  <button
+                    type="button"
+                    disabled={onlineBusy}
+                    onClick={() => void requestRematch()}
+                    className="px-2.5 py-1 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] rounded text-[10px] font-extrabold flex items-center justify-center gap-1 transition-all shadow"
+                  >
+                    <RefreshCw size={11} /> Play Again
+                  </button>
+                )}
 
                 {onReturnToLobby && (
                   <button

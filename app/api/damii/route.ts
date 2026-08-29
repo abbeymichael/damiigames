@@ -114,17 +114,35 @@ export async function GET(req: NextRequest) {
       return false;
     });
 
+    // Build active match token & username lookup
+    const activeMatchTokens = new Set<string>();
+    const activeMatchNames = new Set<string>();
+    for (const r of rawRooms) {
+      if (r.status === "playing" && !r.winner) {
+        if (r.hostToken) activeMatchTokens.add(r.hostToken);
+        if (r.guestToken) activeMatchTokens.add(r.guestToken);
+        if (r.hostName) activeMatchNames.add(r.hostName.toLowerCase());
+        if (r.guestName) activeMatchNames.add(r.guestName.toLowerCase());
+      }
+    }
+
     const nonPlayerRoles = new Set(["admin", "super_admin", "organizer", "facilitator", "treasurer"]);
     const mappedLeaderboard = leaderboard
       .filter((p) => !nonPlayerRoles.has(p.role) && p.status !== "banned")
       .map((p) => {
+        const isBot = p.token?.startsWith("bot-player-") || botService.isBot(p.token);
+        const inMatch = activeMatchTokens.has(p.token) || activeMatchNames.has(p.username.toLowerCase());
         const presence = presenceService.getPresence(p.token, p.username);
         const sanitized = securityService.sanitizePublicProfile(p);
+        
+        const isOnline = isBot ? true : inMatch ? true : presence.isOnline;
+        const presenceStatus = inMatch ? "in_match" : isBot ? "online" : presence.presenceStatus;
+
         return {
           ...sanitized,
-          isOnline: presence.isOnline,
-          presenceStatus: presence.presenceStatus,
-          lastSeenAt: presence.lastSeenAt,
+          isOnline,
+          presenceStatus,
+          lastSeenAt: isBot ? new Date().toISOString() : presence.lastSeenAt,
         };
       });
 
@@ -136,18 +154,39 @@ export async function GET(req: NextRequest) {
   }
 
   if (searchParams.get("leaderboard") === "1") {
-    const leaderboard = await dbRepository.getLeaderboard(50);
+    const [leaderboard, rawRooms] = await Promise.all([
+      dbRepository.getLeaderboard(50),
+      dbRepository.listRooms(30),
+    ]);
+
+    const activeMatchTokens = new Set<string>();
+    const activeMatchNames = new Set<string>();
+    for (const r of rawRooms) {
+      if (r.status === "playing" && !r.winner) {
+        if (r.hostToken) activeMatchTokens.add(r.hostToken);
+        if (r.guestToken) activeMatchTokens.add(r.guestToken);
+        if (r.hostName) activeMatchNames.add(r.hostName.toLowerCase());
+        if (r.guestName) activeMatchNames.add(r.guestName.toLowerCase());
+      }
+    }
+
     const nonPlayerRoles = new Set(["admin", "super_admin", "organizer", "facilitator", "treasurer"]);
     const mappedLeaderboard = leaderboard
       .filter((p) => !nonPlayerRoles.has(p.role) && p.status !== "banned")
       .map((p) => {
+        const isBot = p.token?.startsWith("bot-player-") || botService.isBot(p.token);
+        const inMatch = activeMatchTokens.has(p.token) || activeMatchNames.has(p.username.toLowerCase());
         const presence = presenceService.getPresence(p.token, p.username);
         const sanitized = securityService.sanitizePublicProfile(p);
+
+        const isOnline = isBot ? true : inMatch ? true : presence.isOnline;
+        const presenceStatus = inMatch ? "in_match" : isBot ? "online" : presence.presenceStatus;
+
         return {
           ...sanitized,
-          isOnline: presence.isOnline,
-          presenceStatus: presence.presenceStatus,
-          lastSeenAt: presence.lastSeenAt,
+          isOnline,
+          presenceStatus,
+          lastSeenAt: isBot ? new Date().toISOString() : presence.lastSeenAt,
         };
       });
     return NextResponse.json({ leaderboard: mappedLeaderboard });
@@ -309,6 +348,20 @@ export async function POST(req: NextRequest) {
       if (!username) return NextResponse.json({ error: "Username required" }, { status: 400 });
       const profile = await dbRepository.upsertProfile(token, username);
       return NextResponse.json({ profile: securityService.sanitizeProfile(profile) });
+    }
+
+    if (action === "spectate") {
+      const code = cleanCode(body.code);
+      if (!code) return NextResponse.json({ error: "Room code required" }, { status: 400 });
+      const room = await dbRepository.getRoom(code);
+      if (!room) return NextResponse.json({ error: "Room not found or no longer active." }, { status: 404 });
+      if (room.status === "cancelled") {
+        return NextResponse.json({ error: "This game was cancelled by the host." }, { status: 400 });
+      }
+      return NextResponse.json({
+        room: formatRoomResponse(room, token),
+        profile: existingProfile ? securityService.sanitizeProfile(existingProfile) : null,
+      });
     }
 
     if (action === "create") {
@@ -801,8 +854,8 @@ export async function POST(req: NextRequest) {
       const room = await dbRepository.getRoom(code);
       if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
 
-      // Unjoined match cancellation without penalty
-      if (room.status === "waiting" && !room.guestToken && token === room.hostToken) {
+      // Host cancels waiting room
+      if (room.status === "waiting" && token === room.hostToken) {
         room.status = "cancelled";
         await dbRepository.saveRoom(room);
 
@@ -815,11 +868,27 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
           room: formatRoomResponse(room, token),
           profile: securityService.sanitizeProfile(profile),
-          message: "Unjoined room cancelled immediately without penalty.",
+          message: "Room cancelled immediately without penalty.",
         });
       }
 
-      return NextResponse.json({ error: "Only the host can cancel an unjoined waiting room." }, { status: 400 });
+      // Guest leaves waiting room
+      if (room.status === "waiting" && token === room.guestToken) {
+        room.guestToken = null;
+        room.guestName = null;
+        room.guestReady = false;
+        room.hostReady = false;
+        await dbRepository.saveRoom(room);
+
+        const profile = await dbRepository.getProfile(token);
+        return NextResponse.json({
+          room: formatRoomResponse(room, token),
+          profile: securityService.sanitizeProfile(profile),
+          message: "Left the waiting room.",
+        });
+      }
+
+      return NextResponse.json({ error: "Only participants can cancel or leave a waiting room." }, { status: 400 });
     }
 
     if (action === "report_dispute" || action === "request_review") {
