@@ -22,6 +22,7 @@ import {
   Clock,
   Trophy,
   Gamepad2,
+  Swords,
 } from "lucide-react";
 import {
   rowOf,
@@ -132,6 +133,7 @@ interface ArenaBoardViewProps {
   } | null;
   onReturnToLobby?: () => void;
   onOpenSummary?: () => void;
+  readyOnline?: () => Promise<void>;
 }
 
 export function ArenaBoardView({
@@ -202,9 +204,54 @@ export function ArenaBoardView({
   suggestedHint,
   onReturnToLobby,
   onOpenSummary,
+  readyOnline,
 }: ArenaBoardViewProps) {
   return (
-    <div className="w-full max-w-full lg:max-w-[480px] xl:max-w-[520px] mx-auto flex flex-col items-center space-y-2">
+    <div className="w-full max-w-full lg:max-w-[450px] xl:max-w-[480px] mx-auto flex flex-col items-center space-y-2">
+      {/* Connected Opponent Ready-Up Banner */}
+      {mode === "online" && room?.status === "waiting" && room?.guestToken && (
+        <div className="w-full p-3 sm:p-3.5 bg-gradient-to-r from-[#06261f] via-[#0c3b2e] to-[#081c15] border-2 border-[#d6a735] rounded-xl text-xs flex flex-wrap items-center justify-between gap-2.5 shadow-2xl animate-in fade-in zoom-in-95">
+          <div className="flex items-center gap-2.5 text-[#f5efdf]">
+            <div className="w-9 h-9 rounded-xl bg-[#d6a735]/20 border border-[#d6a735]/40 text-[#d6a735] flex items-center justify-center shrink-0">
+              <Swords size={20} className="animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="px-2 py-0.2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-full text-[10px] font-extrabold uppercase">
+                  Opponent Connected
+                </span>
+                <strong className="text-[#d6a735] text-xs sm:text-sm">
+                  {room.role === "white" ? room.guestName : room.hostName}
+                </strong>
+              </div>
+              <p className="text-[11px] text-slate-300 mt-0.5">
+                {room.role === "white"
+                  ? "Opponent is connected & ready! Click Ready to begin match."
+                  : "Connected! Waiting for host to press Ready..."}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {room.role === "white" && readyOnline ? (
+              <button
+                type="button"
+                onClick={() => void readyOnline()}
+                disabled={onlineBusy}
+                className="px-3.5 sm:px-4 py-2 bg-gradient-to-r from-[#d6a735] via-amber-300 to-[#d6a735] hover:brightness-110 text-[#06261f] font-black rounded-lg text-xs shadow-lg flex items-center gap-1.5 transition-all transform hover:scale-[1.02] cursor-pointer"
+              >
+                <Swords size={14} /> Ready — Start Match ⚔️
+              </button>
+            ) : (
+              <div className="px-3 py-1.5 bg-emerald-950/90 border border-emerald-500/60 text-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                <span>Ready ✓ Waiting for Host</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Unjoined Waiting Room Cancellation Banner */}
       {mode === "online" && room?.status === "waiting" && room?.role === "white" && !room.guestToken && (
         <div className="w-full p-3 bg-[#0c3b2e] border border-[#d6a735]/40 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 shadow-lg animate-in fade-in">

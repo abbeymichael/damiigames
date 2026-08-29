@@ -530,11 +530,60 @@ class SoundService {
   }
 
   /**
+   * Distinctive celebratory 4-note ascending chime when an opponent joins a created room
+   */
+  public playOpponentJoined() {
+    if (!this.isCategoryEnabled("notification")) return;
+    const ctx = this.initCtx();
+    if (!ctx) return;
+
+    try {
+      const notes = [
+        { freq: 523.25, delay: 0, dur: 0.15 }, // C5
+        { freq: 659.25, delay: 0.11, dur: 0.15 }, // E5
+        { freq: 783.99, delay: 0.22, dur: 0.18 }, // G5
+        { freq: 1046.5, delay: 0.35, dur: 0.45 }, // C6
+      ];
+
+      notes.forEach(({ freq, delay, dur }) => {
+        const now = ctx.currentTime + delay;
+        const osc = ctx.createOscillator();
+        const oscHarmonic = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, now);
+
+        oscHarmonic.type = "triangle";
+        oscHarmonic.frequency.setValueAtTime(freq * 2, now);
+
+        gain.gain.setValueAtTime(0.28, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+        osc.connect(gain);
+        oscHarmonic.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        oscHarmonic.start(now);
+        osc.stop(now + dur);
+        oscHarmonic.stop(now + dur);
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /**
    * General notification chime dispatcher
    */
   public playNotification(type: string = "default") {
     if (!this.isCategoryEnabled("notification")) return;
 
+    if (type === "opponent_joined" || type === "match_found" || type === "player_joined") {
+      this.playOpponentJoined();
+      return;
+    }
     if (type === "game_request" || type === "challenge") {
       this.playGameRequest();
       return;

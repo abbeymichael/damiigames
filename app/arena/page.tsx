@@ -366,6 +366,7 @@ export default function ArenaPage() {
   const historyScrollRef = useRef<HTMLDivElement>(null);
   const lastProcessedRoomCodeRef = useRef<string>("");
   const lastProcessedMoveCountRef = useRef<number>(-1);
+  const lastKnownGuestTokenRef = useRef<string | null>(null);
 
   const [focusMode, setFocusMode] = useState(false);
   const [showGameActions, setShowGameActions] = useState(false);
@@ -901,17 +902,21 @@ export default function ArenaPage() {
     setShowPregameModal(true);
   }
 
-  // Poll online room state when in online mode (responsive 800ms polling for smooth shared-hosting synchronization)
+  // Poll online room state when in online mode or when hosting a room
   useEffect(() => {
-    if (mode !== "online" || !room || !token) return;
+    const targetCode =
+      room?.code || (typeof window !== "undefined" ? localStorage.getItem("damii_hosted_room") : null);
+    if (!targetCode || !token) return;
     const update = async () => {
       try {
         const response = await fetch(
-          `/api/damii?code=${encodeURIComponent(room.code)}&token=${encodeURIComponent(token)}`
+          `/api/damii?code=${encodeURIComponent(targetCode)}&token=${encodeURIComponent(token)}`
         );
         if (!response.ok) return;
         const data = await response.json();
-        loadRoom(data.room);
+        if (data.room) {
+          loadRoom(data.room);
+        }
       } catch {
         /* Retain last confirmed state */
       }
@@ -1006,6 +1011,22 @@ export default function ArenaPage() {
   }, [activeMoves.length]);
 
   function loadRoom(next: Room) {
+    // Detect opponent join event: Trigger sound and transition to game screen
+    const isHost = next.role === "white" || next.hostName === username;
+    const previouslyNoGuest = !lastKnownGuestTokenRef.current;
+    const nowHasGuest = Boolean(next.guestToken || next.guestName);
+
+    if (isHost && previouslyNoGuest && nowHasGuest && next.status === "waiting") {
+      soundService.playOpponentJoined();
+      setMode("online");
+      setLocalGameStarted(false);
+      setShowPregameModal(false);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("damii_hosted_room");
+      }
+    }
+    lastKnownGuestTokenRef.current = next.guestToken || null;
+
     // Sound & Event Animation Triggers for Online Room Updates
     const isNewRoom = lastProcessedRoomCodeRef.current !== next.code;
     const prevMoveCount = isNewRoom ? -1 : lastProcessedMoveCountRef.current;
@@ -1170,6 +1191,10 @@ export default function ArenaPage() {
       if (!response.ok) throw new Error(data.error ?? "Unable to complete action");
       if (data.profile) setProfile(data.profile);
       if (data.room) {
+        if (action === "create") {
+          localStorage.setItem("damii_hosted_room", data.room.code);
+          sessionStorage.setItem("damii_active_room", data.room.code);
+        }
         loadRoom(data.room);
         if (action === "create" || action === "join") {
           setShowPregameModal(false);
@@ -1231,8 +1256,17 @@ export default function ArenaPage() {
     await onlineAction("claim_timeout_win", { code: room.code });
   }
 
+  async function readyOnline() {
+    if (!room) return;
+    await onlineAction("ready", { code: room.code });
+  }
+
   async function cancelRoomOnline() {
     if (!room) return;
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("damii_hosted_room");
+      sessionStorage.removeItem("damii_active_room");
+    }
     await onlineAction("cancel_room", { code: room.code });
   }
 
@@ -1527,8 +1561,8 @@ export default function ArenaPage() {
 
       {/* LOBBY VIEW vs GAME BOARD VIEW */}
       {!hasActiveGame ? (
-        /* ARENA LOBBY HUB */
-        <section className="flex-1 max-w-6xl w-full mx-auto p-2 sm:p-4 space-y-4 sm:space-y-5">
+        /* ARENA LOBBY HUB (Consistent 1100px Container matching Home Page) */
+        <section className="flex-1 max-w-[1100px] w-full mx-auto p-2 sm:p-4 space-y-4 sm:space-y-5">
           {/* Streamlined Lobby Hero & Quick Actions Hub */}
           <div className="p-4 sm:p-6 bg-gradient-to-br from-[#06261f] via-[#0c3b2e] to-[#081c15] border-2 border-[#184d3c] rounded-2xl shadow-xl space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -2078,7 +2112,7 @@ export default function ArenaPage() {
           )}
         </section>
       ) : mode === "online" && room && room.status === "waiting" && !room.guestToken ? (
-        <section className="flex-1 max-w-6xl w-full mx-auto p-2 sm:p-4 flex flex-col items-center justify-center">
+        <section className="flex-1 max-w-[1100px] w-full mx-auto p-2 sm:p-4 flex flex-col items-center justify-center">
           <WaitingRoom
             room={room}
             currentUsername={username}
@@ -2089,9 +2123,9 @@ export default function ArenaPage() {
           />
         </section>
       ) : (
-        /* Main Arena Game Layout Container (Feature-Rich 3-Column Desktop Layout) */
-        <section className="flex-1 max-w-[1360px] 2xl:max-w-[1480px] w-full mx-auto p-1.5 sm:p-2.5 md:p-3 flex flex-col items-center justify-start">
-          <div className="w-full grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)_280px] xl:grid-cols-[240px_minmax(0,1fr)_310px] 2xl:grid-cols-[260px_minmax(0,1fr)_340px] gap-2.5 xl:gap-3.5 items-start justify-center">
+        /* Main Arena Game Layout Container (Consistent 1100px Desktop Width matching Home Page) */
+        <section className="flex-1 max-w-[1100px] w-full mx-auto p-1.5 sm:p-2.5 md:p-3 flex flex-col items-center justify-start">
+          <div className="w-full grid grid-cols-1 lg:grid-cols-[190px_minmax(0,1fr)_250px] xl:grid-cols-[200px_minmax(0,1fr)_260px] gap-2.5 xl:gap-3 items-start justify-center">
             
             {/* Left Column: Match Navigation & Settings (Desktop) */}
             <div className="hidden lg:flex flex-col gap-2.5 w-full sticky top-2 select-none">
@@ -2186,6 +2220,7 @@ export default function ArenaPage() {
               suggestedHint={suggestedHint}
               onReturnToLobby={handleReturnToArenaLobby}
               onOpenSummary={() => setShowMatchSummaryModal(true)}
+              readyOnline={readyOnline}
             />
 
             {/* Right Column: Game Intelligence Hub & Live Match Chat (Desktop) */}

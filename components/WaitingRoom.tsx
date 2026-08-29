@@ -100,7 +100,7 @@ export function WaitingRoom({
   const potTotal = isWager ? (room.wagerAmount * 2).toFixed(2) : "0.00";
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-4 sm:p-6 space-y-6" id="damii-waiting-room">
+    <div className="w-full max-w-[1100px] mx-auto p-4 sm:p-6 space-y-6" id="damii-waiting-room">
       {/* Top Header Card */}
       <div className="bg-gradient-to-br from-[#06261f] via-[#0c3b2e] to-[#041c17] border-2 border-[#184d3c] rounded-2xl p-5 sm:p-7 shadow-2xl space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#184d3c]">

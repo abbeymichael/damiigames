@@ -1,8 +1,43 @@
 "use client";
 
 import { useEffect } from "react";
+import { soundService } from "@/lib/sound-service";
 
 export function GlobalNavigationHandler() {
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      // Background monitor for hosted online matches when player is navigating around other pages
+      const checkHostedRoom = async () => {
+        try {
+          const hostedCode = localStorage.getItem("damii_hosted_room");
+          const token = localStorage.getItem("damii-player-token");
+          if (!hostedCode || !token || window.location.pathname.startsWith("/arena")) return;
+
+          const res = await fetch(
+            `/api/damii?code=${encodeURIComponent(hostedCode)}&token=${encodeURIComponent(token)}`
+          );
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data.room && data.room.guestToken && data.room.status !== "cancelled") {
+            // Opponent joined while user was browsing elsewhere!
+            soundService.playOpponentJoined();
+            localStorage.removeItem("damii_hosted_room");
+            sessionStorage.setItem("damii_active_room", hostedCode);
+            window.location.href = `/arena?room=${hostedCode}`;
+          }
+        } catch {
+          /* ignore */
+        }
+      };
+
+      const monitorInterval = window.setInterval(checkHostedRoom, 1800);
+
+      return () => {
+        window.clearInterval(monitorInterval);
+      };
+    }
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
 
