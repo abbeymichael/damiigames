@@ -10,6 +10,7 @@ import { MatchNavigationCard } from "@/components/arena/MatchNavigationCard";
 import { MatchSettingsCard } from "@/components/arena/MatchSettingsCard";
 import { GameIntelligenceHub } from "@/components/arena/GameIntelligenceHub";
 import { ArenaBoardView } from "@/components/arena/ArenaBoardView";
+import { PostJoinAcceptanceModal } from "@/components/arena/PostJoinAcceptanceModal";
 import {
   applyMove,
   createBoard,
@@ -2392,6 +2393,17 @@ export default function ArenaPage() {
           </div>
         </section>
       )}
+
+      {/* Real-time Post-Join Pre-Game Match Acceptance Dialog (Popup for Host & Guest) */}
+      <PostJoinAcceptanceModal
+        room={room}
+        currentUsername={username}
+        isHost={room?.role === "white" || room?.hostName === username}
+        onAccept={acceptChallengeOnline}
+        onDecline={declineChallengeOnline}
+        onWithdraw={withdrawChallengeOnline}
+        busy={onlineBusy}
+      />
 
       {/* Mandatory / Interactive Pregame Match Setup Modal */}
       {showPregameModal && (
