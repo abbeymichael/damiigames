@@ -9,6 +9,7 @@ import { securityService } from "@/lib/security";
 import { getAuthContext, validateCsrfToken } from "@/lib/auth-guard";
 import { botService } from "@/lib/bot-service";
 import { chatService } from "@/lib/chat-service";
+import { getProfileRank } from "@/lib/rank-service";
 import { Room, GameMode, Player, MoveLogEntry, Profile } from "@/lib/types";
 
 const cleanName = (value: unknown) => String(value ?? "").trim().replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 20);
@@ -35,7 +36,17 @@ function formatRoomResponse(room: Room, token: string) {
   return {
     code: room.code,
     hostName: room.hostName,
+    hostFullName: room.hostFullName || room.hostName,
+    hostRankTitle: room.hostRankTitle || "Draft Learner",
+    hostRankBadge: room.hostRankBadge || "🪵",
+    hostRating: room.hostRating || 1200,
     guestName: room.guestName,
+    guestFullName: room.guestFullName || (room.guestName ? room.guestName : null),
+    guestRankTitle: room.guestRankTitle || (room.guestName ? "Draft Learner" : null),
+    guestRankBadge: room.guestRankBadge || (room.guestName ? "🪵" : null),
+    guestRating: room.guestRating || (room.guestName ? 1200 : null),
+    guestToken: room.guestToken || null,
+    hostToken: room.hostToken || null,
     isPrivate: Boolean(room.isPrivate),
     hostReady: Boolean(room.hostReady),
     guestReady: Boolean(room.guestReady),
@@ -92,9 +103,9 @@ export async function GET(req: NextRequest) {
     const validRooms = rawRooms.filter((r) => {
       // Completed, ended, forfeited, cancelled, abandoned, or closed games are not live
       if (r.winner !== null && r.winner !== undefined) return false;
-      if (r.status !== "playing" && r.status !== "waiting") return false;
+      if (r.status !== "playing" && r.status !== "waiting" && r.status !== "pending_acceptance") return false;
 
-      if (r.status === "waiting") {
+      if (r.status === "waiting" || r.status === "pending_acceptance") {
         const createdMs = new Date(r.createdAt).getTime();
         if (now - createdMs >= 10 * 60 * 1000) return false;
         // If private, only show to the host/creator or participants
@@ -427,12 +438,21 @@ export async function POST(req: NextRequest) {
 
       const isPrivate = Boolean(body.isPrivate);
       const now = new Date().toISOString();
+      const hostRank = existingProfile ? getProfileRank(existingProfile) : null;
       const room: Room = {
         code,
         hostName: username,
+        hostFullName: existingProfile?.fullName || username,
+        hostRankTitle: hostRank?.title || "Draft Learner",
+        hostRankBadge: hostRank?.badgeEmoji || "🪵",
+        hostRating: existingProfile?.rating || 1200,
         hostToken: token,
         guestName: null,
         guestToken: null,
+        guestFullName: null,
+        guestRankTitle: null,
+        guestRankBadge: null,
+        guestRating: null,
         isPrivate,
         hostReady: false,
         guestReady: false,
@@ -559,11 +579,60 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Compute guest rank & details
+      const guestRank = getProfileRank(existingProfile);
       room.guestName = username;
       room.guestToken = token;
+      room.guestFullName = existingProfile.fullName || username;
+      room.guestRankTitle = guestRank.title;
+      room.guestRankBadge = guestRank.badgeEmoji;
+      room.guestRating = existingProfile.rating ?? 1200;
       room.guestReady = true;
+      room.hostReady = false;
+
+      // Populate host details if missing
+      if (!room.hostFullName || !room.hostRankTitle) {
+        const hostProfile = await dbRepository.getProfile(room.hostToken);
+        if (hostProfile) {
+          const hostRank = getProfileRank(hostProfile);
+          room.hostFullName = hostProfile.fullName || room.hostName;
+          room.hostRankTitle = hostRank.title;
+          room.hostRankBadge = hostRank.badgeEmoji;
+          room.hostRating = hostProfile.rating ?? 1200;
+        }
+      }
+
+      // Instead of auto-starting, enter pending_acceptance state for host manual review
+      room.status = "pending_acceptance";
+      room.lastMoveTime = Date.now();
+      room.disconnectTime = null;
+      room.disconnectedPlayer = null;
+
+      await dbRepository.saveRoom(room);
+      const profile = await dbRepository.getProfile(token);
+      return NextResponse.json({
+        room: formatRoomResponse(room, token),
+        profile: securityService.sanitizeProfile(profile),
+        message: `Challenge sent to ${room.hostName}. Waiting for host to accept.`,
+      });
+    }
+
+    if (action === "accept_challenge") {
+      const code = cleanCode(body.code);
+      if (!code) return NextResponse.json({ error: "Room code required" }, { status: 400 });
+      const room = await dbRepository.getRoom(code);
+      if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
+
+      if (room.hostToken !== token) {
+        return NextResponse.json({ error: "Only the host can accept match challenges." }, { status: 403 });
+      }
+
+      if (!room.guestToken || room.status !== "pending_acceptance") {
+        return NextResponse.json({ error: "No active pending challenger to accept." }, { status: 400 });
+      }
+
       room.hostReady = true;
-      // Auto-start match immediately upon accepting the challenge
+      room.guestReady = true;
       room.status = "playing";
       room.lastMoveTime = Date.now();
       room.disconnectTime = null;
@@ -571,7 +640,83 @@ export async function POST(req: NextRequest) {
 
       await dbRepository.saveRoom(room);
       const profile = await dbRepository.getProfile(token);
-      return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
+      return NextResponse.json({
+        room: formatRoomResponse(room, token),
+        profile: securityService.sanitizeProfile(profile),
+        message: "Match challenge accepted! Launching 10x10 board...",
+      });
+    }
+
+    if (action === "decline_challenge") {
+      const code = cleanCode(body.code);
+      if (!code) return NextResponse.json({ error: "Room code required" }, { status: 400 });
+      const room = await dbRepository.getRoom(code);
+      if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
+
+      if (room.hostToken !== token) {
+        return NextResponse.json({ error: "Only the host can decline challenges." }, { status: 403 });
+      }
+
+      const guestToken = room.guestToken;
+      if (guestToken && room.mode === "wager" && room.escrowId) {
+        await walletService.refundGuestWagerEscrow(room.escrowId, guestToken).catch(() => {});
+      }
+
+      // Reset guest data and return to clean waiting room without penalty or forfeit
+      room.guestToken = null;
+      room.guestName = null;
+      room.guestFullName = null;
+      room.guestRankTitle = null;
+      room.guestRankBadge = null;
+      room.guestRating = null;
+      room.guestReady = false;
+      room.hostReady = false;
+      room.status = "waiting";
+
+      await dbRepository.saveRoom(room);
+      const profile = await dbRepository.getProfile(token);
+      return NextResponse.json({
+        room: formatRoomResponse(room, token),
+        profile: securityService.sanitizeProfile(profile),
+        message: "Challenger declined. You remain waiting for the next opponent.",
+      });
+    }
+
+    if (action === "withdraw_challenge") {
+      const code = cleanCode(body.code);
+      if (!code) return NextResponse.json({ error: "Room code required" }, { status: 400 });
+      const room = await dbRepository.getRoom(code);
+      if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
+
+      if (room.guestToken !== token) {
+        return NextResponse.json({ error: "Only the challenger can withdraw this challenge." }, { status: 403 });
+      }
+
+      if (room.status !== "pending_acceptance") {
+        return NextResponse.json({ error: "Cannot withdraw challenge once the game has started." }, { status: 400 });
+      }
+
+      if (room.mode === "wager" && room.escrowId) {
+        await walletService.refundGuestWagerEscrow(room.escrowId, token).catch(() => {});
+      }
+
+      room.guestToken = null;
+      room.guestName = null;
+      room.guestFullName = null;
+      room.guestRankTitle = null;
+      room.guestRankBadge = null;
+      room.guestRating = null;
+      room.guestReady = false;
+      room.hostReady = false;
+      room.status = "waiting";
+
+      await dbRepository.saveRoom(room);
+      const profile = await dbRepository.getProfile(token);
+      return NextResponse.json({
+        room: formatRoomResponse(room, token),
+        profile: securityService.sanitizeProfile(profile),
+        message: "Challenge withdrawn. Your wager balance has been refunded.",
+      });
     }
 
     if (action === "ready") {
@@ -623,18 +768,29 @@ export async function POST(req: NextRequest) {
       const room = await dbRepository.getRoom(code);
       if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
 
-      if (room.status === "waiting") {
+      if (room.status === "waiting" || room.status === "pending_acceptance") {
         if (token === room.guestToken) {
+          if (room.mode === "wager" && room.escrowId) {
+            await walletService.refundGuestWagerEscrow(room.escrowId, token).catch(() => {});
+          }
           room.guestToken = null;
           room.guestName = null;
+          room.guestFullName = null;
+          room.guestRankTitle = null;
+          room.guestRankBadge = null;
+          room.guestRating = null;
           room.guestReady = false;
           room.hostReady = false;
+          room.status = "waiting";
           await dbRepository.saveRoom(room);
         } else if (token === room.hostToken) {
-          room.status = "cancelled";
+          if (room.guestToken && room.mode === "wager" && room.escrowId) {
+            await walletService.refundGuestWagerEscrow(room.escrowId, room.guestToken).catch(() => {});
+          }
           if (room.escrowId) {
             await walletService.refundHostWagerEscrow(room.escrowId, room.hostToken).catch(() => {});
           }
+          room.status = "cancelled";
           await dbRepository.saveRoom(room);
         }
       } else if (room.status === "playing") {
@@ -885,10 +1041,15 @@ export async function POST(req: NextRequest) {
       const room = await dbRepository.getRoom(code);
       if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
 
-      // Host cancels waiting room
-      if (room.status === "waiting" && token === room.hostToken) {
+      // Host cancels waiting or pending room
+      if ((room.status === "waiting" || room.status === "pending_acceptance") && token === room.hostToken) {
         room.status = "cancelled";
         await dbRepository.saveRoom(room);
+
+        // Refund guest if one was joined
+        if (room.guestToken && room.mode === "wager" && room.escrowId) {
+          await walletService.refundGuestWagerEscrow(room.escrowId, room.guestToken).catch(() => {});
+        }
 
         // Refund host wager lock immediately back to available balance
         if (room.escrowId) {
@@ -903,12 +1064,20 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Guest leaves waiting room
-      if (room.status === "waiting" && token === room.guestToken) {
+      // Guest leaves waiting or pending room
+      if ((room.status === "waiting" || room.status === "pending_acceptance") && token === room.guestToken) {
+        if (room.mode === "wager" && room.escrowId) {
+          await walletService.refundGuestWagerEscrow(room.escrowId, token).catch(() => {});
+        }
         room.guestToken = null;
         room.guestName = null;
+        room.guestFullName = null;
+        room.guestRankTitle = null;
+        room.guestRankBadge = null;
+        room.guestRating = null;
         room.guestReady = false;
         room.hostReady = false;
+        room.status = "waiting";
         await dbRepository.saveRoom(room);
 
         const profile = await dbRepository.getProfile(token);

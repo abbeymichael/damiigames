@@ -1625,6 +1625,68 @@ export const walletService = {
     });
   },
 
+  /**
+   * 4. Refund guest when host declines or guest withdraws before match start
+   */
+  async refundGuestWagerEscrow(escrowId: string, guestToken: string): Promise<WagerEscrow> {
+    return dbRepository.lockKey(`wager_escrow:${escrowId}`, async () => {
+      const escrow = await dbRepository.getEscrow(escrowId);
+      if (!escrow || escrow.status !== "locked") {
+        return escrow || ({} as WagerEscrow);
+      }
+
+      if (escrow.player2Token !== guestToken) {
+        return escrow;
+      }
+
+      const halfPot = Math.floor(escrow.amountPoints / 2);
+      const refundAmount = halfPot > 0 ? halfPot : escrow.amountPoints;
+      const now = new Date().toISOString();
+
+      // Refund guest balance
+      await dbRepository.updateProfileBalance(guestToken, refundAmount);
+
+      // Decrement escrow total pot back to host stake
+      escrow.player2Token = null;
+      escrow.amountPoints = Math.max(0, escrow.amountPoints - refundAmount);
+      escrow.amountMarbles = Math.max(0, escrow.amountMarbles - refundAmount);
+      await dbRepository.saveEscrow(escrow);
+
+      await dbRepository.createTransaction({
+        id: `tx-wager-ref-guest-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+        userToken: guestToken,
+        type: "wager_refund",
+        currency: "points",
+        amount: refundAmount,
+        reference: escrow.id,
+        status: "completed",
+        metaJson: JSON.stringify({ roomCode: escrow.roomCode, reason: "challenge_declined_or_withdrawn" }),
+        createdAt: now,
+      });
+
+      await dbRepository.writeLedger([
+        {
+          userId: guestToken,
+          accountType: "escrow",
+          entryType: "wager_refund",
+          amount: String(-refundAmount),
+          referenceType: "room",
+          referenceId: escrow.roomCode,
+        },
+        {
+          userId: guestToken,
+          accountType: "available",
+          entryType: "wager_refund",
+          amount: String(refundAmount),
+          referenceType: "room",
+          referenceId: escrow.roomCode,
+        },
+      ]).catch(() => []);
+
+      return escrow;
+    });
+  },
+
   async lockWagerEscrow(roomCode: string, wagerAmount: number, player1Token: string, player2Token: string): Promise<WagerEscrow> {
     return dbRepository.lockKey(`room_wager:${roomCode}`, async () => {
       const p1 = await dbRepository.getProfile(player1Token);

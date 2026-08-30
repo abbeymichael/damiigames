@@ -287,8 +287,16 @@ export type Room = {
   code: string;
   hostName: string;
   hostToken: string;
+  hostFullName?: string | null;
+  hostRankTitle?: string | null;
+  hostRankBadge?: string | null;
+  hostRating?: number | null;
   guestName: string | null;
   guestToken: string | null;
+  guestFullName?: string | null;
+  guestRankTitle?: string | null;
+  guestRankBadge?: string | null;
+  guestRating?: number | null;
   boardJson: string;
   turn: Player;
   forcedFrom: number | null;

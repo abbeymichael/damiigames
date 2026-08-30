@@ -588,9 +588,10 @@ export function ArenaBoardView({
                       const fromCol = colOf(animatedMove.from);
                       const toRow = rowOf(square);
                       const toCol = colOf(square);
+                      const isFlipped = orderedSquares.length > 0 && orderedSquares[0] === 99;
                       slideStyle = {
-                        "--slide-x": fromCol - toCol,
-                        "--slide-y": fromRow - toRow,
+                        "--slide-x": isFlipped ? -(fromCol - toCol) : fromCol - toCol,
+                        "--slide-y": isFlipped ? -(fromRow - toRow) : fromRow - toRow,
                       } as React.CSSProperties;
                     }
 

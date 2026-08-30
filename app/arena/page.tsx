@@ -272,6 +272,14 @@ export default function ArenaPage() {
   const [localMoves, setLocalMoves] = useState<MoveLogEntry[]>([]);
   const [localGameStarted, setLocalGameStarted] = useState(false);
 
+  // Automatically flip board for guest/opponent (playing as Black) so pieces are at bottom of mobile/screen
+  const isOpponent = mode === "online" && room?.role === "black";
+  const isFlipped = isOpponent ? !rotated : rotated;
+  const orderedSquares = useMemo(() => {
+    const list = Array.from({ length: 100 }, (_, i) => i);
+    return isFlipped ? [...list].reverse() : list;
+  }, [isFlipped]);
+
   // Dynamically compute captures (takes) directly from the board state for 100% sync in both online and local modes
   const captures = useMemo<Record<Player, number>>(() => {
     let whiteCount = 0;
@@ -367,6 +375,7 @@ export default function ArenaPage() {
   const lastProcessedRoomCodeRef = useRef<string>("");
   const lastProcessedMoveCountRef = useRef<number>(-1);
   const lastKnownGuestTokenRef = useRef<string | null>(null);
+  const lastKnownRoomStatusRef = useRef<string | null>(null);
 
   const [focusMode, setFocusMode] = useState(false);
   const [showGameActions, setShowGameActions] = useState(false);
@@ -1040,6 +1049,10 @@ export default function ArenaPage() {
     const previouslyNoGuest = !lastKnownGuestTokenRef.current;
     const nowHasGuest = Boolean(next.guestToken || next.guestName);
 
+    const prevStatus = lastKnownRoomStatusRef.current;
+    const nextStatus = next.status;
+    lastKnownRoomStatusRef.current = nextStatus;
+
     if (isHost && previouslyNoGuest && nowHasGuest) {
       soundService.playOpponentJoined();
       setMode("online");
@@ -1050,6 +1063,26 @@ export default function ArenaPage() {
       }
     }
     lastKnownGuestTokenRef.current = next.guestToken || null;
+
+    // For Guest: when host accepts, room status transitions to playing -> play acceptance audio cue
+    if (!isHost && prevStatus === "pending_acceptance" && nextStatus === "playing") {
+      soundService.playMatchAccepted();
+    }
+
+    // For Guest: if host declines challenge or room is cancelled, notify and reset cleanly
+    if (!isHost && prevStatus === "pending_acceptance" && (nextStatus === "waiting" || !next.guestToken || nextStatus === "cancelled")) {
+      soundService.playMatchDeclined();
+      setMessage("The host declined your challenge. Your entry stake (if any) was refunded in full.");
+      setRoom(null);
+      setMode("local");
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("damii_active_room");
+        if (window.location.search.includes("room=") || window.location.search.includes("code=")) {
+          window.history.replaceState({}, "", "/arena");
+        }
+      }
+      return;
+    }
 
     // Sound & Event Animation Triggers for Online Room Updates
     const isNewRoom = lastProcessedRoomCodeRef.current !== next.code;
@@ -1317,6 +1350,39 @@ export default function ArenaPage() {
   async function readyOnline() {
     if (!room) return;
     await onlineAction("ready", { code: room.code });
+  }
+
+  async function acceptChallengeOnline() {
+    if (!room) return;
+    soundService.playMatchAccepted();
+    const data = await onlineAction("accept_challenge", { code: room.code });
+    if (data?.room) {
+      setMessage("⚔️ Match accepted! You play as White (First move). Good luck!");
+    }
+  }
+
+  async function declineChallengeOnline() {
+    if (!room) return;
+    soundService.playMatchDeclined();
+    const data = await onlineAction("decline_challenge", { code: room.code });
+    if (data?.room) {
+      setMessage("Match challenge declined. Waiting for another player...");
+    }
+  }
+
+  async function withdrawChallengeOnline() {
+    if (!room) return;
+    const roomCode = room.code;
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("damii_active_room");
+      if (window.location.search.includes("room=") || window.location.search.includes("code=")) {
+        window.history.replaceState({}, "", "/arena");
+      }
+    }
+    setRoom(null);
+    setMode("local");
+    setMessage("Challenge withdrawn. Any entry wager has been refunded in full.");
+    await onlineAction("withdraw_challenge", { code: roomCode });
   }
 
   async function cancelRoomOnline() {
@@ -1598,8 +1664,6 @@ export default function ArenaPage() {
     }
   };
 
-  const orderedSquares = Array.from({ length: 100 }, (_, square) => square);
-  if (rotated) orderedSquares.reverse();
   const mustCapture = moves.some((move) => move.captured !== undefined);
 
   // Format move pairs for notation table
@@ -2176,13 +2240,16 @@ export default function ArenaPage() {
             </div>
           )}
         </section>
-      ) : mode === "online" && room && room.status === "waiting" && !room.guestToken ? (
+      ) : mode === "online" && room && (room.status === "waiting" || room.status === "pending_acceptance") ? (
         <section className="flex-1 max-w-[1100px] w-full mx-auto p-2 sm:p-4 flex flex-col items-center justify-center">
           <WaitingRoom
             room={room}
             currentUsername={username}
-            isHost={room.role === "white"}
+            isHost={room.role === "white" || room.hostName === username}
             onCancelRoom={cancelRoomOnline}
+            onAcceptChallenge={acceptChallengeOnline}
+            onDeclineChallenge={declineChallengeOnline}
+            onWithdrawChallenge={withdrawChallengeOnline}
             onPracticeAi={() => startBotMatch("easy")}
             busy={onlineBusy}
           />

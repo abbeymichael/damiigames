@@ -575,6 +575,80 @@ class SoundService {
   }
 
   /**
+   * High-energy acceptance bip/cue played when match challenge is accepted and starting
+   */
+  public playMatchAccepted() {
+    if (!this.isCategoryEnabled("notification")) return;
+    const ctx = this.initCtx();
+    if (!ctx) return;
+
+    try {
+      const chords = [
+        { freq: 783.99, delay: 0, dur: 0.08 },     // G5
+        { freq: 1046.5, delay: 0.07, dur: 0.08 },   // C6
+        { freq: 1318.51, delay: 0.14, dur: 0.1 },  // E6
+        { freq: 1567.98, delay: 0.22, dur: 0.28 }, // G6
+      ];
+
+      chords.forEach(({ freq, delay, dur }) => {
+        const now = ctx.currentTime + delay;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(freq, now);
+
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + dur);
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /**
+   * Gentle two-tone decline chime if a challenge is declined
+   */
+  public playMatchDeclined() {
+    if (!this.isCategoryEnabled("notification")) return;
+    const ctx = this.initCtx();
+    if (!ctx) return;
+
+    try {
+      const notes = [
+        { freq: 659.25, delay: 0, dur: 0.12 },     // E5
+        { freq: 440.0, delay: 0.1, dur: 0.2 },     // A4
+      ];
+
+      notes.forEach(({ freq, delay, dur }) => {
+        const now = ctx.currentTime + delay;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, now);
+
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + dur);
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /**
    * General notification chime dispatcher
    */
   public playNotification(type: string = "default") {
@@ -582,6 +656,14 @@ class SoundService {
 
     if (type === "opponent_joined" || type === "match_found" || type === "player_joined") {
       this.playOpponentJoined();
+      return;
+    }
+    if (type === "match_accepted" || type === "game_start" || type === "start_match") {
+      this.playMatchAccepted();
+      return;
+    }
+    if (type === "match_declined" || type === "declined") {
+      this.playMatchDeclined();
       return;
     }
     if (type === "game_request" || type === "challenge") {
