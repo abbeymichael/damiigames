@@ -272,29 +272,6 @@ export default function ArenaPage() {
   const [localMoves, setLocalMoves] = useState<MoveLogEntry[]>([]);
   const [localGameStarted, setLocalGameStarted] = useState(false);
 
-  // Automatically flip board for guest/opponent (playing as Black) so pieces are at bottom of mobile/screen
-  const isOpponent = mode === "online" && room?.role === "black";
-  const isFlipped = isOpponent ? !rotated : rotated;
-  const orderedSquares = useMemo(() => {
-    const list = Array.from({ length: 100 }, (_, i) => i);
-    return isFlipped ? [...list].reverse() : list;
-  }, [isFlipped]);
-
-  // Dynamically compute captures (takes) directly from the board state for 100% sync in both online and local modes
-  const captures = useMemo<Record<Player, number>>(() => {
-    let whiteCount = 0;
-    let blackCount = 0;
-    for (let i = 0; i < board.length; i++) {
-      const piece = board[i];
-      if (piece?.player === "white") whiteCount++;
-      else if (piece?.player === "black") blackCount++;
-    }
-    return {
-      white: Math.max(0, 20 - blackCount),
-      black: Math.max(0, 20 - whiteCount),
-    };
-  }, [board]);
-
   const [token, setToken] = useState("");
   const [username, setUsername] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -303,6 +280,14 @@ export default function ArenaPage() {
   const [onlineBusy, setOnlineBusy] = useState(false);
   const [onlineError, setOnlineError] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(60);
+
+  // Automatically flip board for guest/opponent (playing as Black) so pieces are at bottom of mobile/screen
+  const isOpponent = mode === "online" && room?.role === "black";
+  const isFlipped = isOpponent ? !rotated : rotated;
+  const orderedSquares = useMemo(() => {
+    const list = Array.from({ length: 100 }, (_, i) => i);
+    return isFlipped ? [...list].reverse() : list;
+  }, [isFlipped]);
 
   // UI Modals & Drawers
   const [showPregameModal, setShowPregameModal] = useState(false);
