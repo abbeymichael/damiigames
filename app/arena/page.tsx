@@ -272,6 +272,21 @@ export default function ArenaPage() {
   const [localMoves, setLocalMoves] = useState<MoveLogEntry[]>([]);
   const [localGameStarted, setLocalGameStarted] = useState(false);
 
+  // Dynamically compute captures (takes) directly from the board state for 100% sync in both online and local modes
+  const captures = useMemo<Record<Player, number>>(() => {
+    let whiteCount = 0;
+    let blackCount = 0;
+    for (let i = 0; i < board.length; i++) {
+      const piece = board[i];
+      if (piece?.player === "white") whiteCount++;
+      else if (piece?.player === "black") blackCount++;
+    }
+    return {
+      white: Math.max(0, 20 - blackCount),
+      black: Math.max(0, 20 - whiteCount),
+    };
+  }, [board]);
+
   const [token, setToken] = useState("");
   const [username, setUsername] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
