@@ -931,7 +931,7 @@ export default function ArenaPage() {
     const update = async () => {
       try {
         const response = await fetch(
-          `/api/damii?code=${encodeURIComponent(targetCode)}&token=${encodeURIComponent(token || "")}`
+          `/api/damii?code=${encodeURIComponent(targetCode)}&token=${encodeURIComponent(token || "")}&username=${encodeURIComponent(username || "")}`
         );
         if (!response.ok) return;
         const data = await response.json();
@@ -957,7 +957,7 @@ export default function ArenaPage() {
     };
     const timer = window.setInterval(update, 800);
     return () => window.clearInterval(timer);
-  }, [mode, room?.code, token]);
+  }, [mode, room?.code, token, username]);
 
   const whiteDisplayName = useMemo(() => {
     if (mode === "online" && room) return room.hostName;
@@ -1046,7 +1046,11 @@ export default function ArenaPage() {
 
   function loadRoom(next: Room) {
     // Detect opponent join event: Trigger sound and transition to game screen
-    const isHost = next.role === "white" || next.hostName === username;
+    const isHost = Boolean(
+      next.role === "white" ||
+      (username && next.hostName && username.trim().toLowerCase() === next.hostName.trim().toLowerCase()) ||
+      (token && next.hostToken && token === next.hostToken)
+    );
     const previouslyNoGuest = !lastKnownGuestTokenRef.current;
     const nowHasGuest = Boolean(next.guestToken || next.guestName);
 
@@ -1064,6 +1068,21 @@ export default function ArenaPage() {
       }
     }
     lastKnownGuestTokenRef.current = next.guestToken || null;
+
+    if (nextStatus === "pending_acceptance") {
+      setMode("online");
+      setLocalGameStarted(false);
+      setShowPregameModal(false);
+      if (isHost) {
+        setMessage(`⚔️ Challenger ${next.guestFullName || next.guestName || "Opponent"} joined room ${next.code}! Review challenge to start match.`);
+      } else {
+        setMessage(`⚔️ Challenge submitted to ${next.hostFullName || next.hostName}! Waiting for host acceptance...`);
+      }
+    } else if (nextStatus === "playing") {
+      setMode("online");
+      setLocalGameStarted(false);
+      setShowPregameModal(false);
+    }
 
     // For Guest: when host accepts, room status transitions to playing -> play acceptance audio cue
     if (!isHost && prevStatus === "pending_acceptance" && nextStatus === "playing") {
@@ -2246,7 +2265,7 @@ export default function ArenaPage() {
           <WaitingRoom
             room={room}
             currentUsername={username}
-            isHost={room.role === "white" || room.hostName === username}
+            isHost={Boolean(room.role === "white" || (username && room.hostName && username.trim().toLowerCase() === room.hostName.trim().toLowerCase()))}
             onCancelRoom={cancelRoomOnline}
             onAcceptChallenge={acceptChallengeOnline}
             onDeclineChallenge={declineChallengeOnline}
@@ -2398,7 +2417,7 @@ export default function ArenaPage() {
       <PostJoinAcceptanceModal
         room={room}
         currentUsername={username}
-        isHost={room?.role === "white" || room?.hostName === username}
+        isHost={Boolean(room?.role === "white" || (username && room?.hostName && username.trim().toLowerCase() === room.hostName.trim().toLowerCase()))}
         onAccept={acceptChallengeOnline}
         onDecline={declineChallengeOnline}
         onWithdraw={withdrawChallengeOnline}

@@ -40,14 +40,20 @@ export function PostJoinAcceptanceModal({
 }: PostJoinAcceptanceModalProps) {
   const [secondsWaiting, setSecondsWaiting] = useState(0);
 
+  const effectiveIsHost = Boolean(
+    isHost ||
+    room?.role === "white" ||
+    (currentUsername && room?.hostName && currentUsername.trim().toLowerCase() === room.hostName.trim().toLowerCase())
+  );
+
   // Play audio alert on mount if host
   useEffect(() => {
     if (room?.status === "pending_acceptance") {
-      if (isHost) {
+      if (effectiveIsHost) {
         soundService.playOpponentJoined();
       }
     }
-  }, [room?.status, isHost]);
+  }, [room?.status, effectiveIsHost]);
 
   // Tick seconds waiting for live feedback
   useEffect(() => {
@@ -85,7 +91,7 @@ export function PostJoinAcceptanceModal({
         <div className="px-5 sm:px-7 py-4 sm:py-5 bg-gradient-to-r from-[#0c3b2e] via-[#144435] to-[#081c15] border-b border-[#184d3c] flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#d6a735] to-amber-500 text-slate-950 flex items-center justify-center shadow-lg shrink-0">
-              {isHost ? (
+              {effectiveIsHost ? (
                 <Swords className="w-6 h-6 animate-pulse" />
               ) : (
                 <Clock className="w-6 h-6 animate-spin text-slate-950" />
@@ -95,7 +101,7 @@ export function PostJoinAcceptanceModal({
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 bg-[#d6a735]/20 text-[#d6a735] border border-[#d6a735]/40 text-[9px] sm:text-[10px] font-black uppercase tracking-widest rounded-full flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  {isHost ? "Incoming Challenge" : "Challenge Submitted"}
+                  {effectiveIsHost ? "Incoming Challenge" : "Challenge Submitted"}
                 </span>
                 <span className="text-[10px] sm:text-xs font-mono text-slate-300 font-bold">
                   Room #{room.code}
@@ -105,7 +111,7 @@ export function PostJoinAcceptanceModal({
                 id="acceptance-modal-title"
                 className="text-base sm:text-lg md:text-xl font-black text-[#f5efdf] font-serif tracking-tight mt-0.5"
               >
-                {isHost ? "Challenger Joined • Accept Match?" : "Waiting for Host to Accept..."}
+                {effectiveIsHost ? "Challenger Joined • Accept Match?" : "Waiting for Host to Accept..."}
               </h2>
             </div>
           </div>
@@ -125,7 +131,7 @@ export function PostJoinAcceptanceModal({
         <div className="p-5 sm:p-7 space-y-5">
           
           {/* HOST PERSPECTIVE: SHOW CHALLENGER PROFILE & INTEL */}
-          {isHost ? (
+          {effectiveIsHost ? (
             <div className="space-y-4">
               <div className="p-4 sm:p-5 bg-gradient-to-br from-[#0c3b2e] to-[#06261f] border border-[#d6a735]/50 rounded-2xl shadow-inner space-y-3">
                 <div className="flex items-start justify-between gap-3">
@@ -279,7 +285,7 @@ export function PostJoinAcceptanceModal({
         {/* ========================================================================= */}
         <div className="px-5 sm:px-7 py-4 sm:py-5 bg-[#081c15] border-t border-[#184d3c] flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
           
-          {isHost ? (
+          {effectiveIsHost ? (
             <>
               <button
                 type="button"

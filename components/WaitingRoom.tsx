@@ -104,12 +104,18 @@ export function WaitingRoom({
   const potTotal = isWager ? (room.wagerAmount * 2).toFixed(2) : "0.00";
   const isPendingAcceptance = room.status === "pending_acceptance";
 
+  const effectiveIsHost = Boolean(
+    isHost ||
+    room.role === "white" ||
+    (currentUsername && room.hostName && currentUsername.trim().toLowerCase() === room.hostName.trim().toLowerCase())
+  );
+
   return (
     <div className="w-full max-w-[1100px] mx-auto p-4 sm:p-6 space-y-6" id="damii-waiting-room">
       {/* ========================================================================= */}
       {/* HOST VIEW: CHALLENGER ACCEPTANCE MODAL / HERO POPUP */}
       {/* ========================================================================= */}
-      {isPendingAcceptance && isHost && (
+      {isPendingAcceptance && effectiveIsHost && (
         <div className="w-full bg-gradient-to-r from-amber-950 via-[#0c3b2e] to-emerald-950 border-2 border-[#d6a735] rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 animate-in fade-in zoom-in-95 duration-200">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#d6a735]/40">
             <div className="flex items-center gap-3">
@@ -207,7 +213,7 @@ export function WaitingRoom({
       {/* ========================================================================= */}
       {/* GUEST VIEW: AWAITING HOST ACCEPTANCE */}
       {/* ========================================================================= */}
-      {isPendingAcceptance && !isHost && (
+      {isPendingAcceptance && !effectiveIsHost && (
         <div className="w-full bg-gradient-to-r from-[#06261f] via-[#0c3b2e] to-[#041c17] border-2 border-emerald-500/70 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 animate-in fade-in">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#184d3c]">
             <div className="flex items-center gap-3">

@@ -16,10 +16,32 @@ const cleanName = (value: unknown) => String(value ?? "").trim().replace(/[^a-zA
 const cleanToken = (value: unknown) => String(value ?? "").trim().slice(0, 80);
 const cleanCode = (value: unknown) => String(value ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
 
-function formatRoomResponse(room: Room, token: string) {
+function formatRoomResponse(
+  room: Room,
+  token?: string,
+  username?: string,
+  rawToken?: string,
+  sessionUserId?: string
+) {
   let role: "white" | "black" | "spectator" = "spectator";
-  if (token && token === room.hostToken) role = "white";
-  else if (token && token === room.guestToken) role = "black";
+  const cleanU = (username || "").trim().toLowerCase();
+  const hostU = (room.hostName || "").trim().toLowerCase();
+  const guestU = (room.guestName || "").trim().toLowerCase();
+
+  const isHost = Boolean(
+    (token && (token === room.hostToken || (sessionUserId && sessionUserId === room.hostToken))) ||
+    (rawToken && rawToken === room.hostToken) ||
+    (cleanU && hostU && cleanU === hostU)
+  );
+
+  const isGuest = Boolean(
+    (token && (token === room.guestToken || (sessionUserId && sessionUserId === room.guestToken))) ||
+    (rawToken && rawToken === room.guestToken) ||
+    (cleanU && guestU && cleanU === guestU)
+  );
+
+  if (isHost) role = "white";
+  else if (isGuest) role = "black";
 
   // Check turn timers & 90s disconnection grace
   const timerState = timerService.checkRoomTimers(room);
@@ -205,11 +227,16 @@ export async function GET(req: NextRequest) {
 
   const code = cleanCode(searchParams.get("code"));
   const rawToken = cleanToken(searchParams.get("token"));
+  const username = cleanName(searchParams.get("username"));
   let token = rawToken;
+  let sessionUserId = "";
   if (rawToken) {
     const session = await dbRepository.getSession(rawToken);
-    if (session) token = session.userId;
-    presenceService.recordPresence(token, undefined, code || null);
+    if (session) {
+      token = session.userId;
+      sessionUserId = session.userId;
+    }
+    presenceService.recordPresence(token, username || undefined, code || null);
   }
 
   if (!code) {
@@ -223,13 +250,21 @@ export async function GET(req: NextRequest) {
         const createdMs = new Date(r.createdAt).getTime();
         if (now - createdMs >= 10 * 60 * 1000) return false;
         if (r.isPrivate) {
-          return Boolean(token && (token === r.hostToken || token === r.guestToken));
+          return Boolean(
+            (token && (token === r.hostToken || token === r.guestToken)) ||
+            (rawToken && (rawToken === r.hostToken || rawToken === r.guestToken)) ||
+            (username && r.hostName && username.toLowerCase() === r.hostName.toLowerCase())
+          );
         }
         return true;
       }
       if (r.status === "playing") {
         if (r.isPrivate) {
-          return Boolean(token && (token === r.hostToken || token === r.guestToken));
+          return Boolean(
+            (token && (token === r.hostToken || token === r.guestToken)) ||
+            (rawToken && (rawToken === r.hostToken || rawToken === r.guestToken)) ||
+            (username && r.hostName && username.toLowerCase() === r.hostName.toLowerCase())
+          );
         }
         return true;
       }
@@ -262,7 +297,7 @@ export async function GET(req: NextRequest) {
         await walletService.refundHostWagerEscrow(room.escrowId, room.hostToken).catch(() => {});
       }
       return NextResponse.json({
-        room: formatRoomResponse(room, token),
+        room: formatRoomResponse(room, token, username, rawToken, sessionUserId),
         message: "Room automatically expired after 10 minutes with no opponent. Wager stake refunded.",
       });
     }
@@ -298,8 +333,8 @@ export async function GET(req: NextRequest) {
 
   // Handle heartbeat ping if token provided
   if (token && room.status === "playing") {
-    const isHost = token === room.hostToken;
-    const isGuest = token === room.guestToken;
+    const isHost = token === room.hostToken || rawToken === room.hostToken || (username && room.hostName && username.toLowerCase() === room.hostName.toLowerCase());
+    const isGuest = token === room.guestToken || rawToken === room.guestToken || (username && room.guestName && username.toLowerCase() === room.guestName.toLowerCase());
     if (isHost || isGuest) {
       const playerRole: Player = isHost ? "white" : "black";
       if (room.disconnectedPlayer === playerRole) {
@@ -310,7 +345,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ room: formatRoomResponse(room, token) });
+  return NextResponse.json({ room: formatRoomResponse(room, token, username, rawToken, sessionUserId) });
 }
 
 export async function POST(req: NextRequest) {
@@ -623,7 +658,12 @@ export async function POST(req: NextRequest) {
       const room = await dbRepository.getRoom(code);
       if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
 
-      if (room.hostToken !== token) {
+      const isHost = Boolean(
+        (token && (token === room.hostToken || (resolvedToken && resolvedToken === room.hostToken) || (rawToken && rawToken === room.hostToken))) ||
+        (username && room.hostName && username.trim().toLowerCase() === room.hostName.trim().toLowerCase())
+      );
+
+      if (!isHost) {
         return NextResponse.json({ error: "Only the host can accept match challenges." }, { status: 403 });
       }
 
@@ -641,7 +681,7 @@ export async function POST(req: NextRequest) {
       await dbRepository.saveRoom(room);
       const profile = await dbRepository.getProfile(token);
       return NextResponse.json({
-        room: formatRoomResponse(room, token),
+        room: formatRoomResponse(room, token, username, rawToken, resolvedToken),
         profile: securityService.sanitizeProfile(profile),
         message: "Match challenge accepted! Launching 10x10 board...",
       });
@@ -653,7 +693,12 @@ export async function POST(req: NextRequest) {
       const room = await dbRepository.getRoom(code);
       if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
 
-      if (room.hostToken !== token) {
+      const isHost = Boolean(
+        (token && (token === room.hostToken || (resolvedToken && resolvedToken === room.hostToken) || (rawToken && rawToken === room.hostToken))) ||
+        (username && room.hostName && username.trim().toLowerCase() === room.hostName.trim().toLowerCase())
+      );
+
+      if (!isHost) {
         return NextResponse.json({ error: "Only the host can decline challenges." }, { status: 403 });
       }
 
@@ -676,7 +721,7 @@ export async function POST(req: NextRequest) {
       await dbRepository.saveRoom(room);
       const profile = await dbRepository.getProfile(token);
       return NextResponse.json({
-        room: formatRoomResponse(room, token),
+        room: formatRoomResponse(room, token, username, rawToken, resolvedToken),
         profile: securityService.sanitizeProfile(profile),
         message: "Challenger declined. You remain waiting for the next opponent.",
       });
@@ -688,7 +733,12 @@ export async function POST(req: NextRequest) {
       const room = await dbRepository.getRoom(code);
       if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
 
-      if (room.guestToken !== token) {
+      const isGuest = Boolean(
+        (token && (token === room.guestToken || (resolvedToken && resolvedToken === room.guestToken) || (rawToken && rawToken === room.guestToken))) ||
+        (username && room.guestName && username.trim().toLowerCase() === room.guestName.trim().toLowerCase())
+      );
+
+      if (!isGuest) {
         return NextResponse.json({ error: "Only the challenger can withdraw this challenge." }, { status: 403 });
       }
 
@@ -713,7 +763,7 @@ export async function POST(req: NextRequest) {
       await dbRepository.saveRoom(room);
       const profile = await dbRepository.getProfile(token);
       return NextResponse.json({
-        room: formatRoomResponse(room, token),
+        room: formatRoomResponse(room, token, username, rawToken, resolvedToken),
         profile: securityService.sanitizeProfile(profile),
         message: "Challenge withdrawn. Your wager balance has been refunded.",
       });
