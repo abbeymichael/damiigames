@@ -17,7 +17,7 @@ import {
   Flame,
 } from "lucide-react";
 import type { Room, Profile } from "@/lib/types";
-import { soundService } from "@/lib/soundService";
+import { soundService } from "@/lib/sound-service";
 
 interface PostJoinAcceptanceModalProps {
   room: Room | null;
