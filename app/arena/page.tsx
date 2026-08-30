@@ -1040,7 +1040,7 @@ export default function ArenaPage() {
     const previouslyNoGuest = !lastKnownGuestTokenRef.current;
     const nowHasGuest = Boolean(next.guestToken || next.guestName);
 
-    if (isHost && previouslyNoGuest && nowHasGuest && next.status === "waiting") {
+    if (isHost && previouslyNoGuest && nowHasGuest) {
       soundService.playOpponentJoined();
       setMode("online");
       setLocalGameStarted(false);

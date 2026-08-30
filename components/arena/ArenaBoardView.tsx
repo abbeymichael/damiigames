@@ -205,6 +205,7 @@ export function ArenaBoardView({
   onOpenSummary,
   readyOnline,
 }: ArenaBoardViewProps) {
+  const [showForfeitConfirm, setShowForfeitConfirm] = React.useState(false);
   return (
     <div className="w-full max-w-full lg:max-w-[450px] xl:max-w-[480px] mx-auto flex flex-col items-center space-y-2">
       {/* Live Spectator Header HUD */}
@@ -696,13 +697,38 @@ export function ArenaBoardView({
                     <Handshake size={11} /> Draw
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => void forfeitOnline()}
-                    className="px-2 py-0.5 bg-red-950/80 hover:bg-red-900 text-red-200 rounded text-[10px] font-bold flex items-center justify-center gap-0.5 border border-red-800 transition-colors"
-                  >
-                    <AlertTriangle size={11} /> Forfeit
-                  </button>
+                  {showForfeitConfirm ? (
+                    <div className="flex items-center gap-1 bg-red-950/90 border border-red-700 px-1.5 py-0.5 rounded animate-in fade-in">
+                      <span className="text-[9px] text-red-200 font-bold whitespace-nowrap">Resign?</span>
+                      <button
+                        type="button"
+                        disabled={onlineBusy}
+                        onClick={() => {
+                          setShowForfeitConfirm(false);
+                          void forfeitOnline();
+                        }}
+                        className="px-1.5 py-0.5 bg-red-600 hover:bg-red-500 text-white rounded text-[9px] font-black"
+                      >
+                        Yes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowForfeitConfirm(false)}
+                        className="px-1.5 py-0.5 bg-[#081c15] hover:bg-[#0c3b2e] text-slate-300 rounded text-[9px] font-bold"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowForfeitConfirm(true)}
+                      className="px-2 py-0.5 bg-red-950/80 hover:bg-red-900 text-red-200 rounded text-[10px] font-bold flex items-center justify-center gap-0.5 border border-red-800 transition-colors"
+                      title="Resign / Forfeit this match"
+                    >
+                      <AlertTriangle size={11} /> Forfeit
+                    </button>
+                  )}
                 </>
               )
             )}
