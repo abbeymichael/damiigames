@@ -958,7 +958,7 @@ export interface TournamentActionRequest {
 /* ------------------------------------------------------------------------- */
 /* System Settings Categories & Payloads (Section 2.7)                       */
 /* ------------------------------------------------------------------------- */
-export type SystemSettingsCategory = "sms" | "email" | "whatsapp" | "notifications" | "general" | "backup" | "security";
+export type SystemSettingsCategory = "sms" | "email" | "whatsapp" | "notifications" | "general" | "backup" | "security" | "payments" | "platform" | string;
 
 export interface SystemSettingEntry {
   id: string;

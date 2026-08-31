@@ -650,4 +650,10 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
       "ALTER TABLE `league_matches` MODIFY COLUMN `status` varchar(64) NOT NULL DEFAULT 'pending'",
     ],
   },
+  {
+    name: "0006_widen_system_settings_category.sql",
+    statements: [
+      "ALTER TABLE `system_settings` MODIFY COLUMN `category` varchar(64) NOT NULL",
+    ],
+  },
 ];

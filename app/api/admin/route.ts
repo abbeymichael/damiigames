@@ -10,10 +10,19 @@ import { notificationService } from "@/lib/notification-service";
 const cleanToken = (v: unknown) => String(v ?? "").trim().slice(0, 80);
 
 export async function GET(req: NextRequest) {
+  const authHeader = req.headers.get("authorization") || "";
+  const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : "";
+  const cookieToken = req.cookies.get("damii_token")?.value || "";
   const { searchParams } = new URL(req.url);
-  const token = cleanToken(searchParams.get("token"));
+  const token = cleanToken(searchParams.get("token") || bearerToken || cookieToken);
+  const adminSecret = req.headers.get("x-admin-secret") || "";
 
-  if (!(await adminService.verifyAdminAccessAsync(token))) {
+  const isSecretValid = Boolean(
+    adminSecret &&
+    (adminSecret === process.env.ADMIN_SECRET_KEY || adminSecret === process.env.ADMIN_SECRET)
+  );
+
+  if (!isSecretValid && !(await adminService.verifyAdminAccessAsync(token))) {
     return NextResponse.json({ error: "403 Forbidden: Unauthorized admin access" }, { status: 403 });
   }
 
@@ -1086,11 +1095,19 @@ export async function PUT(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization") || "";
     const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : "";
-    const body = await req.json();
-    const token = cleanToken(bearerToken || body.token || new URL(req.url).searchParams.get("token"));
+    const cookieToken = req.cookies.get("damii_token")?.value || "";
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {
+      body = {};
+    }
+    const token = cleanToken(bearerToken || body.token || cookieToken || new URL(req.url).searchParams.get("token"));
     const adminSecret = req.headers.get("x-admin-secret") || "";
 
-    const isAuthed = (await adminService.verifyAdminAccessAsync(token)) || (adminSecret && adminSecret === process.env.ADMIN_SECRET);
+    const isAuthed = (await adminService.verifyAdminAccessAsync(token)) || Boolean(
+      adminSecret && (adminSecret === process.env.ADMIN_SECRET_KEY || adminSecret === process.env.ADMIN_SECRET)
+    );
     if (!isAuthed) {
       return NextResponse.json({ error: "403 Forbidden: Unauthorized admin access" }, { status: 403 });
     }

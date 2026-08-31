@@ -21,7 +21,7 @@ import {
   DollarSign,
   Info,
 } from "lucide-react";
-import { getCsrfToken } from "@/lib/client-auth";
+import { getCsrfToken, getAuthHeaders, getSessionToken } from "@/lib/client-auth";
 
 export interface PaymentSettingsProps {
   token: string;
@@ -60,12 +60,20 @@ export function PaymentSettings({ token, adminSecret, onSettingsUpdated }: Payme
     setLoading(true);
     setMessage(null);
     try {
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const activeToken = token || getSessionToken() || "";
+      const headers = getAuthHeaders();
       if (adminSecret) headers["x-admin-secret"] = adminSecret;
+      if (activeToken) headers["Authorization"] = `Bearer ${activeToken}`;
 
-      const res = await fetch("/api/admin", { headers });
-      const data = await res.json();
+      const queryUrl = activeToken ? `/api/admin?token=${encodeURIComponent(activeToken)}` : "/api/admin";
+      const res = await fetch(queryUrl, { headers });
+      const rawText = await res.text();
+      let data: any = {};
+      try {
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        throw new Error(`Server returned status ${res.status}: ${rawText.slice(0, 100)}`);
+      }
 
       if (res.ok && data.settings) {
         setFormData({
@@ -96,18 +104,19 @@ export function PaymentSettings({ token, adminSecret, onSettingsUpdated }: Payme
     setSaving(true);
     setMessage(null);
     try {
+      const activeToken = token || getSessionToken() || "";
       const csrfToken = getCsrfToken() || "";
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
+      const headers = getAuthHeaders();
       if (csrfToken) headers["x-csrf-token"] = csrfToken;
-      if (token) headers["Authorization"] = `Bearer ${token}`;
+      if (activeToken) headers["Authorization"] = `Bearer ${activeToken}`;
       if (adminSecret) headers["x-admin-secret"] = adminSecret;
 
       const res = await fetch("/api/admin", {
-        method: "PUT",
+        method: "POST",
         headers,
         body: JSON.stringify({
+          action: "update_payment_settings",
+          token: activeToken,
           paystackSecretKey: formData.paystackSecretKey.trim(),
           paystackPublicKey: formData.paystackPublicKey.trim(),
           paystackMode: formData.paystackMode,
@@ -117,7 +126,14 @@ export function PaymentSettings({ token, adminSecret, onSettingsUpdated }: Payme
         }),
       });
 
-      const data = await res.json();
+      const rawText = await res.text();
+      let data: any = {};
+      try {
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        throw new Error(`Server returned non-JSON response (${res.status}): ${rawText.slice(0, 120)}`);
+      }
+
       if (res.ok && data.success) {
         setMessage({
           type: "success",
@@ -140,12 +156,11 @@ export function PaymentSettings({ token, adminSecret, onSettingsUpdated }: Payme
     setTestingConnection(true);
     setConnectionTestResult(null);
     try {
+      const activeToken = token || getSessionToken() || "";
       const csrfToken = getCsrfToken() || "";
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
+      const headers = getAuthHeaders();
       if (csrfToken) headers["x-csrf-token"] = csrfToken;
-      if (token) headers["Authorization"] = `Bearer ${token}`;
+      if (activeToken) headers["Authorization"] = `Bearer ${activeToken}`;
       if (adminSecret) headers["x-admin-secret"] = adminSecret;
 
       const res = await fetch("/api/admin", {
@@ -153,10 +168,18 @@ export function PaymentSettings({ token, adminSecret, onSettingsUpdated }: Payme
         headers,
         body: JSON.stringify({
           action: "get_paystack_balance",
+          token: activeToken,
         }),
       });
 
-      const data = await res.json();
+      const rawText = await res.text();
+      let data: any = {};
+      try {
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        throw new Error(`Server returned non-JSON response (${res.status}): ${rawText.slice(0, 120)}`);
+      }
+
       if (res.ok && data.success && data.configured && !data.error) {
         setConnectionTestResult({
           tested: true,

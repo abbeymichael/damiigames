@@ -751,7 +751,7 @@ export const systemSettings = mysqlTable(
   "system_settings",
   {
     id: varchar("id", { length: 191 }).primaryKey(),
-    category: mysqlEnum("category", ["sms", "email", "general", "backup", "security"]).notNull(),
+    category: varchar("category", { length: 64 }).notNull(),
     key: varchar("key", { length: 96 }).notNull(),
     value: text("value").notNull(), // JSON string payload
     updatedByAdminId: varchar("updated_by_admin_id", { length: 191 }),

@@ -565,4 +565,37 @@ export const EMBEDDED_MIGRATIONS = [
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
     ],
   },
+  {
+    name: "0004_widen_id_and_reference_columns.sql",
+    statements: [
+      "ALTER TABLE `system_settings` MODIFY COLUMN `id` varchar(191) NOT NULL",
+      "ALTER TABLE `system_settings` MODIFY COLUMN `updated_by_admin_id` varchar(191)",
+    ],
+  },
+  {
+    name: "0005_widen_room_status_and_columns.sql",
+    statements: [
+      "ALTER TABLE `rooms` MODIFY COLUMN `status` varchar(64) NOT NULL DEFAULT 'waiting'",
+      "ALTER TABLE `rooms` MODIFY COLUMN `mode` varchar(64) NOT NULL DEFAULT 'casual'",
+      "ALTER TABLE `rooms` MODIFY COLUMN `turn` varchar(16) NOT NULL DEFAULT 'white'",
+      "ALTER TABLE `rooms` MODIFY COLUMN `winner` varchar(16)",
+      "ALTER TABLE `rooms` MODIFY COLUMN `disconnected_player` varchar(16)",
+      "ALTER TABLE `profiles` MODIFY COLUMN `status` varchar(64) NOT NULL DEFAULT 'active'",
+      "ALTER TABLE `profiles` MODIFY COLUMN `role` varchar(64) NOT NULL DEFAULT 'user'",
+      "ALTER TABLE `organizer_profiles` MODIFY COLUMN `status` varchar(64) NOT NULL DEFAULT 'none'",
+      "ALTER TABLE `wallet_transactions` MODIFY COLUMN `status` varchar(64) NOT NULL DEFAULT 'completed'",
+      "ALTER TABLE `wallet_transactions` MODIFY COLUMN `type` varchar(64) NOT NULL",
+      "ALTER TABLE `escrows` MODIFY COLUMN `status` varchar(64) NOT NULL DEFAULT 'locked'",
+      "ALTER TABLE `leagues` MODIFY COLUMN `status` varchar(64) NOT NULL DEFAULT 'registration'",
+      "ALTER TABLE `leagues` MODIFY COLUMN `format` varchar(64) NOT NULL DEFAULT 'single_elimination'",
+      "ALTER TABLE `league_participants` MODIFY COLUMN `status` varchar(64) NOT NULL DEFAULT 'approved'",
+      "ALTER TABLE `league_matches` MODIFY COLUMN `status` varchar(64) NOT NULL DEFAULT 'pending'",
+    ],
+  },
+  {
+    name: "0006_widen_system_settings_category.sql",
+    statements: [
+      "ALTER TABLE `system_settings` MODIFY COLUMN `category` varchar(64) NOT NULL",
+    ],
+  },
 ];

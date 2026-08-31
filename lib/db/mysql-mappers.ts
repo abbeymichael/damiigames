@@ -1302,7 +1302,7 @@ export function systemSettingToRow(s: SystemSettingEntry): typeof schema.systemS
     category: s.category,
     key: s.key.slice(0, 96),
     value: typeof s.value === "string" ? s.value : JSON.stringify(s.value),
-    updatedByAdminId: clamp(s.updatedByAdminId, 36),
+    updatedByAdminId: clamp(s.updatedByAdminId, 191),
     updatedAt: s.updatedAt ? new Date(s.updatedAt) : new Date(),
   };
 }
