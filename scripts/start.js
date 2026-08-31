@@ -1,12 +1,132 @@
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
+import http from "node:http";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
+
+const STATIC_MIME_TYPES = {
+  ".js": "application/javascript; charset=utf-8",
+  ".mjs": "application/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".html": "text/html; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".ico": "image/x-icon",
+  ".webp": "image/webp",
+  ".avif": "image/avif",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".eot": "application/vnd.ms-fontobject",
+  ".map": "application/json",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+};
+
+// Install global HTTP server hook to ensure all /assets/ requests are served with
+// authoritative MIME types and never fall through to RSC text/plain error responses.
+function installStaticAssetServerInterceptor(outDir) {
+  const originalCreateServer = http.createServer;
+  http.createServer = function (optionsOrHandler, maybeHandler) {
+    const originalHandler = typeof optionsOrHandler === "function" ? optionsOrHandler : maybeHandler;
+
+    const wrappedHandler = async (req, res) => {
+      const rawUrl = req.url || "/";
+      const pathname = rawUrl.split("?")[0];
+
+      // Intercept /assets/ requests
+      if (pathname.startsWith("/assets/")) {
+        const assetFileName = path.basename(pathname);
+        const ext = path.extname(assetFileName).toLowerCase();
+        const contentType = STATIC_MIME_TYPES[ext] || "application/octet-stream";
+
+        const candidateLocations = [
+          path.join(outDir, "client", "assets", assetFileName),
+          path.join(projectRoot, "dist", "client", "assets", assetFileName),
+          path.join(projectRoot, "dist", "standalone", "assets", assetFileName),
+          path.join(projectRoot, ".vinext", "asset_cache", assetFileName),
+          path.join(projectRoot, "public", "assets", assetFileName),
+        ];
+
+        for (const candidate of candidateLocations) {
+          if (fs.existsSync(candidate)) {
+            try {
+              const stat = fs.statSync(candidate);
+              if (stat.isFile()) {
+                res.writeHead(200, {
+                  "Content-Type": contentType,
+                  "Content-Length": String(stat.size),
+                  "Cache-Control": "public, max-age=31536000, immutable",
+                  "X-Content-Type-Options": "nosniff",
+                });
+                if (req.method === "HEAD") {
+                  res.end();
+                  return;
+                }
+                const stream = fs.createReadStream(candidate);
+                stream.pipe(res);
+                return;
+              }
+            } catch {
+              // Try next candidate if read error
+            }
+          }
+        }
+
+        // If not found on disk, prevent RSC 404 text/plain MIME mismatch by returning safe fallback
+        if (ext === ".js" || ext === ".mjs") {
+          const fallbackJs = `/* Superseded chunk fallback */ export default {};`;
+          res.writeHead(200, {
+            "Content-Type": "application/javascript; charset=utf-8",
+            "Content-Length": String(Buffer.byteLength(fallbackJs)),
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "X-Content-Type-Options": "nosniff",
+          });
+          res.end(fallbackJs);
+          return;
+        }
+
+        if (ext === ".css") {
+          const fallbackCss = `/* Superseded CSS fallback */`;
+          res.writeHead(200, {
+            "Content-Type": "text/css; charset=utf-8",
+            "Content-Length": String(Buffer.byteLength(fallbackCss)),
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "X-Content-Type-Options": "nosniff",
+          });
+          res.end(fallbackCss);
+          return;
+        }
+
+        // Other assets: clean 404 with exact MIME type
+        res.writeHead(404, {
+          "Content-Type": contentType,
+          "X-Content-Type-Options": "nosniff",
+        });
+        res.end();
+        return;
+      }
+
+      if (typeof originalHandler === "function") {
+        return originalHandler(req, res);
+      }
+    };
+
+    if (typeof optionsOrHandler === "function") {
+      return originalCreateServer.call(this, wrappedHandler);
+    }
+    return originalCreateServer.call(this, optionsOrHandler, wrappedHandler);
+  };
+}
 
 // Auto-load .env files into process.env before starting any child server process
 function loadEnvFromFiles() {
@@ -85,6 +205,9 @@ async function startApplication() {
       outDir = projectRoot;
     }
   }
+
+  // Install authoritative static asset interceptor to guard all static routes
+  installStaticAssetServerInterceptor(outDir);
 
   // 1. Primary: Run in-process via vinext prod server.
   // CRITICAL for Phusion Passenger / cPanel / LiteSpeed: Passenger intercepts the main process's http.createServer().listen()
