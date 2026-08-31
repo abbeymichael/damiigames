@@ -111,7 +111,9 @@ export const dbRepository: DbRepository = {
   getLeaderboard: withStore("getLeaderboard"),
 
   getAdminSettings: withStore("getAdminSettings"),
+  getPlatformSettings: withStore("getPlatformSettings"),
   updateAdminSettings: withStore("updateAdminSettings"),
+  updatePlatformSettings: withStore("updatePlatformSettings"),
 
   markPaystackRefProcessed: withStore("markPaystackRefProcessed"),
   isPaystackRefProcessed: withStore("isPaystackRefProcessed"),

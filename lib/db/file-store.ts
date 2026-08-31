@@ -510,6 +510,14 @@ export const fileStore: any = {
     return { ...data().adminSettings };
   },
 
+  async getPlatformSettings() {
+    return { ...data().adminSettings };
+  },
+
+  async updatePlatformSettings(updates: Partial<AdminSettings>, adminName?: string) {
+    return fileStore.updateAdminSettings(updates, adminName);
+  },
+
   async updateAdminSettings(updates, adminName) {
     return lockKey("admin_settings", async () => {
       const s = data().adminSettings;
