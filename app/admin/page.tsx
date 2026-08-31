@@ -220,7 +220,7 @@ const NAV_SECTIONS: NavSection[] = [
       { key: "communications", label: "Communications", icon: MessageSquare, permission: "communications.view" },
       { key: "limits", label: "Game Limits & Escrow", icon: SlidersHorizontal, permission: "limits.manage" },
       { key: "users", label: "Players & Users", icon: Users, permission: "users.view" },
-      { key: "bots", label: "Bot Accounts (100)", icon: Bot, permission: "system.settings.view" },
+      { key: "bots", label: "Mechanics", icon: Bot, permission: "mechanics.view" },
     ],
   },
   {
@@ -260,7 +260,7 @@ const TAB_ITEMS_CONFIG: Record<
   limits: { key: "limits", label: "Game Limits & Escrow", permission: "limits.manage", icon: SlidersHorizontal, moduleName: "Game Limits & Escrow" },
   users: { key: "users", label: "Players & Users", permission: "users.view", icon: Users, moduleName: "Player Management" },
   players: { key: "users", label: "Players & Users", permission: "users.view", icon: Users, moduleName: "Player Management" },
-  bots: { key: "bots", label: "Bot Accounts (100)", permission: "system.settings.view", icon: Bot, moduleName: "Bot Fleet Management" },
+  bots: { key: "bots", label: "Mechanics", permission: "mechanics.view", icon: Bot, moduleName: "Mechanics Fleet Management" },
   admins: { key: "admins", label: "Admin Staff", permission: "admins.view", icon: UserCheck, moduleName: "Admin Staff Accounts" },
   roles: { key: "roles", label: "Roles & Permissions", permission: "roles.view", icon: ShieldCheck, moduleName: "Roles & Granular Permissions" },
   audit: { key: "audit", label: "Audit Trail", permission: "audit.view", icon: ScrollText, moduleName: "Audit Trail & Compliance Logs" },
@@ -299,6 +299,7 @@ function hasAccess(
     "admins.view": ["admins.manage", "admins.delete", "manage_admins"],
     "roles.view": ["roles.manage", "roles.delete", "manage_admins"],
     "audit.view": ["audit.export", "audit.delete", "view_audit_log"],
+    "mechanics.view": ["mechanics.manage", "mechanics.fund", "mechanics.create", "mechanics.delete", "manage_bots"],
     "system.settings.view": ["system.settings.edit", "system.settings.delete", "system.maintenance", "system.security", "system.backup"],
   };
 
@@ -553,8 +554,24 @@ export default function AdminPage() {
 
   const filteredUsers = useMemo(() => {
     const list = metrics?.allUsers || [];
-    // Segregate admin accounts: Admins are NOT players and do not play matches.
-    const playersOnly = list.filter((u) => u.role !== "admin" && u.role !== "super_admin");
+    const isBotOrMechanic = (u: any) => {
+      if (!u) return false;
+      const t = (u.token || "").toLowerCase();
+      const name = (u.username || "").toLowerCase();
+      return (
+        t.startsWith("bot-") ||
+        t.startsWith("bot_") ||
+        t.startsWith("mech-") ||
+        t.startsWith("mechanic-") ||
+        t.startsWith("mechanic_") ||
+        name.startsWith("bot_") ||
+        name.startsWith("mechanic_") ||
+        u.isBot === true
+      );
+    };
+
+    // Segregate admin accounts and mechanics: Only human players are listed in Players tab
+    const playersOnly = list.filter((u) => u.role !== "admin" && u.role !== "super_admin" && !isBotOrMechanic(u));
     if (!userSearch.trim()) return playersOnly;
     const q = userSearch.toLowerCase();
     return playersOnly.filter(

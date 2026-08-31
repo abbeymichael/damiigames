@@ -126,8 +126,10 @@ export const adminService = {
     };
   },
 
-  async getBotFleetData(adminToken: string, options?: { search?: string; status?: string; tier?: string }) {
+  async getBotFleetData(adminToken: string, options?: { search?: string; status?: string; tier?: string; profitability?: string }) {
     if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const canView = (await hasPermission(adminToken, "mechanics.view")) || (await hasPermission(adminToken, "system.settings.view"));
+    if (!canView) throw new Error("Unauthorized: 'mechanics.view' permission required");
     const [metrics, bots] = await Promise.all([
       botService.getFleetMetrics(),
       botService.listBots(options),
@@ -139,8 +141,57 @@ export const adminService = {
     };
   },
 
+  async getBotDetail(adminToken: string, botToken: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const canView = (await hasPermission(adminToken, "mechanics.view")) || (await hasPermission(adminToken, "system.settings.view"));
+    if (!canView) throw new Error("Unauthorized: 'mechanics.view' permission required");
+    return botService.getBotDetail(botToken);
+  },
+
+  async fundBotAccount(adminToken: string, botToken: string, points: number, marbles: number, note?: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const canFund = (await hasPermission(adminToken, "mechanics.fund")) || (await hasPermission(adminToken, "mechanics.manage"));
+    if (!canFund) throw new Error("Unauthorized: 'mechanics.fund' permission required");
+    const admin = await this.resolveAdminProfile(adminToken);
+    const updated = await botService.fundBot(botToken, Number(points || 0), Number(marbles || 0), note, admin?.username || "Admin");
+    await this.logAdminAction(adminToken, admin?.username || "Admin", "FUND_BOT_BANKROLL", botToken, { points, marbles, note });
+    return updated;
+  },
+
+  async withdrawBotAccount(adminToken: string, botToken: string, points: number, note?: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const canFund = (await hasPermission(adminToken, "mechanics.fund")) || (await hasPermission(adminToken, "mechanics.manage"));
+    if (!canFund) throw new Error("Unauthorized: 'mechanics.fund' permission required");
+    const admin = await this.resolveAdminProfile(adminToken);
+    const updated = await botService.withdrawBot(botToken, Number(points || 0), note, admin?.username || "Admin");
+    await this.logAdminAction(adminToken, admin?.username || "Admin", "WITHDRAW_BOT_BANKROLL", botToken, { points, note });
+    return updated;
+  },
+
+  async createBotAccount(adminToken: string, botData: any) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const canCreate = (await hasPermission(adminToken, "mechanics.create")) || (await hasPermission(adminToken, "mechanics.manage"));
+    if (!canCreate) throw new Error("Unauthorized: 'mechanics.create' permission required");
+    const admin = await this.resolveAdminProfile(adminToken);
+    const created = await botService.createBot(botData, admin?.username || "Admin");
+    await this.logAdminAction(adminToken, admin?.username || "Admin", "CREATE_BOT_ACCOUNT", created.token, botData);
+    return created;
+  },
+
+  async deleteBotAccount(adminToken: string, botToken: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const canDelete = (await hasPermission(adminToken, "mechanics.delete")) || (await hasPermission(adminToken, "mechanics.manage"));
+    if (!canDelete) throw new Error("Unauthorized: 'mechanics.delete' permission required");
+    const admin = await this.resolveAdminProfile(adminToken);
+    const success = await botService.deleteBot(botToken, admin?.username || "Admin");
+    await this.logAdminAction(adminToken, admin?.username || "Admin", "DELETE_BOT_ACCOUNT", botToken, {});
+    return { success };
+  },
+
   async updateBotAccount(adminToken: string, botToken: string, updates: any) {
     if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const canManage = await hasPermission(adminToken, "mechanics.manage");
+    if (!canManage) throw new Error("Unauthorized: 'mechanics.manage' permission required");
     const updated = await botService.updateBot(botToken, updates);
     if (!updated) throw new Error("Bot account not found");
     const admin = await this.resolveAdminProfile(adminToken);
@@ -150,6 +201,8 @@ export const adminService = {
 
   async updateBotFleetSettings(adminToken: string, settings: any) {
     if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const canManage = await hasPermission(adminToken, "mechanics.manage");
+    if (!canManage) throw new Error("Unauthorized: 'mechanics.manage' permission required");
     const updated = botService.updateSettings(settings);
     const admin = await this.resolveAdminProfile(adminToken);
     await this.logAdminAction(adminToken, admin?.username || "Admin", "UPDATE_BOT_FLEET_SETTINGS", "BotFleet", settings);
@@ -158,6 +211,8 @@ export const adminService = {
 
   async bulkFundBotFleet(adminToken: string, points: number, marbles: number, tier?: string) {
     if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const canFund = (await hasPermission(adminToken, "mechanics.fund")) || (await hasPermission(adminToken, "mechanics.manage"));
+    if (!canFund) throw new Error("Unauthorized: 'mechanics.fund' permission required");
     const res = await botService.bulkFundFleet(Number(points || 0), Number(marbles || 0), tier);
     const admin = await this.resolveAdminProfile(adminToken);
     await this.logAdminAction(adminToken, admin?.username || "Admin", "BULK_FUND_BOTS", "BotFleet", { points, marbles, tier });
@@ -166,6 +221,8 @@ export const adminService = {
 
   async resetBotFleet(adminToken: string) {
     if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const canManage = await hasPermission(adminToken, "mechanics.manage");
+    if (!canManage) throw new Error("Unauthorized: 'mechanics.manage' permission required");
     const res = await botService.resetFleet();
     const admin = await this.resolveAdminProfile(adminToken);
     await this.logAdminAction(adminToken, admin?.username || "Admin", "RESET_BOT_FLEET", "BotFleet", {});
@@ -241,8 +298,10 @@ export const adminService = {
   async getSystemMetrics(adminToken: string) {
     if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
 
-    const allUsers = await dbRepository.getAllProfiles();
-    const leaderboard = await dbRepository.getLeaderboard(200);
+    const rawProfiles = await dbRepository.getAllProfiles();
+    const allUsers = rawProfiles.filter((u) => !botService.isBot(u.token) && !botService.isBot(u.username) && u.role !== "bot");
+    const rawLeaderboard = await dbRepository.getLeaderboard(200);
+    const leaderboard = rawLeaderboard.filter((u) => !botService.isBot(u.token) && !botService.isBot(u.username) && u.role !== "bot");
     const rooms = await dbRepository.listRooms(200);
     const [rawTransactions, rawDeposits, rawWithdrawals, leagues, logs, settings] = await Promise.all([
       dbRepository.getAllTransactions(500).catch(() => []),

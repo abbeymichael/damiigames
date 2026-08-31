@@ -195,20 +195,20 @@ export function UsersTable({
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
-            <tr className="border-b border-[#1a5e48] text-slate-200 uppercase font-bold tracking-wider bg-[#041d17]">
-              <th className="py-2.5 px-3">Player / User</th>
-              <th className="py-2.5 px-3">Role</th>
-              <th className="py-2.5 px-3">Region</th>
-              <th className="py-2.5 px-3">Elo Rating &amp; Record</th>
-              <th className="py-2.5 px-3">Wallet Balances</th>
-              <th className="py-2.5 px-3">Status</th>
-              <th className="py-2.5 px-3 text-right">Actions</th>
+            <tr className="border-b border-[#1a5e48] text-white uppercase font-bold tracking-wider bg-[#041d17]">
+              <th className="py-2.5 px-3 text-white font-bold">Player / User</th>
+              <th className="py-2.5 px-3 text-white font-bold">Role</th>
+              <th className="py-2.5 px-3 text-white font-bold">Region</th>
+              <th className="py-2.5 px-3 text-white font-bold">Elo Rating &amp; Record</th>
+              <th className="py-2.5 px-3 text-white font-bold">Wallet Balances</th>
+              <th className="py-2.5 px-3 text-white font-bold">Status</th>
+              <th className="py-2.5 px-3 text-white font-bold text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#114232]">
+          <tbody className="divide-y divide-[#114232] text-white">
             {filteredUsers.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-slate-300 italic">
+                <td colSpan={7} className="py-8 text-center text-white/80 italic">
                   No user accounts matching the specified filter criteria.
                 </td>
               </tr>
@@ -218,14 +218,14 @@ export function UsersTable({
                 const winPct = totalMatches > 0 ? Math.round(((u.wins || 0) / totalMatches) * 100) : 0;
 
                 return (
-                  <tr key={u.token || u.username} className="hover:bg-[#0c3b2e]/50 transition-colors">
+                  <tr key={u.token || u.username} className="hover:bg-[#0c3b2e]/60 transition-colors">
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-lg bg-[#0c3b2e] border border-[#1a5e48] flex items-center justify-center font-bold text-[#d6a735] text-xs shrink-0">
                           {u.username.slice(0, 2).toUpperCase()}
                         </div>
                         <div>
-                          <div className="font-bold text-[#f5efdf] text-sm flex items-center gap-1.5">
+                          <div className="font-bold text-white text-sm flex items-center gap-1.5">
                             {u.username}
                             {u.phoneNumber && (
                               <span title="Verified Phone">
@@ -233,39 +233,39 @@ export function UsersTable({
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center gap-2 text-[10px] text-slate-300">
+                          <div className="flex items-center gap-2 text-[10px] text-white/90">
                             {u.fullName && <span>{u.fullName}</span>}
-                            {u.phoneNumber && <span className="font-mono text-slate-400">{u.phoneNumber}</span>}
+                            {u.phoneNumber && <span className="font-mono text-white/80">{u.phoneNumber}</span>}
                           </div>
                         </div>
                       </div>
                     </td>
 
                     <td className="py-3 px-3">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-[#0c3b2e] text-cyan-300 border border-cyan-500/20">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-[#0c3b2e] text-cyan-200 border border-cyan-500/40">
                         {u.role}
                       </span>
                     </td>
 
-                    <td className="py-3 px-3 text-slate-300">
-                      <div className="flex items-center gap-1 text-[11px]">
-                        <MapPin size={11} className="text-slate-400" />
+                    <td className="py-3 px-3 text-white">
+                      <div className="flex items-center gap-1 text-[11px] font-medium">
+                        <MapPin size={11} className="text-emerald-400" />
                         {u.region || "Greater Accra"}
                       </div>
                     </td>
 
-                    <td className="py-3 px-3">
-                      <div className="font-bold text-[#d6a735]">{u.rating || 1200} Elo</div>
-                      <div className="text-[10px] text-slate-300">
+                    <td className="py-3 px-3 text-white">
+                      <div className="font-bold text-amber-300">{u.rating || 1200} Elo</div>
+                      <div className="text-[10px] text-white/90 font-medium">
                         {u.wins || 0}W - {u.losses || 0}L - {u.draws || 0}D ({winPct}%)
                       </div>
                     </td>
 
-                    <td className="py-3 px-3">
-                      <div className="font-bold text-emerald-400">
+                    <td className="py-3 px-3 text-white">
+                      <div className="font-bold text-emerald-300 font-mono">
                         GH₵ {typeof u.points === "number" ? u.points.toFixed(2) : u.points || 0}
                       </div>
-                      <div className="text-[10px] text-[#d6a735] font-semibold flex items-center gap-1">
+                      <div className="text-[10px] text-amber-300 font-semibold flex items-center gap-1">
                         <Coins size={10} />
                         {u.marbles ?? 0} Marbles
                       </div>
@@ -275,10 +275,10 @@ export function UsersTable({
                       <span
                         className={`px-2 py-0.5 text-[10px] font-bold rounded uppercase ${
                           u.status === "banned"
-                            ? "bg-red-950 text-red-300 border border-red-500/40"
+                            ? "bg-red-950 text-red-200 border border-red-500/60"
                             : u.status === "suspended"
-                            ? "bg-amber-950 text-amber-300 border border-amber-500/40"
-                            : "bg-emerald-950 text-emerald-300 border border-emerald-500/40"
+                            ? "bg-amber-950 text-amber-200 border border-amber-500/60"
+                            : "bg-emerald-950 text-emerald-200 border border-emerald-500/60"
                         }`}
                       >
                         {u.status || "active"}

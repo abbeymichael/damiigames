@@ -285,9 +285,9 @@ export async function GET(req: NextRequest) {
     const createdMs = new Date(room.createdAt).getTime();
     const elapsedMs = now - createdMs;
 
-    // For casual free public games: match with one of the authentic player accounts after a randomized auto-join delay (15s, 1m, 1.5m to 7m)
+    // For public games (casual or wagered): match with one of the authentic mechanic accounts after a randomized auto-join delay
     const requiredDelayMs = botService.getRoomJoinDelayMs(room.code, room.createdAt);
-    if (room.mode === "casual" && !room.isPrivate && elapsedMs >= requiredDelayMs) {
+    if (!room.isPrivate && elapsedMs >= requiredDelayMs) {
       await botService.matchmakeBotIfEligible(room);
     } else if (elapsedMs > 10 * 60 * 1000) {
       room.status = "cancelled";

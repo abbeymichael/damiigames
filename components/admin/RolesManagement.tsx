@@ -25,6 +25,7 @@ import {
   Layers,
   Check,
   Filter,
+  Bot,
 } from "lucide-react";
 import type { AppRole, Permission } from "@/lib/types";
 import { SYSTEM_PERMISSIONS, MODULE_CATEGORIES, ModuleCategoryInfo } from "@/lib/permissions-constants";
@@ -52,6 +53,7 @@ const CATEGORY_ICON_MAP: Record<string, React.ElementType> = {
   admins: UserCog,
   communications: MessageSquare,
   audit: FileText,
+  mechanics: Bot,
   system: Settings,
 };
 
@@ -349,6 +351,7 @@ export function RolesManagement({
                 (cat.id === "disputes" && p.key.startsWith("disputes.")) ||
                 (cat.id === "admins" && (p.key.startsWith("admins.") || p.key.startsWith("roles."))) ||
                 (cat.id === "communications" && p.key.startsWith("communications.")) ||
+                (cat.id === "mechanics" && p.key.startsWith("mechanics.")) ||
                 (cat.id === "audit" && p.key.startsWith("audit.")) ||
                 (cat.id === "system" && p.key.startsWith("system."))
             ).length;

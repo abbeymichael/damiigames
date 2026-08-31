@@ -104,6 +104,14 @@ export const MODULE_CATEGORIES: ModuleCategoryInfo[] = [
     badgeColor: "bg-amber-950/80 text-amber-200 border-amber-600/40",
   },
   {
+    id: "mechanics",
+    label: "Mechanics Fleet & AI",
+    shortLabel: "Mechanics",
+    description: "AI bot mechanics accounts, double-entry bankroll ledger, matchmaking modes, funding, and wager risk controls.",
+    icon: "Bot",
+    badgeColor: "bg-emerald-950/80 text-emerald-300 border-emerald-500/40",
+  },
+  {
     id: "system",
     label: "System Settings & Maintenance",
     shortLabel: "System",
@@ -336,7 +344,34 @@ export const SYSTEM_PERMISSIONS: Omit<Permission, "id">[] = [
     description: "Purge older audit log records beyond compliance retention windows.",
   },
 
-  // 12. SYSTEM SETTINGS & MAINTENANCE
+  // 12. MECHANICS & AI FLEET
+  {
+    key: "mechanics.view",
+    category: "mechanics",
+    description: "View mechanics fleet dashboard, status, P&L, balance allocations, and performance metrics.",
+  },
+  {
+    key: "mechanics.manage",
+    category: "mechanics",
+    description: "Configure mechanics matchmaking modes, default difficulty, risk controls, and parameters.",
+  },
+  {
+    key: "mechanics.fund",
+    category: "mechanics",
+    description: "Allocate, fund, withdraw, and adjust mechanics double-entry ledger bankrolls.",
+  },
+  {
+    key: "mechanics.create",
+    category: "mechanics",
+    description: "Create, parameterize, and deploy new custom AI mechanics accounts.",
+  },
+  {
+    key: "mechanics.delete",
+    category: "mechanics",
+    description: "Retire or permanently remove custom mechanics accounts.",
+  },
+
+  // 13. SYSTEM SETTINGS & MAINTENANCE
   {
     key: "system.settings.view",
     category: "system",

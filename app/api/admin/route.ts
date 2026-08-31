@@ -95,12 +95,50 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "get_bot_fleet" || action === "list_bots" || action === "bots") {
-      const { search, status, tier } = body;
+      const { search, status, tier, profitability } = body;
       const res = await adminService.getBotFleetData(token, {
         search: search ? String(search) : undefined,
         status: status ? String(status) : undefined,
         tier: tier ? String(tier) : undefined,
+        profitability: profitability ? String(profitability) : undefined,
       });
+      return NextResponse.json({ success: true, ...res });
+    }
+
+    if (action === "get_bot_detail" || action === "bot_detail") {
+      const { botToken } = body;
+      if (!botToken) return NextResponse.json({ error: "botToken is required" }, { status: 400 });
+      const detail = await adminService.getBotDetail(token, String(botToken));
+      return NextResponse.json({ success: true, ...detail });
+    }
+
+    if (action === "fund_bot_bankroll" || action === "fund_bot") {
+      const { botToken, points, marbles, note } = body;
+      if (!botToken) return NextResponse.json({ error: "botToken is required" }, { status: 400 });
+      const updated = await adminService.fundBotAccount(token, String(botToken), Number(points || 0), Number(marbles || 0), note ? String(note) : undefined);
+      return NextResponse.json({ success: true, bot: updated });
+    }
+
+    if (action === "withdraw_bot_bankroll" || action === "withdraw_bot") {
+      const { botToken, points, note } = body;
+      if (!botToken) return NextResponse.json({ error: "botToken is required" }, { status: 400 });
+      const updated = await adminService.withdrawBotAccount(token, String(botToken), Number(points || 0), note ? String(note) : undefined);
+      return NextResponse.json({ success: true, bot: updated });
+    }
+
+    if (action === "create_bot_account" || action === "create_bot") {
+      const { botData } = body;
+      if (!botData || typeof botData !== "object") {
+        return NextResponse.json({ error: "botData object is required" }, { status: 400 });
+      }
+      const created = await adminService.createBotAccount(token, botData);
+      return NextResponse.json({ success: true, bot: created });
+    }
+
+    if (action === "delete_bot_account" || action === "delete_bot") {
+      const { botToken } = body;
+      if (!botToken) return NextResponse.json({ error: "botToken is required" }, { status: 400 });
+      const res = await adminService.deleteBotAccount(token, String(botToken));
       return NextResponse.json({ success: true, ...res });
     }
 
