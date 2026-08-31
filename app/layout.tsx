@@ -83,8 +83,27 @@ export default function RootLayout({
                   origWarn.apply(console, arguments);
                 };
 
+                var handleChunkLoadFailure = function(msg) {
+                  if (typeof window === 'undefined') return;
+                  var isChunkError = (
+                    msg.indexOf('error loading dynamically imported module') !== -1 ||
+                    msg.indexOf('Failed to fetch dynamically imported module') !== -1 ||
+                    msg.indexOf('Loading chunk') !== -1 ||
+                    msg.indexOf('/assets/') !== -1
+                  );
+                  if (isChunkError) {
+                    var lastReload = Number(sessionStorage.getItem('damii_last_chunk_reload') || 0);
+                    var now = Date.now();
+                    if (now - lastReload > 8000) {
+                      sessionStorage.setItem('damii_last_chunk_reload', String(now));
+                      window.location.reload();
+                    }
+                  }
+                };
+
                 window.addEventListener('error', function(e) {
                   var m = (e && e.message) ? e.message : (e && e.error && e.error.message ? e.error.message : '');
+                  handleChunkLoadFailure(m);
                   if (isTransientModuleError(m) || isTransientModuleError(String(e && e.filename))) {
                     if (e.preventDefault) e.preventDefault();
                     if (e.stopImmediatePropagation) e.stopImmediatePropagation();
@@ -96,6 +115,7 @@ export default function RootLayout({
                 window.addEventListener('unhandledrejection', function(e) {
                   var r = e.reason;
                   var m = typeof r === 'string' ? r : (r && r.message ? r.message : String(r));
+                  handleChunkLoadFailure(m);
                   if (isTransientModuleError(m)) {
                     if (e.preventDefault) e.preventDefault();
                     if (e.stopImmediatePropagation) e.stopImmediatePropagation();
