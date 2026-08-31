@@ -2417,7 +2417,11 @@ export default function ArenaPage() {
       <PostJoinAcceptanceModal
         room={room}
         currentUsername={username}
-        isHost={Boolean(room?.role === "white" || (username && room?.hostName && username.trim().toLowerCase() === room.hostName.trim().toLowerCase()))}
+        isHost={Boolean(
+          room?.role === "white" ||
+          (username && room?.hostName && username.trim().toLowerCase() === room.hostName.trim().toLowerCase()) ||
+          (token && room?.hostToken && token === room.hostToken)
+        )}
         onAccept={acceptChallengeOnline}
         onDecline={declineChallengeOnline}
         onWithdraw={withdrawChallengeOnline}

@@ -293,6 +293,24 @@ async function ensureSchema(): Promise<void> {
           // Ignore if table does not exist or user lacks alter privileges
         }
       }
+
+      // Explicitly ensure status/mode columns are wide enough for 'pending_acceptance' and extended states
+      const widenStatements = [
+        "ALTER TABLE `rooms` MODIFY COLUMN `status` varchar(64) NOT NULL DEFAULT 'waiting'",
+        "ALTER TABLE `rooms` MODIFY COLUMN `mode` varchar(64) NOT NULL DEFAULT 'casual'",
+        "ALTER TABLE `rooms` MODIFY COLUMN `turn` varchar(16) NOT NULL DEFAULT 'white'",
+        "ALTER TABLE `rooms` MODIFY COLUMN `winner` varchar(16)",
+        "ALTER TABLE `rooms` MODIFY COLUMN `disconnected_player` varchar(16)",
+        "ALTER TABLE `profiles` MODIFY COLUMN `status` varchar(64) NOT NULL DEFAULT 'active'",
+        "ALTER TABLE `profiles` MODIFY COLUMN `role` varchar(64) NOT NULL DEFAULT 'user'",
+      ];
+      for (const stmt of widenStatements) {
+        try {
+          await conn.query(stmt);
+        } catch {
+          // Ignore if already widened or table not yet created
+        }
+      }
     } finally {
       conn.release();
     }

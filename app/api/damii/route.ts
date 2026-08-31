@@ -543,7 +543,7 @@ export async function POST(req: NextRequest) {
 
       await dbRepository.saveRoom(room);
       const profile = await dbRepository.getProfile(token);
-      return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
+      return NextResponse.json({ room: formatRoomResponse(room, token, username, rawToken, resolvedToken), profile: securityService.sanitizeProfile(profile) });
     }
 
     if (action === "join" || action === "accept") {
@@ -567,7 +567,7 @@ export async function POST(req: NextRequest) {
 
       if (room.hostToken === token) {
         const profile = await dbRepository.getProfile(token);
-        return NextResponse.json({ room: formatRoomResponse(room, token), profile: securityService.sanitizeProfile(profile) });
+        return NextResponse.json({ room: formatRoomResponse(room, token, username, rawToken, resolvedToken), profile: securityService.sanitizeProfile(profile) });
       }
 
       if (room.guestToken && room.guestToken !== token) {
@@ -646,7 +646,7 @@ export async function POST(req: NextRequest) {
       await dbRepository.saveRoom(room);
       const profile = await dbRepository.getProfile(token);
       return NextResponse.json({
-        room: formatRoomResponse(room, token),
+        room: formatRoomResponse(room, token, username, rawToken, resolvedToken),
         profile: securityService.sanitizeProfile(profile),
         message: `Challenge sent to ${room.hostName}. Waiting for host to accept.`,
       });

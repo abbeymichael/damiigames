@@ -43,7 +43,8 @@ export function PostJoinAcceptanceModal({
   const effectiveIsHost = Boolean(
     isHost ||
     room?.role === "white" ||
-    (currentUsername && room?.hostName && currentUsername.trim().toLowerCase() === room.hostName.trim().toLowerCase())
+    (currentUsername && room?.hostName && currentUsername.trim().toLowerCase() === room.hostName.trim().toLowerCase()) ||
+    (room?.hostToken && typeof window !== "undefined" && localStorage.getItem("damii-player-token") === room.hostToken)
   );
 
   // Play audio alert on mount if host

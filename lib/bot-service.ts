@@ -10,6 +10,7 @@ import {
 import { dbRepository } from "./db-client";
 import type { Room, MoveLogEntry, Profile } from "./types";
 import { securityService } from "./security";
+import { getProfileRank } from "./rank-service";
 
 // 100 realistic, authentic Ghanaian player profiles for automated casual matchmaking and practice
 export interface BotAccountConfig {
@@ -189,18 +190,18 @@ export const botService = {
   },
 
   /**
-   * Generates an authentic randomized auto-join delay between 15s (15,000ms),
-   * 1 minute (60,000ms), 1.5 minutes (90,000ms), up to 7 minutes (420,000ms).
+   * Generates an authentic randomized auto-join delay between 5s (5,000ms),
+   * 10 seconds (10,000ms), 15s (15,000ms), up to 3 minutes (180,000ms).
    */
   getRandomJoinDelayMs(): number {
-    const presetBuckets = [15000, 25000, 45000, 60000, 90000, 120000, 180000, 240000, 300000, 360000, 420000];
+    const presetBuckets = [5000, 8000, 12000, 18000, 25000, 45000, 60000, 90000, 120000, 180000];
     const base = presetBuckets[Math.floor(Math.random() * presetBuckets.length)];
-    const jitter = Math.floor(Math.random() * 8000) - 4000;
-    return Math.max(15000, Math.min(420000, base + jitter));
+    const jitter = Math.floor(Math.random() * 4000) - 2000;
+    return Math.max(5000, Math.min(180000, base + jitter));
   },
 
   /**
-   * Deterministically computes a room's randomized bot auto-join delay (15s to 7m)
+   * Deterministically computes a room's randomized bot auto-join delay (5s to 3m)
    * based on room code and creation timestamp, ensuring stable evaluation across polling ticks.
    */
   getRoomJoinDelayMs(roomCode: string, createdAt?: string | number): number {
@@ -210,10 +211,10 @@ export const botService = {
       hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
     }
     const positiveHash = Math.abs(hash);
-    const presetBuckets = [15000, 30000, 45000, 60000, 90000, 120000, 180000, 240000, 300000, 360000, 420000];
+    const presetBuckets = [5000, 8000, 12000, 18000, 25000, 45000, 60000, 90000, 120000, 180000];
     const base = presetBuckets[positiveHash % presetBuckets.length];
-    const jitter = (positiveHash % 8000) - 4000;
-    return Math.max(15000, Math.min(420000, base + jitter));
+    const jitter = (positiveHash % 4000) - 2000;
+    return Math.max(5000, Math.min(180000, base + jitter));
   },
 
   async getFleetMetrics() {
@@ -312,11 +313,16 @@ export const botService = {
       await dbRepository.saveProfile(profile);
     }
 
+    const guestRank = profile ? getProfileRank(profile) : { title: "Challenger", badgeEmoji: "🔥" };
     room.guestName = botAccount.username;
     room.guestToken = botAccount.token;
+    room.guestFullName = botAccount.fullName;
+    room.guestRankTitle = guestRank.title;
+    room.guestRankBadge = guestRank.badgeEmoji;
+    room.guestRating = botAccount.rating;
     room.guestReady = true;
-    room.hostReady = true;
-    room.status = "playing";
+    room.hostReady = false;
+    room.status = "pending_acceptance";
     room.lastMoveTime = Date.now();
     room.disconnectTime = null;
     room.disconnectedPlayer = null;
@@ -461,11 +467,16 @@ export const botService = {
       await dbRepository.saveProfile(profile);
     }
 
+    const guestRank = profile ? getProfileRank(profile) : { title: "Challenger", badgeEmoji: "🔥" };
     room.guestName = chosenBot.username;
     room.guestToken = chosenBot.token;
+    room.guestFullName = chosenBot.fullName;
+    room.guestRankTitle = guestRank.title;
+    room.guestRankBadge = guestRank.badgeEmoji;
+    room.guestRating = chosenBot.rating;
     room.guestReady = true;
-    room.hostReady = true;
-    room.status = "playing";
+    room.hostReady = false;
+    room.status = "pending_acceptance";
     room.lastMoveTime = Date.now();
     room.disconnectTime = null;
     room.disconnectedPlayer = null;

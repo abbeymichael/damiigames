@@ -65,8 +65,8 @@ export const profiles = mysqlTable(
     opponentRatingAvg: int("opponent_rating_avg").notNull().default(0),
     totalOpponentsFaced: int("total_opponents_faced").notNull().default(0),
 
-    role: varchar("role", { length: 32 }).notNull().default("user"),
-    status: varchar("status", { length: 16 }).notNull().default("active"),
+    role: varchar("role", { length: 64 }).notNull().default("user"),
+    status: varchar("status", { length: 64 }).notNull().default("active"),
     bannedAt: isoTimestamp("banned_at"),
     bannedReason: varchar("banned_reason", { length: 512 }),
 
@@ -128,7 +128,7 @@ export const organizerProfiles = mysqlTable(
   {
     userId: varchar("user_id", { length: 191 }).primaryKey(),
     username: varchar("username", { length: 191 }),
-    status: varchar("status", { length: 16 }).notNull().default("none"),
+    status: varchar("status", { length: 64 }).notNull().default("none"),
     requestedAt: isoTimestamp("requested_at").notNull(),
     reviewedBy: varchar("reviewed_by", { length: 191 }),
     reviewedAt: isoTimestamp("reviewed_at"),
@@ -160,11 +160,11 @@ export const rooms = mysqlTable(
     /** Append-only serialized MoveLogEntry[] used for reconnect replay. */
     movesJson: text("moves_json"),
 
-    turn: varchar("turn", { length: 8 }).notNull().default("white"),
+    turn: varchar("turn", { length: 16 }).notNull().default("white"),
     forcedFrom: int("forced_from"),
-    winner: varchar("winner", { length: 8 }),
-    status: varchar("status", { length: 16 }).notNull().default("waiting"),
-    mode: varchar("mode", { length: 16 }).notNull().default("casual"),
+    winner: varchar("winner", { length: 16 }),
+    status: varchar("status", { length: 64 }).notNull().default("waiting"),
+    mode: varchar("mode", { length: 64 }).notNull().default("casual"),
 
     wagerAmount: int("wager_amount").notNull().default(0),
     escrowId: varchar("escrow_id", { length: 191 }),
@@ -182,7 +182,7 @@ export const rooms = mysqlTable(
     /** Epoch millis — needs 64-bit width. */
     lastMoveTime: bigint("last_move_time", { mode: "number" }).notNull().default(0),
     disconnectTime: bigint("disconnect_time", { mode: "number" }),
-    disconnectedPlayer: varchar("disconnected_player", { length: 8 }),
+    disconnectedPlayer: varchar("disconnected_player", { length: 16 }),
 
     createdAt: isoTimestamp("created_at").notNull(),
     updatedAt: isoTimestamp("updated_at").notNull(),
@@ -204,11 +204,11 @@ export const walletTransactions = mysqlTable(
   {
     id: varchar("id", { length: 191 }).primaryKey(),
     userToken: varchar("user_token", { length: 191 }).notNull(),
-    type: varchar("type", { length: 32 }).notNull(),
+    type: varchar("type", { length: 64 }).notNull(),
     currency: varchar("currency", { length: 16 }).notNull(),
     amount: int("amount").notNull(),
     reference: varchar("reference", { length: 191 }).notNull(),
-    status: varchar("status", { length: 16 }).notNull().default("completed"),
+    status: varchar("status", { length: 64 }).notNull().default("completed"),
     metaJson: text("meta_json").notNull(),
     createdAt: isoTimestamp("created_at").notNull(),
   },
@@ -241,7 +241,7 @@ export const escrows = mysqlTable(
     player1Token: varchar("player1_token", { length: 191 }).notNull(),
     player2Token: varchar("player2_token", { length: 191 }),
     lockedAt: isoTimestamp("locked_at").notNull(),
-    status: varchar("status", { length: 16 }).notNull().default("locked"),
+    status: varchar("status", { length: 64 }).notNull().default("locked"),
     winnerToken: varchar("winner_token", { length: 191 }),
     disbursedAt: isoTimestamp("disbursed_at"),
   },
@@ -265,8 +265,8 @@ export const leagues = mysqlTable(
     entryFeePoints: int("entry_fee_points").notNull().default(0),
     prizePoolPoints: int("prize_pool_points").notNull().default(0),
 
-    status: varchar("status", { length: 16 }).notNull().default("registration"),
-    format: varchar("format", { length: 32 }).notNull().default("single_elimination"),
+    status: varchar("status", { length: 64 }).notNull().default("registration"),
+    format: varchar("format", { length: 64 }).notNull().default("single_elimination"),
 
     facilitatorToken: varchar("facilitator_token", { length: 191 }).notNull(),
     facilitatorName: varchar("facilitator_name", { length: 191 }).notNull(),
@@ -316,7 +316,7 @@ export const leagueParticipants = mysqlTable(
     leagueId: varchar("league_id", { length: 191 }).notNull(),
     userToken: varchar("user_token", { length: 191 }).notNull(),
     username: varchar("username", { length: 191 }).notNull(),
-    status: varchar("status", { length: 16 }).notNull().default("approved"),
+    status: varchar("status", { length: 64 }).notNull().default("approved"),
     seed: int("seed").notNull().default(0),
     checkedIn: tinyint("checked_in").notNull().default(0),
     pointsScore: int("points_score").notNull().default(0),
@@ -354,7 +354,7 @@ export const leagueMatches = mysqlTable(
     winnerToken: varchar("winner_token", { length: 191 }),
     roomCode: varchar("room_code", { length: 32 }),
     scheduledTime: varchar("scheduled_time", { length: 64 }),
-    status: varchar("status", { length: 16 }).notNull().default("pending"),
+    status: varchar("status", { length: 64 }).notNull().default("pending"),
     disputeNotes: text("dispute_notes"),
     createdAt: isoTimestamp("created_at").notNull(),
   },
