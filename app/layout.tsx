@@ -25,7 +25,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "DAMII — 10×10 Strategy Platform",
   description:
-    "Play a free digital version of traditional 10×10 Damii draughts on the authentic board.",
+    "Traditional strategy game played on an authentic 10x10 board with local and online multiplayer.",
   other: {
     "codex-preview": "development",
   },

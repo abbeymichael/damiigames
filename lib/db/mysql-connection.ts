@@ -32,27 +32,28 @@ function createPool(): mysql.Pool {
     );
   }
 
-  return mysql.createPool({
+  const pool = mysql.createPool({
     host: cfg.host,
     port: cfg.port,
     user: cfg.user,
     password: cfg.password,
     database: cfg.database,
     waitForConnections: true,
-    connectionLimit: cfg.connectionLimit,
-    maxIdle: Math.min(cfg.connectionLimit, 2),
+    connectionLimit: Math.min(cfg.connectionLimit || 3, 3),
+    maxIdle: 1,
     idleTimeout: 15_000,
     connectTimeout: 10_000,
     queueLimit: 0,
     enableKeepAlive: true,
-    keepAliveInitialDelay: 5_000,
+    keepAliveInitialDelay: 0,
     charset: "UTF8MB4_UNICODE_CI",
     timezone: "Z",
-    // Always parameterise; never interpolate user input into SQL.
     namedPlaceholders: false,
     multipleStatements: false,
     ssl: cfg.ssl ? { rejectUnauthorized: false } : undefined,
   });
+
+  return pool;
 }
 
 /** Returns the shared pool, creating it on first use. */
@@ -65,10 +66,24 @@ export function getPool(): mysql.Pool {
 
 /** Returns the shared Drizzle database handle. */
 export function getDb(): DamiiDb {
-  if (!holder.db) {
+  if (!holder.db || !holder.pool) {
     holder.db = drizzle(getPool(), { schema, mode: "default" });
   }
   return holder.db;
+}
+
+/** Safely resets the MySQL connection pool and Drizzle handle on connection errors. */
+export async function resetPool(): Promise<void> {
+  const oldPool = holder.pool;
+  holder.pool = null;
+  holder.db = null;
+  if (oldPool) {
+    try {
+      await oldPool.end();
+    } catch {
+      // ignore
+    }
+  }
 }
 
 /** Verifies connectivity; throws a descriptive error when unreachable. */

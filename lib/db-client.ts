@@ -1,6 +1,7 @@
 import type { DbRepository } from "./db/repository";
 import { mysqlStore } from "./db/mysql-store";
 import { memoryStore } from "./db/memory-store";
+import { resetPool } from "./db/mysql-connection";
 
 /**
  * DAMII data-access entrypoint.
@@ -54,8 +55,25 @@ boot();
 
 function withStore<T extends keyof DbRepository>(method: T) {
   return (async (...args: unknown[]) => {
-    const store = await boot();
-    return (store[method] as any)(...args);
+    let store = await boot();
+    try {
+      return await (store[method] as any)(...args);
+    } catch (err) {
+      if (store === mysqlStore) {
+        console.warn(`[damii][db] MySQL operation failed in ${String(method)}, recycling pool and retrying:`, err instanceof Error ? err.message : err);
+        try {
+          await resetPool();
+          store = await boot();
+          return await (store[method] as any)(...args);
+        } catch (retryErr) {
+          console.warn(`[damii][db] MySQL retry failed in ${String(method)}, serving from resilient embedded store:`, retryErr instanceof Error ? retryErr.message : retryErr);
+          if (memoryStore[method]) {
+            return await (memoryStore[method] as any)(...args);
+          }
+        }
+      }
+      throw err;
+    }
   }) as DbRepository[T] extends (...a: infer A) => infer R ? (...a: A) => R : never;
 }
 

@@ -30,7 +30,7 @@ function loadEnvFromFiles() {
         ) {
           value = value.slice(1, -1);
         }
-        if (process.env[key] === undefined) {
+        if (process.env[key] === undefined || process.env[key] === "") {
           process.env[key] = value;
         }
       }
