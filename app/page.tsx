@@ -1,5 +1,6 @@
 "use client";
 
+import "@/lib/react-shim";
 import { useEffect, useState } from "react";
 import { NavLink, safeNavigate } from "@/components/NavLink";
 import { useRouter } from "next/navigation";

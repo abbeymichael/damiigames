@@ -1,3 +1,4 @@
+import "@/lib/react-shim";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { GlobalNavigationHandler } from "@/components/GlobalNavigationHandler";

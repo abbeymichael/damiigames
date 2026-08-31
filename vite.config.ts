@@ -1,20 +1,59 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import vinext from "vinext";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+function reactSafetyPlugin(): Plugin {
+  return {
+    name: "vite-react-safety-shim",
+    enforce: "pre",
+    async configureServer() {
+      try {
+        const React = await import("react");
+        const clientInternals = (React.default as any)?.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
+        if (clientInternals) {
+          for (const key of ["A", "H"] as const) {
+            let current = clientInternals[key];
+            if (current && typeof current === "object" && typeof current.getOwner !== "function") {
+              current.getOwner = () => null;
+            }
+            try {
+              Object.defineProperty(clientInternals, key, {
+                get() {
+                  return current;
+                },
+                set(val) {
+                  if (val && typeof val === "object" && typeof val.getOwner !== "function") {
+                    try {
+                      val.getOwner = () => null;
+                    } catch {}
+                  }
+                  current = val;
+                },
+                configurable: true,
+                enumerable: true,
+              });
+            } catch {}
+          }
+        }
+      } catch {}
+    },
+  };
+}
+
 export default defineConfig({
   server: {
     host: "0.0.0.0",
     port: 3000,
   },
-  plugins: [vinext()],
+  plugins: [reactSafetyPlugin(), vinext()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "."),
     },
+    dedupe: ["react", "react-dom", "react-is"],
   },
   // The dev server should NOT attempt to transform or inline Node-native or CJS-only
   // packages into Vite's ESM evaluation/runtime. Those packages (database drivers,
