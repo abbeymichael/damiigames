@@ -799,16 +799,46 @@ export const mysqlStore: DbRepository = {
   async getAdminSettings() {
     const db = getDb();
     const [row] = await db.select().from(schema.adminSettings).where(eq(schema.adminSettings.id, 1)).limit(1);
-    if (row) return rowToAdminSettings(row);
+    const baseSettings = row ? rowToAdminSettings(row) : null;
 
-    // Lazily create the singleton row on first access.
-    const now = new Date().toISOString();
-    await db
-      .insert(schema.adminSettings)
-      .values({ id: 1, ...DEFAULT_ADMIN_SETTINGS, updatedAt: now, updatedBy: "System" })
-      .onDuplicateKeyUpdate({ set: { id: 1 } });
-    const [fresh] = await db.select().from(schema.adminSettings).where(eq(schema.adminSettings.id, 1)).limit(1);
-    return fresh ? rowToAdminSettings(fresh) : { ...DEFAULT_ADMIN_SETTINGS, updatedAt: now };
+    let res: AdminSettings;
+    if (baseSettings) {
+      res = { ...baseSettings };
+    } else {
+      // Lazily create the singleton row on first access.
+      const now = new Date().toISOString();
+      await db
+        .insert(schema.adminSettings)
+        .values({ id: 1, ...DEFAULT_ADMIN_SETTINGS, updatedAt: now, updatedBy: "System" })
+        .onDuplicateKeyUpdate({ set: { id: 1 } });
+      const [fresh] = await db.select().from(schema.adminSettings).where(eq(schema.adminSettings.id, 1)).limit(1);
+      res = fresh ? rowToAdminSettings(fresh) : { ...DEFAULT_ADMIN_SETTINGS, updatedAt: now };
+    }
+
+    try {
+      const paymentRows = await db
+        .select()
+        .from(schema.systemSettings)
+        .where(eq(schema.systemSettings.category, "payments"));
+      for (const pr of paymentRows) {
+        if (pr.key === "paystack_secret_key" && pr.value) res.paystackSecretKey = String(pr.value);
+        if (pr.key === "paystack_public_key" && pr.value) res.paystackPublicKey = String(pr.value);
+        if (pr.key === "paystack_mode" && pr.value) res.paystackMode = pr.value as "test" | "live";
+        if (pr.key === "paystack_webhook_secret" && pr.value) res.paystackWebhookSecret = String(pr.value);
+        if (pr.key === "paystack_currency" && pr.value) res.paystackCurrency = String(pr.value);
+        if (pr.key === "auto_payout_enabled") (res as any).autoPayoutEnabled = Boolean(pr.value);
+      }
+    } catch {}
+
+    return res;
+  },
+
+  async getPlatformSettings() {
+    return mysqlStore.getAdminSettings();
+  },
+
+  async updatePlatformSettings(updates: Partial<AdminSettings>, adminName?: string) {
+    return mysqlStore.updateAdminSettings(updates, adminName);
   },
 
   async updateAdminSettings(updates, adminName) {
@@ -839,6 +869,12 @@ export const mysqlStore: DbRepository = {
       if (positive(updates.ratingKFactor)) next.ratingKFactor = updates.ratingKFactor!;
       if (positive(updates.minWagerGhs)) next.minWagerGhs = updates.minWagerGhs!;
       if (positive(updates.maxWagerGhs)) next.maxWagerGhs = updates.maxWagerGhs!;
+      if (updates.paystackSecretKey !== undefined) next.paystackSecretKey = String(updates.paystackSecretKey).trim();
+      if (updates.paystackPublicKey !== undefined) next.paystackPublicKey = String(updates.paystackPublicKey).trim();
+      if (updates.paystackMode !== undefined) next.paystackMode = updates.paystackMode;
+      if (updates.paystackWebhookSecret !== undefined) next.paystackWebhookSecret = String(updates.paystackWebhookSecret).trim();
+      if (updates.paystackCurrency !== undefined) next.paystackCurrency = String(updates.paystackCurrency).trim().toUpperCase();
+      if ((updates as any).autoPayoutEnabled !== undefined) (next as any).autoPayoutEnabled = Boolean((updates as any).autoPayoutEnabled);
       next.updatedAt = new Date().toISOString();
       if (adminName) next.updatedBy = adminName;
 
@@ -858,6 +894,21 @@ export const mysqlStore: DbRepository = {
           updatedBy: next.updatedBy ?? null,
         })
         .where(eq(schema.adminSettings.id, 1));
+
+      // Also persist payment keys to system_settings
+      const payKeys: [string, any][] = [
+        ["paystack_secret_key", next.paystackSecretKey],
+        ["paystack_public_key", next.paystackPublicKey],
+        ["paystack_mode", next.paystackMode],
+        ["paystack_webhook_secret", next.paystackWebhookSecret],
+        ["paystack_currency", next.paystackCurrency],
+        ["auto_payout_enabled", (next as any).autoPayoutEnabled],
+      ];
+      for (const [k, v] of payKeys) {
+        if (v !== undefined) {
+          await mysqlStore.saveSystemSetting("payments", k, v, adminName);
+        }
+      }
 
       return next;
     });

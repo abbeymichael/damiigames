@@ -53,6 +53,7 @@ import {
   Inbox,
   MessageSquare,
   Bot,
+  CreditCard,
 } from "lucide-react";
 import { getSessionToken, saveSessionToken, clearSessionToken } from "@/lib/client-auth";
 import type {
@@ -91,6 +92,7 @@ import { AuditLogsTable } from "@/components/admin/AuditLogsTable";
 import { AdminRolesTable } from "@/components/admin/AdminRolesTable";
 import { GameLimitsTable } from "@/components/admin/GameLimitsTable";
 import { PlatformSettings } from "@/components/admin/PlatformSettings";
+import { PaymentSettings } from "@/components/admin/PaymentSettings";
 import { RolesManagement } from "@/components/admin/RolesManagement";
 import { AdminStaffTable } from "@/components/admin/AdminStaffTable";
 import { GamesCatalogTable } from "@/components/admin/GamesCatalogTable";
@@ -234,6 +236,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: "System",
     items: [
       { key: "audit", label: "Audit Trail", icon: ScrollText, permission: "audit.view" },
+      { key: "payment", label: "Payments (Paystack)", icon: CreditCard, permission: "system.settings.view" },
       { key: "settings", label: "System Settings", icon: Settings, permission: "system.settings.view" },
       { key: "pages", label: "Legal & Policy Pages", icon: FileText, permission: "system.settings.view" },
     ],
@@ -254,8 +257,10 @@ const TAB_ITEMS_CONFIG: Record<
   deposits: { key: "deposits", label: "Deposits", permission: "deposits.view", icon: ArrowDownLeft, moduleName: "Deposits & Paystack Reconciliation" },
   withdrawals: { key: "withdrawals", label: "Withdrawals & Payouts", permission: "withdrawals.view", icon: ArrowUpRight, moduleName: "Withdrawals & Payouts" },
   wallet: { key: "wallet", label: "Financial Ledger", permission: "wallet.view", icon: Wallet, moduleName: "Financial Ledger & Treasury" },
-  payments: { key: "wallet", label: "Financial Ledger", permission: "wallet.view", icon: Wallet, moduleName: "Financial Ledger & Treasury" },
   ledger: { key: "wallet", label: "Financial Ledger", permission: "wallet.view", icon: Wallet, moduleName: "Financial Ledger & Treasury" },
+  payment: { key: "payment", label: "Payments (Paystack)", permission: "system.settings.view", icon: CreditCard, moduleName: "Paystack Gateway & Payout Configuration" },
+  paystack: { key: "payment", label: "Payments (Paystack)", permission: "system.settings.view", icon: CreditCard, moduleName: "Paystack Gateway & Payout Configuration" },
+  payment_config: { key: "payment", label: "Payments (Paystack)", permission: "system.settings.view", icon: CreditCard, moduleName: "Paystack Gateway & Payout Configuration" },
   communications: { key: "communications", label: "Communications", permission: "communications.view", icon: MessageSquare, moduleName: "Communications & Broadcasts" },
   limits: { key: "limits", label: "Game Limits & Escrow", permission: "limits.manage", icon: SlidersHorizontal, moduleName: "Game Limits & Escrow" },
   users: { key: "users", label: "Players & Users", permission: "users.view", icon: Users, moduleName: "Player Management" },
@@ -2347,6 +2352,18 @@ export default function AdminPage() {
             {/* TAB: AUDIT LOG */}
             {activeTab === "audit" && (
               <AuditLogsTable logs={metrics?.logs || []} />
+            )}
+
+            {/* TAB: PAYMENTS (PAYSTACK CONFIGURATION & GATEWAY) */}
+            {(activeTab === "payment" || activeTab === "payment_config" || activeTab === "paystack") && (
+              <PaymentSettings
+                token={token}
+                adminSecret={adminSecret}
+                onSettingsUpdated={(newSettings) => {
+                  setMetrics((prev) => (prev ? { ...prev, settings: newSettings } : prev));
+                  refreshAdminData();
+                }}
+              />
             )}
 
             {/* TAB: SETTINGS & CONTROLS */}

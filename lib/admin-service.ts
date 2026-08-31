@@ -1839,17 +1839,7 @@ export const adminService = {
 
   async updateSettings(
     adminToken: string,
-    updates: {
-      wagerFeePercent?: number;
-      tournamentFeePercent?: number;
-      pointsPerGhsBuy?: number;
-      pointsPerGhsWithdraw?: number;
-      minDepositGhs?: number;
-      maxDepositGhs?: number;
-      minWithdrawalGhs?: number;
-      maxWithdrawalGhs?: number;
-      maxDailyWithdrawalGhs?: number;
-    }
+    updates: Partial<AdminSettings> & { autoPayoutEnabled?: boolean }
   ) {
     if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
     const adminProfile = await dbRepository.getProfile(adminToken);

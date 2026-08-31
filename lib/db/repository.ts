@@ -110,7 +110,9 @@ export interface DbRepository {
 
   // --- Admin settings ---
   getAdminSettings(): Promise<AdminSettings>;
+  getPlatformSettings(): Promise<AdminSettings>;
   updateAdminSettings(updates: Partial<AdminSettings>, adminName?: string): Promise<AdminSettings>;
+  updatePlatformSettings?(updates: Partial<AdminSettings>, adminName?: string): Promise<AdminSettings>;
 
   // --- Paystack idempotency ---
   markPaystackRefProcessed(reference: string): Promise<boolean>;

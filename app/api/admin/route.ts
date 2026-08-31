@@ -24,8 +24,10 @@ export async function GET(req: NextRequest) {
       adminService.getAdminSelfProfile(token).catch(() => null),
     ]);
     const roleTitle = adminPerms.roleTitle || selfProfile?.profile?.roleTitle || (adminPerms.isSuperAdmin ? "Super Admin" : "Administrator");
+    const hasPaystackKey = Boolean(metrics.settings?.paystackSecretKey || process.env.PAYSTACK_SECRET_KEY);
     return NextResponse.json({
       ...metrics,
+      hasPaystackKey,
       adminPermissions: adminPerms,
       currentAdmin: selfProfile?.profile || null,
       adminRoleTitle: roleTitle,
@@ -309,7 +311,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, profile: res });
     }
 
-    if (action === "update_settings") {
+    if (action === "update_settings" || action === "update_payment_settings" || action === "update_paystack_settings") {
       const {
         wagerFeePercent,
         tournamentFeePercent,
@@ -332,6 +334,12 @@ export async function POST(req: NextRequest) {
         ratingKFactor,
         minWagerGhs,
         maxWagerGhs,
+        paystackSecretKey,
+        paystackPublicKey,
+        paystackMode,
+        paystackWebhookSecret,
+        paystackCurrency,
+        autoPayoutEnabled,
       } = body;
       const res = await adminService.updateSettings(token, {
         wagerFeePercent: wagerFeePercent !== undefined ? Number(wagerFeePercent) : undefined,
@@ -355,6 +363,12 @@ export async function POST(req: NextRequest) {
         ratingKFactor: ratingKFactor !== undefined ? Number(ratingKFactor) : undefined,
         minWagerGhs: minWagerGhs !== undefined ? Number(minWagerGhs) : undefined,
         maxWagerGhs: maxWagerGhs !== undefined ? Number(maxWagerGhs) : undefined,
+        paystackSecretKey: paystackSecretKey !== undefined ? String(paystackSecretKey).trim() : undefined,
+        paystackPublicKey: paystackPublicKey !== undefined ? String(paystackPublicKey).trim() : undefined,
+        paystackMode: paystackMode !== undefined ? (paystackMode === "live" ? "live" : "test") : undefined,
+        paystackWebhookSecret: paystackWebhookSecret !== undefined ? String(paystackWebhookSecret).trim() : undefined,
+        paystackCurrency: paystackCurrency !== undefined ? String(paystackCurrency).trim().toUpperCase() : undefined,
+        autoPayoutEnabled: autoPayoutEnabled !== undefined ? Boolean(autoPayoutEnabled) : undefined,
       });
       return NextResponse.json({ success: true, settings: res });
     }
@@ -1063,6 +1077,88 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Admin execution error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(req: NextRequest) {
+  try {
+    const authHeader = req.headers.get("authorization") || "";
+    const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : "";
+    const body = await req.json();
+    const token = cleanToken(bearerToken || body.token || new URL(req.url).searchParams.get("token"));
+    const adminSecret = req.headers.get("x-admin-secret") || "";
+
+    const isAuthed = (await adminService.verifyAdminAccessAsync(token)) || (adminSecret && adminSecret === process.env.ADMIN_SECRET);
+    if (!isAuthed) {
+      return NextResponse.json({ error: "403 Forbidden: Unauthorized admin access" }, { status: 403 });
+    }
+
+    const {
+      wagerFeePercent,
+      tournamentFeePercent,
+      pointsPerGhsBuy,
+      pointsPerGhsWithdraw,
+      minDepositGhs,
+      maxDepositGhs,
+      minWithdrawalGhs,
+      maxWithdrawalGhs,
+      maxDailyWithdrawalGhs,
+      turnTimerSeconds,
+      disconnectGraceSeconds,
+      unjoinedRoomExpiryMinutes,
+      maintenanceMode,
+      maintenanceNotice,
+      disableWagers,
+      disableWithdrawals,
+      publicSpectatingEnabled,
+      defaultRating,
+      ratingKFactor,
+      minWagerGhs,
+      maxWagerGhs,
+      paystackSecretKey,
+      paystackPublicKey,
+      paystackMode,
+      paystackWebhookSecret,
+      paystackCurrency,
+      autoPayoutEnabled,
+    } = body;
+
+    const res = await adminService.updateSettings(token, {
+      wagerFeePercent: wagerFeePercent !== undefined ? Number(wagerFeePercent) : undefined,
+      tournamentFeePercent: tournamentFeePercent !== undefined ? Number(tournamentFeePercent) : undefined,
+      pointsPerGhsBuy: pointsPerGhsBuy !== undefined ? Number(pointsPerGhsBuy) : undefined,
+      pointsPerGhsWithdraw: pointsPerGhsWithdraw !== undefined ? Number(pointsPerGhsWithdraw) : undefined,
+      minDepositGhs: minDepositGhs !== undefined ? Number(minDepositGhs) : undefined,
+      maxDepositGhs: maxDepositGhs !== undefined ? Number(maxDepositGhs) : undefined,
+      minWithdrawalGhs: minWithdrawalGhs !== undefined ? Number(minWithdrawalGhs) : undefined,
+      maxWithdrawalGhs: maxWithdrawalGhs !== undefined ? Number(maxWithdrawalGhs) : undefined,
+      maxDailyWithdrawalGhs: maxDailyWithdrawalGhs !== undefined ? Number(maxDailyWithdrawalGhs) : undefined,
+      turnTimerSeconds: turnTimerSeconds !== undefined ? Number(turnTimerSeconds) : undefined,
+      disconnectGraceSeconds: disconnectGraceSeconds !== undefined ? Number(disconnectGraceSeconds) : undefined,
+      unjoinedRoomExpiryMinutes: unjoinedRoomExpiryMinutes !== undefined ? Number(unjoinedRoomExpiryMinutes) : undefined,
+      maintenanceMode: maintenanceMode !== undefined ? Boolean(maintenanceMode) : undefined,
+      maintenanceNotice: maintenanceNotice !== undefined ? String(maintenanceNotice) : undefined,
+      disableWagers: disableWagers !== undefined ? Boolean(disableWagers) : undefined,
+      disableWithdrawals: disableWithdrawals !== undefined ? Boolean(disableWithdrawals) : undefined,
+      publicSpectatingEnabled: publicSpectatingEnabled !== undefined ? Boolean(publicSpectatingEnabled) : undefined,
+      defaultRating: defaultRating !== undefined ? Number(defaultRating) : undefined,
+      ratingKFactor: ratingKFactor !== undefined ? Number(ratingKFactor) : undefined,
+      minWagerGhs: minWagerGhs !== undefined ? Number(minWagerGhs) : undefined,
+      maxWagerGhs: maxWagerGhs !== undefined ? Number(maxWagerGhs) : undefined,
+      paystackSecretKey: paystackSecretKey !== undefined ? String(paystackSecretKey).trim() : undefined,
+      paystackPublicKey: paystackPublicKey !== undefined ? String(paystackPublicKey).trim() : undefined,
+      paystackMode: paystackMode !== undefined ? (paystackMode === "live" ? "live" : "test") : undefined,
+      paystackWebhookSecret: paystackWebhookSecret !== undefined ? String(paystackWebhookSecret).trim() : undefined,
+      paystackCurrency: paystackCurrency !== undefined ? String(paystackCurrency).trim().toUpperCase() : undefined,
+      autoPayoutEnabled: autoPayoutEnabled !== undefined ? Boolean(autoPayoutEnabled) : undefined,
+    });
+
+    return NextResponse.json({ success: true, settings: res });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Admin update error" },
       { status: 500 }
     );
   }

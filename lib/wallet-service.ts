@@ -4,6 +4,19 @@ import { WalletTransaction, WagerEscrow, Deposit, Withdrawal, DepositAction, Wit
 import { notificationService } from "./notification-service";
 import { getAdminPermissions } from "./permissions";
 
+export async function getEffectivePaystackConfig(): Promise<{ secretKey: string; publicKey: string }> {
+  try {
+    const settings = await dbRepository.getPlatformSettings();
+    const secretKey = (settings?.paystackSecretKey || process.env.PAYSTACK_SECRET_KEY || "").trim();
+    const publicKey = (settings?.paystackPublicKey || process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || process.env.PAYSTACK_PUBLIC_KEY || "").trim();
+    return { secretKey, publicKey };
+  } catch {
+    const secretKey = (process.env.PAYSTACK_SECRET_KEY || "").trim();
+    const publicKey = (process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || process.env.PAYSTACK_PUBLIC_KEY || "").trim();
+    return { secretKey, publicKey };
+  }
+}
+
 export const walletService = {
   // 1 GHS = 100 Points
   POINTS_PER_GHS: 100,
@@ -239,7 +252,8 @@ export const walletService = {
       createdAt: new Date().toISOString(),
     }).catch(() => {});
 
-    const secretKey = (process.env.PAYSTACK_SECRET_KEY || "").trim();
+    const paystackConfig = await getEffectivePaystackConfig();
+    const secretKey = (paystackConfig.secretKey || "").trim();
     if (!secretKey) {
       throw new Error("PAYSTACK_SECRET_KEY is not configured on the server. Please configure your Paystack secret key in Settings.");
     }
@@ -909,7 +923,8 @@ export const walletService = {
   },
 
   async getPaystackBalance() {
-    const secretKey = (process.env.PAYSTACK_SECRET_KEY || "").trim();
+    const paystackConfig = await getEffectivePaystackConfig();
+    const secretKey = (paystackConfig.secretKey || "").trim();
     if (!secretKey) {
       return { configured: false, balances: [], ghsBalance: 0, message: "PAYSTACK_SECRET_KEY not configured" };
     }
@@ -939,7 +954,8 @@ export const walletService = {
   },
 
   async createTransferRecipient(name: string, accountNumber: string, bankCode: string, currency = "GHS") {
-    const secretKey = (process.env.PAYSTACK_SECRET_KEY || "").trim();
+    const paystackConfig = await getEffectivePaystackConfig();
+    const secretKey = (paystackConfig.secretKey || "").trim();
     if (!secretKey) throw new Error("PAYSTACK_SECRET_KEY is not configured on the server.");
 
     // Validate and format Mobile Money phone number
@@ -983,7 +999,8 @@ export const walletService = {
   },
 
   async initiatePaystackTransfer(recipientCode: string, amountGhs: number, reference: string, reason: string) {
-    const secretKey = (process.env.PAYSTACK_SECRET_KEY || "").trim();
+    const paystackConfig = await getEffectivePaystackConfig();
+    const secretKey = (paystackConfig.secretKey || "").trim();
     if (!secretKey) throw new Error("PAYSTACK_SECRET_KEY is not configured on the server.");
 
     const amountPesewas = Math.round(amountGhs * 100);
@@ -1020,7 +1037,8 @@ export const walletService = {
   },
 
   async verifyPaystackTransfer(reference: string) {
-    const secretKey = (process.env.PAYSTACK_SECRET_KEY || "").trim();
+    const paystackConfig = await getEffectivePaystackConfig();
+    const secretKey = (paystackConfig.secretKey || "").trim();
     if (!secretKey) throw new Error("PAYSTACK_SECRET_KEY is not configured on the server.");
 
     const res = await fetch(`https://api.paystack.co/transfer/verify/${encodeURIComponent(reference)}`, {
@@ -1086,7 +1104,8 @@ export const walletService = {
     }
 
     // 3. Float Balance Verification (if Paystack secret key is configured)
-    const secretKey = (process.env.PAYSTACK_SECRET_KEY || "").trim();
+    const paystackConfig = await getEffectivePaystackConfig();
+    const secretKey = (paystackConfig.secretKey || "").trim();
     if (secretKey) {
       const balanceInfo = await this.getPaystackBalance();
       if (balanceInfo.configured && !balanceInfo.error && balanceInfo.ghsBalance < amountGhs) {

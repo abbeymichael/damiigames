@@ -251,6 +251,11 @@ export type AdminSettings = {
   ratingKFactor?: number;       // Default: 32
   minWagerGhs?: number;         // Default: 5 GHS
   maxWagerGhs?: number;         // Default: 1000 GHS
+  paystackSecretKey?: string;
+  paystackPublicKey?: string;
+  paystackMode?: "test" | "live";
+  paystackWebhookSecret?: string;
+  paystackCurrency?: string;
   updatedAt?: string | Date;
   updatedBy?: string;
 };
