@@ -22,6 +22,13 @@
       "when": 1787910076457,
       "tag": "0002_married_lightspeed",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1788156450458,
+      "tag": "0003_fluffy_scarlet_spider",
+      "breakpoints": true
     }
   ]
 }
