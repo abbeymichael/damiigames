@@ -64,6 +64,14 @@ export const MODULE_CATEGORIES: ModuleCategoryInfo[] = [
     badgeColor: "bg-teal-950/80 text-teal-300 border-teal-500/40",
   },
   {
+    id: "payments",
+    label: "Payments & Paystack Gateway",
+    shortLabel: "Payments",
+    description: "Paystack live/test API keys, webhook secrets, currency, fee splits, and payment gateway configuration.",
+    icon: "CreditCard",
+    badgeColor: "bg-emerald-950/80 text-emerald-300 border-emerald-500/40",
+  },
+  {
     id: "ledger",
     label: "Financial Ledger & Adjustments",
     shortLabel: "Ledger",
@@ -249,7 +257,24 @@ export const SYSTEM_PERMISSIONS: Omit<Permission, "id">[] = [
     description: "Reject cashout requests and return funds directly to user available balances.",
   },
 
-  // 7. FINANCIAL LEDGER & ADJUSTMENTS
+  // 7. PAYMENTS & PAYSTACK GATEWAY
+  {
+    key: "payments.view",
+    category: "payments",
+    description: "View payment gateway configurations, Paystack public/secret status, live balances, and webhook endpoints.",
+  },
+  {
+    key: "payments.manage",
+    category: "payments",
+    description: "Configure Paystack API secret and public keys, payment channels, fee configurations, and live/test mode toggles.",
+  },
+  {
+    key: "payments.delete",
+    category: "payments",
+    description: "Clear, reset, or revoke configured payment gateway credentials.",
+  },
+
+  // 8. FINANCIAL LEDGER & ADJUSTMENTS
   {
     key: "ledger.adjust",
     category: "ledger",
@@ -409,6 +434,8 @@ export const SEED_ROLES_CONFIG = [
       "wallet.view",
       "deposits.view",
       "withdrawals.view",
+      "payments.view",
+      "payments.manage",
       "wallet.payouts",
       "wallet.reject_payout",
       "ledger.adjust",

@@ -26,10 +26,11 @@ import { getCsrfToken, getAuthHeaders, getSessionToken } from "@/lib/client-auth
 export interface PaymentSettingsProps {
   token: string;
   adminSecret?: string;
+  canManage?: boolean;
   onSettingsUpdated?: (settings: any) => void;
 }
 
-export function PaymentSettings({ token, adminSecret, onSettingsUpdated }: PaymentSettingsProps) {
+export function PaymentSettings({ token, adminSecret, canManage = true, onSettingsUpdated }: PaymentSettingsProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
@@ -101,6 +102,13 @@ export function PaymentSettings({ token, adminSecret, onSettingsUpdated }: Payme
 
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (!canManage) {
+      setMessage({
+        type: "error",
+        text: "Permission Denied: You need 'payments.manage' permission to modify payment gateway configurations.",
+      });
+      return;
+    }
     setSaving(true);
     setMessage(null);
     try {
@@ -246,6 +254,11 @@ export function PaymentSettings({ token, adminSecret, onSettingsUpdated }: Payme
               >
                 {isLive ? "● Live Production" : "🧪 Test Mode"}
               </span>
+              {!canManage && (
+                <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-amber-950/80 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                  <Lock size={11} /> Read-Only View
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-400 max-w-2xl">
               Configure Paystack API credentials, live/test modes, and webhook endpoints for player Mobile Money deposits (MTN, Telecel, AT), card payments, and automated payout disbursements.
@@ -501,14 +514,21 @@ export function PaymentSettings({ token, adminSecret, onSettingsUpdated }: Payme
 
         {/* Save Bar */}
         <div className="flex items-center justify-end gap-3 pt-2">
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl font-bold text-sm transition flex items-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
-          >
-            {saving ? <RefreshCw className="animate-spin" size={16} /> : <Save size={16} />}
-            {saving ? "Saving Configuration..." : "Save Payment Settings"}
-          </button>
+          {!canManage ? (
+            <div className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-400">
+              <Lock size={14} className="text-amber-400" />
+              <span>Read-only: <strong>payments.manage</strong> permission required to save changes</span>
+            </div>
+          ) : (
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl font-bold text-sm transition flex items-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+            >
+              {saving ? <RefreshCw className="animate-spin" size={16} /> : <Save size={16} />}
+              {saving ? "Saving Configuration..." : "Save Payment Settings"}
+            </button>
+          )}
         </div>
       </form>
     </div>

@@ -26,6 +26,7 @@ import {
   Check,
   Filter,
   Bot,
+  CreditCard,
 } from "lucide-react";
 import type { AppRole, Permission } from "@/lib/types";
 import { SYSTEM_PERMISSIONS, MODULE_CATEGORIES, ModuleCategoryInfo } from "@/lib/permissions-constants";
@@ -48,6 +49,7 @@ const CATEGORY_ICON_MAP: Record<string, React.ElementType> = {
   games: Gamepad2,
   deposits: ArrowDownCircle,
   withdrawals: ArrowUpCircle,
+  payments: CreditCard,
   ledger: BookOpen,
   disputes: Scale,
   admins: UserCog,

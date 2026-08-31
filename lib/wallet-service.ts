@@ -18,8 +18,8 @@ export async function getEffectivePaystackConfig(): Promise<{ secretKey: string;
 }
 
 export const walletService = {
-  // 1 GHS = 100 Points
-  POINTS_PER_GHS: 100,
+  // 1 GHS = 1 Marble / Point
+  POINTS_PER_GHS: 1,
 
   async getBalance(token: string) {
     const profile = await dbRepository.getProfile(token);

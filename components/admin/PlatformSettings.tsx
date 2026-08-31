@@ -440,11 +440,11 @@ export function PlatformSettings({
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-slate-300 font-semibold">1 GH₵ =</span>
                   <span className="px-3 py-1.5 bg-[#081c15] border border-[#1a5e48] rounded-lg text-xs font-mono text-emerald-400 font-bold">
-                    100 Marbles
+                    1 Marble
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-300">
-                  Fixed treasury standard rate for Mobile Money deposits.
+                  Fixed treasury standard rate for Mobile Money deposits (1:1 Cedi Parity).
                 </p>
               </div>
 

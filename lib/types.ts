@@ -114,10 +114,15 @@ export type AdminPermission =
   | "manage_tournaments"    // edit/cancel any tournament, override brackets
   | "manage_wallet"         // view wallet ledger, approve manual adjustments
   | "manage_payouts"        // execute/approve cashouts (treasurer-tier)
+  | "manage_payments"       // configure Paystack keys, gateways, webhook secrets
+  | "payments.view"         // view payment gateway settings and status
+  | "payments.manage"       // update Paystack keys, mode, and configurations
+  | "payments.delete"       // delete/reset payment gateway credentials
   | "resolve_disputes"      // access dispute resolver, rule on matches
   | "manage_admins"         // grant/revoke admin roles & permissions (super_admin only)
   | "run_seeder"            // execute seeder / system maintenance actions
-  | "view_audit_log";       // read-only access to audit trail
+  | "view_audit_log"        // read-only access to audit trail
+  | string;
 
 export interface AdminProfile {
   userId: string;
@@ -855,11 +860,13 @@ export type PermissionCategory =
   | "games"
   | "deposits"
   | "withdrawals"
+  | "payments"
   | "ledger"
   | "disputes"
   | "admins"
   | "communications"
   | "audit"
+  | "mechanics"
   | "system"
   | "review"
   | "operations"

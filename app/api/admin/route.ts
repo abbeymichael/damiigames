@@ -51,9 +51,19 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const authHeader = req.headers.get("authorization") || "";
+    const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : "";
+    const cookieToken = req.cookies.get("damii_token")?.value || "";
+    const adminSecret = req.headers.get("x-admin-secret") || "";
+
+    const isSecretValid = Boolean(
+      adminSecret &&
+      (adminSecret === process.env.ADMIN_SECRET_KEY || adminSecret === process.env.ADMIN_SECRET)
+    );
+
     const body = await req.json();
     const action = String(body.action ?? "").trim().toLowerCase();
-    const token = cleanToken(body.token);
+    const token = cleanToken(body.token || bearerToken || cookieToken);
 
     if (action === "admin_login" || action === "login") {
       const { username, passcode } = body;
@@ -91,7 +101,7 @@ export async function POST(req: NextRequest) {
       return nextRes;
     }
 
-    if (!(await adminService.verifyAdminAccessAsync(token))) {
+    if (!isSecretValid && !(await adminService.verifyAdminAccessAsync(token))) {
       return NextResponse.json({ error: "403 Forbidden: Unauthorized admin access" }, { status: 403 });
     }
 
@@ -321,6 +331,35 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "update_settings" || action === "update_payment_settings" || action === "update_paystack_settings") {
+      const isPaymentUpdate =
+        action === "update_payment_settings" ||
+        action === "update_paystack_settings" ||
+        body.paystackSecretKey !== undefined ||
+        body.paystackPublicKey !== undefined ||
+        body.paystackMode !== undefined ||
+        body.paystackWebhookSecret !== undefined ||
+        body.paystackCurrency !== undefined ||
+        body.autoPayoutEnabled !== undefined;
+
+      if (isPaymentUpdate) {
+        const canManagePayments = await hasPermission(token, "payments.manage");
+        const canManageSystem = await hasPermission(token, "system.settings.edit");
+        if (!isSecretValid && !canManagePayments && !canManageSystem) {
+          return NextResponse.json(
+            { error: "403 Forbidden: 'payments.manage' permission required to configure payment gateways" },
+            { status: 403 }
+          );
+        }
+      } else {
+        const canManageSystem = await hasPermission(token, "system.settings.edit");
+        if (!isSecretValid && !canManageSystem) {
+          return NextResponse.json(
+            { error: "403 Forbidden: 'system.settings.edit' permission required" },
+            { status: 403 }
+          );
+        }
+      }
+
       const {
         wagerFeePercent,
         tournamentFeePercent,
@@ -442,6 +481,15 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "get_paystack_balance") {
+      const canViewPayments = await hasPermission(token, "payments.view");
+      const canViewWallet = await hasPermission(token, "wallet.view");
+      const canViewSettings = await hasPermission(token, "system.settings.view");
+      if (!isSecretValid && !canViewPayments && !canViewWallet && !canViewSettings) {
+        return NextResponse.json(
+          { error: "403 Forbidden: 'payments.view' or 'wallet.view' permission required to inspect payment balances" },
+          { status: 403 }
+        );
+      }
       const res = await walletService.getPaystackBalance();
       return NextResponse.json({ success: true, ...res });
     }
@@ -1110,6 +1158,38 @@ export async function PUT(req: NextRequest) {
     );
     if (!isAuthed) {
       return NextResponse.json({ error: "403 Forbidden: Unauthorized admin access" }, { status: 403 });
+    }
+
+    const isPaymentUpdate =
+      body.paystackSecretKey !== undefined ||
+      body.paystackPublicKey !== undefined ||
+      body.paystackMode !== undefined ||
+      body.paystackWebhookSecret !== undefined ||
+      body.paystackCurrency !== undefined ||
+      body.autoPayoutEnabled !== undefined;
+
+    const isSecretValid = Boolean(
+      adminSecret &&
+      (adminSecret === process.env.ADMIN_SECRET_KEY || adminSecret === process.env.ADMIN_SECRET)
+    );
+
+    if (isPaymentUpdate) {
+      const canManagePayments = await hasPermission(token, "payments.manage");
+      const canManageSystem = await hasPermission(token, "system.settings.edit");
+      if (!isSecretValid && !canManagePayments && !canManageSystem) {
+        return NextResponse.json(
+          { error: "403 Forbidden: 'payments.manage' permission required to update payment settings" },
+          { status: 403 }
+        );
+      }
+    } else {
+      const canManageSystem = await hasPermission(token, "system.settings.edit");
+      if (!isSecretValid && !canManageSystem) {
+        return NextResponse.json(
+          { error: "403 Forbidden: 'system.settings.edit' permission required" },
+          { status: 403 }
+        );
+      }
     }
 
     const {

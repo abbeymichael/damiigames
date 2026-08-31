@@ -236,7 +236,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: "System",
     items: [
       { key: "audit", label: "Audit Trail", icon: ScrollText, permission: "audit.view" },
-      { key: "payment", label: "Payments (Paystack)", icon: CreditCard, permission: "system.settings.view" },
+      { key: "payment", label: "Payments (Paystack)", icon: CreditCard, permission: "payments.view" },
       { key: "settings", label: "System Settings", icon: Settings, permission: "system.settings.view" },
       { key: "pages", label: "Legal & Policy Pages", icon: FileText, permission: "system.settings.view" },
     ],
@@ -258,9 +258,9 @@ const TAB_ITEMS_CONFIG: Record<
   withdrawals: { key: "withdrawals", label: "Withdrawals & Payouts", permission: "withdrawals.view", icon: ArrowUpRight, moduleName: "Withdrawals & Payouts" },
   wallet: { key: "wallet", label: "Financial Ledger", permission: "wallet.view", icon: Wallet, moduleName: "Financial Ledger & Treasury" },
   ledger: { key: "wallet", label: "Financial Ledger", permission: "wallet.view", icon: Wallet, moduleName: "Financial Ledger & Treasury" },
-  payment: { key: "payment", label: "Payments (Paystack)", permission: "system.settings.view", icon: CreditCard, moduleName: "Paystack Gateway & Payout Configuration" },
-  paystack: { key: "payment", label: "Payments (Paystack)", permission: "system.settings.view", icon: CreditCard, moduleName: "Paystack Gateway & Payout Configuration" },
-  payment_config: { key: "payment", label: "Payments (Paystack)", permission: "system.settings.view", icon: CreditCard, moduleName: "Paystack Gateway & Payout Configuration" },
+  payment: { key: "payment", label: "Payments (Paystack)", permission: "payments.view", icon: CreditCard, moduleName: "Paystack Gateway & Payout Configuration" },
+  paystack: { key: "payment", label: "Payments (Paystack)", permission: "payments.view", icon: CreditCard, moduleName: "Paystack Gateway & Payout Configuration" },
+  payment_config: { key: "payment", label: "Payments (Paystack)", permission: "payments.view", icon: CreditCard, moduleName: "Paystack Gateway & Payout Configuration" },
   communications: { key: "communications", label: "Communications", permission: "communications.view", icon: MessageSquare, moduleName: "Communications & Broadcasts" },
   limits: { key: "limits", label: "Game Limits & Escrow", permission: "limits.manage", icon: SlidersHorizontal, moduleName: "Game Limits & Escrow" },
   users: { key: "users", label: "Players & Users", permission: "users.view", icon: Users, moduleName: "Player Management" },
@@ -297,6 +297,9 @@ function hasAccess(
     "deposits.view": ["wallet.view", "manage_wallet"],
     "withdrawals.view": ["wallet.view", "wallet.payouts", "wallet.payout", "wallet.reject_payout", "manage_wallet", "manage_payouts"],
     "wallet.view": ["ledger.adjust", "transactions.void", "manage_wallet"],
+    "payments.view": ["payments.manage", "payments.delete", "manage_payments", "system.settings.view", "system.settings.edit"],
+    "payments.manage": ["manage_payments", "system.settings.edit"],
+    "payments.delete": ["manage_payments", "system.settings.delete"],
     "communications.view": ["communications.send", "communications.delete", "system.sms_email"],
     "system.sms_email": ["communications.send", "communications.view"],
     "limits.manage": ["manage_wallet"],
@@ -2359,6 +2362,7 @@ export default function AdminPage() {
               <PaymentSettings
                 token={token}
                 adminSecret={adminSecret}
+                canManage={hasAccess(currentRole, "payments.manage")}
                 onSettingsUpdated={(newSettings) => {
                   setMetrics((prev) => (prev ? { ...prev, settings: newSettings } : prev));
                   refreshAdminData();
