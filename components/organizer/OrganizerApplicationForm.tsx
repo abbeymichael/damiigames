@@ -22,7 +22,7 @@ import {
   Info,
   Sparkles,
 } from "lucide-react";
-import { OrganizerApplication, OrganizerApplicationStatus } from "@/lib/types";
+import type { OrganizerApplication, OrganizerApplicationStatus } from "@/lib/types";
 
 interface OrganizerApplicationFormProps {
   token: string;

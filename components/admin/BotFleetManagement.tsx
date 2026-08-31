@@ -37,8 +37,8 @@ import {
   Activity,
   Award,
 } from "lucide-react";
-import { BotAccountConfig, BotFleetSettings } from "@/lib/bot-service";
-import { LedgerEntry, Profile, Transaction } from "@/lib/types";
+import type { BotAccountConfig, BotFleetSettings } from "@/lib/bot-service";
+import type { LedgerEntry, Profile, Transaction } from "@/lib/types";
 
 interface BotFleetManagementProps {
   token: string;

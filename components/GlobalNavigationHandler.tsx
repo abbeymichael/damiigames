@@ -90,21 +90,15 @@ export function GlobalNavigationHandler() {
         message.includes("RSC navigation error") ||
         message.includes("[vinext]") ||
         message.includes("vite-rsc") ||
+        message.includes("entry-browser") ||
+        message.includes("remove-duplicate-server-css") ||
         message.includes("error loading dynamically imported module") ||
+        message.includes("Failed to fetch dynamically imported module") ||
         message.includes("NetworkError when attempting to fetch resource") ||
         message.includes("NetworkError")
       ) {
-        if (
-          message.includes("error loading dynamically imported module") ||
-          message.includes("Failed to fetch dynamically imported module")
-        ) {
-          const lastReload = sessionStorage.getItem("damii_dyn_reload");
-          const now = Date.now();
-          if (!lastReload || now - Number(lastReload) > 8000) {
-            sessionStorage.setItem("damii_dyn_reload", String(now));
-            window.location.reload();
-          }
-        }
+        event.preventDefault();
+        console.warn("[damii] Handled dynamic import rejection gracefully:", message);
       }
     };
 
@@ -115,6 +109,8 @@ export function GlobalNavigationHandler() {
         message.includes("RSC navigation error") ||
         message.includes("[vinext]") ||
         message.includes("vite-rsc") ||
+        message.includes("entry-browser") ||
+        message.includes("remove-duplicate-server-css") ||
         message.includes("error loading dynamically imported module") ||
         message.includes("Failed to fetch dynamically imported module") ||
         message.includes("NetworkError when attempting to fetch resource") ||
@@ -122,17 +118,6 @@ export function GlobalNavigationHandler() {
       ) {
         event.preventDefault();
         console.warn("[damii] Handled dynamic import error gracefully:", message);
-        if (
-          message.includes("error loading dynamically imported module") ||
-          message.includes("Failed to fetch dynamically imported module")
-        ) {
-          const lastReload = sessionStorage.getItem("damii_dyn_reload");
-          const now = Date.now();
-          if (!lastReload || now - Number(lastReload) > 8000) {
-            sessionStorage.setItem("damii_dyn_reload", String(now));
-            window.location.reload();
-          }
-        }
       }
     };
 

@@ -18,7 +18,7 @@ import {
   MapPin,
   Trash2,
 } from "lucide-react";
-import { OrganizerApplication, OrganizerApplicationStatus } from "@/lib/types";
+import type { OrganizerApplication, OrganizerApplicationStatus } from "@/lib/types";
 
 export interface OrganizersTableProps {
   applications: OrganizerApplication[];

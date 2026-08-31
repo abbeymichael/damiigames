@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { UserCheck, ShieldAlert, KeyRound, Plus, ShieldCheck, CheckSquare, Square, AlertTriangle, Trash2 } from "lucide-react";
+import { UserCheck, ShieldAlert, KeyRound, Plus, CheckSquare, Square, AlertTriangle, Trash2, ShieldCheck } from "lucide-react";
 import type { AdminAccount, AppRole } from "@/lib/types";
 
 interface AdminStaffTableProps {

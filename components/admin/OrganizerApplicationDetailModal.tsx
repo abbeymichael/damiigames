@@ -25,7 +25,7 @@ import {
   AlertTriangle,
   Trash2,
 } from "lucide-react";
-import { OrganizerApplicationDetailPayload, OrganizerApplicationStatus } from "@/lib/types";
+import type { OrganizerApplicationDetailPayload, OrganizerApplicationStatus } from "@/lib/types";
 
 interface OrganizerApplicationDetailModalProps {
   isOpen: boolean;
