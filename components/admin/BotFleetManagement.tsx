@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import type { BotAccountConfig, BotFleetSettings } from "@/lib/bot-service";
 import type { LedgerEntry, Profile, Transaction, FormalLedgerAuditReport, FleetLedgerAuditReport } from "@/lib/types";
+import { AdminPaystackModal } from "./AdminPaystackModal";
 
 interface BotFleetManagementProps {
   token: string;
@@ -170,6 +171,25 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
   const [bulkPaystackAuthUrl, setBulkPaystackAuthUrl] = useState<string | null>(null);
   const [bulkManualVerifyRef, setBulkManualVerifyRef] = useState<string>("");
   const [bulkShowManualVerify, setBulkShowManualVerify] = useState<boolean>(false);
+
+  // Active Admin Embedded Paystack Modal state (strictly in-modal, no redirects)
+  const [activePaystackModal, setActivePaystackModal] = useState<{
+    isOpen: boolean;
+    mode: "single" | "bulk";
+    authorizationUrl: string | null;
+    reference: string | null;
+    amountGhs: number;
+    botName?: string;
+    botUsername?: string;
+    bulkCount?: number;
+    bulkTier?: string;
+  }>({
+    isOpen: false,
+    mode: "single",
+    authorizationUrl: null,
+    reference: null,
+    amountGhs: 0,
+  });
 
   const matchingBotsCount = useMemo(() => {
     if (!bots || bots.length === 0) return 0;
@@ -432,9 +452,16 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
       if (data.success && data.reference) {
         setPaystackPendingRef(data.reference);
         setPaystackAuthUrl(data.authorizationUrl || null);
-        if (data.authorizationUrl) {
-          window.open(data.authorizationUrl, "_blank", "noopener,noreferrer");
-        }
+        // STRICT IN-MODAL POPUP — NEVER REDIRECT OR OPEN EXTERNAL WINDOW
+        setActivePaystackModal({
+          isOpen: true,
+          mode: "single",
+          authorizationUrl: data.authorizationUrl || null,
+          reference: data.reference,
+          amountGhs: fundAmountPoints,
+          botName: fundModalBot.fullName || fundModalBot.username,
+          botUsername: fundModalBot.username,
+        });
       } else {
         setFeedback({ type: "error", message: data.error || "Failed to initialize Paystack checkout." });
       }
@@ -470,6 +497,7 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
         setPaystackAuthUrl(null);
         setManualVerifyRef("");
         setShowManualVerify(false);
+        setActivePaystackModal((prev) => ({ ...prev, isOpen: false }));
         fetchBotFleet();
         if (selectedBotDetail && fundModalBot && selectedBotDetail.bot.token === fundModalBot.token) {
           loadBotDetail(fundModalBot.token);
@@ -503,9 +531,16 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
       if (data.success && data.reference) {
         setBulkPaystackPendingRef(data.reference);
         setBulkPaystackAuthUrl(data.authorizationUrl || null);
-        if (data.authorizationUrl) {
-          window.open(data.authorizationUrl, "_blank", "noopener,noreferrer");
-        }
+        // STRICT IN-MODAL POPUP — NEVER REDIRECT OR OPEN EXTERNAL WINDOW
+        setActivePaystackModal({
+          isOpen: true,
+          mode: "bulk",
+          authorizationUrl: data.authorizationUrl || null,
+          reference: data.reference,
+          amountGhs: matchingBotsCount * bulkPoints,
+          bulkCount: matchingBotsCount,
+          bulkTier,
+        });
       } else {
         setFeedback({ type: "error", message: data.error || "Failed to initialize bulk Paystack checkout." });
       }
@@ -541,6 +576,7 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
         setBulkPaystackAuthUrl(null);
         setBulkManualVerifyRef("");
         setBulkShowManualVerify(false);
+        setActivePaystackModal((prev) => ({ ...prev, isOpen: false }));
         fetchBotFleet();
       } else {
         setFeedback({ type: "error", message: data.error || "Bulk payment verification failed." });
@@ -549,6 +585,24 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
       setFeedback({ type: "error", message: err.message || "Error verifying bulk Paystack funding." });
     } finally {
       setBulkPaystackLoading(false);
+    }
+  };
+
+  const handlePaystackModalSuccess = (reference: string, message?: string) => {
+    setActivePaystackModal((prev) => ({ ...prev, isOpen: false }));
+    setFeedback({
+      type: "success",
+      message: message || `Paystack payment (${reference}) successfully confirmed and credited to ledger!`,
+    });
+    setFundModalBot(null);
+    setShowBulkModal(false);
+    setPaystackPendingRef(null);
+    setPaystackAuthUrl(null);
+    setBulkPaystackPendingRef(null);
+    setBulkPaystackAuthUrl(null);
+    fetchBotFleet();
+    if (selectedBotDetail) {
+      loadBotDetail(selectedBotDetail.bot.token);
     }
   };
 
@@ -2270,15 +2324,24 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
                       </p>
                       <div className="flex items-center gap-2">
                         {paystackAuthUrl && (
-                          <a
-                            href={paystackAuthUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex-1 py-2 px-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-center font-semibold text-[11px] flex items-center justify-center gap-1"
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActivePaystackModal({
+                                isOpen: true,
+                                mode: "single",
+                                authorizationUrl: paystackAuthUrl,
+                                reference: paystackPendingRef,
+                                amountGhs: fundAmountPoints,
+                                botName: fundModalBot.fullName || fundModalBot.username,
+                                botUsername: fundModalBot.username,
+                              });
+                            }}
+                            className="flex-1 py-2 px-3 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-center font-semibold text-[11px] flex items-center justify-center gap-1 shadow-md shadow-amber-950/40"
                           >
-                            <ExternalLink className="w-3 h-3" />
-                            Reopen Paystack
-                          </a>
+                            <CreditCard className="w-3.5 h-3.5" />
+                            Open Paystack Modal
+                          </button>
                         )}
                         <button
                           type="button"
@@ -2711,15 +2774,24 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
                   </p>
                   <div className="flex items-center gap-2">
                     {bulkPaystackAuthUrl && (
-                      <a
-                        href={bulkPaystackAuthUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1 py-2 px-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-center font-semibold text-[11px] flex items-center justify-center gap-1"
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActivePaystackModal({
+                            isOpen: true,
+                            mode: "bulk",
+                            authorizationUrl: bulkPaystackAuthUrl,
+                            reference: bulkPaystackPendingRef,
+                            amountGhs: matchingBotsCount * bulkPoints,
+                            bulkCount: matchingBotsCount,
+                            bulkTier,
+                          });
+                        }}
+                        className="flex-1 py-2 px-3 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-center font-semibold text-[11px] flex items-center justify-center gap-1 shadow-md shadow-amber-950/40"
                       >
-                        <ExternalLink className="w-3 h-3" />
-                        Reopen Paystack
-                      </a>
+                        <CreditCard className="w-3.5 h-3.5" />
+                        Open Paystack Modal
+                      </button>
                     )}
                     <button
                       type="button"
@@ -3003,6 +3075,22 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
           </div>
         </div>
       )}
+
+      {/* Embedded In-Modal Paystack Checkout (No redirects) */}
+      <AdminPaystackModal
+        isOpen={activePaystackModal.isOpen}
+        onClose={() => setActivePaystackModal((prev) => ({ ...prev, isOpen: false }))}
+        authorizationUrl={activePaystackModal.authorizationUrl}
+        reference={activePaystackModal.reference}
+        amountGhs={activePaystackModal.amountGhs}
+        mode={activePaystackModal.mode}
+        botName={activePaystackModal.botName}
+        botUsername={activePaystackModal.botUsername}
+        bulkCount={activePaystackModal.bulkCount}
+        bulkTier={activePaystackModal.bulkTier}
+        token={token}
+        onSuccess={handlePaystackModalSuccess}
+      />
     </div>
   );
 };
