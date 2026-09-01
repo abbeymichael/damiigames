@@ -216,12 +216,10 @@ const NAV_SECTIONS: NavSection[] = [
     title: "Operations",
     items: [
       { key: "tournaments", label: "Tournaments", icon: Trophy, permission: "tournaments.view" },
-      { key: "games", label: "Game Catalog", icon: Gamepad2, permission: "games.view" },
       { key: "deposits", label: "Deposits", icon: ArrowDownLeft, permission: "deposits.view" },
       { key: "withdrawals", label: "Withdrawals & Payouts", icon: ArrowUpRight, permission: "withdrawals.view", badgeKey: "pendingWithdrawals" },
       { key: "wallet", label: "Financial Ledger", icon: Wallet, permission: "wallet.view" },
       { key: "communications", label: "Communications", icon: MessageSquare, permission: "communications.view" },
-      { key: "limits", label: "Game Limits & Escrow", icon: SlidersHorizontal, permission: "limits.manage" },
       { key: "users", label: "Players & Users", icon: Users, permission: "users.view" },
       { key: "bots", label: "Mechanics", icon: Bot, permission: "mechanics.view" },
     ],
@@ -2175,16 +2173,6 @@ export default function AdminPage() {
               />
             )}
 
-            {/* TAB: GAMES CATALOG */}
-            {activeTab === "games" && (
-              <GamesCatalogTable
-                games={metrics?.games || []}
-                busy={busy}
-                token={token}
-                onRefresh={refreshAdminData}
-              />
-            )}
-
             {/* TAB: DEPOSITS */}
             {activeTab === "deposits" && (
               <DepositsTable
@@ -2339,11 +2327,6 @@ export default function AdminPage() {
               />
             )}
 
-            {/* TAB: GAME LIMITS & ESCROW */}
-            {activeTab === "limits" && (
-              <GameLimitsTable token={token} adminSecret={adminSecret} />
-            )}
-
             {/* TAB: COMMUNICATIONS & BROADCAST */}
             {activeTab === "communications" && (
               <CommunicationsCenter
@@ -2372,12 +2355,21 @@ export default function AdminPage() {
               />
             )}
 
-            {/* TAB: SETTINGS & CONTROLS */}
-            {activeTab === "settings" && (
+            {/* TAB: SETTINGS & CONTROLS (Includes Game Catalog and Game Limits & Escrow) */}
+            {(activeTab === "settings" || activeTab === "games" || activeTab === "limits") && (
               <PlatformSettings
                 token={token}
                 adminSecret={adminSecret}
                 initialSettings={metrics?.settings || undefined}
+                games={metrics?.games || []}
+                onRefreshGames={refreshAdminData}
+                initialSection={
+                  activeTab === "games"
+                    ? "games"
+                    : activeTab === "limits"
+                    ? "game_limits"
+                    : undefined
+                }
                 onSettingsUpdated={(newSettings) => {
                   setMetrics((prev) => (prev ? { ...prev, settings: newSettings } : prev));
                   refreshAdminData();

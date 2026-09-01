@@ -25,25 +25,41 @@ import {
   Check,
   Bell,
   RadioTower,
+  Gamepad2,
 } from "lucide-react";
-import type { AdminSettings } from "@/lib/types";
+import type { AdminSettings, GameCatalogItem } from "@/lib/types";
 import { NotificationSettings } from "@/components/admin/NotificationSettings";
+import { GamesCatalogTable } from "@/components/admin/GamesCatalogTable";
+import { GameLimitsTable } from "@/components/admin/GameLimitsTable";
 
 interface PlatformSettingsProps {
   token: string;
   adminSecret?: string;
   initialSettings?: AdminSettings;
   onSettingsUpdated?: (newSettings: AdminSettings) => void;
+  games?: GameCatalogItem[];
+  onRefreshGames?: () => void;
+  initialSection?: "fees" | "games" | "game_limits" | "timers" | "limits" | "breakers" | "rating" | "notifications" | "maintenance";
 }
 
 export function PlatformSettings({
   token,
+  adminSecret,
   initialSettings,
   onSettingsUpdated,
+  games,
+  onRefreshGames,
+  initialSection,
 }: PlatformSettingsProps) {
   const [activeSection, setActiveSection] = useState<
-    "fees" | "timers" | "limits" | "breakers" | "rating" | "notifications" | "maintenance"
-  >("fees");
+    "fees" | "games" | "game_limits" | "timers" | "limits" | "breakers" | "rating" | "notifications" | "maintenance"
+  >(initialSection || "fees");
+
+  useEffect(() => {
+    if (initialSection) {
+      setActiveSection(initialSection);
+    }
+  }, [initialSection]);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -275,6 +291,32 @@ export function PlatformSettings({
 
         <button
           type="button"
+          id="btn-tab-games-catalog"
+          onClick={() => setActiveSection("games")}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+            activeSection === "games"
+              ? "bg-[#d6a735] text-[#06261f] shadow-md font-bold"
+              : "text-slate-200 hover:text-white hover:bg-[#06261f]"
+          }`}
+        >
+          <Gamepad2 size={14} /> Game Catalog
+        </button>
+
+        <button
+          type="button"
+          id="btn-tab-game-limits"
+          onClick={() => setActiveSection("game_limits")}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+            activeSection === "game_limits"
+              ? "bg-[#d6a735] text-[#06261f] shadow-md font-bold"
+              : "text-slate-200 hover:text-white hover:bg-[#06261f]"
+          }`}
+        >
+          <SlidersHorizontal size={14} /> Game Limits & Escrow
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveSection("timers")}
           className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
             activeSection === "timers"
@@ -372,8 +414,20 @@ export function PlatformSettings({
         </div>
       )}
 
-      {/* NOTIFICATION PROVIDERS & MODES SECTION */}
-      {activeSection === "notifications" ? (
+      {/* SECTION CONTENT ROUTING */}
+      {activeSection === "games" ? (
+        <GamesCatalogTable
+          games={games || []}
+          busy={busy}
+          onRefresh={onRefreshGames || (() => {})}
+          token={token}
+        />
+      ) : activeSection === "game_limits" ? (
+        <GameLimitsTable
+          token={token}
+          adminSecret={adminSecret || ""}
+        />
+      ) : activeSection === "notifications" ? (
         <NotificationSettings token={token} />
       ) : (
         /* FORM CONTAINER FOR PLATFORM SETTINGS */
