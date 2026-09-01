@@ -3,6 +3,7 @@ import { securityService } from "./security";
 import { WalletTransaction, WagerEscrow, Deposit, Withdrawal, DepositAction, WithdrawalAction } from "./types";
 import { notificationService } from "./notification-service";
 import { getAdminPermissions } from "./permissions";
+import { botService } from "./bot-service";
 
 export async function getEffectivePaystackConfig(): Promise<{ secretKey: string; publicKey: string }> {
   try {
@@ -590,22 +591,39 @@ export const walletService = {
     const caller = await dbRepository.getProfile(actorToken);
     const actorName = caller?.username || "Admin";
 
-    // Credit user balance
-    await dbRepository.updateProfileBalance(deposit.userId, deposit.amount);
+    let ledgerEntryId: string | null = null;
 
-    // Write ledger entries
-    const ledgerEntries = await dbRepository.writeLedger([
-      {
-        userId: deposit.userId,
-        accountType: "available",
-        entryType: "deposit",
-        amount: String(deposit.amount),
-        referenceType: "deposit",
-        referenceId: deposit.id,
-      },
-    ]).catch(() => []);
+    if (botService.isBot(deposit.userId)) {
+      try {
+        const result = await botService.fundBot(
+          deposit.userId,
+          deposit.amount,
+          deposit.amount,
+          notes || `Manual Deposit Processed (${deposit.reference || deposit.id})`,
+          actorName,
+          deposit.reference || deposit.id
+        );
+      } catch (err) {
+        console.error("Failed to sync bot bankroll on manual processDeposit:", err);
+      }
+    } else {
+      // Credit user balance
+      await dbRepository.updateProfileBalance(deposit.userId, deposit.amount);
 
-    const ledgerEntryId = ledgerEntries[0]?.id;
+      // Write ledger entries
+      const ledgerEntries = await dbRepository.writeLedger([
+        {
+          userId: deposit.userId,
+          accountType: "available",
+          entryType: "deposit",
+          amount: String(deposit.amount),
+          referenceType: "deposit",
+          referenceId: deposit.id,
+        },
+      ]).catch(() => []);
+      ledgerEntryId = ledgerEntries[0]?.id || null;
+    }
+
     const prevStatus = deposit.status;
 
     const updated = await dbRepository.updateDeposit(deposit.id, {
