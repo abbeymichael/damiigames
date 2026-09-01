@@ -176,6 +176,7 @@ type SystemMetrics = {
   systemFunds?: SystemFundsReport | null;
   chartOfAccounts?: ChartOfAccountsReport | null;
   treasuryDetails?: TreasuryFundDetails | null;
+  mechanicsDetails?: MechanicsFundDetails | null;
   ledgerEntries?: LedgerEntry[];
   comprehensiveMatches?: ComprehensiveMatch[];
   gameRequests?: GameRequestItem[];
@@ -2283,6 +2284,7 @@ export default function AdminPage() {
                     systemFunds={metrics?.systemFunds || null}
                     chartOfAccounts={metrics?.chartOfAccounts || null}
                     treasuryDetails={metrics?.treasuryDetails || null}
+                    mechanicsDetails={metrics?.mechanicsDetails || null}
                     txFilter={txFilter}
                     setTxFilter={(filter: string) => setTxFilter(filter as any)}
                     busy={busy}

@@ -35,12 +35,20 @@ import {
 } from "lucide-react";
 import { ActionMenu } from "@/components/ActionMenu";
 import { AuditTrailView } from "@/components/admin/AuditTrailView";
+import { FinancialReportsView } from "@/components/admin/FinancialReportsView";
+import {
+  exportComprehensiveFinancialReportPDF,
+  exportBalanceSheetPDF,
+  exportSystemFundsReportPDF,
+  exportLedgerEntriesPDF,
+} from "@/lib/financial-pdf-service";
 import type {
   LedgerEntry,
   SystemFundsReport,
   SystemFundType,
   ChartOfAccountsReport,
   TreasuryFundDetails,
+  MechanicsFundDetails,
   AccountClass,
 } from "@/lib/types";
 
@@ -61,6 +69,7 @@ export interface LedgerTableProps {
   systemFunds?: SystemFundsReport | null;
   chartOfAccounts?: ChartOfAccountsReport | null;
   treasuryDetails?: TreasuryFundDetails | null;
+  mechanicsDetails?: MechanicsFundDetails | null;
   txFilter: string;
   setTxFilter: (filter: string) => void;
   busy: boolean;
@@ -77,6 +86,7 @@ export function LedgerTable({
   systemFunds,
   chartOfAccounts,
   treasuryDetails,
+  mechanicsDetails,
   txFilter,
   setTxFilter,
   busy,
@@ -86,7 +96,7 @@ export function LedgerTable({
   onUpdateTransactionStatus,
   onVoidTransaction,
 }: LedgerTableProps) {
-  const [viewMode, setViewMode] = useState<"overview" | "coa" | "treasury" | "audit" | "ledger" | "transactions">("overview");
+  const [viewMode, setViewMode] = useState<"overview" | "reports" | "coa" | "treasury" | "audit" | "ledger" | "transactions">("overview");
   const [fundFilter, setFundFilter] = useState<SystemFundType | "all">("all");
   const [accountClassFilter, setAccountClassFilter] = useState<AccountClass | "all">("all");
   const [ledgerSearch, setLedgerSearch] = useState("");
@@ -170,6 +180,18 @@ export function LedgerTable({
           </button>
           <button
             type="button"
+            id="tab-btn-reports"
+            onClick={() => setViewMode("reports")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+              viewMode === "reports"
+                ? "bg-[#d6a735] text-[#06261f] shadow-md font-black"
+                : "text-slate-300 hover:text-white hover:bg-[#0c3b2e]"
+            }`}
+          >
+            <FileText size={14} /> Financial Reports &amp; PDF Exports
+          </button>
+          <button
+            type="button"
             id="tab-btn-coa"
             onClick={() => setViewMode("coa")}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
@@ -231,6 +253,25 @@ export function LedgerTable({
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            id="btn-quick-export-pdf"
+            onClick={() => {
+              exportComprehensiveFinancialReportPDF({
+                systemFunds,
+                chartOfAccounts,
+                treasuryDetails,
+                mechanicsDetails,
+                ledgerEntries,
+                title: "DAMII Gaming Financial Statement",
+              });
+            }}
+            className="px-2.5 py-1.5 bg-[#0c3b2e] hover:bg-[#114232] text-amber-300 hover:text-white border border-[#d6a735]/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+            title="Download Comprehensive Financial Statement PDF"
+          >
+            <FileText size={13} className="text-[#d6a735]" /> Export PDF
+          </button>
+
           {onReconcileFunds && (
             <button
               type="button"
@@ -251,7 +292,7 @@ export function LedgerTable({
             className="px-2.5 py-1.5 bg-[#06261f] hover:bg-[#0c3b2e] text-slate-300 hover:text-white border border-[#1a5e48] rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
             title="Download full Chart of Accounts and Treasury Statement JSON"
           >
-            <Download size={13} /> Export Report
+            <Download size={13} /> JSON
           </button>
 
           <button
@@ -273,6 +314,19 @@ export function LedgerTable({
           </button>
         </div>
       </div>
+
+      {/* VIEW: FINANCIAL REPORTS & PDF EXPORTS */}
+      {viewMode === "reports" && (
+        <FinancialReportsView
+          systemFunds={systemFunds}
+          chartOfAccounts={chartOfAccounts}
+          treasuryDetails={treasuryDetails}
+          mechanicsDetails={mechanicsDetails}
+          ledgerEntries={ledgerEntries}
+          onRefresh={onRefresh}
+          busy={busy}
+        />
+      )}
 
       {/* VIEW 1: 3 CORE SYSTEM FUNDS OVERVIEW */}
       {viewMode === "overview" && systemFunds && (
