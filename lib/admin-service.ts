@@ -18,6 +18,7 @@ import { notificationService } from "./notification-service";
 import { hasPermission, getAdminPermissions } from "./permissions";
 import { buildComprehensiveMatches, buildGameRequests } from "./match-analytics";
 import { botService } from "./bot-service";
+import { getEffectivePaystackConfig } from "./wallet-service";
 
 export const adminService = {
   async verifyAdminAccessAsync(token: string): Promise<boolean> {
@@ -156,6 +157,446 @@ export const adminService = {
     const updated = await botService.fundBot(botToken, Number(points || 0), Number(marbles || 0), note, admin?.username || "Admin");
     await this.logAdminAction(adminToken, admin?.username || "Admin", "FUND_BOT_BANKROLL", botToken, { points, marbles, note });
     return updated;
+  },
+
+  async initBotPaystackFunding(
+    adminToken: string,
+    botToken: string,
+    amountGhs: number,
+    email?: string,
+    callbackUrl?: string
+  ) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const canFund = (await hasPermission(adminToken, "mechanics.fund")) || (await hasPermission(adminToken, "mechanics.manage"));
+    if (!canFund) throw new Error("Unauthorized: 'mechanics.fund' permission required");
+
+    if (!amountGhs || amountGhs <= 0) {
+      throw new Error("Funding amount must be greater than zero GHS");
+    }
+
+    const bot = await botService.getBot(botToken);
+    if (!bot) throw new Error(`Mechanic ${botToken} not found`);
+
+    const admin = await this.resolveAdminProfile(adminToken);
+    const adminEmail = (email || (admin?.username ? `${admin.username}@damii.game` : "admin@damii.game")).toLowerCase();
+
+    const reference = `MECH-FUND-${Date.now()}-${securityService.generateCsprngToken(4)}`;
+    const amountPesewas = Math.round(amountGhs * 100);
+
+    const { secretKey } = await getEffectivePaystackConfig();
+    if (!secretKey) {
+      throw new Error("Paystack secret key is not configured on the server.");
+    }
+
+    const payload = {
+      email: adminEmail,
+      amount: amountPesewas,
+      reference,
+      currency: "GHS",
+      channels: ["card", "mobile_money"],
+      callback_url: callbackUrl || undefined,
+      metadata: {
+        botToken,
+        botUsername: bot.username,
+        botFullName: bot.fullName,
+        amountGhs,
+        type: "mechanic_bankroll_funding",
+        adminUsername: admin?.username || "Admin",
+        adminToken,
+        custom_fields: [
+          {
+            display_name: "Mechanic Name",
+            variable_name: "mechanic_name",
+            value: `${bot.fullName} (@${bot.username})`,
+          },
+          {
+            display_name: "Funded By",
+            variable_name: "admin_username",
+            value: admin?.username || "Admin",
+          },
+        ],
+      },
+    };
+
+    const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const paystackData = await paystackRes.json();
+    if (!paystackRes.ok || !paystackData.status) {
+      throw new Error(paystackData.message || "Failed to initialize Paystack transaction for mechanic funding.");
+    }
+
+    // Create pending deposit and transaction record for complete audit trail
+    try {
+      await dbRepository.createDeposit({
+        id: `dep-${securityService.generateUUID()}`,
+        userId: botToken,
+        username: bot.username,
+        paymentMethod: "paystack",
+        amountPesewas,
+        amountGhs,
+        pointsToCredit: amountGhs,
+        marblesToCredit: amountGhs,
+        status: "pending",
+        paystackReference: reference,
+        paystackAccessCode: paystackData.data?.access_code,
+        authorizationUrl: paystackData.data?.authorization_url,
+        customerEmail: adminEmail,
+        metadata: {
+          botToken,
+          botUsername: bot.username,
+          isMechanicFunding: true,
+          adminUsername: admin?.username || "Admin",
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      await dbRepository.createTransaction({
+        id: `tx-fund-init-${Date.now()}-${securityService.generateCsprngToken(4)}`,
+        userToken: botToken,
+        type: "deposit",
+        currency: "points",
+        amount: amountGhs,
+        reference,
+        status: "pending",
+        metaJson: JSON.stringify({
+          adminUsername: admin?.username || "Admin",
+          amountGhs,
+          type: "mechanic_bankroll_funding",
+          status: "pending_paystack_payment",
+        }),
+        createdAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error("Failed to write pending deposit for mechanic:", err);
+    }
+
+    await this.logAdminAction(adminToken, admin?.username || "Admin", "INIT_PAYSTACK_BOT_FUNDING", botToken, {
+      amountGhs,
+      reference,
+    });
+
+    return {
+      success: true,
+      reference,
+      authorizationUrl: paystackData.data?.authorization_url,
+      accessCode: paystackData.data?.access_code,
+      amountGhs,
+      botToken,
+      botUsername: bot.username,
+      botFullName: bot.fullName,
+    };
+  },
+
+  async verifyBotPaystackFunding(adminToken: string, reference: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const canFund = (await hasPermission(adminToken, "mechanics.fund")) || (await hasPermission(adminToken, "mechanics.manage"));
+    if (!canFund) throw new Error("Unauthorized: 'mechanics.fund' permission required");
+
+    const cleanRef = String(reference || "").trim();
+    if (!cleanRef) throw new Error("Paystack reference is required");
+
+    const { secretKey } = await getEffectivePaystackConfig();
+    if (!secretKey) throw new Error("Paystack secret key not configured");
+
+    const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(cleanRef)}`, {
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        "Content-Type": "application/json",
+      },
+    });
+    const json = await res.json();
+    if (!res.ok || !json.status) {
+      throw new Error(json.message || "Payment verification failed");
+    }
+
+    if (json.data?.status !== "success") {
+      throw new Error(`Paystack payment status is ${json.data?.status || "incomplete"}`);
+    }
+
+    const paidPesewas = Number(json.data?.amount || 0);
+    const paidGhs = paidPesewas / 100;
+    const metadata = json.data?.metadata || {};
+    const botToken = metadata.botToken;
+
+    if (!botToken) {
+      throw new Error("Paystack transaction metadata does not contain a mechanic botToken");
+    }
+
+    const bot = await botService.getBot(botToken);
+    if (!bot) throw new Error(`Mechanic ${botToken} not found`);
+
+    const admin = await this.resolveAdminProfile(adminToken);
+    const adminUsername = admin?.username || metadata.adminUsername || "Admin";
+
+    // Fund the bot with exact verified amount
+    const updatedBot = await botService.fundBot(
+      botToken,
+      paidGhs,
+      paidGhs,
+      `Paystack Verified Payment (${cleanRef}) - Bankroll Float Deposit`,
+      adminUsername,
+      cleanRef
+    );
+
+    // Update deposit record to completed
+    try {
+      const existingDep = await dbRepository.getDepositByReference(cleanRef);
+      if (existingDep) {
+        await dbRepository.updateDeposit(existingDep.id, {
+          status: "completed",
+          gatewayResponse: json.data?.gateway_response || "Successful",
+          gatewayReference: json.data?.reference || cleanRef,
+          verifiedAt: new Date().toISOString(),
+          verifiedBy: "Paystack Gateway",
+          approvedAt: new Date().toISOString(),
+          approvedBy: adminUsername,
+          processedAt: new Date().toISOString(),
+        });
+      }
+    } catch {}
+
+    await this.logAdminAction(adminToken, adminUsername, "VERIFIED_PAYSTACK_BOT_FUNDING", botToken, {
+      paidGhs,
+      reference: cleanRef,
+    });
+
+    return {
+      success: true,
+      bot: updatedBot,
+      amountGhs: paidGhs,
+      message: `Successfully funded ${bot.fullName || bot.username} with GH₵ ${paidGhs.toLocaleString()} via verified Paystack payment.`,
+    };
+  },
+
+  async initBulkBotPaystackFunding(
+    adminToken: string,
+    amountPerBot: number,
+    tier?: string,
+    email?: string,
+    callbackUrl?: string
+  ) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const canFund = (await hasPermission(adminToken, "mechanics.fund")) || (await hasPermission(adminToken, "mechanics.manage"));
+    if (!canFund) throw new Error("Unauthorized: 'mechanics.fund' permission required");
+
+    if (!amountPerBot || amountPerBot <= 0) {
+      throw new Error("Amount per mechanic must be greater than zero");
+    }
+
+    const all = botService.getAllBotsList();
+    const eligible = all.filter((b) => !tier || tier === "all" || b.difficultyTier === tier);
+    if (eligible.length === 0) {
+      throw new Error(`No mechanics found matching tier "${tier || "all"}"`);
+    }
+
+    const totalAmountGhs = eligible.length * amountPerBot;
+    const admin = await this.resolveAdminProfile(adminToken);
+    const adminEmail = (email || (admin?.username ? `${admin.username}@damii.game` : "admin@damii.game")).toLowerCase();
+    const reference = `MECH-BULK-${Date.now()}-${securityService.generateCsprngToken(4)}`;
+    const amountPesewas = Math.round(totalAmountGhs * 100);
+
+    const { secretKey } = await getEffectivePaystackConfig();
+    if (!secretKey) {
+      throw new Error("Paystack secret key is not configured on the server.");
+    }
+
+    const payload = {
+      email: adminEmail,
+      amount: amountPesewas,
+      reference,
+      currency: "GHS",
+      channels: ["card", "mobile_money"],
+      callback_url: callbackUrl || undefined,
+      metadata: {
+        isBulkMechanicFunding: true,
+        tier: tier || "all",
+        amountPerBot,
+        botCount: eligible.length,
+        botTokens: eligible.map((b) => b.token),
+        adminUsername: admin?.username || "Admin",
+        adminToken,
+      },
+    };
+
+    const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const paystackData = await paystackRes.json();
+    if (!paystackRes.ok || !paystackData.status) {
+      throw new Error(paystackData.message || "Failed to initialize Paystack bulk funding transaction.");
+    }
+
+    await this.logAdminAction(adminToken, admin?.username || "Admin", "INIT_BULK_PAYSTACK_BOT_FUNDING", "BotFleet", {
+      totalAmountGhs,
+      amountPerBot,
+      botCount: eligible.length,
+      tier,
+      reference,
+    });
+
+    return {
+      success: true,
+      reference,
+      authorizationUrl: paystackData.data?.authorization_url,
+      accessCode: paystackData.data?.access_code,
+      totalAmountGhs,
+      amountPerBot,
+      botCount: eligible.length,
+      tier: tier || "all",
+    };
+  },
+
+  async verifyBulkBotPaystackFunding(adminToken: string, reference: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const canFund = (await hasPermission(adminToken, "mechanics.fund")) || (await hasPermission(adminToken, "mechanics.manage"));
+    if (!canFund) throw new Error("Unauthorized: 'mechanics.fund' permission required");
+
+    const cleanRef = String(reference || "").trim();
+    if (!cleanRef) throw new Error("Paystack reference is required");
+
+    const { secretKey } = await getEffectivePaystackConfig();
+    if (!secretKey) throw new Error("Paystack secret key not configured");
+
+    const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(cleanRef)}`, {
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        "Content-Type": "application/json",
+      },
+    });
+    const json = await res.json();
+    if (!res.ok || !json.status || json.data?.status !== "success") {
+      throw new Error(json.message || `Payment verification failed (status: ${json.data?.status || "unknown"})`);
+    }
+
+    const metadata = json.data?.metadata || {};
+    const botTokens: string[] = Array.isArray(metadata.botTokens) ? metadata.botTokens : [];
+    const amountPerBot = Number(metadata.amountPerBot || 0);
+
+    if (botTokens.length === 0 || amountPerBot <= 0) {
+      throw new Error("Invalid bulk payment metadata: missing botTokens or amountPerBot");
+    }
+
+    const admin = await this.resolveAdminProfile(adminToken);
+    const adminUsername = admin?.username || metadata.adminUsername || "Admin";
+
+    let fundedCount = 0;
+    for (const bToken of botTokens) {
+      try {
+        await botService.fundBot(
+          bToken,
+          amountPerBot,
+          amountPerBot,
+          `Bulk Paystack Funding (${cleanRef}) - ${metadata.tier || "Fleet"} Tier`,
+          adminUsername,
+          cleanRef
+        );
+        fundedCount++;
+      } catch (err) {
+        console.error(`Failed to fund bot ${bToken} in bulk batch:`, err);
+      }
+    }
+
+    await this.logAdminAction(adminToken, adminUsername, "VERIFIED_BULK_PAYSTACK_BOT_FUNDING", "BotFleet", {
+      fundedCount,
+      amountPerBot,
+      totalGhs: fundedCount * amountPerBot,
+      reference: cleanRef,
+    });
+
+    return {
+      success: true,
+      fundedCount,
+      amountPerBot,
+      totalGhs: fundedCount * amountPerBot,
+      message: `Successfully funded ${fundedCount} mechanics with GH₵ ${amountPerBot} each (Total: GH₵ ${fundedCount * amountPerBot}) via verified Paystack payment.`,
+    };
+  },
+
+  async verifyBotLedger(adminToken: string, botToken: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const canView =
+      (await hasPermission(adminToken, "ledger.view")) ||
+      (await hasPermission(adminToken, "mechanics.manage")) ||
+      (await hasPermission(adminToken, "mechanics.fund"));
+    if (!canView) throw new Error("Unauthorized: 'ledger.view' or 'mechanics.manage' permission required");
+
+    const report = await botService.verifyBotLedgerIntegrity(botToken);
+    const admin = await this.resolveAdminProfile(adminToken);
+    await this.logAdminAction(adminToken, admin?.username || "Admin", "FORMAL_LEDGER_VERIFICATION", botToken, {
+      isValid: report.isValid,
+      reportedBalance: report.currentReportedBalance,
+      verifiedLedgerBalance: report.verifiedLedgerBalance,
+      nonNegativePassed: report.nonNegativeInvariantPassed,
+      checksum: report.auditChecksum,
+    });
+    return report;
+  },
+
+  async verifyFleetLedgers(adminToken: string) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const canView =
+      (await hasPermission(adminToken, "ledger.view")) ||
+      (await hasPermission(adminToken, "mechanics.manage")) ||
+      (await hasPermission(adminToken, "mechanics.fund"));
+    if (!canView) throw new Error("Unauthorized: 'ledger.view' or 'mechanics.manage' permission required");
+
+    const fleetReport = await botService.verifyFleetLedgerIntegrity();
+    const admin = await this.resolveAdminProfile(adminToken);
+    await this.logAdminAction(adminToken, admin?.username || "Admin", "FORMAL_FLEET_LEDGER_AUDIT", "BotFleet", {
+      totalBotsAudited: fleetReport.totalBotsAudited,
+      totalValidLedgers: fleetReport.totalValidLedgers,
+      totalDeficitViolations: fleetReport.totalDeficitViolations,
+      allInvariantsSatisfied: fleetReport.allInvariantsSatisfied,
+    });
+    return fleetReport;
+  },
+
+  async executeVerifiedSystemBotTransfer(
+    adminToken: string,
+    params: {
+      botToken: string;
+      amount: number;
+      direction: "credit" | "debit";
+      transferType: any;
+      note?: string;
+      marbles?: number;
+      paymentRef?: string;
+    }
+  ) {
+    if (!(await this.verifyAdminAccessAsync(adminToken))) throw new Error("Unauthorized admin access");
+    const canFund = (await hasPermission(adminToken, "mechanics.fund")) || (await hasPermission(adminToken, "mechanics.manage"));
+    if (!canFund) throw new Error("Unauthorized: 'mechanics.fund' permission required");
+
+    const admin = await this.resolveAdminProfile(adminToken);
+    const result = await botService.executeVerifiedSystemBotTransfer({
+      ...params,
+      adminUsername: admin?.username || "Admin",
+    });
+
+    await this.logAdminAction(adminToken, admin?.username || "Admin", "VERIFIED_SYSTEM_BOT_TRANSFER", params.botToken, {
+      amount: params.amount,
+      direction: params.direction,
+      transferType: params.transferType,
+      balanceBefore: result.balanceBefore,
+      balanceAfter: result.balanceAfter,
+      verificationHash: result.verificationHash,
+    });
+
+    return result;
   },
 
   async withdrawBotAccount(adminToken: string, botToken: string, points: number, note?: string) {

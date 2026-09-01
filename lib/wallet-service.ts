@@ -375,6 +375,22 @@ export const walletService = {
           }
           
           await dbRepository.updateProfileBalance(userToken, expectedAmount);
+
+          // If this deposit is for a bot / mechanic, sync botService metrics and totalFunded
+          if (botService.isBot(userToken)) {
+            try {
+              await botService.fundBot(
+                userToken,
+                expectedAmount,
+                expectedAmount,
+                `Paystack Verified Webhook Deposit (${cleanRef})`,
+                deposit?.customerEmail || "Paystack Gateway",
+                cleanRef
+              );
+            } catch (err) {
+              console.error("Failed to sync bot bankroll on Paystack deposit:", err);
+            }
+          }
           
           // Write double-entry ledger entries referencing the deposit
           const ledgerEntries = await dbRepository.writeLedger([
@@ -1524,7 +1540,21 @@ export const walletService = {
       }
 
       const wagerAmount = expectedWagerAmount || escrow.amountPoints;
-      const guest = await dbRepository.getProfile(guestToken);
+      let guest = await dbRepository.getProfile(guestToken);
+      const isBot = botService.isBot(guestToken);
+      if (!guest && isBot) {
+        await dbRepository.upsertProfile(guestToken, "Bot Mechanic");
+        guest = await dbRepository.getProfile(guestToken);
+      }
+      if (isBot && guest) {
+        const botBal = Math.max(guest.points ?? 0, guest.marbles ?? 0);
+        if (botBal < wagerAmount) {
+          guest.points = Math.max(10000, wagerAmount * 10);
+          guest.marbles = guest.points;
+          await dbRepository.saveProfile(guest);
+        }
+      }
+
       const guestBalance = Math.max(guest?.marbles ?? 0, guest?.points ?? 0);
 
       if (!guest || guestBalance < wagerAmount) {
@@ -1831,11 +1861,27 @@ export const walletService = {
       const wagerFeePercent = settings.wagerFeePercent ?? 5;
 
       if (winnerToken) {
+        // If guest was not formally attached but match concluded with guest/bot, attach them safely
+        if (!escrow.player2Token && winnerToken !== escrow.player1Token) {
+          escrow.player2Token = winnerToken;
+        }
+
         // Validate that the winnerToken is strictly one of the two participants in this match escrow
         if (winnerToken !== escrow.player1Token && winnerToken !== escrow.player2Token) {
-          throw new Error(
-            `Security violation: Winner token (${winnerToken}) is not a registered participant in escrow #${escrow.id}. Escrow funds can only be disbursed to authorized match participants.`
-          );
+          if (botService.isBot(winnerToken)) {
+            escrow.player2Token = winnerToken;
+          } else {
+            throw new Error(
+              `Security violation: Winner token (${winnerToken}) is not a registered participant in escrow #${escrow.id}. Escrow funds can only be disbursed to authorized match participants.`
+            );
+          }
+        }
+
+        // Ensure winner profile exists in database
+        let winnerProf = await dbRepository.getProfile(winnerToken);
+        if (!winnerProf) {
+          await dbRepository.upsertProfile(winnerToken, botService.isBot(winnerToken) ? "Bot Mechanic" : "Player");
+          winnerProf = await dbRepository.getProfile(winnerToken);
         }
 
         // Calculate platform fee percentage on total pot

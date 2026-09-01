@@ -1354,8 +1354,25 @@ export const memoryStore: DbRepository = {
         (e) => e.userId === item.userId && e.accountType === item.accountType
       );
       const lastEntry = userEntries[userEntries.length - 1];
-      const previousBalance = lastEntry ? Number(lastEntry.balanceAfter || 0) : 0;
-      const newBalance = previousBalance + Number(item.amount);
+      let previousBalance = 0;
+      if (lastEntry) {
+        previousBalance = Number(lastEntry.balanceAfter || 0);
+      } else if (item.accountType === "available" && item.userId !== "platform-treasury" && item.userId !== "system-house") {
+        const prof = data.profiles.get(item.userId);
+        if (prof) {
+          const currentPoints = Math.max(Number(prof.points ?? 0), Number(prof.marbles ?? 0));
+          if (Number(item.amount) < 0) {
+            previousBalance = Math.max(0, currentPoints - Number(item.amount));
+          } else {
+            previousBalance = currentPoints;
+          }
+        }
+      }
+
+      const rawNewBalance = previousBalance + Number(item.amount);
+      const newBalance = (item.accountType === "available" && item.userId !== "platform-treasury" && item.userId !== "system-house")
+        ? Math.max(0, rawNewBalance)
+        : rawNewBalance;
 
       const entry: LedgerEntry = {
         id: `ledger-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,

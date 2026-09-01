@@ -140,6 +140,76 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, bot: updated });
     }
 
+    if (action === "init_bot_paystack_funding") {
+      const { botToken, amountGhs, email, callbackUrl } = body;
+      if (!botToken) return NextResponse.json({ error: "botToken is required" }, { status: 400 });
+      if (!amountGhs || Number(amountGhs) <= 0) return NextResponse.json({ error: "Valid amountGhs is required" }, { status: 400 });
+      const result = await adminService.initBotPaystackFunding(
+        token,
+        String(botToken),
+        Number(amountGhs),
+        email ? String(email) : undefined,
+        callbackUrl ? String(callbackUrl) : undefined
+      );
+      return NextResponse.json(result);
+    }
+
+    if (action === "verify_bot_paystack_funding") {
+      const { reference } = body;
+      if (!reference) return NextResponse.json({ error: "reference is required" }, { status: 400 });
+      const result = await adminService.verifyBotPaystackFunding(token, String(reference));
+      return NextResponse.json(result);
+    }
+
+    if (action === "init_bulk_bot_paystack_funding") {
+      const { amountPerBot, tier, email, callbackUrl } = body;
+      if (!amountPerBot || Number(amountPerBot) <= 0) return NextResponse.json({ error: "Valid amountPerBot is required" }, { status: 400 });
+      const result = await adminService.initBulkBotPaystackFunding(
+        token,
+        Number(amountPerBot),
+        tier ? String(tier) : undefined,
+        email ? String(email) : undefined,
+        callbackUrl ? String(callbackUrl) : undefined
+      );
+      return NextResponse.json(result);
+    }
+
+    if (action === "verify_bulk_bot_paystack_funding") {
+      const { reference } = body;
+      if (!reference) return NextResponse.json({ error: "reference is required" }, { status: 400 });
+      const result = await adminService.verifyBulkBotPaystackFunding(token, String(reference));
+      return NextResponse.json(result);
+    }
+
+    if (action === "verify_bot_ledger") {
+      const { botToken } = body;
+      if (!botToken) return NextResponse.json({ error: "botToken is required" }, { status: 400 });
+      const report = await adminService.verifyBotLedger(token, String(botToken));
+      return NextResponse.json({ success: true, report });
+    }
+
+    if (action === "verify_fleet_ledgers") {
+      const fleetReport = await adminService.verifyFleetLedgers(token);
+      return NextResponse.json({ success: true, fleetReport });
+    }
+
+    if (action === "verified_system_bot_transfer") {
+      const { botToken, amount, direction, transferType, note, marbles, paymentRef } = body;
+      if (!botToken || !amount || !direction) {
+        return NextResponse.json({ error: "botToken, amount, and direction are required" }, { status: 400 });
+      }
+      const result = await adminService.executeVerifiedSystemBotTransfer(token, {
+        botToken: String(botToken),
+        amount: Number(amount),
+        direction: direction === "debit" ? "debit" : "credit",
+        transferType: transferType || (direction === "credit" ? "system_bot_funding" : "system_bot_reclaim"),
+        note: note ? String(note) : undefined,
+        marbles: marbles ? Number(marbles) : undefined,
+        paymentRef: paymentRef ? String(paymentRef) : undefined,
+      });
+      return NextResponse.json({ success: true, result });
+    }
+
     if (action === "withdraw_bot_bankroll" || action === "withdraw_bot") {
       const { botToken, points, note } = body;
       if (!botToken) return NextResponse.json({ error: "botToken is required" }, { status: 400 });

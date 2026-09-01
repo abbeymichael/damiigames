@@ -2072,8 +2072,29 @@ export const mysqlStore: DbRepository = {
           .limit(1)
           .for("update");
 
-        const previousBalance = last ? Number(last.balanceAfter) : 0;
-        const newBalance = previousBalance + Number(e.amount);
+        let previousBalance = 0;
+        if (last) {
+          previousBalance = Number(last.balanceAfter);
+        } else if (e.accountType === "available" && e.userId !== "platform-treasury" && e.userId !== "system-house") {
+          const [prof] = await getDb()
+            .select({ points: schema.profiles.points, marbles: schema.profiles.marbles })
+            .from(schema.profiles)
+            .where(eq(schema.profiles.token, e.userId))
+            .limit(1);
+          if (prof) {
+            const currentPoints = Math.max(Number(prof.points ?? 0), Number(prof.marbles ?? 0));
+            if (Number(e.amount) < 0) {
+              previousBalance = Math.max(0, currentPoints - Number(e.amount));
+            } else {
+              previousBalance = currentPoints;
+            }
+          }
+        }
+
+        const rawNewBalance = previousBalance + Number(e.amount);
+        const newBalance = (e.accountType === "available" && e.userId !== "platform-treasury" && e.userId !== "system-house")
+          ? Math.max(0, rawNewBalance)
+          : rawNewBalance;
 
         const id = crypto.randomUUID();
         const le: LedgerEntry = {

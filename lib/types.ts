@@ -851,6 +851,105 @@ export interface LedgerEntryInput {
 }
 
 /* ------------------------------------------------------------------------- */
+/* Formal Ledger Verification & System-Level Bot Funding Types               */
+/* ------------------------------------------------------------------------- */
+export type SystemBotTransferType =
+  | "system_bot_funding"
+  | "system_bot_reclaim"
+  | "admin_bot_allocation"
+  | "paystack_bot_funding"
+  | "paystack_bulk_bot_funding";
+
+export interface FormalLedgerTransferResult {
+  success: boolean;
+  transactionId: string;
+  transactionGroupId: string;
+  transferType: SystemBotTransferType;
+  botToken: string;
+  botUsername: string;
+  amount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  sourceAccount: string;
+  targetAccount: string;
+  adminExecutor: string;
+  invariantsChecked: {
+    nonNegativeBalanceGuaranteed: boolean;
+    doubleEntryBalanced: boolean;
+    transferAmountPositive: boolean;
+    adminAuthorized: boolean;
+  };
+  ledgerEntries: LedgerEntry[];
+  verificationHash: string;
+  timestamp: string;
+  note?: string;
+}
+
+export interface FormalLedgerAuditEntry {
+  id: string;
+  timestamp: string;
+  entryType: string;
+  referenceType: string;
+  referenceId: string;
+  amount: number;
+  direction: "credit" | "debit";
+  balanceBefore: number;
+  balanceAfter: number;
+  nonNegativeInvariantHeld: boolean;
+  isSystemFunding: boolean;
+  transactionGroupId?: string;
+}
+
+export interface FormalLedgerAuditReport {
+  isValid: boolean;
+  botToken: string;
+  botUsername: string;
+  botFullName: string;
+  currentReportedBalance: number;
+  verifiedLedgerBalance: number;
+  balanceDiscrepancy: number;
+  totalCredits: number;
+  totalDebits: number;
+  totalSystemFunded: number;
+  totalSystemReclaimed: number;
+  totalWagerProfits: number;
+  totalWagerLosses: number;
+  entriesCount: number;
+  nonNegativeInvariantPassed: boolean;
+  doubleEntryInvariantPassed: boolean;
+  violations: string[];
+  chronologicalAuditTrail: FormalLedgerAuditEntry[];
+  verifiedAt: string;
+  auditChecksum: string;
+}
+
+export interface FleetLedgerAuditReport {
+  totalBotsAudited: number;
+  totalValidLedgers: number;
+  totalDeficitViolations: number;
+  fleetTotalSystemFunded: number;
+  fleetTotalSystemReclaimed: number;
+  fleetNetSystemCapital: number;
+  fleetTotalReportedBalance: number;
+  fleetTotalLedgerBalance: number;
+  fleetReconciliationStatus: "balanced" | "discrepancy";
+  discrepancyAmount: number;
+  allInvariantsSatisfied: boolean;
+  verifiedAt: string;
+  botAuditSummaries: Array<{
+    token: string;
+    username: string;
+    fullName: string;
+    tier: string;
+    balance: number;
+    ledgerBalance: number;
+    isValid: boolean;
+    nonNegativeProof: boolean;
+    violationsCount: number;
+  }>;
+}
+
+/* ------------------------------------------------------------------------- */
 /* RBAC & Granular Permissions Types (Section 1)                             */
 /* ------------------------------------------------------------------------- */
 export type PermissionCategory =

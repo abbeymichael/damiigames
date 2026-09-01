@@ -216,9 +216,19 @@ export const ledgerService = {
     if (match.status !== "in_progress") {
       throw new Error(`Match ${matchId} cannot be settled (current status: ${match.status})`);
     }
-    if (!match.playerBId) throw new Error(`Match ${matchId} has no Player B`);
+    if (!match.playerBId) {
+      if (winnerId.startsWith("bot-") || winnerId.startsWith("mech-") || winnerId.startsWith("bot_") || winnerId.startsWith("mechanic-")) {
+        match.playerBId = winnerId;
+      } else {
+        throw new Error(`Match ${matchId} has no Player B`);
+      }
+    }
     if (winnerId !== match.playerAId && winnerId !== match.playerBId) {
-      throw new Error(`Winner ${winnerId} is not a participant in match ${matchId}`);
+      if (winnerId.startsWith("bot-") || winnerId.startsWith("mech-") || winnerId.startsWith("bot_") || winnerId.startsWith("mechanic-")) {
+        match.playerBId = winnerId;
+      } else {
+        throw new Error(`Winner ${winnerId} is not a participant in match ${matchId}`);
+      }
     }
 
     const wagerAmount = Number(match.wagerAmount);

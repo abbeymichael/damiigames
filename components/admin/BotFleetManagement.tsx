@@ -36,9 +36,14 @@ import {
   PieChart,
   Activity,
   Award,
+  CreditCard,
+  Loader2,
+  ShieldCheck,
+  Lock,
+  CheckCircle,
 } from "lucide-react";
 import type { BotAccountConfig, BotFleetSettings } from "@/lib/bot-service";
-import type { LedgerEntry, Profile, Transaction } from "@/lib/types";
+import type { LedgerEntry, Profile, Transaction, FormalLedgerAuditReport, FleetLedgerAuditReport } from "@/lib/types";
 
 interface BotFleetManagementProps {
   token: string;
@@ -103,7 +108,15 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
   // Modals & action states
   const [selectedBotDetail, setSelectedBotDetail] = useState<BotDetailData | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [detailActiveTab, setDetailActiveTab] = useState<"overview" | "matches" | "ledger" | "transactions" | "config">("overview");
+  const [detailActiveTab, setDetailActiveTab] = useState<"overview" | "matches" | "ledger" | "transactions" | "config" | "audit">("overview");
+
+  // Formal Ledger Verification & Audit states
+  const [botAuditReport, setBotAuditReport] = useState<FormalLedgerAuditReport | null>(null);
+  const [botAuditLoading, setBotAuditLoading] = useState(false);
+  const [fleetAuditReport, setFleetAuditReport] = useState<FleetLedgerAuditReport | null>(null);
+  const [showFleetAuditModal, setShowFleetAuditModal] = useState(false);
+  const [fleetAuditLoading, setFleetAuditLoading] = useState(false);
+  const [fleetAuditSearch, setFleetAuditSearch] = useState("");
 
   // Create Bot Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -126,6 +139,12 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
   const [fundAmountPoints, setFundAmountPoints] = useState<number>(100);
   const [fundAmountMarbles, setFundAmountMarbles] = useState<number>(100);
   const [fundNote, setFundNote] = useState<string>("");
+  const [adminBillingEmail, setAdminBillingEmail] = useState<string>("admin@damii.game");
+  const [paystackLoading, setPaystackLoading] = useState<boolean>(false);
+  const [paystackPendingRef, setPaystackPendingRef] = useState<string | null>(null);
+  const [paystackAuthUrl, setPaystackAuthUrl] = useState<string | null>(null);
+  const [manualVerifyRef, setManualVerifyRef] = useState<string>("");
+  const [showManualVerify, setShowManualVerify] = useState<boolean>(false);
 
   // Edit Bot Parameters Modal
   const [editingBot, setEditingBot] = useState<BotAccountConfig | null>(null);
@@ -146,6 +165,20 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
   const [bulkTier, setBulkTier] = useState<string>("all");
   const [bulkNote, setBulkNote] = useState<string>("");
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkPaystackLoading, setBulkPaystackLoading] = useState<boolean>(false);
+  const [bulkPaystackPendingRef, setBulkPaystackPendingRef] = useState<string | null>(null);
+  const [bulkPaystackAuthUrl, setBulkPaystackAuthUrl] = useState<string | null>(null);
+  const [bulkManualVerifyRef, setBulkManualVerifyRef] = useState<string>("");
+  const [bulkShowManualVerify, setBulkShowManualVerify] = useState<boolean>(false);
+
+  const matchingBotsCount = useMemo(() => {
+    if (!bots || bots.length === 0) return 0;
+    return bots.filter((b) => {
+      if (b.status === "retired") return false;
+      if (bulkTier === "all") return true;
+      return b.difficultyTier === bulkTier;
+    }).length;
+  }, [bots, bulkTier]);
 
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
@@ -184,9 +217,60 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
     fetchBotFleet();
   }, [fetchBotFleet]);
 
+  const handleVerifyBotLedger = async (botToken: string) => {
+    try {
+      setBotAuditLoading(true);
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "verify_bot_ledger",
+          token,
+          botToken,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.report) {
+        setBotAuditReport(data.report);
+      } else {
+        setFeedback({ type: "error", message: data.error || "Formal ledger verification failed." });
+      }
+    } catch (err: any) {
+      setFeedback({ type: "error", message: err.message || "Error running formal ledger verification." });
+    } finally {
+      setBotAuditLoading(false);
+    }
+  };
+
+  const handleVerifyFleetLedgers = async () => {
+    try {
+      setFleetAuditLoading(true);
+      setShowFleetAuditModal(true);
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "verify_fleet_ledgers",
+          token,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.fleetReport) {
+        setFleetAuditReport(data.fleetReport);
+      } else {
+        setFeedback({ type: "error", message: data.error || "Failed running fleet ledger audit." });
+      }
+    } catch (err: any) {
+      setFeedback({ type: "error", message: err.message || "Error auditing fleet ledgers." });
+    } finally {
+      setFleetAuditLoading(false);
+    }
+  };
+
   const loadBotDetail = async (botToken: string) => {
     try {
       setLoadingDetail(true);
+      setBotAuditReport(null);
       const res = await fetch("/api/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -200,6 +284,7 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
       if (data.success) {
         setSelectedBotDetail(data);
         setDetailActiveTab("overview");
+        handleVerifyBotLedger(botToken);
       } else {
         setFeedback({ type: "error", message: data.error || "Failed to load bot details." });
       }
@@ -290,17 +375,22 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
     e.preventDefault();
     if (!fundModalBot) return;
 
-    const actionName = fundActionType === "fund" ? "fund_bot_bankroll" : "withdraw_bot_bankroll";
+    if (fundActionType === "fund") {
+      // Must initiate Paystack checkout flow
+      await handleInitiatePaystackFunding();
+      return;
+    }
+
+    // Reclaim to treasury
     try {
       const res = await fetch("/api/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: actionName,
+          action: "withdraw_bot_bankroll",
           token,
           botToken: fundModalBot.token,
           points: fundAmountPoints,
-          marbles: fundActionType === "fund" ? fundAmountMarbles : 0,
           note: fundNote || undefined,
         }),
       });
@@ -308,10 +398,7 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
       if (data.success) {
         setFeedback({
           type: "success",
-          message:
-            fundActionType === "fund"
-              ? `Successfully allocated GH₵ ${fundAmountPoints} (+ledger entry) to ${fundModalBot.fullName || fundModalBot.username}.`
-              : `Reclaimed GH₵ ${fundAmountPoints} (+ledger entry) from ${fundModalBot.fullName || fundModalBot.username} to Treasury.`,
+          message: `Reclaimed GH₵ ${fundAmountPoints} (+ledger entry) from ${fundModalBot.fullName || fundModalBot.username} to Treasury.`,
         });
         setFundModalBot(null);
         fetchBotFleet();
@@ -323,6 +410,145 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
       }
     } catch (err: any) {
       setFeedback({ type: "error", message: err.message || "Error performing bankroll transaction." });
+    }
+  };
+
+  const handleInitiatePaystackFunding = async () => {
+    if (!fundModalBot || fundAmountPoints <= 0) return;
+    try {
+      setPaystackLoading(true);
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "init_bot_paystack_funding",
+          token,
+          botToken: fundModalBot.token,
+          amountGhs: fundAmountPoints,
+          email: adminBillingEmail || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.reference) {
+        setPaystackPendingRef(data.reference);
+        setPaystackAuthUrl(data.authorizationUrl || null);
+        if (data.authorizationUrl) {
+          window.open(data.authorizationUrl, "_blank", "noopener,noreferrer");
+        }
+      } else {
+        setFeedback({ type: "error", message: data.error || "Failed to initialize Paystack checkout." });
+      }
+    } catch (err: any) {
+      setFeedback({ type: "error", message: err.message || "Error initializing Paystack funding." });
+    } finally {
+      setPaystackLoading(false);
+    }
+  };
+
+  const handleVerifyPaystackFunding = async (refToVerify?: string) => {
+    const targetRef = refToVerify || paystackPendingRef || manualVerifyRef;
+    if (!targetRef) return;
+    try {
+      setPaystackLoading(true);
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "verify_bot_paystack_funding",
+          token,
+          reference: targetRef.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFeedback({
+          type: "success",
+          message: data.message || `Successfully funded mechanic via Paystack payment (${targetRef})!`,
+        });
+        setFundModalBot(null);
+        setPaystackPendingRef(null);
+        setPaystackAuthUrl(null);
+        setManualVerifyRef("");
+        setShowManualVerify(false);
+        fetchBotFleet();
+        if (selectedBotDetail && fundModalBot && selectedBotDetail.bot.token === fundModalBot.token) {
+          loadBotDetail(fundModalBot.token);
+        }
+      } else {
+        setFeedback({ type: "error", message: data.error || "Payment verification failed." });
+      }
+    } catch (err: any) {
+      setFeedback({ type: "error", message: err.message || "Error verifying Paystack funding." });
+    } finally {
+      setPaystackLoading(false);
+    }
+  };
+
+  const handleInitiateBulkPaystackFunding = async () => {
+    if (bulkPoints <= 0) return;
+    try {
+      setBulkPaystackLoading(true);
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "init_bulk_bot_paystack_funding",
+          token,
+          amountPerBot: bulkPoints,
+          tier: bulkTier !== "all" ? bulkTier : undefined,
+          email: adminBillingEmail || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.reference) {
+        setBulkPaystackPendingRef(data.reference);
+        setBulkPaystackAuthUrl(data.authorizationUrl || null);
+        if (data.authorizationUrl) {
+          window.open(data.authorizationUrl, "_blank", "noopener,noreferrer");
+        }
+      } else {
+        setFeedback({ type: "error", message: data.error || "Failed to initialize bulk Paystack checkout." });
+      }
+    } catch (err: any) {
+      setFeedback({ type: "error", message: err.message || "Error initializing bulk Paystack funding." });
+    } finally {
+      setBulkPaystackLoading(false);
+    }
+  };
+
+  const handleVerifyBulkPaystackFunding = async (refToVerify?: string) => {
+    const targetRef = refToVerify || bulkPaystackPendingRef || bulkManualVerifyRef;
+    if (!targetRef) return;
+    try {
+      setBulkPaystackLoading(true);
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "verify_bulk_bot_paystack_funding",
+          token,
+          reference: targetRef.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFeedback({
+          type: "success",
+          message: data.message || `Successfully bulk-funded fleet mechanics via Paystack (${targetRef})!`,
+        });
+        setShowBulkModal(false);
+        setBulkPaystackPendingRef(null);
+        setBulkPaystackAuthUrl(null);
+        setBulkManualVerifyRef("");
+        setBulkShowManualVerify(false);
+        fetchBotFleet();
+      } else {
+        setFeedback({ type: "error", message: data.error || "Bulk payment verification failed." });
+      }
+    } catch (err: any) {
+      setFeedback({ type: "error", message: err.message || "Error verifying bulk Paystack funding." });
+    } finally {
+      setBulkPaystackLoading(false);
     }
   };
 
@@ -646,6 +872,15 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
             >
               <Coins className="w-4 h-4" />
               <span>Bulk Bankroll Top-Up</span>
+            </button>
+
+            <button
+              onClick={handleVerifyFleetLedgers}
+              disabled={fleetAuditLoading}
+              className="px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 flex items-center gap-1.5 transition-all"
+            >
+              <ShieldCheck className={`w-4 h-4 text-indigo-400 ${fleetAuditLoading ? "animate-pulse" : ""}`} />
+              <span>{fleetAuditLoading ? "Auditing Fleet..." : "Verify Fleet Ledgers"}</span>
             </button>
 
             <button
@@ -1230,6 +1465,23 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
                 <Receipt className="w-3.5 h-3.5" />
                 <span>Wallet Audit Trail</span>
               </button>
+
+              <button
+                onClick={() => {
+                  setDetailActiveTab("audit");
+                  if (selectedBotDetail && !botAuditReport) {
+                    handleVerifyBotLedger(selectedBotDetail.bot.token);
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-lg font-semibold transition-colors flex items-center gap-1.5 ${
+                  detailActiveTab === "audit"
+                    ? "bg-indigo-950 text-indigo-300 border border-indigo-700"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Formal Ledger Audit</span>
+              </button>
             </div>
 
             {/* Tab Contents */}
@@ -1454,6 +1706,207 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
                   )}
                 </div>
               )}
+
+              {detailActiveTab === "audit" && (
+                <div className="space-y-4 text-xs">
+                  {/* Top Audit Action & Status Banner */}
+                  <div className="flex items-center justify-between bg-slate-950/80 border border-indigo-900/50 rounded-2xl p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                        <ShieldCheck className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-white text-sm flex items-center gap-2">
+                          Formal Ledger Verification Engine
+                          {botAuditReport && (
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                botAuditReport.isValid && botAuditReport.nonNegativeInvariantPassed
+                                  ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
+                                  : "bg-red-950 text-red-300 border border-red-800"
+                              }`}
+                            >
+                              {botAuditReport.isValid && botAuditReport.nonNegativeInvariantPassed
+                                ? "✓ Audit Invariants Passed"
+                                : "⚠ Discrepancy Flagged"}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-slate-400 text-[11px]">
+                          Replays complete ledger history and verifies zero-deficit invariants and double-entry balancing.
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleVerifyBotLedger(selectedBotDetail.bot.token)}
+                      disabled={botAuditLoading}
+                      className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-indigo-900/30 transition-all"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${botAuditLoading ? "animate-spin" : ""}`} />
+                      <span>{botAuditLoading ? "Auditing..." : "Re-Verify Ledger"}</span>
+                    </button>
+                  </div>
+
+                  {/* Audit Invariant Cards */}
+                  {botAuditReport ? (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div
+                          className={`p-3.5 rounded-xl border ${
+                            botAuditReport.nonNegativeInvariantPassed
+                              ? "bg-emerald-950/40 border-emerald-800/80"
+                              : "bg-red-950/40 border-red-800/80"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-slate-300 text-[11px] mb-1 font-medium">
+                            <span>Zero-Deficit Invariant</span>
+                            {botAuditReport.nonNegativeInvariantPassed ? (
+                              <CheckCircle className="w-4 h-4 text-emerald-400" />
+                            ) : (
+                              <AlertTriangle className="w-4 h-4 text-red-400" />
+                            )}
+                          </div>
+                          <div
+                            className={`text-base font-bold font-mono ${
+                              botAuditReport.nonNegativeInvariantPassed ? "text-emerald-300" : "text-red-300"
+                            }`}
+                          >
+                            {botAuditReport.nonNegativeInvariantPassed ? "PASSED (Balance ≥ 0)" : "FAILED (Negative Balance Detected)"}
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-1">
+                            Verified Ledger Balance: <span className="font-mono text-white">GH₵ {botAuditReport.verifiedLedgerBalance.toFixed(2)}</span>
+                          </div>
+                        </div>
+
+                        <div
+                          className={`p-3.5 rounded-xl border ${
+                            botAuditReport.reconciliationStatus === "balanced"
+                              ? "bg-emerald-950/40 border-emerald-800/80"
+                              : "bg-amber-950/40 border-amber-800/80"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-slate-300 text-[11px] mb-1 font-medium">
+                            <span>State Reconciliation</span>
+                            <Coins className="w-4 h-4 text-amber-400" />
+                          </div>
+                          <div className="text-base font-bold font-mono text-white capitalize">
+                            {botAuditReport.reconciliationStatus}
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-1">
+                            Reported: <span className="font-mono text-white">GH₵ {botAuditReport.currentReportedBalance.toFixed(2)}</span> | Ledger:{" "}
+                            <span className="font-mono text-white">GH₵ {botAuditReport.verifiedLedgerBalance.toFixed(2)}</span>
+                          </div>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl border bg-slate-950/60 border-slate-800">
+                          <div className="flex items-center justify-between text-slate-300 text-[11px] mb-1 font-medium">
+                            <span>Distinct System Float</span>
+                            <Receipt className="w-4 h-4 text-indigo-400" />
+                          </div>
+                          <div className="text-base font-bold font-mono text-indigo-300">
+                            GH₵ {(botAuditReport.totalSystemFunded - botAuditReport.totalSystemReclaimed).toFixed(2)}
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-1">
+                            Injected: GH₵ {botAuditReport.totalSystemFunded.toFixed(2)} | Reclaimed: GH₵ {botAuditReport.totalSystemReclaimed.toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Cryptographic SHA-256 Audit Signature */}
+                      <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Lock className="w-4 h-4 text-slate-400" />
+                          <span className="text-slate-400 text-[11px]">Ledger State Audit Checksum (SHA-256):</span>
+                        </div>
+                        <span className="font-mono text-[10px] text-indigo-300 bg-slate-900 px-2.5 py-1 rounded border border-slate-700 break-all">
+                          {botAuditReport.auditChecksum}
+                        </span>
+                      </div>
+
+                      {/* Chronological Audit Verification Table */}
+                      <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-bold text-white text-xs flex items-center gap-2">
+                            <BookOpen className="w-4 h-4 text-emerald-400" />
+                            <span>Audit Trail Invariant Verification ({botAuditReport.entryAuditTrail.length} Entries)</span>
+                          </h4>
+                          <span className="text-[10px] text-slate-400">
+                            Replayed strictly chronologically
+                          </span>
+                        </div>
+
+                        {botAuditReport.entryAuditTrail.length === 0 ? (
+                          <div className="text-center py-8 text-slate-400">
+                            No ledger entries have been recorded yet for this mechanic.
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                              <thead className="bg-slate-900/90 text-slate-300 uppercase tracking-wider text-[10px] font-bold border-b border-slate-700">
+                                <tr>
+                                  <th className="py-2 px-2.5 text-slate-300">#</th>
+                                  <th className="py-2 px-2.5 text-slate-300">Entry ID</th>
+                                  <th className="py-2 px-2.5 text-slate-300">Type / Classification</th>
+                                  <th className="py-2 px-2.5 text-slate-300">Delta</th>
+                                  <th className="py-2 px-2.5 text-slate-300">Verified Balance</th>
+                                  <th className="py-2 px-2.5 text-slate-300">Invariant</th>
+                                  <th className="py-2 px-2.5 text-slate-300 text-right">Timestamp</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-800/60 font-mono">
+                                {botAuditReport.entryAuditTrail.map((entry, idx) => (
+                                  <tr key={entry.id} className="hover:bg-slate-800/30">
+                                    <td className="py-2 px-2.5 text-slate-500 text-[10px]">{idx + 1}</td>
+                                    <td className="py-2 px-2.5 text-slate-400 text-[10px]">{entry.id.slice(0, 8)}...</td>
+                                    <td className="py-2 px-2.5">
+                                      <span
+                                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                          entry.referenceType.includes("system") || entry.referenceType.includes("paystack")
+                                            ? "bg-indigo-950 text-indigo-300 border border-indigo-800"
+                                            : "bg-slate-800 text-slate-300"
+                                        }`}
+                                      >
+                                        {entry.referenceType}
+                                      </span>
+                                    </td>
+                                    <td className={`py-2 px-2.5 font-bold ${entry.amount > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                                      {entry.amount > 0 ? "+" : ""}
+                                      {entry.amount.toFixed(2)}
+                                    </td>
+                                    <td className="py-2 px-2.5 text-amber-300 font-bold">
+                                      GH₵ {entry.calculatedRunningBalance.toFixed(2)}
+                                    </td>
+                                    <td className="py-2 px-2.5">
+                                      {entry.invariantSatisfied ? (
+                                        <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-semibold">
+                                          <CheckCircle className="w-3 h-3" /> Valid (≥0)
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 text-[10px] text-red-400 font-semibold">
+                                          <AlertTriangle className="w-3 h-3" /> Deficit
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="py-2 px-2.5 text-slate-400 text-right text-[10px]">
+                                      {new Date(entry.createdAt).toLocaleDateString()} {new Date(entry.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="py-12 text-center text-slate-400">
+                      <Loader2 className="w-6 h-6 animate-spin mx-auto text-indigo-400 mb-2" />
+                      <p>Calculating formal ledger mathematical verification...</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1668,127 +2121,304 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
       {/* FUND / WITHDRAW SINGLE BOT MODAL */}
       {fundModalBot && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                  <Coins className="w-5 h-5" />
+                  <CreditCard className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-base">
-                    {fundActionType === "fund" ? "Allocate Bankroll (+)" : "Reclaim Capital (-)"}
+                    {fundActionType === "fund" ? "Fund Mechanic Bankroll (Paystack)" : "Reclaim Capital (-)"}
                   </h3>
                   <div className="text-[11px] text-amber-400 font-mono">
-                    {fundModalBot.fullName || fundModalBot.username} • Balance: GH₵ {(fundModalBot.bankrollPoints ?? 0).toLocaleString()}
+                    {fundModalBot.fullName || fundModalBot.username} (@{fundModalBot.username}) • Liquid: GH₵ {(fundModalBot.bankrollPoints ?? 0).toLocaleString()}
                   </div>
                 </div>
               </div>
-              <button onClick={() => setFundModalBot(null)} className="text-slate-400 hover:text-white">
+              <button
+                onClick={() => {
+                  setFundModalBot(null);
+                  setPaystackPendingRef(null);
+                  setPaystackAuthUrl(null);
+                }}
+                className="text-slate-400 hover:text-white"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleFundOrWithdrawBot} className="space-y-4 text-xs">
+            <div className="space-y-4 text-xs">
               <div className="flex items-center gap-2 p-1 bg-slate-950 rounded-xl border border-slate-800">
                 <button
                   type="button"
                   onClick={() => setFundActionType("fund")}
-                  className={`flex-1 py-1.5 rounded-lg font-semibold transition-all ${
-                    fundActionType === "fund" ? "bg-amber-600 text-white" : "text-slate-400 hover:text-white"
+                  className={`flex-1 py-1.5 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                    fundActionType === "fund" ? "bg-amber-600 text-white shadow-md shadow-amber-900/30" : "text-slate-400 hover:text-white"
                   }`}
                 >
-                  + Inject Bankroll (Deposit)
+                  <CreditCard className="w-3.5 h-3.5" />
+                  + Paystack Float (Deposit)
                 </button>
                 <button
                   type="button"
                   onClick={() => setFundActionType("withdraw")}
                   className={`flex-1 py-1.5 rounded-lg font-semibold transition-all ${
-                    fundActionType === "withdraw" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white"
+                    fundActionType === "withdraw" ? "bg-indigo-600 text-white shadow-md shadow-indigo-900/30" : "text-slate-400 hover:text-white"
                   }`}
                 >
                   - Reclaim to Treasury
                 </button>
               </div>
 
-              <div>
-                <label className="block text-slate-300 font-medium mb-1">
-                  Amount in Points (GH₵) *
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={fundActionType === "withdraw" ? fundModalBot.bankrollPoints || 0 : 50000}
-                  value={fundAmountPoints}
-                  onChange={(e) => setFundAmountPoints(Number(e.target.value))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono font-bold text-base focus:outline-none focus:border-amber-500"
-                />
-              </div>
+              {fundActionType === "fund" ? (
+                <>
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-200 text-[11px] leading-relaxed">
+                    <p className="font-semibold flex items-center gap-1 mb-1">
+                      <Shield className="w-3.5 h-3.5 text-amber-400" />
+                      Authentic Float & Non-Negative P&L Guarantee:
+                    </p>
+                    Mechanic accounts cannot receive unbacked balances. Funding requires a genuine Paystack transaction. New funds enter at neutral P&L (GH₵ 0.00) — never negative at inception.
+                  </div>
 
-              {fundActionType === "fund" && (
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">
-                    Amount in Practice Marbles
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={fundAmountMarbles}
-                    onChange={(e) => setFundAmountMarbles(Number(e.target.value))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono"
-                  />
-                </div>
+                  {/* Preset Buttons */}
+                  <div>
+                    <label className="block text-slate-400 font-medium mb-1.5">Quick Presets (GH₵)</label>
+                    <div className="grid grid-cols-5 gap-2">
+                      {[50, 100, 250, 500, 1000].map((amt) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => setFundAmountPoints(amt)}
+                          className={`py-1.5 rounded-lg font-mono font-semibold border transition-all ${
+                            fundAmountPoints === amt
+                              ? "bg-amber-500/20 border-amber-500 text-amber-300 shadow-sm"
+                              : "bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700"
+                          }`}
+                        >
+                          GH₵ {amt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">
+                      Deposit Amount in Points (GH₵) *
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={50000}
+                      value={fundAmountPoints}
+                      onChange={(e) => setFundAmountPoints(Number(e.target.value))}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono font-bold text-base focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">
+                      Admin Billing / Receipt Email
+                    </label>
+                    <input
+                      type="email"
+                      value={adminBillingEmail}
+                      onChange={(e) => setAdminBillingEmail(e.target.value)}
+                      placeholder="admin@damii.game"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  {/* Financial & P&L Projection Card */}
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 space-y-1.5">
+                    <div className="flex justify-between">
+                      <span>Current Liquid Bankroll:</span>
+                      <span className="font-mono text-white">GH₵ {(fundModalBot.bankrollPoints ?? 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Cumulative Capital Funded:</span>
+                      <span className="font-mono text-slate-300">GH₵ {(fundModalBot.totalFunded ?? 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-slate-800/80 pt-1.5">
+                      <span className="text-slate-300 font-medium">Post-Deposit Bankroll:</span>
+                      <span className="font-mono font-bold text-amber-300">
+                        GH₵ {((fundModalBot.bankrollPoints ?? 0) + fundAmountPoints).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>New Net P&L Offset:</span>
+                      <span className="font-mono font-semibold text-emerald-400">
+                        GH₵ {Math.max(0, (fundModalBot.bankrollPoints ?? 0) + fundAmountPoints + (fundModalBot.totalWithdrawn ?? 0) - ((fundModalBot.totalFunded ?? 0) + fundAmountPoints)).toFixed(2)} (Neutral baseline)
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Pending Reference Banner */}
+                  {paystackPendingRef && (
+                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-emerald-300 flex items-center gap-1.5">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                          Payment Session Active
+                        </span>
+                        <span className="font-mono text-[10px] text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
+                          {paystackPendingRef}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-emerald-200/80">
+                        Paystack checkout window has opened. Complete your payment on Mobile Money or Card, then click Verify below.
+                      </p>
+                      <div className="flex items-center gap-2">
+                        {paystackAuthUrl && (
+                          <a
+                            href={paystackAuthUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 py-2 px-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-center font-semibold text-[11px] flex items-center justify-center gap-1"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            Reopen Paystack
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleVerifyPaystackFunding()}
+                          disabled={paystackLoading}
+                          className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-950/50"
+                        >
+                          {paystackLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                          Verify & Finalize Credit
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setShowManualVerify(!showManualVerify)}
+                      className="text-[11px] text-slate-400 hover:text-amber-400 flex items-center gap-1"
+                    >
+                      <Receipt className="w-3.5 h-3.5" />
+                      {showManualVerify ? "Hide Reference Lookup" : "Verify Existing Paystack Ref"}
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFundModalBot(null);
+                          setPaystackPendingRef(null);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
+                      >
+                        Cancel
+                      </button>
+                      {!paystackPendingRef && (
+                        <button
+                          type="button"
+                          onClick={handleInitiatePaystackFunding}
+                          disabled={paystackLoading || fundAmountPoints <= 0}
+                          className="px-4 py-2 rounded-lg font-semibold text-white shadow-lg bg-amber-600 hover:bg-amber-500 shadow-amber-900/30 flex items-center gap-2"
+                        >
+                          {paystackLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                          Pay GH₵ {fundAmountPoints} via Paystack
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Manual reference input */}
+                  {showManualVerify && (
+                    <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2 mt-2">
+                      <label className="block text-slate-300 font-medium text-[11px]">
+                        Paste Paystack Transaction Reference:
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={manualVerifyRef}
+                          onChange={(e) => setManualVerifyRef(e.target.value)}
+                          placeholder="e.g. BOT-FUND-1712345678-ABCD"
+                          className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-amber-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleVerifyPaystackFunding(manualVerifyRef)}
+                          disabled={paystackLoading || !manualVerifyRef.trim()}
+                          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-semibold rounded-lg text-xs flex items-center gap-1"
+                        >
+                          {paystackLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Verify"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* WITHDRAW / RECLAIM FLOW */
+                <form onSubmit={handleFundOrWithdrawBot} className="space-y-4">
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">
+                      Amount to Reclaim to Treasury (GH₵) *
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={fundModalBot.bankrollPoints || 0}
+                      value={fundAmountPoints}
+                      onChange={(e) => setFundAmountPoints(Number(e.target.value))}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono font-bold text-base focus:outline-none focus:border-indigo-500"
+                    />
+                    <span className="text-[11px] text-slate-500">
+                      Maximum available to reclaim: GH₵ {(fundModalBot.bankrollPoints || 0).toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">
+                      Reclaim Reason / Audit Note
+                    </label>
+                    <input
+                      type="text"
+                      value={fundNote}
+                      onChange={(e) => setFundNote(e.target.value)}
+                      placeholder="e.g. Capital sweep back to platform treasury"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white placeholder-slate-500"
+                    />
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 space-y-1">
+                    <div className="flex justify-between">
+                      <span>Current Liquid Balance:</span>
+                      <span className="font-mono text-white">GH₵ {(fundModalBot.bankrollPoints ?? 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Balance After Reclaim:</span>
+                      <span className="font-mono font-bold text-indigo-300">
+                        GH₵ {Math.max(0, (fundModalBot.bankrollPoints ?? 0) - fundAmountPoints).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setFundModalBot(null)}
+                      className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={fundAmountPoints > (fundModalBot.bankrollPoints || 0)}
+                      className="px-4 py-2 rounded-lg font-semibold text-white shadow-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 shadow-indigo-900/30"
+                    >
+                      Confirm Reclaim to Treasury
+                    </button>
+                  </div>
+                </form>
               )}
-
-              <div>
-                <label className="block text-slate-300 font-medium mb-1">
-                  Ledger Transaction Memo / Audit Note
-                </label>
-                <input
-                  type="text"
-                  value={fundNote}
-                  onChange={(e) => setFundNote(e.target.value)}
-                  placeholder="e.g. Bankroll top-up for high-stakes cash room coverage"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white placeholder-slate-500"
-                />
-              </div>
-
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 space-y-1">
-                <div className="flex justify-between">
-                  <span>Current Liquid Balance:</span>
-                  <span className="font-mono text-white">GH₵ {(fundModalBot.bankrollPoints ?? 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Projected Balance After TX:</span>
-                  <span className="font-mono font-bold text-amber-300">
-                    GH₵{" "}
-                    {(
-                      (fundModalBot.bankrollPoints ?? 0) +
-                      (fundActionType === "fund" ? fundAmountPoints : -fundAmountPoints)
-                    ).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setFundModalBot(null)}
-                  className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className={`px-4 py-2 rounded-lg font-semibold text-white shadow-lg ${
-                    fundActionType === "fund"
-                      ? "bg-amber-600 hover:bg-amber-500 shadow-amber-900/30"
-                      : "bg-indigo-600 hover:bg-indigo-500 shadow-indigo-900/30"
-                  }`}
-                >
-                  Confirm & Write Ledger Entry
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
@@ -1952,89 +2582,424 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
       {/* BULK FUND MODAL */}
       {showBulkModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Coins className="w-5 h-5 text-amber-400" />
-                <h3 className="font-semibold text-white">Bulk Bankroll Fleet Top-Up</h3>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">Bulk Fleet Bankroll Top-Up</h3>
+                  <div className="text-[11px] text-amber-400 font-mono">
+                    Paystack Float Distribution • {matchingBotsCount} Target Mechanics
+                  </div>
+                </div>
               </div>
-              <button onClick={() => setShowBulkModal(false)} className="text-slate-400 hover:text-white">
+              <button
+                onClick={() => {
+                  setShowBulkModal(false);
+                  setBulkPaystackPendingRef(null);
+                  setBulkPaystackAuthUrl(null);
+                }}
+                className="text-slate-400 hover:text-white"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-4 text-xs">
-              <p className="text-slate-400">
-                Distribute additional points across target bot accounts with double-entry ledger entries logged for each.
-              </p>
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-200 text-[11px] leading-relaxed">
+                <p className="font-semibold flex items-center gap-1 mb-1">
+                  <Shield className="w-3.5 h-3.5 text-amber-400" />
+                  Fleet Capital Float & Neutral P&L Guarantee:
+                </p>
+                Bulk bankroll injection is backed by a single consolidated Paystack transaction. Each mechanic receives their exact allocated float with neutral base P&L (GH₵ 0.00) — zero arbitrary balance inflation.
+              </div>
 
               <div>
-                <label className="block text-slate-300 font-medium mb-1">Target AI Tier</label>
+                <label className="block text-slate-300 font-medium mb-1">Target Mechanic Tier</label>
                 <select
                   value={bulkTier}
                   onChange={(e) => setBulkTier(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white capitalize"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white capitalize focus:outline-none focus:border-amber-500"
                 >
-                  <option value="all">Entire Active Bot Fleet</option>
-                  <option value="adaptive">Adaptive Tier Only</option>
-                  <option value="hard">Hard Tier Only</option>
-                  <option value="expert">Expert Tier Only</option>
-                  <option value="medium">Medium Tier Only</option>
-                  <option value="easy">Easy Tier Only</option>
+                  <option value="all">Entire Active Bot Fleet ({bots?.filter((b) => b.status !== "retired").length || 0} Mechanics)</option>
+                  <option value="adaptive">Adaptive Tier Only ({bots?.filter((b) => b.difficultyTier === "adaptive" && b.status !== "retired").length || 0})</option>
+                  <option value="hard">Hard Tier Only ({bots?.filter((b) => b.difficultyTier === "hard" && b.status !== "retired").length || 0})</option>
+                  <option value="expert">Expert Tier Only ({bots?.filter((b) => b.difficultyTier === "expert" && b.status !== "retired").length || 0})</option>
+                  <option value="medium">Medium Tier Only ({bots?.filter((b) => b.difficultyTier === "medium" && b.status !== "retired").length || 0})</option>
+                  <option value="easy">Easy Tier Only ({bots?.filter((b) => b.difficultyTier === "easy" && b.status !== "retired").length || 0})</option>
                 </select>
+              </div>
+
+              {/* Preset Buttons */}
+              <div>
+                <label className="block text-slate-400 font-medium mb-1.5">Float Per Mechanic (GH₵)</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[50, 100, 250, 500].map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => setBulkPoints(amt)}
+                      className={`py-1.5 rounded-lg font-mono font-semibold border transition-all ${
+                        bulkPoints === amt
+                          ? "bg-amber-500/20 border-amber-500 text-amber-300 shadow-sm"
+                          : "bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700"
+                      }`}
+                    >
+                      GH₵ {amt}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-medium mb-1">Points Per Bot (GH₵)</label>
+                  <label className="block text-slate-300 font-medium mb-1">Custom Amount/Bot (GH₵)</label>
                   <input
                     type="number"
-                    min={0}
+                    min={1}
                     value={bulkPoints}
                     onChange={(e) => setBulkPoints(Number(e.target.value))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-amber-300 font-mono font-semibold"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-medium mb-1">Marbles Per Bot</label>
+                  <label className="block text-slate-300 font-medium mb-1">Admin Billing Email</label>
                   <input
-                    type="number"
-                    min={0}
-                    value={bulkMarbles}
-                    onChange={(e) => setBulkMarbles(Number(e.target.value))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono"
+                    type="email"
+                    value={adminBillingEmail}
+                    onChange={(e) => setAdminBillingEmail(e.target.value)}
+                    placeholder="admin@damii.game"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono placeholder-slate-600 focus:outline-none focus:border-amber-500"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-slate-300 font-medium mb-1">Ledger Memo</label>
-                <input
-                  type="text"
-                  value={bulkNote}
-                  onChange={(e) => setBulkNote(e.target.value)}
-                  placeholder="e.g. Monthly fleet bankroll provisioning"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white placeholder-slate-500"
-                />
+              {/* Total Calculation Card */}
+              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 space-y-1.5">
+                <div className="flex justify-between">
+                  <span>Selected Fleet Size:</span>
+                  <span className="font-mono text-white font-semibold">{matchingBotsCount} mechanics</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Float Allocation Per Mechanic:</span>
+                  <span className="font-mono text-slate-300">GH₵ {bulkPoints.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between border-t border-slate-800/80 pt-1.5">
+                  <span className="text-amber-400 font-bold text-xs">Total Paystack Payment Required:</span>
+                  <span className="font-mono font-bold text-amber-300 text-sm">
+                    GH₵ {(matchingBotsCount * bulkPoints).toLocaleString()}
+                  </span>
+                </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+              {/* Bulk Pending Reference Banner */}
+              {bulkPaystackPendingRef && (
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-emerald-300 flex items-center gap-1.5">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                      Bulk Payment Session Active
+                    </span>
+                    <span className="font-mono text-[10px] text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
+                      {bulkPaystackPendingRef}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-200/80">
+                    Paystack checkout window has opened for GH₵ {(matchingBotsCount * bulkPoints).toLocaleString()}. Complete your payment, then click Verify below.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    {bulkPaystackAuthUrl && (
+                      <a
+                        href={bulkPaystackAuthUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 py-2 px-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-center font-semibold text-[11px] flex items-center justify-center gap-1"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        Reopen Paystack
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleVerifyBulkPaystackFunding()}
+                      disabled={bulkPaystackLoading}
+                      className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-950/50"
+                    >
+                      {bulkPaystackLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                      Verify & Credit Fleet
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-2 border-t border-slate-800">
                 <button
                   type="button"
-                  onClick={() => setShowBulkModal(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
+                  onClick={() => setBulkShowManualVerify(!bulkShowManualVerify)}
+                  className="text-[11px] text-slate-400 hover:text-amber-400 flex items-center gap-1"
                 >
-                  Cancel
+                  <Receipt className="w-3.5 h-3.5" />
+                  {bulkShowManualVerify ? "Hide Ref Lookup" : "Verify Bulk Paystack Ref"}
                 </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowBulkModal(false);
+                      setBulkPaystackPendingRef(null);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  {!bulkPaystackPendingRef && (
+                    <button
+                      type="button"
+                      onClick={handleInitiateBulkPaystackFunding}
+                      disabled={bulkPaystackLoading || bulkPoints <= 0 || matchingBotsCount === 0}
+                      className="px-4 py-2 rounded-lg font-semibold text-white shadow-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 shadow-amber-900/30 flex items-center gap-2"
+                    >
+                      {bulkPaystackLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                      Pay GH₵ {(matchingBotsCount * bulkPoints).toLocaleString()} via Paystack
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Bulk Manual Ref input */}
+              {bulkShowManualVerify && (
+                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2 mt-2">
+                  <label className="block text-slate-300 font-medium text-[11px]">
+                    Paste Existing Bulk Paystack Reference:
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={bulkManualVerifyRef}
+                      onChange={(e) => setBulkManualVerifyRef(e.target.value)}
+                      placeholder="e.g. BULK-BOT-1712345678-ABCD"
+                      className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-amber-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleVerifyBulkPaystackFunding(bulkManualVerifyRef)}
+                      disabled={bulkPaystackLoading || !bulkManualVerifyRef.trim()}
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-semibold rounded-lg text-xs flex items-center gap-1"
+                    >
+                      {bulkPaystackLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Verify"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FLEET FORMAL LEDGER AUDIT MODAL */}
+      {showFleetAuditModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-indigo-900/60 rounded-3xl max-w-4xl w-full p-6 shadow-2xl space-y-5 my-8 max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base flex items-center gap-2">
+                    Fleet-Wide Formal Ledger Verification Report
+                    {fleetAuditReport && (
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                          fleetAuditReport.allInvariantsSatisfied
+                            ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
+                            : "bg-red-950 text-red-300 border border-red-800"
+                        }`}
+                      >
+                        {fleetAuditReport.allInvariantsSatisfied
+                          ? "✓ Zero-Deficit Proof Passed"
+                          : `⚠ ${fleetAuditReport.totalDeficitViolations} Invariant Violations`}
+                      </span>
+                    )}
+                  </h3>
+                  <div className="text-[11px] text-slate-400">
+                    Exhaustive replay & double-entry verification of all mechanic bankrolls across the platform
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
                 <button
-                  type="button"
-                  onClick={handleBulkFund}
-                  className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 font-semibold text-white shadow-lg shadow-amber-900/30"
+                  onClick={handleVerifyFleetLedgers}
+                  disabled={fleetAuditLoading}
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors disabled:opacity-50"
+                  title="Re-run Fleet Audit"
                 >
-                  Confirm & Log Ledger Entries
+                  <RefreshCw className={`w-4 h-4 ${fleetAuditLoading ? "animate-spin" : ""}`} />
+                </button>
+                <button onClick={() => setShowFleetAuditModal(false)} className="text-slate-400 hover:text-white p-2">
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
+
+            {fleetAuditLoading ? (
+              <div className="py-20 text-center space-y-3 flex-1 flex flex-col items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
+                <div className="text-sm font-semibold text-white">Replaying Fleet Ledger Records...</div>
+                <div className="text-xs text-slate-400">
+                  Verifying mathematical non-negative constraints and double-entry balancing for all mechanics.
+                </div>
+              </div>
+            ) : fleetAuditReport ? (
+              <div className="space-y-4 flex-1 overflow-y-auto pr-1">
+                {/* Fleet Overview Metrics */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+                    <div className="text-slate-400 text-[11px] mb-1">Mechanics Audited</div>
+                    <div className="text-xl font-bold font-mono text-white">
+                      {fleetAuditReport.totalBotsAudited}
+                    </div>
+                    <div className="text-[10px] text-emerald-400 mt-0.5">
+                      {fleetAuditReport.totalValidLedgers} valid ({((fleetAuditReport.totalValidLedgers / (fleetAuditReport.totalBotsAudited || 1)) * 100).toFixed(0)}%)
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+                    <div className="text-slate-400 text-[11px] mb-1">Zero-Deficit Invariant</div>
+                    <div
+                      className={`text-xl font-bold font-mono ${
+                        fleetAuditReport.totalDeficitViolations === 0 ? "text-emerald-400" : "text-red-400"
+                      }`}
+                    >
+                      {fleetAuditReport.totalDeficitViolations === 0 ? "100% Passed" : `${fleetAuditReport.totalDeficitViolations} Violations`}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      Strict non-negative constraint
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+                    <div className="text-slate-400 text-[11px] mb-1">Total System Capital Float</div>
+                    <div className="text-xl font-bold font-mono text-indigo-300">
+                      GH₵ {fleetAuditReport.totalFleetSystemFloat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      Injected: GH₵ {fleetAuditReport.totalFleetSystemFunded.toLocaleString()}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+                    <div className="text-slate-400 text-[11px] mb-1">Verified Fleet Balance</div>
+                    <div className="text-xl font-bold font-mono text-amber-300">
+                      GH₵ {fleetAuditReport.totalFleetReportedBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      Reclaimed: GH₵ {fleetAuditReport.totalFleetSystemReclaimed.toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Search & Audit Table */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="relative flex-1">
+                      <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={fleetAuditSearch}
+                        onChange={(e) => setFleetAuditSearch(e.target.value)}
+                        placeholder="Filter audit reports by bot name, username, or token..."
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <span className="text-[11px] text-slate-400 whitespace-nowrap">
+                      Generated at {new Date(fleetAuditReport.auditTimestamp).toLocaleTimeString()}
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto border border-slate-800/80 rounded-2xl bg-slate-950/60">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-900 text-slate-300 uppercase tracking-wider text-[10px] font-bold border-b border-slate-800">
+                        <tr>
+                          <th className="py-2.5 px-3">Mechanic</th>
+                          <th className="py-2.5 px-3">Reported Balance</th>
+                          <th className="py-2.5 px-3">Verified Ledger</th>
+                          <th className="py-2.5 px-3">System Float</th>
+                          <th className="py-2.5 px-3">Zero-Deficit Proof</th>
+                          <th className="py-2.5 px-3">Status</th>
+                          <th className="py-2.5 px-3 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 font-mono text-white">
+                        {fleetAuditReport.botReports
+                          .filter((rep) => {
+                            if (!fleetAuditSearch) return true;
+                            const q = fleetAuditSearch.toLowerCase();
+                            return (
+                              rep.botToken.toLowerCase().includes(q) ||
+                              rep.username.toLowerCase().includes(q) ||
+                              rep.fullName.toLowerCase().includes(q)
+                            );
+                          })
+                          .map((rep) => (
+                            <tr key={rep.botToken} className="hover:bg-slate-800/30">
+                              <td className="py-2.5 px-3">
+                                <div className="font-sans font-bold text-white text-xs">{rep.fullName}</div>
+                                <div className="text-[10px] text-slate-400 font-mono">{rep.username}</div>
+                              </td>
+                              <td className="py-2.5 px-3 text-amber-300 font-bold">
+                                GH₵ {rep.currentReportedBalance.toFixed(2)}
+                              </td>
+                              <td className="py-2.5 px-3 text-white font-bold">
+                                GH₵ {rep.verifiedLedgerBalance.toFixed(2)}
+                              </td>
+                              <td className="py-2.5 px-3 text-indigo-300">
+                                GH₵ {(rep.totalSystemFunded - rep.totalSystemReclaimed).toFixed(2)}
+                              </td>
+                              <td className="py-2.5 px-3">
+                                {rep.nonNegativeInvariantPassed ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800">
+                                    <CheckCircle className="w-3 h-3" /> Balance ≥ 0
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-red-950 text-red-300 border border-red-800">
+                                    <AlertTriangle className="w-3 h-3" /> Deficit
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                    rep.isValid ? "text-emerald-400" : "text-amber-400"
+                                  }`}
+                                >
+                                  {rep.reconciliationStatus}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-right">
+                                <button
+                                  onClick={() => {
+                                    setShowFleetAuditModal(false);
+                                    loadBotDetail(rep.botToken);
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 font-sans text-[11px] font-semibold transition-colors"
+                                >
+                                  Inspect Ledger
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       )}

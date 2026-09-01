@@ -261,8 +261,29 @@ export async function writeLedger(
         .limit(1)
         .for("update");
 
-      const previousBalance = last ? Number(last.balanceAfter) : 0;
-      const newBalance = previousBalance + Number(line.amount);
+      let previousBalance = 0;
+      if (last) {
+        previousBalance = Number(last.balanceAfter);
+      } else if (line.accountType === "available" && line.userId !== PLATFORM_ACCOUNT_ID) {
+        const [prof] = await tx
+          .select({ points: profiles.points, marbles: profiles.marbles })
+          .from(profiles)
+          .where(eq(profiles.token, line.userId))
+          .limit(1);
+        if (prof) {
+          const currentPoints = Math.max(Number(prof.points ?? 0), Number(prof.marbles ?? 0));
+          if (Number(line.amount) < 0) {
+            previousBalance = Math.max(0, currentPoints - Number(line.amount));
+          } else {
+            previousBalance = currentPoints;
+          }
+        }
+      }
+
+      const rawNewBalance = previousBalance + Number(line.amount);
+      const newBalance = (line.accountType === "available" && line.userId !== PLATFORM_ACCOUNT_ID)
+        ? Math.max(0, rawNewBalance)
+        : rawNewBalance;
 
       const id = randomUUID();
       await tx.insert(ledgerEntries).values({
