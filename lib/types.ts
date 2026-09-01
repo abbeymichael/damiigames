@@ -711,7 +711,7 @@ export interface GameTypeLimit {
 /* ------------------------------------------------------------------------- */
 /* System Funds & Triple-Ledger Types                                        */
 /* ------------------------------------------------------------------------- */
-export type SystemFundType = "account_balances" | "escrow" | "platform_fee";
+export type SystemFundType = "account_balances" | "escrow" | "platform_fee" | "mechanics_fund";
 
 export interface SystemFundSummary {
   fundType: SystemFundType;
@@ -730,10 +730,15 @@ export interface SystemFundsReport {
   accountBalancesFund: SystemFundSummary;
   escrowFund: SystemFundSummary;
   platformFeeFund: SystemFundSummary;
+  mechanicsFund: SystemFundSummary;
   totalPlatformAssets: number;
   totalUserAvailable: number;
   totalEscrowLocked: number;
   totalPlatformFeesEarned: number;
+  totalMechanicsCapital: number;
+  totalMechanicsProfits: number;
+  totalMechanicsLosses: number;
+  totalMechanicsNetPnL: number;
   totalDeposits: number;
   totalWithdrawals: number;
   reconciliationStatus: "balanced" | "discrepancy";
@@ -754,7 +759,7 @@ export type AccountClass = "asset" | "liability" | "equity" | "revenue" | "expen
 export type NormalBalance = "debit" | "credit";
 
 export interface ChartOfAccount {
-  code: string; // e.g. "1010", "1020", "1030", "2010", "2020", "2030", "3010", "3020", "4010", "4020", "4030", "5010", "5020"
+  code: string; // e.g. "1010", "1020", "1030", "1040", "1045", "2010", "2020", "2030", "2040", "3010", "3020", "3030", "4010", "4020", "4030", "4040", "5010", "5020", "5030", "5040"
   name: string;
   accountClass: AccountClass;
   fundType: SystemFundType;
@@ -792,6 +797,21 @@ export interface TreasuryFundDetails {
   promotionalExpenses: number;
   disputeReserveBalance: number;
   recentTreasuryEntries: LedgerEntry[];
+  lastUpdated: string;
+}
+
+export interface MechanicsFundDetails {
+  mechanicsFundBalance: number;
+  totalOperatingFloat: number;
+  totalReserveVault: number;
+  lifetimeFunded: number;
+  lifetimeWithdrawn: number;
+  netMechanicsCapital: number;
+  mechanicsGameplayProfits: number;
+  mechanicsGameplayLosses: number;
+  netGameplayPnL: number;
+  activeBotsCount: number;
+  recentMechanicsEntries: LedgerEntry[];
   lastUpdated: string;
 }
 

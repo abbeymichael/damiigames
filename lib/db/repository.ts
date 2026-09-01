@@ -247,6 +247,7 @@ export interface DbRepository {
   getSystemFundsSummary(): Promise<SystemFundsReport>;
   getChartOfAccountsReport?(): Promise<ChartOfAccountsReport>;
   getTreasuryFundDetails?(): Promise<TreasuryFundDetails>;
+  getMechanicsFundDetails?(): Promise<MechanicsFundDetails>;
 
   // --- Roles & RBAC (Section 1) ---
   listRoles(): Promise<AppRole[]>;

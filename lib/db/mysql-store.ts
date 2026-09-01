@@ -2149,143 +2149,8 @@ export const mysqlStore: DbRepository = {
   },
 
   async getSystemFundsSummary(): Promise<SystemFundsReport> {
-    const allEntries = await getDb()
-      .select()
-      .from(schema.ledgerEntries)
-      .orderBy(desc(schema.ledgerEntries.createdAt));
-
-    const allProfiles = await getDb().select().from(schema.profiles);
-    const totalProfilesPoints = allProfiles.reduce((sum, p) => sum + (Number(p.points) || 0), 0);
-
-    let accBalanceInflow = 0;
-    let accBalanceOutflow = 0;
-    let accBalanceCount = 0;
-
-    let escrowInflow = 0;
-    let escrowOutflow = 0;
-    let escrowCount = 0;
-
-    let platformFeeInflow = 0;
-    let platformFeeOutflow = 0;
-    let platformFeeCount = 0;
-
-    let totalDeposits = 0;
-    let totalWithdrawals = 0;
-
-    const latestBalances = new Map<string, number>();
-
-    for (const entry of allEntries) {
-      const key = `${entry.userId}:${entry.accountType}`;
-      if (!latestBalances.has(key)) {
-        latestBalances.set(key, Number(entry.balanceAfter || 0));
-      }
-
-      const amt = Number(entry.amount || 0);
-      const isFee = entry.userId === "platform-treasury" || entry.entryType === "platform_fee";
-      const isEscrow = entry.accountType === "escrow";
-
-      if (entry.entryType === "deposit" && amt > 0) totalDeposits += amt;
-      else if (entry.entryType === "withdrawal" && amt < 0) totalWithdrawals += Math.abs(amt);
-
-      if (isFee) {
-        platformFeeCount++;
-        if (amt >= 0) platformFeeInflow += amt;
-        else platformFeeOutflow += Math.abs(amt);
-      } else if (isEscrow) {
-        escrowCount++;
-        if (amt >= 0) escrowInflow += amt;
-        else escrowOutflow += Math.abs(amt);
-      } else {
-        accBalanceCount++;
-        if (amt >= 0) accBalanceInflow += amt;
-        else accBalanceOutflow += Math.abs(amt);
-      }
-    }
-
-    let accountBalancesFundTotal = 0;
-    let escrowFundTotal = 0;
-    let platformFeeFundTotal = 0;
-    let activeUsersCount = 0;
-
-    for (const [key, bal] of latestBalances.entries()) {
-      const [userId, accType] = key.split(":");
-      if (userId === "platform-treasury" || userId === "platform" || userId === "system-house" || userId === "system") {
-        platformFeeFundTotal += bal;
-      } else if (accType === "escrow") {
-        escrowFundTotal += bal;
-      } else if (accType === "available") {
-        accountBalancesFundTotal += bal;
-        if (bal > 0) activeUsersCount++;
-      }
-    }
-
-    if (latestBalances.size === 0 && totalProfilesPoints > 0) {
-      accountBalancesFundTotal = totalProfilesPoints;
-      activeUsersCount = allProfiles.filter((p) => p.points > 0).length;
-    }
-
-    const totalPlatformAssets = Number((accountBalancesFundTotal + escrowFundTotal + platformFeeFundTotal).toFixed(2));
-    const expectedAssets = Number((totalDeposits - totalWithdrawals).toFixed(2));
-    const discrepancyAmount = Math.abs(Number((totalPlatformAssets - (totalDeposits > 0 ? expectedAssets : totalPlatformAssets)).toFixed(2)));
-    const isBalanced = discrepancyAmount < 0.01;
-
-    const now = new Date().toISOString();
-
-    const accountBalancesSummary: SystemFundSummary = {
-      fundType: "account_balances",
-      name: "Account Balances Fund",
-      description: "Total liquid funds available across all registered user wallets for gameplay, tournaments, and withdrawals.",
-      balance: Number(accountBalancesFundTotal.toFixed(2)),
-      entryCount: accBalanceCount,
-      totalInflow: Number(accBalanceInflow.toFixed(2)),
-      totalOutflow: Number(accBalanceOutflow.toFixed(2)),
-      netFlow: Number((accBalanceInflow - accBalanceOutflow).toFixed(2)),
-      activeHoldersCount: activeUsersCount,
-      lastActivityAt: allEntries[0]?.createdAt ? new Date(allEntries[0].createdAt).toISOString() : now,
-    };
-
-    const escrowSummary: SystemFundSummary = {
-      fundType: "escrow",
-      name: "Escrow Fund",
-      description: "Total funds actively locked in trust for ongoing wager matches, tournament prize pools, and participant entry fees.",
-      balance: Number(escrowFundTotal.toFixed(2)),
-      entryCount: escrowCount,
-      totalInflow: Number(escrowInflow.toFixed(2)),
-      totalOutflow: Number(escrowOutflow.toFixed(2)),
-      netFlow: Number((escrowInflow - escrowOutflow).toFixed(2)),
-      lastActivityAt: allEntries.find((e) => e.accountType === "escrow")?.createdAt
-        ? new Date(allEntries.find((e) => e.accountType === "escrow")!.createdAt).toISOString()
-        : now,
-    };
-
-    const platformFeeSummary: SystemFundSummary = {
-      fundType: "platform_fee",
-      name: "Platform Fee Fund",
-      description: "Accumulated platform commissions (5% match fees, 10% tournament fees, and cancellation surcharges) retained as platform revenue.",
-      balance: Number(platformFeeFundTotal.toFixed(2)),
-      entryCount: platformFeeCount,
-      totalInflow: Number(platformFeeInflow.toFixed(2)),
-      totalOutflow: Number(platformFeeOutflow.toFixed(2)),
-      netFlow: Number((platformFeeInflow - platformFeeOutflow).toFixed(2)),
-      lastActivityAt: allEntries.find((e) => e.userId === "platform-treasury" || e.entryType === "platform_fee")?.createdAt
-        ? new Date(allEntries.find((e) => e.userId === "platform-treasury" || e.entryType === "platform_fee")!.createdAt).toISOString()
-        : now,
-    };
-
-    return {
-      accountBalancesFund: accountBalancesSummary,
-      escrowFund: escrowSummary,
-      platformFeeFund: platformFeeSummary,
-      totalPlatformAssets,
-      totalUserAvailable: Number(accountBalancesFundTotal.toFixed(2)),
-      totalEscrowLocked: Number(escrowFundTotal.toFixed(2)),
-      totalPlatformFeesEarned: Number(platformFeeFundTotal.toFixed(2)),
-      totalDeposits: Number(totalDeposits.toFixed(2)),
-      totalWithdrawals: Number(totalWithdrawals.toFixed(2)),
-      reconciliationStatus: isBalanced ? "balanced" : "discrepancy",
-      discrepancyAmount,
-      generatedAt: now,
-    };
+    const { getSystemFundsReport } = await import("../ledger");
+    return getSystemFundsReport();
   },
 
   async getChartOfAccountsReport(): Promise<ChartOfAccountsReport> {
@@ -2296,6 +2161,11 @@ export const mysqlStore: DbRepository = {
   async getTreasuryFundDetails(): Promise<TreasuryFundDetails> {
     const { getTreasuryFundDetails } = await import("../ledger");
     return getTreasuryFundDetails();
+  },
+
+  async getMechanicsFundDetails(): Promise<MechanicsFundDetails> {
+    const { getMechanicsFundDetails } = await import("../ledger");
+    return getMechanicsFundDetails();
   },
 
   // --- Roles & RBAC (Section 1) ---

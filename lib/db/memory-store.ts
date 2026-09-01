@@ -43,8 +43,16 @@ import type {
   ChartOfAccount,
   ChartOfAccountsReport,
   TreasuryFundDetails,
+  MechanicsFundDetails,
 } from "../types";
-import { CANONICAL_CHART_OF_ACCOUNTS, mapLedgerEntryToAccount } from "../ledger";
+import {
+  CANONICAL_CHART_OF_ACCOUNTS,
+  mapLedgerEntryToAccount,
+  determineFundType,
+  isMechanicOrBotUser,
+  PLATFORM_ACCOUNT_ID,
+  MECHANICS_FUND_ACCOUNT_ID,
+} from "../ledger";
 import { SYSTEM_PERMISSIONS, SEED_ROLES_CONFIG } from "../permissions-constants";
 import { securityService } from "../security";
 import { calculateDynamicRatingUpdate, getProfileRank } from "../rank-service";
@@ -1438,6 +1446,12 @@ export const memoryStore: DbRepository = {
     let platformFeeOutflow = 0;
     let platformFeeCount = 0;
 
+    let mechanicsInflow = 0;
+    let mechanicsOutflow = 0;
+    let mechanicsCount = 0;
+    let mechanicsProfits = 0;
+    let mechanicsLosses = 0;
+
     let totalDeposits = 0;
     let totalWithdrawals = 0;
 
@@ -1450,17 +1464,35 @@ export const memoryStore: DbRepository = {
       }
 
       const amt = Number(entry.amount || 0);
-      const isFee = entry.userId === "platform-treasury" || (entry as any).entryType === "platform_fee";
-      const isEscrow = entry.accountType === "escrow";
+      const fund = determineFundType(
+        entry.userId,
+        entry.accountType as any,
+        (entry as any).entryType,
+        entry.referenceType,
+        entry.referenceId
+      );
 
       if ((entry as any).entryType === "deposit" && amt > 0) totalDeposits += amt;
       else if ((entry as any).entryType === "withdrawal" && amt < 0) totalWithdrawals += Math.abs(amt);
 
-      if (isFee) {
+      if (fund === "platform_fee") {
         platformFeeCount++;
         if (amt >= 0) platformFeeInflow += amt;
         else platformFeeOutflow += Math.abs(amt);
-      } else if (isEscrow) {
+      } else if (fund === "mechanics_fund") {
+        mechanicsCount++;
+        if (amt >= 0) {
+          mechanicsInflow += amt;
+          if ((entry as any).entryType === "wager_payout" || (entry as any).entryType === "mechanics_profit") {
+            mechanicsProfits += amt;
+          }
+        } else {
+          mechanicsOutflow += Math.abs(amt);
+          if ((entry as any).entryType === "wager_payout" || (entry as any).entryType === "mechanics_loss") {
+            mechanicsLosses += Math.abs(amt);
+          }
+        }
+      } else if (fund === "escrow") {
         escrowCount++;
         if (amt >= 0) escrowInflow += amt;
         else escrowOutflow += Math.abs(amt);
@@ -1474,28 +1506,43 @@ export const memoryStore: DbRepository = {
     let accountBalancesFundTotal = 0;
     let escrowFundTotal = 0;
     let platformFeeFundTotal = 0;
+    let mechanicsFundTotal = 0;
     let activeUsersCount = 0;
+    let activeBotsCount = 0;
 
     for (const [key, bal] of latestBalances.entries()) {
       const [userId, accType] = key.split(":");
-      if (userId === "platform-treasury" || userId === "platform" || userId === "system-house" || userId === "system") {
+      const isBot = isMechanicOrBotUser(userId);
+
+      if (userId === PLATFORM_ACCOUNT_ID || userId === "platform" || userId === "system-house" || userId === "system") {
         platformFeeFundTotal += bal;
+      } else if (userId === MECHANICS_FUND_ACCOUNT_ID) {
+        mechanicsFundTotal += bal;
       } else if (accType === "escrow") {
         escrowFundTotal += bal;
       } else if (accType === "available") {
-        accountBalancesFundTotal += bal;
-        if (bal > 0) activeUsersCount++;
+        if (isBot) {
+          mechanicsFundTotal += bal;
+          if (bal > 0) activeBotsCount++;
+        } else {
+          accountBalancesFundTotal += bal;
+          if (bal > 0) activeUsersCount++;
+        }
       }
     }
 
     if (latestBalances.size === 0 && totalProfilesPoints > 0) {
       accountBalancesFundTotal = totalProfilesPoints;
-      activeUsersCount = allProfiles.filter((p) => p.points > 0).length;
+      activeUsersCount = allProfiles.filter((p) => p.points > 0 && !isMechanicOrBotUser(p.id)).length;
     }
 
-    const totalPlatformAssets = Number((accountBalancesFundTotal + escrowFundTotal + platformFeeFundTotal).toFixed(2));
+    const totalPlatformAssets = Number(
+      (accountBalancesFundTotal + escrowFundTotal + platformFeeFundTotal + mechanicsFundTotal).toFixed(2)
+    );
     const expectedAssets = Number((totalDeposits - totalWithdrawals).toFixed(2));
-    const discrepancyAmount = Math.abs(Number((totalPlatformAssets - (totalDeposits > 0 ? expectedAssets : totalPlatformAssets)).toFixed(2)));
+    const discrepancyAmount = Math.abs(
+      Number((totalPlatformAssets - (totalDeposits > 0 ? expectedAssets : totalPlatformAssets)).toFixed(2))
+    );
     const isBalanced = discrepancyAmount < 0.01;
 
     const now = new Date().toISOString();
@@ -1503,7 +1550,7 @@ export const memoryStore: DbRepository = {
     const accountBalancesSummary: SystemFundSummary = {
       fundType: "account_balances",
       name: "Account Balances Fund",
-      description: "Total liquid funds available across all registered user wallets for gameplay, tournaments, and withdrawals.",
+      description: "Total liquid funds available across registered human player wallets for gameplay, tournaments, and withdrawals.",
       balance: Number(accountBalancesFundTotal.toFixed(2)),
       entryCount: accBalanceCount,
       totalInflow: Number(accBalanceInflow.toFixed(2)),
@@ -1527,7 +1574,7 @@ export const memoryStore: DbRepository = {
       lastActivityAt: escrowActivityDate ? new Date(escrowActivityDate).toISOString() : now,
     };
 
-    const feeEntry = allEntries.find((e) => e.userId === "platform-treasury" || (e as any).entryType === "platform_fee");
+    const feeEntry = allEntries.find((e) => e.userId === PLATFORM_ACCOUNT_ID || (e as any).entryType === "platform_fee");
     const feeActivityDate = feeEntry?.recordedAt || feeEntry?.createdAt;
     const platformFeeSummary: SystemFundSummary = {
       fundType: "platform_fee",
@@ -1541,14 +1588,42 @@ export const memoryStore: DbRepository = {
       lastActivityAt: feeActivityDate ? new Date(feeActivityDate).toISOString() : now,
     };
 
+    const mechanicsSummary: SystemFundSummary = {
+      fundType: "mechanics_fund",
+      name: "Mechanics Fund",
+      description: "Dedicated capital bankrolls, operating floats, gameplay profits, and player payout losses for the AI mechanics fleet.",
+      balance: Number(mechanicsFundTotal.toFixed(2)),
+      entryCount: mechanicsCount,
+      totalInflow: Number(mechanicsInflow.toFixed(2)),
+      totalOutflow: Number(mechanicsOutflow.toFixed(2)),
+      netFlow: Number((mechanicsInflow - mechanicsOutflow).toFixed(2)),
+      activeHoldersCount: activeBotsCount,
+      lastActivityAt: allEntries.find(
+        (e) => isMechanicOrBotUser(e.userId, e.referenceType) || e.userId === MECHANICS_FUND_ACCOUNT_ID
+      )?.recordedAt
+        ? new Date(
+            allEntries.find(
+              (e) => isMechanicOrBotUser(e.userId, e.referenceType) || e.userId === MECHANICS_FUND_ACCOUNT_ID
+            )!.recordedAt
+          ).toISOString()
+        : now,
+    };
+
+    const totalMechanicsNetPnL = Number((mechanicsProfits - mechanicsLosses).toFixed(2));
+
     return {
       accountBalancesFund: accountBalancesSummary,
       escrowFund: escrowSummary,
       platformFeeFund: platformFeeSummary,
+      mechanicsFund: mechanicsSummary,
       totalPlatformAssets,
       totalUserAvailable: Number(accountBalancesFundTotal.toFixed(2)),
       totalEscrowLocked: Number(escrowFundTotal.toFixed(2)),
       totalPlatformFeesEarned: Number(platformFeeFundTotal.toFixed(2)),
+      totalMechanicsCapital: Number(mechanicsFundTotal.toFixed(2)),
+      totalMechanicsProfits: Number(mechanicsProfits.toFixed(2)),
+      totalMechanicsLosses: Number(mechanicsLosses.toFixed(2)),
+      totalMechanicsNetPnL,
       totalDeposits: Number(totalDeposits.toFixed(2)),
       totalWithdrawals: Number(totalWithdrawals.toFixed(2)),
       reconciliationStatus: isBalanced ? "balanced" : "discrepancy",
@@ -1645,10 +1720,20 @@ export const memoryStore: DbRepository = {
         liveBalance = fundsReport.totalUserAvailable;
       } else if (canonical.code === "1030") {
         liveBalance = fundsReport.totalEscrowLocked;
+      } else if (canonical.code === "1040" || canonical.code === "2040") {
+        liveBalance = fundsReport.totalMechanicsCapital;
+      } else if (canonical.code === "1045") {
+        liveBalance = Math.max(0, stats.totalDebits - stats.totalCredits);
       } else if (canonical.code === "2020") {
         liveBalance = matchEscrowBalance;
       } else if (canonical.code === "2030") {
         liveBalance = tournamentEscrowBalance;
+      } else if (canonical.code === "3010") {
+        liveBalance = fundsReport.totalPlatformFeesEarned;
+      } else if (canonical.code === "3020") {
+        liveBalance = Math.max(0, stats.totalCredits - stats.totalDebits);
+      } else if (canonical.code === "3030") {
+        liveBalance = Math.max(0, fundsReport.totalMechanicsNetPnL);
       } else if (canonical.code === "4010") {
         liveBalance = Math.max(0, stats.totalCredits - stats.totalDebits);
         if (liveBalance === 0 && fundsReport.platformFeeFund.totalInflow > 0 && stats.entryCount === 0) {
@@ -1658,14 +1743,16 @@ export const memoryStore: DbRepository = {
         liveBalance = Math.max(0, stats.totalCredits - stats.totalDebits);
       } else if (canonical.code === "4030") {
         liveBalance = Math.max(0, stats.totalCredits - stats.totalDebits);
+      } else if (canonical.code === "4040") {
+        liveBalance = fundsReport.totalMechanicsProfits || Math.max(0, stats.totalCredits - stats.totalDebits);
       } else if (canonical.code === "5010") {
         liveBalance = Math.max(0, stats.totalDebits - stats.totalCredits);
       } else if (canonical.code === "5020") {
         liveBalance = Math.max(0, stats.totalDebits - stats.totalCredits);
-      } else if (canonical.code === "3020") {
-        liveBalance = Math.max(0, stats.totalCredits - stats.totalDebits);
-      } else if (canonical.code === "3010") {
-        liveBalance = fundsReport.totalPlatformFeesEarned;
+      } else if (canonical.code === "5030") {
+        liveBalance = fundsReport.totalMechanicsLosses || Math.max(0, stats.totalDebits - stats.totalCredits);
+      } else if (canonical.code === "5040") {
+        liveBalance = Math.max(0, stats.totalDebits - stats.totalCredits);
       } else {
         liveBalance =
           canonical.normalBalance === "debit"
@@ -1748,7 +1835,7 @@ export const memoryStore: DbRepository = {
 
     const allEntries = [...data.ledgerEntries].reverse();
     const treasuryEntries = allEntries
-      .filter((e) => e.userId === "platform-treasury" || e.entryType === "platform_fee")
+      .filter((e) => e.userId === PLATFORM_ACCOUNT_ID || e.entryType === "platform_fee")
       .slice(0, 50)
       .map((e) => {
         const { code, name, fundType } = mapLedgerEntryToAccount(e);
@@ -1779,6 +1866,55 @@ export const memoryStore: DbRepository = {
       promotionalExpenses: promo,
       disputeReserveBalance: reserve,
       recentTreasuryEntries: treasuryEntries as any,
+      lastUpdated: new Date().toISOString(),
+    };
+  },
+
+  async getMechanicsFundDetails(): Promise<MechanicsFundDetails> {
+    const data = getMemoryData();
+    const fundsReport = await memoryStore.getSystemFundsSummary();
+    const coaReport = await memoryStore.getChartOfAccountsReport();
+
+    const allEntries = [...data.ledgerEntries].reverse();
+    const mechanicsEntries = allEntries
+      .filter((e) => {
+        const fund = determineFundType(
+          e.userId,
+          e.accountType as any,
+          e.entryType,
+          e.referenceType,
+          e.referenceId
+        );
+        return fund === "mechanics_fund" || isMechanicOrBotUser(e.userId, e.referenceType);
+      })
+      .slice(0, 50)
+      .map((e) => {
+        const { code, name, fundType } = mapLedgerEntryToAccount(e);
+        return {
+          ...e,
+          accountCode: code,
+          accountName: name,
+          fundType,
+        };
+      });
+
+    const profits = coaReport.accounts.find((a) => a.code === "4040")?.balance || fundsReport.totalMechanicsProfits || 0;
+    const losses = coaReport.accounts.find((a) => a.code === "5030")?.balance || fundsReport.totalMechanicsLosses || 0;
+    const operatingFloat = coaReport.accounts.find((a) => a.code === "1040")?.balance || fundsReport.mechanicsFund.balance || 0;
+    const reserveVault = coaReport.accounts.find((a) => a.code === "1045")?.balance || 0;
+
+    return {
+      mechanicsFundBalance: fundsReport.mechanicsFund.balance,
+      totalOperatingFloat: operatingFloat,
+      totalReserveVault: reserveVault,
+      lifetimeFunded: fundsReport.mechanicsFund.totalInflow,
+      lifetimeWithdrawn: fundsReport.mechanicsFund.totalOutflow,
+      netMechanicsCapital: fundsReport.mechanicsFund.netFlow,
+      mechanicsGameplayProfits: profits,
+      mechanicsGameplayLosses: losses,
+      netGameplayPnL: Number((profits - losses).toFixed(2)),
+      activeBotsCount: fundsReport.mechanicsFund.activeHoldersCount || 0,
+      recentMechanicsEntries: mechanicsEntries as any,
       lastUpdated: new Date().toISOString(),
     };
   },

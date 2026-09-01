@@ -48,7 +48,7 @@ export const securityService = {
   },
 
   /**
-   * Verifies a password against a stored bcrypt hash or PBKDF2 hash
+   * Verifies a password against a stored bcrypt hash, PBKDF2 hash, or salted hash
    */
   verifyPassword(password: string, storedHash: string, salt?: string): boolean {
     if (!password || !storedHash) return false;
@@ -56,19 +56,40 @@ export const securityService = {
     // Standard bcrypt hash ($2a$, $2b$, or $2y$)
     if (storedHash.startsWith("$2a$") || storedHash.startsWith("$2b$") || storedHash.startsWith("$2y$")) {
       try {
-        return bcrypt.compareSync(password, storedHash);
-      } catch {
-        return false;
-      }
+        if (bcrypt.compareSync(password, storedHash)) {
+          return true;
+        }
+      } catch {}
     }
 
-    // PBKDF2 SHA-256 fallback for existing salted hashes
+    // PBKDF2 SHA-256 fallback with provided salt
     if (salt) {
-      const computedHash = crypto.pbkdf2Sync(password, salt, 10000, 64, "sha256").toString("hex");
-      if (this.timingSafeCompare(computedHash, storedHash)) {
+      try {
+        const computedHash = crypto.pbkdf2Sync(password, salt, 10000, 64, "sha256").toString("hex");
+        if (this.timingSafeCompare(computedHash, storedHash)) {
+          return true;
+        }
+      } catch {}
+
+      try {
+        const shaHash = crypto.createHash("sha256").update(`${password}:${salt}`).digest("hex");
+        if (this.timingSafeCompare(shaHash, storedHash)) {
+          return true;
+        }
+        const shaHashAlt = crypto.createHash("sha256").update(`${salt}:${password}`).digest("hex");
+        if (this.timingSafeCompare(shaHashAlt, storedHash)) {
+          return true;
+        }
+      } catch {}
+    }
+
+    // Direct SHA-256 check
+    try {
+      const sha256 = crypto.createHash("sha256").update(password).digest("hex");
+      if (this.timingSafeCompare(sha256, storedHash)) {
         return true;
       }
-    }
+    } catch {}
 
     // Fallback timing-safe comparison for legacy plaintext entries
     return this.timingSafeCompare(password, storedHash);
