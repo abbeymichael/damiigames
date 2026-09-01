@@ -31,6 +31,7 @@ import {
   BarChart3,
   Shield,
   HelpCircle,
+  Bot,
 } from "lucide-react";
 import { ActionMenu } from "@/components/ActionMenu";
 import { AuditTrailView } from "@/components/admin/AuditTrailView";
@@ -165,7 +166,7 @@ export function LedgerTable({
                 : "text-slate-300 hover:text-white hover:bg-[#0c3b2e]"
             }`}
           >
-            <Layers size={14} /> 3 System Funds
+            <Layers size={14} /> 4 System Funds
           </button>
           <button
             type="button"
@@ -327,8 +328,8 @@ export function LedgerTable({
             </div>
           </div>
 
-          {/* 3 Core System Funds Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* 4 Core System Funds Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Fund 1: Account Balances Fund */}
             <div
               id="card-fund-account-balances"
@@ -480,6 +481,60 @@ export function LedgerTable({
                     Net Retained Revenue
                   </span>
                   <span className="font-mono font-bold text-amber-400">GH₵ {systemFunds.platformFeeFund.netFlow.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Fund 4: Mechanics Fund */}
+            <div
+              id="card-fund-mechanics"
+              onClick={() => {
+                setFundFilter("mechanics_fund");
+                setViewMode("ledger");
+              }}
+              className="p-4 rounded-xl border bg-[#06261f] border-[#1a5e48] hover:border-purple-500/60 transition-all cursor-pointer group space-y-3"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-purple-950 text-purple-400 border border-purple-700/50 group-hover:scale-105 transition-transform">
+                    <Bot size={18} />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-[#f5efdf] flex items-center gap-1">
+                      Mechanics Fund
+                      <ArrowRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity text-purple-400" />
+                    </h5>
+                    <span className="text-[10px] text-slate-300">Bot Bankrolls &amp; PnL [1040/4040/5030]</span>
+                  </div>
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[#041c17] text-slate-300 border border-[#1a5e48]">
+                  {systemFunds.mechanicsFund?.entryCount ?? 0} entries
+                </span>
+              </div>
+
+              <div className="pt-2">
+                <div className="text-2xl font-black text-purple-400 font-mono tracking-tight">
+                  GH₵ {(systemFunds.mechanicsFund?.balance ?? 0).toFixed(2)}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">
+                  {systemFunds.mechanicsFund?.description || "Operating float, automated wager liquidity, and bot gameplay profits/losses."}
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-[#114232] space-y-1.5 text-[11px]">
+                <div className="flex items-center justify-between text-slate-300">
+                  <span className="flex items-center gap-1 text-purple-300">
+                    <ArrowDownLeft size={12} /> Float / Bankroll Inflow
+                  </span>
+                  <span className="font-mono font-bold">GH₵ {(systemFunds.mechanicsFund?.totalInflow ?? 0).toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between text-slate-300">
+                  <span className="flex items-center gap-1 text-slate-400">
+                    Net Mechanics P&amp;L
+                  </span>
+                  <span className={`font-mono font-bold ${(systemFunds.mechanicsFund?.netFlow ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                    GH₵ {(systemFunds.mechanicsFund?.netFlow ?? 0).toFixed(2)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -967,6 +1022,15 @@ export function LedgerTable({
               >
                 Platform Fee
               </button>
+              <button
+                type="button"
+                onClick={() => setFundFilter("mechanics_fund")}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold ${
+                  fundFilter === "mechanics_fund" ? "bg-purple-900/60 text-purple-300" : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Mechanics Fund
+              </button>
             </div>
 
             <div className="flex items-center gap-2">
@@ -1053,6 +1117,11 @@ export function LedgerTable({
                           {calculatedFund === "platform_fee" && (
                             <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-950 text-amber-300 border border-amber-500/40">
                               Platform Fee
+                            </span>
+                          )}
+                          {calculatedFund === "mechanics_fund" && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-purple-950 text-purple-300 border border-purple-500/40 flex items-center gap-1 w-fit">
+                              <Bot size={10} /> Mechanics Fund
                             </span>
                           )}
                         </td>

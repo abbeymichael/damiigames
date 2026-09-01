@@ -246,6 +246,7 @@ export const dbRepository: DbRepository = {
   getSystemFundsSummary: withStore("getSystemFundsSummary"),
   getChartOfAccountsReport: withStore("getChartOfAccountsReport"),
   getTreasuryFundDetails: withStore("getTreasuryFundDetails"),
+  getMechanicsFundDetails: withStore("getMechanicsFundDetails"),
 
   // Roles & RBAC
   listRoles: withStore("listRoles"),

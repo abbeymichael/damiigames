@@ -28,6 +28,7 @@ import {
   FileSpreadsheet,
   Check,
   Copy,
+  Bot,
 } from "lucide-react";
 import type {
   LedgerEntry,
@@ -131,6 +132,39 @@ export function AuditTrailView({
     accountClass: AccountClass;
     fundType: SystemFundType;
   } => {
+    // 0. Mechanics Fund / Bot user entries
+    if (
+      entry.userId === "mechanics-fund" ||
+      entry.userId === "platform-mechanics" ||
+      entry.userId?.startsWith("bot-") ||
+      entry.userId?.startsWith("bot_") ||
+      entry.userId?.startsWith("mech-") ||
+      entry.referenceType?.includes("bot")
+    ) {
+      if (entry.entryType === "mechanics_profit" || (entry.entryType === "wager_payout" && entry.accountType === "available")) {
+        return {
+          accountCode: "4040",
+          accountName: "Mechanics Gameplay Profits (Bot Win Margin)",
+          accountClass: "revenue",
+          fundType: "mechanics_fund",
+        };
+      }
+      if (entry.entryType === "mechanics_loss" || (entry.entryType === "wager_payout" && entry.accountType === "escrow")) {
+        return {
+          accountCode: "5030",
+          accountName: "Mechanics Gameplay Losses (Player Payouts)",
+          accountClass: "expense",
+          fundType: "mechanics_fund",
+        };
+      }
+      return {
+        accountCode: "1040",
+        accountName: "Mechanics Operating Float (Bot Bankrolls)",
+        accountClass: "asset",
+        fundType: "mechanics_fund",
+      };
+    }
+
     if (entry.userId === "platform-treasury" || entry.entryType === "platform_fee") {
       if (
         entry.referenceType === "league" ||
@@ -675,6 +709,12 @@ export function AuditTrailView({
             <Coins size={10} /> Platform Fee
           </span>
         );
+      case "mechanics_fund":
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-purple-950 text-purple-300 border border-purple-500/40">
+            <Bot size={10} /> Mechanics Fund
+          </span>
+        );
     }
   };
 
@@ -776,6 +816,7 @@ export function AuditTrailView({
               <option value="account_balances">Account Balances Fund (Liquid)</option>
               <option value="escrow">Escrow Fund (Custodial)</option>
               <option value="platform_fee">Platform Fee Fund (Treasury)</option>
+              <option value="mechanics_fund">Mechanics Fund (AI Bot Bankrolls &amp; PnL)</option>
               <option value="cross_fund">Cross-Fund Settlements Only</option>
             </select>
 
