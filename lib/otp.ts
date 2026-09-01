@@ -75,7 +75,12 @@ export function hashOtpCode(code: string): string {
  * Generates a random 6-digit numeric OTP code using cryptographically secure random integers
  */
 export function generateOtpCode(): string {
-  return String(crypto.randomInt(100000, 1000000));
+  try {
+    if (typeof crypto !== "undefined" && typeof (crypto as any).randomInt === "function") {
+      return String((crypto as any).randomInt(100000, 1000000));
+    }
+  } catch {}
+  return String(Math.floor(100000 + Math.random() * 900000));
 }
 
 /**

@@ -237,23 +237,26 @@ export const adminService = {
       await dbRepository.createDeposit({
         id: `dep-${securityService.generateUUID()}`,
         userId: botToken,
-        username: bot.username,
-        paymentMethod: "paystack",
-        amountPesewas,
-        amountGhs,
-        pointsToCredit: amountGhs,
-        marblesToCredit: amountGhs,
+        amount: amountGhs,
+        currency: "GHS",
+        method: "momo",
+        provider: "Paystack",
+        reference,
+        gatewayReference: reference,
         status: "pending",
-        paystackReference: reference,
-        paystackAccessCode: paystackData.data?.access_code,
-        authorizationUrl: paystackData.data?.authorization_url,
-        customerEmail: adminEmail,
-        metadata: {
+        fee: 0,
+        netAmount: amountGhs,
+        metadataJson: JSON.stringify({
           botToken,
           botUsername: bot.username,
           isMechanicFunding: true,
           adminUsername: admin?.username || "Admin",
-        },
+          customerEmail: adminEmail,
+          paystackAccessCode: paystackData.data?.access_code,
+          authorizationUrl: paystackData.data?.authorization_url,
+          pointsToCredit: amountGhs,
+          marblesToCredit: amountGhs,
+        }),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
@@ -303,77 +306,94 @@ export const adminService = {
     const cleanRef = String(reference || "").trim();
     if (!cleanRef) throw new Error("Paystack reference is required");
 
-    const { secretKey } = await getEffectivePaystackConfig();
-    if (!secretKey) throw new Error("Paystack secret key not configured");
-
-    const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(cleanRef)}`, {
-      headers: {
-        Authorization: `Bearer ${secretKey}`,
-        "Content-Type": "application/json",
-      },
-    });
-    const json = await res.json();
-    if (!res.ok || !json.status) {
-      throw new Error(json.message || "Payment verification failed");
-    }
-
-    if (json.data?.status !== "success") {
-      throw new Error(`Paystack payment status is ${json.data?.status || "incomplete"}`);
-    }
-
-    const paidPesewas = Number(json.data?.amount || 0);
-    const paidGhs = paidPesewas / 100;
-    const metadata = json.data?.metadata || {};
-    const botToken = metadata.botToken;
-
-    if (!botToken) {
-      throw new Error("Paystack transaction metadata does not contain a mechanic botToken");
-    }
-
-    const bot = await botService.getBot(botToken);
-    if (!bot) throw new Error(`Mechanic ${botToken} not found`);
-
-    const admin = await this.resolveAdminProfile(adminToken);
-    const adminUsername = admin?.username || metadata.adminUsername || "Admin";
-
-    // Fund the bot with exact verified amount
-    const updatedBot = await botService.fundBot(
-      botToken,
-      paidGhs,
-      paidGhs,
-      `Paystack Verified Payment (${cleanRef}) - Bankroll Float Deposit`,
-      adminUsername,
-      cleanRef
-    );
-
-    // Update deposit record to completed
-    try {
+    return dbRepository.lockKey(`paystack-bot-${cleanRef}`, async () => {
+      // Check if reference was already processed to prevent duplicate funding
+      const alreadyProcessed = await dbRepository.isPaystackRefProcessed(cleanRef);
       const existingDep = await dbRepository.getDepositByReference(cleanRef);
-      if (existingDep) {
-        await dbRepository.updateDeposit(existingDep.id, {
-          status: "completed",
-          gatewayResponse: json.data?.gateway_response || "Successful",
-          gatewayReference: json.data?.reference || cleanRef,
-          verifiedAt: new Date().toISOString(),
-          verifiedBy: "Paystack Gateway",
-          approvedAt: new Date().toISOString(),
-          approvedBy: adminUsername,
-          processedAt: new Date().toISOString(),
-        });
+
+      const { secretKey } = await getEffectivePaystackConfig();
+      if (!secretKey) throw new Error("Paystack secret key not configured");
+
+      const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(cleanRef)}`, {
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          "Content-Type": "application/json",
+        },
+      });
+      const json = await res.json();
+      if (!res.ok || !json.status) {
+        throw new Error(json.message || "Payment verification failed");
       }
-    } catch {}
 
-    await this.logAdminAction(adminToken, adminUsername, "VERIFIED_PAYSTACK_BOT_FUNDING", botToken, {
-      paidGhs,
-      reference: cleanRef,
+      if (json.data?.status !== "success") {
+        throw new Error(`Paystack payment status is ${json.data?.status || "incomplete"}`);
+      }
+
+      const paidPesewas = Number(json.data?.amount || 0);
+      const paidGhs = paidPesewas / 100;
+      const metadata = json.data?.metadata || {};
+      const botToken = metadata.botToken;
+
+      if (!botToken) {
+        throw new Error("Paystack transaction metadata does not contain a mechanic botToken");
+      }
+
+      const bot = await botService.getBot(botToken);
+      if (!bot) throw new Error(`Mechanic ${botToken} not found`);
+
+      if (alreadyProcessed || existingDep?.status === "completed") {
+        return {
+          success: true,
+          bot,
+          amountGhs: paidGhs,
+          message: `Payment (${cleanRef}) was already verified and credited to ${bot.fullName || bot.username}.`,
+        };
+      }
+
+      // Mark reference as processed atomically
+      await dbRepository.markPaystackRefProcessed(cleanRef);
+
+      const admin = await this.resolveAdminProfile(adminToken);
+      const adminUsername = admin?.username || metadata.adminUsername || "Admin";
+
+      // Fund the bot with exact verified amount
+      const updatedBot = await botService.fundBot(
+        botToken,
+        paidGhs,
+        paidGhs,
+        `Paystack Verified Payment (${cleanRef}) - Bankroll Float Deposit`,
+        adminUsername,
+        cleanRef
+      );
+
+      // Update deposit record to completed
+      try {
+        if (existingDep) {
+          await dbRepository.updateDeposit(existingDep.id, {
+            status: "completed",
+            gatewayResponse: json.data?.gateway_response || "Successful",
+            gatewayReference: json.data?.reference || cleanRef,
+            verifiedAt: new Date().toISOString(),
+            verifiedBy: "Paystack Gateway",
+            approvedAt: new Date().toISOString(),
+            approvedBy: adminUsername,
+            processedAt: new Date().toISOString(),
+          });
+        }
+      } catch {}
+
+      await this.logAdminAction(adminToken, adminUsername, "VERIFIED_PAYSTACK_BOT_FUNDING", botToken, {
+        paidGhs,
+        reference: cleanRef,
+      });
+
+      return {
+        success: true,
+        bot: updatedBot,
+        amountGhs: paidGhs,
+        message: `Successfully funded ${bot.fullName || bot.username} with GH₵ ${paidGhs.toLocaleString()} via verified Paystack payment.`,
+      };
     });
-
-    return {
-      success: true,
-      bot: updatedBot,
-      amountGhs: paidGhs,
-      message: `Successfully funded ${bot.fullName || bot.username} with GH₵ ${paidGhs.toLocaleString()} via verified Paystack payment.`,
-    };
   },
 
   async initBulkBotPaystackFunding(
@@ -440,6 +460,38 @@ export const adminService = {
       throw new Error(paystackData.message || "Failed to initialize Paystack bulk funding transaction.");
     }
 
+    // Create pending deposit for bulk fleet funding audit trail
+    try {
+      await dbRepository.createDeposit({
+        id: `dep-${securityService.generateUUID()}`,
+        userId: adminToken,
+        amount: totalAmountGhs,
+        currency: "GHS",
+        method: "momo",
+        provider: "Paystack",
+        reference,
+        gatewayReference: reference,
+        status: "pending",
+        fee: 0,
+        netAmount: totalAmountGhs,
+        metadataJson: JSON.stringify({
+          isBulkMechanicFunding: true,
+          tier: tier || "all",
+          amountPerBot,
+          botCount: eligible.length,
+          botTokens: eligible.map((b) => b.token),
+          adminUsername: admin?.username || "Admin",
+          customerEmail: adminEmail,
+          paystackAccessCode: paystackData.data?.access_code,
+          authorizationUrl: paystackData.data?.authorization_url,
+        }),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error("Failed to write pending deposit for bulk fleet:", err);
+    }
+
     await this.logAdminAction(adminToken, admin?.username || "Admin", "INIT_BULK_PAYSTACK_BOT_FUNDING", "BotFleet", {
       totalAmountGhs,
       amountPerBot,
@@ -468,62 +520,78 @@ export const adminService = {
     const cleanRef = String(reference || "").trim();
     if (!cleanRef) throw new Error("Paystack reference is required");
 
-    const { secretKey } = await getEffectivePaystackConfig();
-    if (!secretKey) throw new Error("Paystack secret key not configured");
+    return dbRepository.lockKey(`paystack-bulk-${cleanRef}`, async () => {
+      const alreadyProcessed = await dbRepository.isPaystackRefProcessed(cleanRef);
 
-    const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(cleanRef)}`, {
-      headers: {
-        Authorization: `Bearer ${secretKey}`,
-        "Content-Type": "application/json",
-      },
-    });
-    const json = await res.json();
-    if (!res.ok || !json.status || json.data?.status !== "success") {
-      throw new Error(json.message || `Payment verification failed (status: ${json.data?.status || "unknown"})`);
-    }
+      const { secretKey } = await getEffectivePaystackConfig();
+      if (!secretKey) throw new Error("Paystack secret key not configured");
 
-    const metadata = json.data?.metadata || {};
-    const botTokens: string[] = Array.isArray(metadata.botTokens) ? metadata.botTokens : [];
-    const amountPerBot = Number(metadata.amountPerBot || 0);
-
-    if (botTokens.length === 0 || amountPerBot <= 0) {
-      throw new Error("Invalid bulk payment metadata: missing botTokens or amountPerBot");
-    }
-
-    const admin = await this.resolveAdminProfile(adminToken);
-    const adminUsername = admin?.username || metadata.adminUsername || "Admin";
-
-    let fundedCount = 0;
-    for (const bToken of botTokens) {
-      try {
-        await botService.fundBot(
-          bToken,
-          amountPerBot,
-          amountPerBot,
-          `Bulk Paystack Funding (${cleanRef}) - ${metadata.tier || "Fleet"} Tier`,
-          adminUsername,
-          cleanRef
-        );
-        fundedCount++;
-      } catch (err) {
-        console.error(`Failed to fund bot ${bToken} in bulk batch:`, err);
+      const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(cleanRef)}`, {
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          "Content-Type": "application/json",
+        },
+      });
+      const json = await res.json();
+      if (!res.ok || !json.status || json.data?.status !== "success") {
+        throw new Error(json.message || `Payment verification failed (status: ${json.data?.status || "unknown"})`);
       }
-    }
 
-    await this.logAdminAction(adminToken, adminUsername, "VERIFIED_BULK_PAYSTACK_BOT_FUNDING", "BotFleet", {
-      fundedCount,
-      amountPerBot,
-      totalGhs: fundedCount * amountPerBot,
-      reference: cleanRef,
+      const metadata = json.data?.metadata || {};
+      const botTokens: string[] = Array.isArray(metadata.botTokens) ? metadata.botTokens : [];
+      const amountPerBot = Number(metadata.amountPerBot || 0);
+
+      if (botTokens.length === 0 || amountPerBot <= 0) {
+        throw new Error("Invalid bulk payment metadata: missing botTokens or amountPerBot");
+      }
+
+      if (alreadyProcessed) {
+        return {
+          success: true,
+          fundedCount: botTokens.length,
+          amountPerBot,
+          totalGhs: botTokens.length * amountPerBot,
+          message: `Bulk payment reference (${cleanRef}) was already verified and credited to ${botTokens.length} mechanics.`,
+        };
+      }
+
+      await dbRepository.markPaystackRefProcessed(cleanRef);
+
+      const admin = await this.resolveAdminProfile(adminToken);
+      const adminUsername = admin?.username || metadata.adminUsername || "Admin";
+
+      let fundedCount = 0;
+      for (const bToken of botTokens) {
+        try {
+          await botService.fundBot(
+            bToken,
+            amountPerBot,
+            amountPerBot,
+            `Bulk Paystack Funding (${cleanRef}) - ${metadata.tier || "Fleet"} Tier`,
+            adminUsername,
+            cleanRef
+          );
+          fundedCount++;
+        } catch (err) {
+          console.error(`Failed to fund bot ${bToken} in bulk batch:`, err);
+        }
+      }
+
+      await this.logAdminAction(adminToken, adminUsername, "VERIFIED_BULK_PAYSTACK_BOT_FUNDING", "BotFleet", {
+        fundedCount,
+        amountPerBot,
+        totalGhs: fundedCount * amountPerBot,
+        reference: cleanRef,
+      });
+
+      return {
+        success: true,
+        fundedCount,
+        amountPerBot,
+        totalGhs: fundedCount * amountPerBot,
+        message: `Successfully funded ${fundedCount} mechanics with GH₵ ${amountPerBot} each (Total: GH₵ ${fundedCount * amountPerBot}) via verified Paystack payment.`,
+      };
     });
-
-    return {
-      success: true,
-      fundedCount,
-      amountPerBot,
-      totalGhs: fundedCount * amountPerBot,
-      message: `Successfully funded ${fundedCount} mechanics with GH₵ ${amountPerBot} each (Total: GH₵ ${fundedCount * amountPerBot}) via verified Paystack payment.`,
-    };
   },
 
   async verifyBotLedger(adminToken: string, botToken: string) {

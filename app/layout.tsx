@@ -146,6 +146,7 @@ export default function RootLayout({
             `,
           }}
         />
+        <script id="paystack-inline-js" src="https://js.paystack.co/v2/inline.js" async />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}

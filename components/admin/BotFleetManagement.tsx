@@ -45,6 +45,7 @@ import {
 import type { BotAccountConfig, BotFleetSettings } from "@/lib/bot-service";
 import type { LedgerEntry, Profile, Transaction, FormalLedgerAuditReport, FleetLedgerAuditReport } from "@/lib/types";
 import { AdminPaystackModal } from "./AdminPaystackModal";
+import { openPaystackInlinePopup } from "@/lib/paystack-client";
 
 interface BotFleetManagementProps {
   token: string;
@@ -178,6 +179,7 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
     mode: "single" | "bulk";
     authorizationUrl: string | null;
     reference: string | null;
+    accessCode?: string | null;
     amountGhs: number;
     botName?: string;
     botUsername?: string;
@@ -188,6 +190,7 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
     mode: "single",
     authorizationUrl: null,
     reference: null,
+    accessCode: null,
     amountGhs: 0,
   });
 
@@ -452,12 +455,29 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
       if (data.success && data.reference) {
         setPaystackPendingRef(data.reference);
         setPaystackAuthUrl(data.authorizationUrl || null);
-        // STRICT IN-MODAL POPUP — NEVER REDIRECT OR OPEN EXTERNAL WINDOW
+        
+        // Launch official Paystack popup directly on page
+        openPaystackInlinePopup({
+          accessCode: data.accessCode || undefined,
+          reference: data.reference,
+          authorizationUrl: data.authorizationUrl || undefined,
+          email: adminBillingEmail || undefined,
+          amountGhs: fundAmountPoints,
+          onSuccess: (confirmedRef) => {
+            handleVerifyPaystackFunding(confirmedRef || data.reference);
+          },
+          onCancel: () => {
+            // Popup closed by user
+          },
+        });
+
+        // Set active modal state with live status & manual controls
         setActivePaystackModal({
           isOpen: true,
           mode: "single",
           authorizationUrl: data.authorizationUrl || null,
           reference: data.reference,
+          accessCode: data.accessCode || null,
           amountGhs: fundAmountPoints,
           botName: fundModalBot.fullName || fundModalBot.username,
           botUsername: fundModalBot.username,
@@ -531,13 +551,31 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
       if (data.success && data.reference) {
         setBulkPaystackPendingRef(data.reference);
         setBulkPaystackAuthUrl(data.authorizationUrl || null);
-        // STRICT IN-MODAL POPUP — NEVER REDIRECT OR OPEN EXTERNAL WINDOW
+        const totalAmountGhs = matchingBotsCount * bulkPoints;
+
+        // Launch official Paystack popup directly on page
+        openPaystackInlinePopup({
+          accessCode: data.accessCode || undefined,
+          reference: data.reference,
+          authorizationUrl: data.authorizationUrl || undefined,
+          email: adminBillingEmail || undefined,
+          amountGhs: totalAmountGhs,
+          onSuccess: (confirmedRef) => {
+            handleVerifyBulkPaystackFunding(confirmedRef || data.reference);
+          },
+          onCancel: () => {
+            // Popup closed by user
+          },
+        });
+
+        // Set active modal state with live status & manual controls
         setActivePaystackModal({
           isOpen: true,
           mode: "bulk",
           authorizationUrl: data.authorizationUrl || null,
           reference: data.reference,
-          amountGhs: matchingBotsCount * bulkPoints,
+          accessCode: data.accessCode || null,
+          amountGhs: totalAmountGhs,
           bulkCount: matchingBotsCount,
           bulkTier,
         });
@@ -3082,12 +3120,14 @@ export const BotFleetManagement: React.FC<BotFleetManagementProps> = ({ token })
         onClose={() => setActivePaystackModal((prev) => ({ ...prev, isOpen: false }))}
         authorizationUrl={activePaystackModal.authorizationUrl}
         reference={activePaystackModal.reference}
+        accessCode={activePaystackModal.accessCode}
         amountGhs={activePaystackModal.amountGhs}
         mode={activePaystackModal.mode}
         botName={activePaystackModal.botName}
         botUsername={activePaystackModal.botUsername}
         bulkCount={activePaystackModal.bulkCount}
         bulkTier={activePaystackModal.bulkTier}
+        email={adminBillingEmail || undefined}
         token={token}
         onSuccess={handlePaystackModalSuccess}
       />

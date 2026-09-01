@@ -358,7 +358,7 @@ export function transactionToRow(t: WalletTransaction): WalletTransactionRow {
     type: t.type,
     currency: t.currency,
     amount: t.amount,
-    reference: t.reference.slice(0, 191),
+    reference: String(t.reference || "").slice(0, 191),
     status: t.status || "completed",
     metaJson: t.metaJson || "{}",
     createdAt: t.createdAt,
@@ -401,20 +401,22 @@ export function rowToDeposit(row: DepositRow): Deposit {
 }
 
 export function depositToRow(d: Deposit): DepositRow {
+  const ref = String(d.reference || (d as any).paystackReference || d.id || "").slice(0, 191);
+  const amt = d.amount !== undefined ? d.amount : (d as any).amountGhs ?? 0;
   return {
     id: d.id,
     userId: d.userId,
-    amount: String(d.amount),
+    amount: String(amt),
     currency: d.currency || "GHS",
-    method: d.method || "momo",
+    method: d.method || (d as any).paymentMethod || "momo",
     provider: d.provider || "Paystack",
-    reference: d.reference.slice(0, 191),
+    reference: ref,
     gatewayReference: orNull(d.gatewayReference),
     status: d.status || "pending",
     phoneNumber: orNull(d.phoneNumber),
     accountName: orNull(d.accountName),
     fee: String(d.fee ?? 0),
-    netAmount: String(d.netAmount ?? d.amount),
+    netAmount: String(d.netAmount ?? amt),
     gatewayResponse: orNull(d.gatewayResponse),
     verifiedAt: orNull(d.verifiedAt),
     verifiedBy: orNull(d.verifiedBy),
@@ -425,7 +427,7 @@ export function depositToRow(d: Deposit): DepositRow {
     rejectedAt: orNull(d.rejectedAt),
     rejectedBy: orNull(d.rejectedBy),
     rejectionReason: orNull(d.rejectionReason),
-    metadataJson: orNull(d.metadataJson),
+    metadataJson: orNull(d.metadataJson || ((d as any).metadata ? JSON.stringify((d as any).metadata) : null)),
     ledgerEntryId: orNull(d.ledgerEntryId),
     walletTransactionId: orNull(d.walletTransactionId),
     createdAt: d.createdAt,
@@ -487,7 +489,7 @@ export function withdrawalToRow(w: Withdrawal): WithdrawalRow {
     recipientCode: orNull(w.recipientCode),
     transferCode: orNull(w.transferCode),
     transferId: orNull(w.transferId),
-    reference: w.reference.slice(0, 191),
+    reference: String(w.reference || "").slice(0, 191),
     status: w.status || "pending",
     fee: String(w.fee ?? 0),
     netAmount: String(w.netAmount ?? w.amount),

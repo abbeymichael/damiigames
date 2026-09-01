@@ -18,13 +18,13 @@ let lastAttemptTime = 0;
 let mysqlConnectionError: string | null = null;
 let hasLoggedFallbackNotice = false;
 
-async function boot(): Promise<DbRepository> {
-  if (activeStore === mysqlStore) {
+async function boot(force = false): Promise<DbRepository> {
+  if (!force && activeStore === mysqlStore && !mysqlConnectionError) {
     return mysqlStore;
   }
   const now = Date.now();
   // Allow periodic retry when configured or if credentials change
-  if (!initPromise || (activeStore === memoryStore && now - lastAttemptTime > 15000)) {
+  if (force || !initPromise || (activeStore === memoryStore && now - lastAttemptTime > 15000)) {
     lastAttemptTime = now;
     initPromise = (async () => {
       try {
@@ -58,15 +58,25 @@ function withStore<T extends keyof DbRepository>(method: T) {
     let store = await boot();
     try {
       return await (store[method] as any)(...args);
-    } catch (err) {
-      if (store === mysqlStore) {
-        console.warn(`[damii][db] MySQL operation failed in ${String(method)}, recycling pool and retrying:`, err instanceof Error ? err.message : err);
+    } catch (err: any) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const isConnectionIssue =
+        errMsg.includes("closed state") ||
+        errMsg.includes("Pool is closed") ||
+        errMsg.includes("ECONNREFUSED") ||
+        errMsg.includes("PROTOCOL_CONNECTION_LOST") ||
+        errMsg.includes("ETIMEDOUT") ||
+        errMsg.includes("ER_CON_COUNT_ERROR");
+
+      if (store === mysqlStore && isConnectionIssue) {
+        console.warn(`[damii][db] MySQL connection issue in ${String(method)}, recycling pool and retrying:`, errMsg);
         try {
           await resetPool();
-          store = await boot();
+          store = await boot(true);
           return await (store[method] as any)(...args);
         } catch (retryErr) {
           console.warn(`[damii][db] MySQL retry failed in ${String(method)}, serving from resilient embedded store:`, retryErr instanceof Error ? retryErr.message : retryErr);
+          activeStore = memoryStore;
           if (memoryStore[method]) {
             return await (memoryStore[method] as any)(...args);
           }

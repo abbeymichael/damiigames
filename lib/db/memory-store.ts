@@ -429,7 +429,7 @@ export const memoryStore: DbRepository = {
       let uniqueUsername = cleanUsername;
       for (const p of data.profiles.values()) {
         if (p.username.trim().toLowerCase() === lower && p.token !== token) {
-          uniqueUsername = `${cleanUsername}_${crypto.randomInt(100, 1000)}`;
+          uniqueUsername = `${cleanUsername}_${Math.floor(100 + Math.random() * 900)}`;
           break;
         }
       }

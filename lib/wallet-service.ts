@@ -373,38 +373,40 @@ export const walletService = {
             tx.status = "completed";
             await dbRepository.createTransaction(tx);
           }
-          
-          await dbRepository.updateProfileBalance(userToken, expectedAmount);
 
-          // If this deposit is for a bot / mechanic, sync botService metrics and totalFunded
+          let ledgerEntryId: string | null = null;
+
+          // If this deposit is for a bot / mechanic, sync bot bankroll ledger and profile safely
           if (botService.isBot(userToken)) {
             try {
-              await botService.fundBot(
+              const res = await botService.fundBot(
                 userToken,
                 expectedAmount,
                 expectedAmount,
-                `Paystack Verified Webhook Deposit (${cleanRef})`,
+                `Paystack Verified Deposit (${cleanRef})`,
                 deposit?.customerEmail || "Paystack Gateway",
                 cleanRef
               );
             } catch (err) {
               console.error("Failed to sync bot bankroll on Paystack deposit:", err);
             }
-          }
-          
-          // Write double-entry ledger entries referencing the deposit
-          const ledgerEntries = await dbRepository.writeLedger([
-            {
-              userId: userToken,
-              accountType: "available",
-              entryType: "deposit",
-              amount: String(expectedAmount),
-              referenceType: "deposit",
-              referenceId: deposit ? deposit.id : cleanRef,
-            },
-          ]).catch(() => []);
+          } else {
+            // Human player account: update wallet balance and write ledger entry
+            await dbRepository.updateProfileBalance(userToken, expectedAmount);
 
-          const ledgerEntryId = ledgerEntries[0]?.id;
+            // Write double-entry ledger entries referencing the deposit
+            const ledgerEntries = await dbRepository.writeLedger([
+              {
+                userId: userToken,
+                accountType: "available",
+                entryType: "deposit",
+                amount: String(expectedAmount),
+                referenceType: "deposit",
+                referenceId: deposit ? deposit.id : cleanRef,
+              },
+            ]).catch(() => []);
+            ledgerEntryId = ledgerEntries[0]?.id || null;
+          }
 
           // Update dedicated deposits table
           if (deposit) {
