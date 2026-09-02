@@ -29,14 +29,40 @@ import {
 import { soundService } from "@/lib/sound-service";
 import type { NotificationItem, UserNotificationPreferences, NotificationType } from "@/lib/types";
 
-interface NotificationCenterProps {
+export interface NotificationCenterProps {
   userToken: string | null;
   username: string;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onUnreadCountChange?: (count: number) => void;
+  showDesktopTrigger?: boolean;
 }
 
-export function NotificationCenter({ userToken, username }: NotificationCenterProps) {
+export function NotificationCenter({
+  userToken,
+  username,
+  isOpen: propIsOpen,
+  onOpenChange,
+  onUnreadCountChange,
+  showDesktopTrigger = true,
+}: NotificationCenterProps) {
   const router = useRouter();
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+
+  const isControlled = typeof propIsOpen === "boolean";
+  const isOpen = isControlled ? propIsOpen : internalIsOpen;
+
+  const setOpen = useCallback(
+    (val: boolean | ((prev: boolean) => boolean)) => {
+      const nextVal = typeof val === "function" ? val(isOpen) : val;
+      if (!isControlled) {
+        setInternalIsOpen(nextVal);
+      }
+      onOpenChange?.(nextVal);
+    },
+    [isControlled, isOpen, onOpenChange]
+  );
+
   const [activeTab, setActiveTab] = useState<"all" | "games" | "tournaments" | "wallet">("all");
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [readIds, setReadIds] = useState<string[]>([]);
@@ -46,6 +72,23 @@ export function NotificationCenter({ userToken, username }: NotificationCenterPr
   const [activeToast, setActiveToast] = useState<NotificationItem | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [testFeedback, setTestFeedback] = useState("");
+
+  // Listen for global custom events to open/toggle notifications from any mobile or desktop trigger
+  useEffect(() => {
+    const handleToggle = () => setOpen((prev) => !prev);
+    const handleOpen = () => setOpen(true);
+    const handleClose = () => setOpen(false);
+
+    window.addEventListener("damii-toggle-notifications", handleToggle);
+    window.addEventListener("damii-open-notifications", handleOpen);
+    window.addEventListener("damii-close-notifications", handleClose);
+
+    return () => {
+      window.removeEventListener("damii-toggle-notifications", handleToggle);
+      window.removeEventListener("damii-open-notifications", handleOpen);
+      window.removeEventListener("damii-close-notifications", handleClose);
+    };
+  }, [setOpen]);
 
   // Track known notification IDs to detect fresh incoming ones for audio chime & toast banner
   const prevNotificationIdsRef = useRef<Set<string>>(new Set());
@@ -266,13 +309,17 @@ export function NotificationCenter({ userToken, username }: NotificationCenterPr
   const handleActionClick = (notification: NotificationItem) => {
     handleMarkSingleRead(notification.id);
     setActiveToast(null);
-    setIsOpen(false);
+    setOpen(false);
     if (notification.link) {
       safeNavigate(router, notification.link);
     }
   };
 
   const unreadCount = notifications.filter((n) => !readIds.includes(n.id)).length;
+
+  useEffect(() => {
+    onUnreadCountChange?.(unreadCount);
+  }, [unreadCount, onUnreadCountChange]);
 
   // Filter by active tab
   const filteredNotifications = notifications.filter((n) => {
@@ -364,68 +411,99 @@ export function NotificationCenter({ userToken, username }: NotificationCenterPr
       )}
 
       {/* ------------------------------------------------------------------- */}
-      {/* NOTIFICATION BELL BUTTON WITH AUDIO & UNREAD BADGES                 */}
+      {/* NOTIFICATION BELL BUTTON WITH AUDIO & UNREAD BADGES (OPTIONAL TRIGGER)*/}
       {/* ------------------------------------------------------------------- */}
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => setIsOpen((prev) => !prev)}
-          aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ""}`}
-          className="relative p-2 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] rounded-xl border border-[#d6a735]/40 transition-colors flex items-center justify-center shadow-sm cursor-pointer"
-          title="Notifications & Game Alerts"
+      {showDesktopTrigger && (
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setOpen((prev) => !prev)}
+            aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ""}`}
+            className="relative p-2 bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] rounded-xl border border-[#d6a735]/40 transition-colors flex items-center justify-center shadow-sm cursor-pointer"
+            title="Notifications & Game Alerts"
+          >
+            <Bell size={16} />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 bg-gradient-to-br from-[#d6a735] to-amber-500 text-[#06261f] font-black text-[10px] rounded-full flex items-center justify-center shadow-md animate-pulse">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* ----------------------------------------------------------------- */}
+      {/* NOTIFICATION BACKDROP OVERLAY                                     */}
+      {/* ----------------------------------------------------------------- */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-[140] bg-black/75 backdrop-blur-xs transition-opacity"
+          onClick={() => setOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* ----------------------------------------------------------------- */}
+      {/* NOTIFICATION DRAWER / POPOVER (BOTTOM SHEET ON MOBILE, POPOVER ON DESKTOP) */}
+      {/* ----------------------------------------------------------------- */}
+      {isOpen && (
+        <aside
+          role="dialog"
+          aria-modal="true"
+          aria-label="Alerts and In-App Notifications"
+          className="fixed inset-x-0 bottom-0 md:bottom-auto md:top-16 md:right-6 md:left-auto md:w-96 max-h-[85vh] md:max-h-[620px] bg-[#06261f] border-t-2 md:border-2 border-[#d6a735]/60 rounded-t-3xl md:rounded-2xl shadow-2xl z-[150] text-left text-[#f5efdf] animate-in slide-in-from-bottom md:slide-in-from-top-2 duration-200 flex flex-col overflow-hidden"
         >
-          <Bell size={16} />
-          {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 bg-gradient-to-br from-[#d6a735] to-amber-500 text-[#06261f] font-black text-[10px] rounded-full flex items-center justify-center shadow-md animate-pulse">
-              {unreadCount}
-            </span>
-          )}
-        </button>
+          {/* Mobile Drag Handle */}
+          <div className="w-12 h-1 bg-slate-600 rounded-full mx-auto my-2.5 shrink-0 md:hidden" />
 
-        {/* ----------------------------------------------------------------- */}
-        {/* NOTIFICATION DRAWER / POPOVER                                     */}
-        {/* ----------------------------------------------------------------- */}
-        {isOpen && (
-          <div className="absolute right-0 top-full mt-2 w-88 sm:w-96 max-w-[92vw] bg-[#06261f] border-2 border-[#d6a735]/50 rounded-2xl shadow-2xl z-50 text-left text-[#f5efdf] animate-in fade-in slide-in-from-top-2 duration-150 overflow-hidden">
-            {/* Header with Title & Quick Controls */}
-            <div className="p-3.5 bg-gradient-to-b from-[#081c15] to-[#06261f] border-b border-[#0c3b2e] flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-[#d6a735]/20 flex items-center justify-center text-[#d6a735]">
-                  <Bell size={15} />
-                </div>
-                <div>
-                  <h3 className="text-xs font-black text-[#f5efdf] uppercase tracking-wider">Alerts & In-App Feed</h3>
-                  <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                    <span>{notifications.length} Total</span>
-                    {unreadCount > 0 && <span className="text-[#d6a735] font-bold">• {unreadCount} New</span>}
-                  </div>
-                </div>
+          {/* Header with Title & Quick Controls */}
+          <div className="p-3.5 bg-gradient-to-b from-[#081c15] to-[#06261f] border-b border-[#0c3b2e] flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-[#d6a735]/20 flex items-center justify-center text-[#d6a735]">
+                <Bell size={15} />
               </div>
-
-              {/* Sound toggle & Settings action */}
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={toggleSound}
-                  title={isSoundMuted ? "Unmute In-App Notification Audio" : "Mute In-App Notification Audio"}
-                  className={`p-1.5 rounded-lg border transition-colors ${
-                    isSoundMuted
-                      ? "bg-red-950/40 border-red-800/60 text-red-400"
-                      : "bg-[#0c3b2e] border-[#d6a735]/40 text-[#d6a735]"
-                  }`}
-                >
-                  {isSoundMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsSettingsOpen(true)}
-                  title="Notification Channel Settings (WhatsApp, SMS, Email)"
-                  className="p-1.5 bg-[#0c3b2e] hover:bg-[#144435] text-slate-300 hover:text-[#d6a735] rounded-lg border border-[#184d3c] transition-colors"
-                >
-                  <Settings2 size={14} />
-                </button>
+              <div>
+                <h3 className="text-xs font-black text-[#f5efdf] uppercase tracking-wider">Alerts & In-App Feed</h3>
+                <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                  <span>{notifications.length} Total</span>
+                  {unreadCount > 0 && <span className="text-[#d6a735] font-bold">• {unreadCount} New</span>}
+                </div>
               </div>
             </div>
+
+            {/* Sound toggle & Settings action & Close button */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={toggleSound}
+                title={isSoundMuted ? "Unmute In-App Notification Audio" : "Mute In-App Notification Audio"}
+                className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                  isSoundMuted
+                    ? "bg-red-950/40 border-red-800/60 text-red-400"
+                    : "bg-[#0c3b2e] border-[#d6a735]/40 text-[#d6a735]"
+                }`}
+              >
+                {isSoundMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsSettingsOpen(true)}
+                title="Notification Channel Settings (WhatsApp, SMS, Email)"
+                className="p-1.5 bg-[#0c3b2e] hover:bg-[#144435] text-slate-300 hover:text-[#d6a735] rounded-lg border border-[#184d3c] transition-colors cursor-pointer"
+              >
+                <Settings2 size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                title="Close notification drawer"
+                aria-label="Close notification drawer"
+                className="p-1.5 bg-[#0c3b2e] hover:bg-[#144435] text-slate-300 hover:text-white rounded-lg border border-[#184d3c] transition-colors cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
 
             {/* Category Filter Tabs */}
             <div className="flex items-center px-3 py-1.5 bg-[#081c15]/60 border-b border-[#0c3b2e] gap-1 text-[11px] font-bold overflow-x-auto scrollbar-none">
@@ -561,15 +639,14 @@ export function NotificationCenter({ userToken, username }: NotificationCenterPr
                 </button>
               )}
             </div>
-          </div>
+          </aside>
         )}
-      </div>
 
       {/* ------------------------------------------------------------------- */}
       {/* MULTI-CHANNEL PREFERENCES & DISPATCH SETTINGS MODAL                 */}
       {/* ------------------------------------------------------------------- */}
       {isSettingsOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#06261f] border-2 border-[#d6a735] rounded-3xl max-w-lg w-full p-6 text-[#f5efdf] shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-[#0c3b2e] pb-4">
