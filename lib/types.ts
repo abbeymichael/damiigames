@@ -181,9 +181,42 @@ export type Profile = {
   status?: "active" | "suspended" | "banned";
   bannedAt?: string;
   bannedReason?: string;
+  // Multi-Factor Authentication (MFA / 2FA)
+  mfaEnabled?: boolean;
+  mfaEnrolledAt?: string;
+  mfaPreferredMethod?: "passkey" | "biometric" | "authenticator" | "sms";
+  totpSecret?: string;
+  totpEnabled?: boolean;
+  totpVerifiedAt?: string;
+  passkeys?: UserPasskey[];
+  backupCodes?: string[];
   createdAt: string;
   updatedAt?: string | Date;
 };
+
+export interface UserPasskey {
+  id: string; // credential ID
+  name: string;
+  type: "passkey" | "biometric";
+  publicKey?: string;
+  counter?: number;
+  transports?: string[];
+  createdAt: string;
+  lastUsedAt?: string;
+  deviceType?: "platform" | "cross-platform";
+}
+
+export interface UserMfaSettings {
+  enabled: boolean;
+  preferredMethod: "passkey" | "biometric" | "authenticator" | "sms";
+  enrolledAt?: string;
+  totpEnabled: boolean;
+  totpVerifiedAt?: string;
+  passkeysCount: number;
+  biometricsCount: number;
+  hasBackupCodes: boolean;
+  passkeys: UserPasskey[];
+}
 
 export interface UserDetailPayload {
   profile: Profile;

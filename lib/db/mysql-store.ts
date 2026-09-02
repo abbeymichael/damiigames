@@ -172,6 +172,14 @@ function profileUpdateSet(p: Profile) {
     status: p.status || "active",
     bannedAt: p.bannedAt ?? null,
     bannedReason: p.bannedReason ?? null,
+    mfaEnabled: p.mfaEnabled ? 1 : 0,
+    mfaEnrolledAt: p.mfaEnrolledAt ?? null,
+    mfaPreferredMethod: p.mfaPreferredMethod ?? null,
+    totpSecret: p.totpSecret ?? null,
+    totpEnabled: p.totpEnabled ? 1 : 0,
+    totpVerifiedAt: p.totpVerifiedAt ?? null,
+    passkeysJson: p.passkeys ? JSON.stringify(p.passkeys) : null,
+    backupCodesJson: p.backupCodes ? JSON.stringify(p.backupCodes) : null,
     updatedAt: p.updatedAt,
   };
 }

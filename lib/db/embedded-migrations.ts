@@ -656,4 +656,17 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
       "ALTER TABLE `system_settings` MODIFY COLUMN `category` varchar(64) NOT NULL",
     ],
   },
+  {
+    name: "0007_add_profile_mfa_columns.sql",
+    statements: [
+      "ALTER TABLE `profiles` ADD COLUMN `mfa_enabled` tinyint NOT NULL DEFAULT 0",
+      "ALTER TABLE `profiles` ADD COLUMN `mfa_enrolled_at` varchar(32)",
+      "ALTER TABLE `profiles` ADD COLUMN `mfa_preferred_method` varchar(32)",
+      "ALTER TABLE `profiles` ADD COLUMN `totp_secret` varchar(128)",
+      "ALTER TABLE `profiles` ADD COLUMN `totp_enabled` tinyint NOT NULL DEFAULT 0",
+      "ALTER TABLE `profiles` ADD COLUMN `totp_verified_at` varchar(32)",
+      "ALTER TABLE `profiles` ADD COLUMN `passkeys_json` text",
+      "ALTER TABLE `profiles` ADD COLUMN `backup_codes_json` text",
+    ],
+  },
 ];

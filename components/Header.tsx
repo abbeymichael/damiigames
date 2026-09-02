@@ -63,6 +63,8 @@ import {
   getAuthHeaders,
   clearSessionToken,
 } from "@/lib/client-auth";
+import MfaSecurityManager from "@/components/MfaSecurityManager";
+import { authenticateWithPasskey } from "@/lib/webauthn-client";
 
 type NotificationItem = {
   id: string;
@@ -72,6 +74,25 @@ type NotificationItem = {
   timestamp: string;
   link: string;
 };
+
+const DEFAULT_FALLBACK_REGIONS: { id: string; name: string; code?: string }[] = [
+  { id: "reg-greater-accra", name: "Greater Accra", code: "GA" },
+  { id: "reg-ashanti", name: "Ashanti", code: "AS" },
+  { id: "reg-western", name: "Western", code: "WP" },
+  { id: "reg-eastern", name: "Eastern", code: "EP" },
+  { id: "reg-central", name: "Central", code: "CP" },
+  { id: "reg-northern", name: "Northern", code: "NP" },
+  { id: "reg-volta", name: "Volta", code: "VR" },
+  { id: "reg-upper-east", name: "Upper East", code: "UE" },
+  { id: "reg-upper-west", name: "Upper West", code: "UW" },
+  { id: "reg-bono", name: "Bono", code: "BO" },
+  { id: "reg-bono-east", name: "Bono East", code: "BE" },
+  { id: "reg-ahafo", name: "Ahafo", code: "AH" },
+  { id: "reg-western-north", name: "Western North", code: "WN" },
+  { id: "reg-oti", name: "Oti", code: "OT" },
+  { id: "reg-savannah", name: "Savannah", code: "SV" },
+  { id: "reg-north-east", name: "North East", code: "NE" },
+];
 
 export function Header() {
   const pathname = usePathname();
@@ -181,7 +202,8 @@ export function Header() {
   const [profMomoNumber, setProfMomoNumber] = useState("");
   const [profMomoNetwork, setProfMomoNetwork] = useState("MTN");
   const [profileCompleted, setProfileCompleted] = useState(false);
-  const [dbRegions, setDbRegions] = useState<{ id: string; name: string; code?: string }[]>([]);
+  const [dbRegions, setDbRegions] = useState<{ id: string; name: string; code?: string }[]>(DEFAULT_FALLBACK_REGIONS);
+  const regionsList = dbRegions && dbRegions.length > 0 ? dbRegions : DEFAULT_FALLBACK_REGIONS;
 
   // Dynamic regions fetching from database
   useEffect(() => {
@@ -197,18 +219,7 @@ export function Header() {
       })
       .catch(() => {
         // Fallback default list
-        setDbRegions([
-          { id: "1", name: "Greater Accra" },
-          { id: "2", name: "Ashanti" },
-          { id: "3", name: "Western" },
-          { id: "4", name: "Eastern" },
-          { id: "5", name: "Central" },
-          { id: "6", name: "Northern" },
-          { id: "7", name: "Volta" },
-          { id: "8", name: "Upper East" },
-          { id: "9", name: "Upper West" },
-          { id: "10", name: "Bono" },
-        ]);
+        setDbRegions(DEFAULT_FALLBACK_REGIONS);
       });
   }, []);
 
@@ -261,6 +272,20 @@ export function Header() {
   const [editSuccess, setEditSuccess] = useState("");
   const [isEditLoading, setIsEditLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Login MFA Challenge State
+  const [mfaChallenge, setMfaChallenge] = useState<{
+    ticket: string;
+    username: string;
+    preferredMethod: string;
+    hasPasskeys: boolean;
+    hasTotp: boolean;
+    hasBackupCodes: boolean;
+    passkeys: Array<{ id: string; name: string; type: string }>;
+  } | null>(null);
+  const [mfaLoginCode, setMfaLoginCode] = useState("");
+  const [mfaLoginMethod, setMfaLoginMethod] = useState<"totp" | "passkey" | "biometric" | "backup">("totp");
+  const [isMfaVerifying, setIsMfaVerifying] = useState(false);
 
   const fetchNotifications = useCallback((token: string) => {
     fetch(`/api/notifications?token=${encodeURIComponent(token)}`)
@@ -902,6 +927,28 @@ export function Header() {
         return;
       }
 
+      // If Multi-Factor Authentication is enabled on this account
+      if (data.mfaRequired) {
+        setMfaChallenge({
+          ticket: data.ticket,
+          username: data.username,
+          preferredMethod: data.preferredMethod || "totp",
+          hasPasskeys: Boolean(data.hasPasskeys),
+          hasTotp: Boolean(data.hasTotp),
+          hasBackupCodes: Boolean(data.hasBackupCodes),
+          passkeys: data.passkeys || [],
+        });
+        setMfaLoginMethod(
+          data.preferredMethod === "biometric" || data.preferredMethod === "passkey"
+            ? (data.hasPasskeys ? "passkey" : "totp")
+            : data.hasTotp
+            ? "totp"
+            : "passkey"
+        );
+        setIsLoading(false);
+        return;
+      }
+
       // Success
       saveSessionToken(data.token, data.csrfToken);
       localStorage.setItem("damii-player-token", data.token);
@@ -951,6 +998,147 @@ export function Header() {
     }
   };
 
+  const handlePasskeyDirectLogin = async () => {
+    setAuthError("");
+    setAuthSuccess("");
+    setIsLoading(true);
+
+    try {
+      // 1. Get challenge
+      const chRes = await fetch("/api/auth/mfa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "challenge" }),
+      });
+      const chData = await chRes.json();
+      const challenge = chData.challenge;
+
+      // 2. Prompt device passkey / biometric
+      const authResult = await authenticateWithPasskey();
+      if (!authResult.success || !authResult.credentialId) {
+        setAuthError(authResult.error || "Passkey authentication was cancelled.");
+        setIsLoading(false);
+        return;
+      }
+
+      // 3. Authenticate with backend
+      const res = await fetch("/api/auth/mfa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "passkey_login",
+          credentialId: authResult.credentialId,
+          challenge,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setAuthError(data.error || "Passkey login failed.");
+        setIsLoading(false);
+        return;
+      }
+
+      // Success
+      saveSessionToken(data.token, data.csrfToken);
+      localStorage.setItem("damii-player-token", data.token);
+      localStorage.setItem("damii-player-name", data.profile.username);
+      localStorage.setItem(
+        "damii-auth-user",
+        JSON.stringify({
+          token: data.token,
+          username: data.profile.username,
+          points: data.profile.points,
+          role: data.profile.role,
+        })
+      );
+
+      setAuthSuccess(`⚡ Welcome back, ${data.profile.username}! Authenticated via Biometrics / Passkey.`);
+      window.dispatchEvent(new Event("damii-auth-changed"));
+      setTimeout(() => {
+        setIsAuthOpen(false);
+        setAuthSuccess("");
+      }, 1000);
+    } catch {
+      setAuthError("Passkey login encountered an error.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyLoginMfa = async (methodOverride?: "passkey" | "biometric") => {
+    if (!mfaChallenge) return;
+    const activeMethod = methodOverride || mfaLoginMethod;
+
+    setAuthError("");
+    setIsMfaVerifying(true);
+
+    try {
+      let credentialId: string | undefined;
+
+      if (activeMethod === "passkey" || activeMethod === "biometric") {
+        const allowedIds = (mfaChallenge.passkeys || []).map((p) => p.id);
+        const authResult = await authenticateWithPasskey(allowedIds);
+        if (!authResult.success || !authResult.credentialId) {
+          setAuthError(authResult.error || "Biometric / Passkey prompt was cancelled.");
+          setIsMfaVerifying(false);
+          return;
+        }
+        credentialId = authResult.credentialId;
+      } else if (!mfaLoginCode.trim()) {
+        setAuthError("Please enter your 6-digit authenticator or backup code.");
+        setIsMfaVerifying(false);
+        return;
+      }
+
+      const res = await fetch("/api/auth/mfa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "verify_login_mfa",
+          ticket: mfaChallenge.ticket,
+          method: activeMethod,
+          code: mfaLoginCode.trim() || undefined,
+          credentialId,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setAuthError(data.error || "MFA Verification failed.");
+        setIsMfaVerifying(false);
+        return;
+      }
+
+      // Success
+      saveSessionToken(data.token, data.csrfToken);
+      localStorage.setItem("damii-player-token", data.token);
+      localStorage.setItem("damii-player-name", data.profile.username);
+      localStorage.setItem(
+        "damii-auth-user",
+        JSON.stringify({
+          token: data.token,
+          username: data.profile.username,
+          points: data.profile.points,
+          role: data.profile.role,
+        })
+      );
+
+      setAuthSuccess(`🛡️ MFA Verified! Welcome back, ${data.profile.username}!`);
+      window.dispatchEvent(new Event("damii-auth-changed"));
+      setTimeout(() => {
+        setIsAuthOpen(false);
+        setMfaChallenge(null);
+        setMfaLoginCode("");
+        setAuthSuccess("");
+      }, 1000);
+    } catch {
+      setAuthError("Failed to verify MFA.");
+    } finally {
+      setIsMfaVerifying(false);
+    }
+  };
+
   const handleEditProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setEditError("");
@@ -977,6 +1165,7 @@ export function Header() {
     setIsEditLoading(true);
 
     try {
+      const isExistingPhoneLocked = Boolean(phoneNumber || isPhoneVerified);
       const res = await fetch("/api/auth", {
         method: "POST",
         headers: getAuthHeaders(),
@@ -987,7 +1176,7 @@ export function Header() {
           fullName: editFullName.trim() || undefined,
           email: editEmail.trim() || undefined,
           avatarUrl: editAvatarUrl || undefined,
-          phoneNumber: !isPhoneVerified && editPhone.trim() ? editPhone.trim() : undefined,
+          phoneNumber: !isExistingPhoneLocked && editPhone.trim() ? editPhone.trim() : undefined,
           gender: editGender || undefined,
           dateOfBirth: editDob ? new Date(editDob).toISOString() : undefined,
           region: editRegion || undefined,
@@ -2838,8 +3027,148 @@ export function Header() {
                 </form>
               )}
 
-              {/* Sign In Mode */}
-              {authMode === "login" && (
+              {/* Sign In Mode / MFA Challenge */}
+              {authMode === "login" && mfaChallenge && (
+                <div className="space-y-4">
+                  <div className="p-4 bg-[#0c3b2e]/70 border border-[#d6a735]/40 rounded-2xl text-center space-y-2">
+                    <div className="w-12 h-12 rounded-full bg-[#d6a735]/20 border border-[#d6a735]/50 flex items-center justify-center mx-auto text-[#d6a735]">
+                      <ShieldCheck size={26} />
+                    </div>
+                    <h4 className="text-sm font-black text-[#f5efdf]">
+                      Multi-Factor Authentication Required
+                    </h4>
+                    <p className="text-xs text-slate-300">
+                      Sign in security challenge for <strong className="text-[#d6a735]">@{mfaChallenge.username}</strong>
+                    </p>
+                  </div>
+
+                  {/* Method Selector Tabs if multiple methods available */}
+                  {(mfaChallenge.hasPasskeys || mfaChallenge.hasTotp) && (
+                    <div className="flex gap-2 p-1 bg-[#06261f] rounded-xl border border-[#184d3c] text-xs font-bold">
+                      {mfaChallenge.hasPasskeys && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMfaLoginMethod("passkey");
+                            setAuthError("");
+                          }}
+                          className={`flex-1 py-2 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                            mfaLoginMethod === "passkey" || mfaLoginMethod === "biometric"
+                              ? "bg-[#d6a735] text-[#06261f]"
+                              : "text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          <KeyRound size={14} /> Passkey / Biometrics
+                        </button>
+                      )}
+                      {mfaChallenge.hasTotp && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMfaLoginMethod("totp");
+                            setAuthError("");
+                          }}
+                          className={`flex-1 py-2 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                            mfaLoginMethod === "totp"
+                              ? "bg-[#d6a735] text-[#06261f]"
+                              : "text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          <Smartphone size={14} /> Authenticator App
+                        </button>
+                      )}
+                      {mfaChallenge.hasBackupCodes && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMfaLoginMethod("backup");
+                            setAuthError("");
+                          }}
+                          className={`flex-1 py-2 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                            mfaLoginMethod === "backup"
+                              ? "bg-[#d6a735] text-[#06261f]"
+                              : "text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          <Lock size={14} /> Backup Code
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Passkey / Biometric Option */}
+                  {(mfaLoginMethod === "passkey" || mfaLoginMethod === "biometric") && (
+                    <div className="p-4 bg-[#0c3b2e]/40 border border-[#184d3c] rounded-2xl text-center space-y-3">
+                      <p className="text-xs text-slate-300">
+                        Use your device Face ID, Touch ID, or security passkey to confirm your identity instantly without waiting for an SMS.
+                      </p>
+                      <button
+                        type="button"
+                        disabled={isMfaVerifying}
+                        onClick={() => handleVerifyLoginMfa("passkey")}
+                        className="w-full py-3 bg-[#d6a735] hover:bg-[#b88c24] disabled:opacity-50 text-[#06261f] font-black rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        {isMfaVerifying ? (
+                          "Verifying Biometric / Passkey..."
+                        ) : (
+                          <>
+                            <Zap size={16} /> Tap to Authenticate with Device
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* TOTP or Backup Code Option */}
+                  {(mfaLoginMethod === "totp" || mfaLoginMethod === "backup") && (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center justify-between">
+                          <span>
+                            {mfaLoginMethod === "totp"
+                              ? "6-Digit Authenticator Code"
+                              : "Emergency 8-Character Backup Code"}
+                          </span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          maxLength={mfaLoginMethod === "totp" ? 6 : 10}
+                          value={mfaLoginCode}
+                          onChange={(e) => setMfaLoginCode(e.target.value.trim().toUpperCase())}
+                          placeholder={mfaLoginMethod === "totp" ? "123456" : "A1B2C3D4"}
+                          className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#d6a735] placeholder-slate-500 font-mono font-bold tracking-widest text-center text-lg focus:outline-none focus:border-[#d6a735] transition-colors"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={isMfaVerifying}
+                        onClick={() => handleVerifyLoginMfa()}
+                        className="w-full py-3 bg-[#d6a735] hover:bg-[#b88c24] disabled:opacity-50 text-[#06261f] font-black rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        {isMfaVerifying ? "Verifying Code..." : "Verify & Complete Sign In"}
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="pt-2 text-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMfaChallenge(null);
+                        setAuthError("");
+                      }}
+                      className="text-xs text-slate-400 hover:text-white underline cursor-pointer"
+                    >
+                      ← Back to username and password
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Sign In Mode (Initial Credentials) */}
+              {authMode === "login" && !mfaChallenge && (
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center gap-1">
@@ -2883,6 +3212,26 @@ export function Header() {
                     )}
                   </button>
 
+                  {/* 1-Tap Passkey / Biometrics Login */}
+                  <div className="pt-2">
+                    <div className="relative flex items-center justify-center mb-3">
+                      <div className="border-t border-[#184d3c] w-full" />
+                      <span className="bg-[#06261f] px-3 text-[11px] text-slate-400 font-bold uppercase tracking-wider">
+                        Or passwordless
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isLoading}
+                      onClick={handlePasskeyDirectLogin}
+                      className="w-full py-2.5 px-3 bg-[#0c3b2e] hover:bg-[#114232] border border-[#184d3c] hover:border-[#d6a735]/50 text-[#f5efdf] text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Zap size={14} className="text-[#d6a735]" />
+                      <span>Sign in with Passkey / Phone Biometrics</span>
+                    </button>
+                  </div>
+
                   <div className="pt-2 text-center text-xs text-slate-400">
                     Don&apos;t have an account?{" "}
                     <button
@@ -2892,7 +3241,7 @@ export function Header() {
                         setRegStep(1);
                         setAuthError("");
                       }}
-                      className="text-[#d6a735] hover:underline font-bold"
+                      className="text-[#d6a735] hover:underline font-bold cursor-pointer"
                     >
                       Register
                     </button>
@@ -3146,82 +3495,87 @@ export function Header() {
               {/* TAB 2: PERSONAL & MOMO */}
               {editActiveTab === "personal" && (
                 <div className="space-y-4">
-                  {/* Phone & MoMo Network Section with Immutable Verified Phone Notice */}
-                  <div className="p-4 bg-[#0c3b2e]/60 border border-[#184d3c] rounded-2xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-xs font-bold text-[#d6a735] uppercase tracking-wider flex items-center gap-1.5">
-                        <Phone size={14} /> Mobile Money &amp; Withdrawal Account
-                      </label>
-                      {isPhoneVerified ? (
-                        <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black rounded-full flex items-center gap-1">
-                          <CheckCircle2 size={11} className="text-emerald-400" /> Phone Verified &amp; Locked
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-black rounded-full flex items-center gap-1">
-                          <AlertCircle size={11} className="text-amber-400" /> Unverified
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center justify-between">
-                          <span>Phone Number *</span>
-                          {isPhoneVerified && (
-                            <span className="text-[10px] text-emerald-400 flex items-center gap-0.5 font-bold">
-                              <Lock size={10} /> Immutable
+                  {/* Phone & MoMo Network Section with Immutable MoMo Line Policy */}
+                  {(() => {
+                    const isPhoneLocked = Boolean(isPhoneVerified || phoneNumber || (editPhone && editPhone.trim().length > 0));
+                    return (
+                      <div className="p-4 bg-[#0c3b2e]/60 border border-[#184d3c] rounded-2xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-xs font-bold text-[#d6a735] uppercase tracking-wider flex items-center gap-1.5">
+                            <Phone size={14} /> Mobile Money &amp; Withdrawal Account
+                          </label>
+                          {isPhoneLocked ? (
+                            <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black rounded-full flex items-center gap-1">
+                              <Lock size={11} className="text-emerald-400" /> MoMo Line (Locked &amp; Permanent)
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-black rounded-full flex items-center gap-1">
+                              <AlertCircle size={11} className="text-amber-400" /> Unverified
                             </span>
                           )}
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="tel"
-                            readOnly={isPhoneVerified}
-                            disabled={isPhoneVerified}
-                            value={editPhone}
-                            onChange={(e) => setEditPhone(e.target.value)}
-                            placeholder="e.g. 0241234567"
-                            className={`w-full px-3.5 py-2.5 rounded-xl text-sm transition-colors ${
-                              isPhoneVerified
-                                ? "bg-[#06261f] border border-[#184d3c] text-emerald-300 font-mono font-bold cursor-not-allowed select-none opacity-90"
-                                : "bg-[#0c3b2e] border border-[#184d3c] text-[#f5efdf] placeholder-slate-500 focus:outline-none focus:border-[#d6a735]"
-                            }`}
-                          />
                         </div>
-                      </div>
 
-                      <div>
-                        <label className="block text-xs font-bold text-[#f5efdf] mb-1.5">
-                          MoMo Network Provider
-                        </label>
-                        <select
-                          value={editMomoNetwork}
-                          onChange={(e) => setEditMomoNetwork(e.target.value)}
-                          className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-sm focus:outline-none focus:border-[#d6a735]"
-                        >
-                          <option value="MTN">MTN Mobile Money</option>
-                          <option value="Telecel">Telecel Cash (Vodafone)</option>
-                          <option value="AT">AT Money (AirtelTigo)</option>
-                        </select>
-                      </div>
-                    </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center justify-between">
+                              <span>Phone Number *</span>
+                              {isPhoneLocked && (
+                                <span className="text-[10px] text-emerald-400 flex items-center gap-0.5 font-bold">
+                                  <Lock size={10} /> Immutable
+                                </span>
+                              )}
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="tel"
+                                readOnly={isPhoneLocked}
+                                disabled={isPhoneLocked}
+                                value={editPhone}
+                                onChange={(e) => setEditPhone(e.target.value)}
+                                placeholder="e.g. 0241234567"
+                                className={`w-full px-3.5 py-2.5 rounded-xl text-sm transition-colors ${
+                                  isPhoneLocked
+                                    ? "bg-[#06261f] border border-[#184d3c] text-emerald-300 font-mono font-bold cursor-not-allowed select-none opacity-90"
+                                    : "bg-[#0c3b2e] border border-[#184d3c] text-[#f5efdf] placeholder-slate-500 focus:outline-none focus:border-[#d6a735]"
+                                }`}
+                              />
+                            </div>
+                          </div>
 
-                    {isPhoneVerified ? (
-                      <div className="p-2.5 bg-emerald-950/60 border border-emerald-800/60 rounded-xl text-[11px] text-emerald-200/90 leading-relaxed flex items-start gap-2">
-                        <ShieldCheck size={16} className="text-emerald-400 shrink-0 mt-0.5" />
-                        <span>
-                          <strong>Security Policy:</strong> A verified phone number cannot be modified. During wallet withdrawals and tournament prize settlements, funds will strictly and automatically be paid out to this Mobile Money line.
-                        </span>
+                          <div>
+                            <label className="block text-xs font-bold text-[#f5efdf] mb-1.5">
+                              MoMo Network Provider
+                            </label>
+                            <select
+                              value={editMomoNetwork}
+                              onChange={(e) => setEditMomoNetwork(e.target.value)}
+                              className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-sm focus:outline-none focus:border-[#d6a735]"
+                            >
+                              <option value="MTN">MTN Mobile Money</option>
+                              <option value="Telecel">Telecel Cash (Vodafone)</option>
+                              <option value="AT">AT Money (AirtelTigo)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {isPhoneLocked ? (
+                          <div className="p-3 bg-emerald-950/70 border border-emerald-800/80 rounded-xl text-[11px] text-emerald-200/90 leading-relaxed flex items-start gap-2.5">
+                            <ShieldCheck size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                            <span>
+                              <strong>MoMo Binding Security:</strong> Your registered phone number ({editPhone || phoneNumber}) is permanently linked as your Mobile Money account for deposits and instant tournament payouts. For financial security and anti-fraud integrity, the registered phone number cannot be modified.
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="p-2.5 bg-amber-950/60 border border-amber-800/60 rounded-xl text-[11px] text-amber-200/90 leading-relaxed flex items-start gap-2">
+                            <AlertCircle size={16} className="text-amber-400 shrink-0 mt-0.5" />
+                            <span>
+                              Your phone number is currently unverified. Enter your accurate 10-digit Ghana MoMo number so it can be verified for seamless cashouts.
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <div className="p-2.5 bg-amber-950/60 border border-amber-800/60 rounded-xl text-[11px] text-amber-200/90 leading-relaxed flex items-start gap-2">
-                        <AlertCircle size={16} className="text-amber-400 shrink-0 mt-0.5" />
-                        <span>
-                          Your phone number is currently unverified. Enter your accurate 10-digit Ghana MoMo number so it can be verified for seamless cashouts.
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                    );
+                  })()}
 
                   {/* Email & Date of Birth & Gender */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -3318,6 +3672,16 @@ export function Header() {
               {/* TAB 3: SECURITY & SESSIONS */}
               {editActiveTab === "security" && (
                 <div className="space-y-4">
+                  {/* Multi-Factor Authentication (MFA), Passkeys & Biometrics */}
+                  <MfaSecurityManager
+                    userToken={userToken}
+                    username={username}
+                    getAuthHeaders={getAuthHeaders}
+                    onMfaUpdated={() => {
+                      fetchNotifications(userToken);
+                    }}
+                  />
+
                   {/* Change Passcode */}
                   <div className="p-4 bg-[#0c3b2e]/60 border border-[#184d3c] rounded-2xl space-y-2.5">
                     <label className="block text-xs font-bold text-[#d6a735] uppercase tracking-wider flex items-center gap-1.5">

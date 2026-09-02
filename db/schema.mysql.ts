@@ -70,6 +70,16 @@ export const profiles = mysqlTable(
     bannedAt: isoTimestamp("banned_at"),
     bannedReason: varchar("banned_reason", { length: 512 }),
 
+    // Multi-Factor Authentication (MFA / 2FA)
+    mfaEnabled: tinyint("mfa_enabled").notNull().default(0),
+    mfaEnrolledAt: isoTimestamp("mfa_enrolled_at"),
+    mfaPreferredMethod: varchar("mfa_preferred_method", { length: 32 }),
+    totpSecret: varchar("totp_secret", { length: 128 }),
+    totpEnabled: tinyint("totp_enabled").notNull().default(0),
+    totpVerifiedAt: isoTimestamp("totp_verified_at"),
+    passkeysJson: text("passkeys_json"),
+    backupCodesJson: text("backup_codes_json"),
+
     createdAt: isoTimestamp("created_at").notNull(),
     updatedAt: isoTimestamp("updated_at").notNull(),
   },

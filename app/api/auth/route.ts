@@ -7,11 +7,20 @@ import { getAdminPermissions } from "@/lib/permissions";
 
 const cleanStr = (v: unknown) => securityService.sanitizeInput(String(v ?? "")).slice(0, 80);
 
+import {
+  createMfaChallenge,
+  verifyTotpCode,
+  verifyAndConsumeBackupCode,
+  getSanitizedMfaSettings,
+} from "@/lib/mfa";
+
 // Helper to strip sensitive secrets before sending profile to client
 function sanitizeProfileResponse(profile: Profile) {
   const copy = { ...profile };
   delete copy.passcode;
   delete copy.passwordSalt;
+  delete copy.totpSecret;
+  delete copy.backupCodes;
   return copy;
 }
 
@@ -75,6 +84,7 @@ export async function GET(req: NextRequest) {
     profile: sanitized,
     user: user || null,
     adminPermissions: adminPerms,
+    mfaSettings: getSanitizedMfaSettings(profile),
     roleTitle: sanitized.roleTitle || (sanitized.role === "super_admin" ? "Super Admin" : sanitized.role === "admin" ? "Administrator" : undefined),
     isSuperAdmin: sanitized.isSuperAdmin,
     sessionToken: session ? session.token : undefined,
@@ -179,16 +189,14 @@ export async function POST(req: NextRequest) {
         user = await dbRepository.getUserByPhone(existingProfile.phoneNumber);
       }
 
-      // Check if phone number is locked (verified)
-      const isPhoneVerified = Boolean(user?.phoneVerifiedAt || existingProfile.phoneNumber);
+      // Check if phone number is locked (registered or verified)
+      const existingPhone = existingProfile.phoneNumber || user?.phoneNumber;
       const requestedPhone = body.phoneNumber !== undefined ? cleanStr(body.phoneNumber || body.phone) : undefined;
-      if (requestedPhone && requestedPhone !== existingProfile.phoneNumber && requestedPhone !== user?.phoneNumber) {
-        if (isPhoneVerified) {
-          return NextResponse.json(
-            { error: "Verified phone numbers cannot be changed for anti-fraud and security reasons." },
-            { status: 400 }
-          );
-        }
+      if (requestedPhone && existingPhone && requestedPhone !== existingPhone) {
+        return NextResponse.json(
+          { error: "The registered phone number is permanently bound to your Mobile Money account and cannot be modified." },
+          { status: 400 }
+        );
       }
 
       // Validate username length & uniqueness if username is being changed
@@ -389,6 +397,49 @@ export async function POST(req: NextRequest) {
 
       if (!isValid) {
         return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+      }
+
+      // Check if Multi-Factor Authentication (MFA) is enabled for this account
+      if (profile.mfaEnabled && (profile.totpEnabled || (profile.passkeys && profile.passkeys.length > 0))) {
+        const mfaCode = body.mfaCode ? String(body.mfaCode).trim() : undefined;
+        const mfaCredentialId = body.mfaCredentialId ? String(body.mfaCredentialId).trim() : undefined;
+        const mfaMethod = body.mfaMethod ? String(body.mfaMethod).trim() : undefined;
+        let mfaPassed = false;
+
+        if (mfaMethod === "totp" && mfaCode && profile.totpSecret) {
+          mfaPassed = verifyTotpCode(profile.totpSecret, mfaCode);
+          if (!mfaPassed) {
+            return NextResponse.json({ error: "Invalid 6-digit authenticator code." }, { status: 401 });
+          }
+        } else if ((mfaMethod === "passkey" || mfaMethod === "biometric") && mfaCredentialId) {
+          mfaPassed = (profile.passkeys || []).some((pk) => pk.id === mfaCredentialId);
+          if (!mfaPassed) {
+            return NextResponse.json({ error: "Unrecognized Passkey credential." }, { status: 401 });
+          }
+        } else if (mfaMethod === "backup" && mfaCode && profile.backupCodes) {
+          const result = verifyAndConsumeBackupCode(profile.backupCodes, mfaCode);
+          if (result.valid) {
+            mfaPassed = true;
+            profile.backupCodes = result.remainingCodes;
+            await dbRepository.saveProfile(profile);
+          } else {
+            return NextResponse.json({ error: "Invalid emergency backup code." }, { status: 401 });
+          }
+        }
+
+        if (!mfaPassed) {
+          const mfaTicket = createMfaChallenge(profile.token);
+          return NextResponse.json({
+            mfaRequired: true,
+            ticket: mfaTicket,
+            username: profile.username,
+            preferredMethod: profile.mfaPreferredMethod || (profile.passkeys?.length ? "passkey" : "authenticator"),
+            hasPasskeys: Boolean(profile.passkeys && profile.passkeys.length > 0),
+            hasTotp: Boolean(profile.totpEnabled),
+            hasBackupCodes: Boolean(profile.backupCodes && profile.backupCodes.length > 0),
+            passkeys: (profile.passkeys || []).map((p) => ({ id: p.id, name: p.name, type: p.type })),
+          });
+        }
       }
 
       // Create server session with HttpOnly cookie & CSRF token
