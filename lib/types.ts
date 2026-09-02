@@ -261,7 +261,12 @@ export type AdminSettings = {
   paystackMode?: "test" | "live";
   paystackWebhookSecret?: string;
   paystackCurrency?: string;
-  // Payout Gateways & PalmPay Integration
+  // Payment Gateways (Paystack & PalmPay Integration)
+  activeDepositProvider?: "paystack" | "palmpay";
+  depositProvidersEnabled?: {
+    paystack?: boolean;
+    palmpay?: boolean;
+  };
   activePayoutProvider?: "paystack" | "palmpay";
   payoutProvidersEnabled?: {
     paystack?: boolean;

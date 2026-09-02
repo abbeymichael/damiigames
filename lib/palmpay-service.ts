@@ -59,6 +59,40 @@ export interface PalmpayTransferResult {
   error?: string;
 }
 
+export interface PalmpayCreateOrderParams {
+  orderId: string; // The unique Order Number of the merchant (max 32 chars)
+  amountGhs: number; // Transaction amount in GHS. Will be sent as cent/pesewas (100 = 1 GHS). Min: 100
+  title?: string; // Order title (max 100)
+  description?: string; // Order description (max 200)
+  notifyUrl?: string; // Receive transaction result notification url (max 200)
+  callBackUrl?: string; // After payment completed, H5 page returns this url (max 200)
+  orderExpireTime?: number; // Validity duration in seconds (1800s to 86400s)
+  goodsDetails?: string | Array<any>; // JSONArray string format
+  customerInfo?: string | {
+    userId?: string;
+    userName?: string;
+    phone?: string;
+    email?: string;
+  };
+  remark?: string; // Remarks (max 200)
+  currency?: string; // Currency: strictly "GHS" for Ghana
+}
+
+export interface PalmpayCreateOrderResult {
+  success: boolean;
+  orderNo?: string;
+  orderStatus?: number;
+  message?: string;
+  checkoutUrl?: string;
+  payToken?: string;
+  sdkSessionId?: string;
+  sdkSignKey?: string;
+  currency?: string;
+  orderAmount?: number;
+  raw?: any;
+  error?: string;
+}
+
 export async function getEffectivePalmpayConfig(): Promise<PalmpayConfig> {
   let settings: AdminSettings | null = null;
   try {
@@ -450,6 +484,187 @@ export const palmpayService = {
           orderNo,
           message: `[Sandbox Simulated] Transfer queued for ${params.recipientPhone} (${config.currency} ${params.amount.toFixed(2)})`,
           data: { simulated: true, originalError: err.message },
+        };
+      }
+      throw err;
+    }
+  },
+
+  /**
+   * Create Order for Pay-in or Deposits via PalmPay API
+   * Request Path: /api/v2/payment/merchant/createorder
+   * Pulls up H5 checkoutUrl or parameters required for SDK payment.
+   */
+  async createOrder(params: PalmpayCreateOrderParams): Promise<PalmpayCreateOrderResult> {
+    const config = await getEffectivePalmpayConfig();
+    if (!config.merchantId || !config.bearerToken) {
+      throw new Error("PalmPay is not fully configured (Merchant ID and Bearer Token required).");
+    }
+
+    const cleanOrderId = (params.orderId || `ORD${Date.now().toString(36)}${crypto.randomBytes(4).toString("hex")}`).slice(0, 32);
+    const amountMinor = Math.round(params.amountGhs * 100);
+    const nowMs = Date.now();
+    const nonceStr = crypto.randomBytes(16).toString("hex");
+
+    // Format goodsDetails as JSON string
+    let goodsDetailsStr = '[{"goodsId":"marbles_deposit"}]';
+    if (typeof params.goodsDetails === "string" && params.goodsDetails.trim()) {
+      goodsDetailsStr = params.goodsDetails.trim();
+    } else if (Array.isArray(params.goodsDetails) && params.goodsDetails.length > 0) {
+      goodsDetailsStr = JSON.stringify(params.goodsDetails);
+    }
+
+    // Format customerInfo as JSON string
+    let customerInfoStr = "{}";
+    if (typeof params.customerInfo === "string" && params.customerInfo.trim()) {
+      customerInfoStr = params.customerInfo.trim();
+    } else if (typeof params.customerInfo === "object" && params.customerInfo !== null) {
+      customerInfoStr = JSON.stringify(params.customerInfo);
+    }
+
+    const payload: Record<string, any> = {
+      requestTime: nowMs,
+      version: "V1.1",
+      nonceStr,
+      amount: Math.max(100, amountMinor),
+      notifyUrl: params.notifyUrl || `${config.baseUrl}/api/wallet/palmpay-webhook`,
+      orderId: cleanOrderId,
+      title: (params.title || "Damii Marbles Top-up").slice(0, 100),
+      description: (params.description || "Damii Game Wallet Deposit").slice(0, 200),
+      currency: config.currency || "GHS",
+      callBackUrl: params.callBackUrl || "https://damii.gh/wallet",
+      goodsDetails: goodsDetailsStr,
+      customerInfo: customerInfoStr,
+      remark: (params.remark || "Wallet Deposit GHS").slice(0, 200),
+    };
+
+    if (params.orderExpireTime && params.orderExpireTime >= 1800 && params.orderExpireTime <= 86400) {
+      payload.orderExpireTime = params.orderExpireTime;
+    }
+
+    const signature = generatePalmpaySignature(payload, config);
+    const targetUrl = `${config.baseUrl}/api/v2/payment/merchant/createorder`;
+
+    const headers: Record<string, string> = {
+      Accept: "application/json, text/plain, */*",
+      "Content-Type": "application/json",
+      CountryCode: config.countryCode || "GH",
+      Authorization: `Bearer ${config.bearerToken.trim()}`,
+    };
+    if (signature) headers["Signature"] = signature;
+
+    try {
+      const res = await fetch(targetUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (res.ok && (json?.respCode === "00000000" || json?.respCode === "000000" || json?.code === 0 || json?.status === "success") && json?.data) {
+        return {
+          success: true,
+          orderNo: json.data.orderNo,
+          orderStatus: json.data.orderStatus,
+          message: json.respMsg || json.data.message || "Order created successfully",
+          checkoutUrl: json.data.checkoutUrl,
+          payToken: json.data.payToken,
+          sdkSessionId: json.data.sdkSessionId,
+          sdkSignKey: json.data.sdkSignKey,
+          currency: json.data.currency || config.currency || "GHS",
+          orderAmount: json.data.orderAmount,
+          raw: json,
+        };
+      }
+
+      // If in sandbox mode and the API returns simulation or specific mock status
+      if (config.mode === "sandbox") {
+        const mockOrderNo = json?.data?.orderNo || `SBX-ORD-${Date.now()}`;
+        const mockCheckout = json?.data?.checkoutUrl || `${params.callBackUrl || "/wallet"}?palmpay_sandbox=true&orderNo=${mockOrderNo}&ref=${cleanOrderId}`;
+        return {
+          success: true,
+          orderNo: mockOrderNo,
+          orderStatus: 1,
+          message: `[Sandbox] Order created successfully: ${json?.respMsg || "ready"}`,
+          checkoutUrl: mockCheckout,
+          payToken: json?.data?.payToken || Buffer.from(JSON.stringify({ orderNo: mockOrderNo, simulated: true })).toString("base64"),
+          sdkSessionId: json?.data?.sdkSessionId || String(Date.now()),
+          sdkSignKey: json?.data?.sdkSignKey || "sandbox-key",
+          currency: config.currency || "GHS",
+          orderAmount: Math.max(100, amountMinor),
+          raw: json || { simulated: true },
+        };
+      }
+
+      const errMsg = json?.respMsg || json?.message || `PalmPay createorder failed (HTTP ${res.status})`;
+      throw new Error(errMsg);
+    } catch (err: any) {
+      if (config.mode === "sandbox") {
+        const mockOrderNo = `SBX-ORD-${Date.now()}`;
+        const mockCheckout = `${params.callBackUrl || "/wallet"}?palmpay_sandbox=true&orderNo=${mockOrderNo}&ref=${cleanOrderId}`;
+        return {
+          success: true,
+          orderNo: mockOrderNo,
+          orderStatus: 1,
+          message: `[Sandbox Simulated] Order created successfully for ${config.currency} ${params.amountGhs.toFixed(2)}`,
+          checkoutUrl: mockCheckout,
+          payToken: Buffer.from(JSON.stringify({ orderNo: mockOrderNo, simulated: true })).toString("base64"),
+          sdkSessionId: String(Date.now()),
+          sdkSignKey: "sandbox-key",
+          currency: config.currency || "GHS",
+          orderAmount: Math.max(100, amountMinor),
+          raw: { simulated: true, originalError: err.message },
+        };
+      }
+      throw err;
+    }
+  },
+
+  /**
+   * Query status of an order via PalmPay API
+   */
+  async queryOrder(params: { orderId?: string; orderNo?: string }): Promise<any> {
+    const config = await getEffectivePalmpayConfig();
+    if (!config.merchantId || !config.bearerToken) {
+      throw new Error("PalmPay is not fully configured.");
+    }
+
+    const payload: Record<string, any> = {
+      merchantId: config.merchantId,
+    };
+    if (params.orderId) payload.orderId = params.orderId;
+    if (params.orderNo) payload.orderNo = params.orderNo;
+
+    const signature = generatePalmpaySignature(payload, config);
+    const targetUrl = `${config.baseUrl}/api/v2/payment/merchant/queryorder`;
+
+    const headers: Record<string, string> = {
+      Accept: "application/json, text/plain, */*",
+      "Content-Type": "application/json",
+      CountryCode: config.countryCode || "GH",
+      Authorization: `Bearer ${config.bearerToken.trim()}`,
+    };
+    if (signature) headers["Signature"] = signature;
+
+    try {
+      const res = await fetch(targetUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json().catch(() => null);
+      return json;
+    } catch (err: any) {
+      if (config.mode === "sandbox") {
+        return {
+          respCode: "00000000",
+          respMsg: "success",
+          data: {
+            orderNo: params.orderNo || `SBX-${params.orderId}`,
+            orderStatus: 1,
+            message: "success (simulated)",
+          },
         };
       }
       throw err;

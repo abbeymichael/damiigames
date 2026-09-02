@@ -469,6 +469,8 @@ export async function POST(req: NextRequest) {
         paystackWebhookSecret,
         paystackCurrency,
         autoPayoutEnabled,
+        activeDepositProvider,
+        depositProvidersEnabled,
         activePayoutProvider,
         payoutProvidersEnabled,
         palmpayMerchantId,
@@ -508,6 +510,8 @@ export async function POST(req: NextRequest) {
         paystackWebhookSecret: paystackWebhookSecret !== undefined ? String(paystackWebhookSecret).trim() : undefined,
         paystackCurrency: paystackCurrency !== undefined ? String(paystackCurrency).trim().toUpperCase() : undefined,
         autoPayoutEnabled: autoPayoutEnabled !== undefined ? Boolean(autoPayoutEnabled) : undefined,
+        activeDepositProvider: activeDepositProvider !== undefined ? activeDepositProvider : undefined,
+        depositProvidersEnabled: depositProvidersEnabled !== undefined ? depositProvidersEnabled : undefined,
         activePayoutProvider: activePayoutProvider !== undefined ? activePayoutProvider : undefined,
         payoutProvidersEnabled: payoutProvidersEnabled !== undefined ? payoutProvidersEnabled : undefined,
         palmpayMerchantId: palmpayMerchantId !== undefined ? String(palmpayMerchantId).trim() : undefined,
@@ -619,6 +623,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, ...res });
     }
 
+    if (action === "test_palmpay_create_order" || action === "palmpay_create_order") {
+      const canViewSettings = await hasPermission(token, "system.settings.view");
+      const canViewPayments = await hasPermission(token, "payments.view");
+      if (!isSecretValid && !canViewSettings && !canViewPayments) {
+        return NextResponse.json(
+          { error: "403 Forbidden: 'system.settings.view' or 'payments.view' permission required" },
+          { status: 403 }
+        );
+      }
+
+      const {
+        orderId,
+        amountGhs,
+        title,
+        description,
+        notifyUrl,
+        callBackUrl,
+        currency,
+        goodsDetails,
+        customerInfo,
+        remark,
+      } = body;
+
+      const res = await palmpayService.createOrder({
+        orderId: String(orderId || `TEST${Date.now().toString(36)}`).slice(0, 32),
+        amountGhs: Number(amountGhs || 2),
+        title: title || "Test Deposit Order",
+        description: description || "PalmPay Create Order API Verification",
+        notifyUrl: notifyUrl || undefined,
+        callBackUrl: callBackUrl || undefined,
+        currency: currency || "GHS",
+        goodsDetails: goodsDetails || '[{"goodsId":"test_1"}]',
+        customerInfo: customerInfo || '{"userId":"admin_test","userName":"Admin Test","phone":"0240000000","email":"admin@damii.gh"}',
+        remark: remark || "Test PalmPay Pay-in",
+      });
+
+      return NextResponse.json({ success: true, ...res });
+    }
+
     if (action === "process_payout" || action === "process_withdrawal") {
       const { transactionId, txId, reference, provider } = body;
       const target = transactionId || txId || reference;
@@ -647,10 +690,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, ...res });
     }
 
-    if (action === "verify_deposit" || action === "verify_paystack_deposit") {
-      const { reference } = body;
+    if (action === "verify_deposit" || action === "verify_paystack_deposit" || action === "verify_palmpay_deposit") {
+      const { reference, provider } = body;
       if (!reference) return NextResponse.json({ error: "Reference required" }, { status: 400 });
-      const res = await walletService.verifyAndCreditPaystack(String(reference));
+      const refStr = String(reference);
+      if (provider === "palmpay" || action === "verify_palmpay_deposit" || refStr.startsWith("PLM") || refStr.startsWith("ORD") || refStr.startsWith("SBX-ORD")) {
+        const res = await walletService.verifyAndCreditPalmpay(refStr);
+        return NextResponse.json({ success: true, ...res });
+      }
+      const res = await walletService.verifyAndCreditPaystack(refStr);
       return NextResponse.json({ success: true, ...res });
     }
 

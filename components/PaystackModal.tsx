@@ -21,6 +21,7 @@ export interface PaystackModalProps {
   amountGhs: number;
   points: number;
   token: string | null;
+  provider?: "paystack" | "palmpay";
   onSuccess: (reference: string, message?: string) => void;
 }
 
@@ -32,6 +33,7 @@ export function PaystackModal({
   amountGhs,
   points,
   token,
+  provider,
   onSuccess,
 }: PaystackModalProps) {
   const [iframeLoading, setIframeLoading] = useState(true);
@@ -39,6 +41,9 @@ export function PaystackModal({
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  const isPalmpay = provider === "palmpay" || reference?.startsWith("PLM") || reference?.startsWith("ORD");
+  const providerLabel = isPalmpay ? "PalmPay" : "Paystack";
 
   // Poll for verification in the background while modal is open
   useEffect(() => {
@@ -105,7 +110,7 @@ export function PaystackModal({
 
       if (res.ok && data.success) {
         if (data.pending) {
-          setErrorMessage("Payment authorization is still pending on Paystack. Complete the prompt on your phone.");
+          setErrorMessage(`Payment authorization is still pending on ${providerLabel}. Complete the prompt on your phone.`);
         } else {
           setIsSuccess(true);
           setTimeout(() => {
@@ -113,7 +118,7 @@ export function PaystackModal({
           }, 1200);
         }
       } else {
-        setErrorMessage(data.error || "Unable to verify payment status yet. Please ensure payment is completed.");
+        setErrorMessage(data.error || `Unable to verify ${providerLabel} payment status yet. Please ensure payment is completed.`);
       }
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : "Verification failed");
@@ -142,7 +147,7 @@ export function PaystackModal({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-sm sm:text-base font-bold text-white tracking-wide">
-                  Paystack Secure Checkout
+                  {providerLabel} Secure Checkout
                 </h3>
                 <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-800/60">
                   <ShieldCheck size={11} /> 256-bit Encrypted
@@ -169,7 +174,7 @@ export function PaystackModal({
           </button>
         </div>
 
-        {/* Content Body: Embedded Paystack Frame or Success State */}
+        {/* Content Body: Embedded Gateway Frame or Success State */}
         <div className="relative flex-1 min-h-[480px] sm:min-h-[560px] bg-[#031511] flex flex-col">
           {isSuccess ? (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center animate-in zoom-in-95 duration-200">
@@ -189,7 +194,7 @@ export function PaystackModal({
               {iframeLoading && (
                 <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#031511] gap-3 text-slate-400">
                   <RefreshCw size={28} className="animate-spin text-[#d6a735]" />
-                  <span className="text-xs font-medium tracking-wide">Connecting to Paystack...</span>
+                  <span className="text-xs font-medium tracking-wide">Connecting to {providerLabel}...</span>
                 </div>
               )}
 
@@ -197,7 +202,7 @@ export function PaystackModal({
                 <iframe
                   ref={iframeRef}
                   src={authorizationUrl}
-                  title="Paystack Checkout"
+                  title={`${providerLabel} Checkout`}
                   className="w-full h-full flex-1 border-0 rounded-none bg-white min-h-[480px] sm:min-h-[560px]"
                   allow="payment; camera; microphone"
                   onLoad={() => setIframeLoading(false)}

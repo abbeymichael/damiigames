@@ -99,15 +99,23 @@ export default function WalletPage() {
   const [error, setError] = useState("");
   const [copiedRef, setCopiedRef] = useState<string | null>(null);
 
-  // Active Paystack Checkout State
+  // Active Checkout State
   const [pendingPayment, setPendingPayment] = useState<{
     reference: string;
     authorizationUrl: string;
     amountGhs: number;
     points: number;
+    provider?: "paystack" | "palmpay";
   } | null>(null);
   const [showPaystackModal, setShowPaystackModal] = useState(false);
   const [verifyingPayment, setVerifyingPayment] = useState(false);
+
+  // Deposit provider preferences
+  const [selectedDepositProvider, setSelectedDepositProvider] = useState<"paystack" | "palmpay">("paystack");
+  const [depositProvidersEnabled, setDepositProvidersEnabled] = useState<{ paystack: boolean; palmpay: boolean }>({
+    paystack: true,
+    palmpay: true,
+  });
 
   useEffect(() => {
     loadPaystackScript().catch(() => {});
@@ -146,6 +154,17 @@ export default function WalletPage() {
           maxWithdrawalGhs: data.settings.maxWithdrawalGhs ?? 2000,
           maxDailyWithdrawalGhs: data.settings.maxDailyWithdrawalGhs ?? 5000,
         });
+
+        if (data.settings.activeDepositProvider) {
+          const active = data.settings.activeDepositProvider === "palmpay" ? "palmpay" : "paystack";
+          setSelectedDepositProvider(active);
+        }
+        if (data.settings.depositProvidersEnabled) {
+          setDepositProvidersEnabled({
+            paystack: data.settings.depositProvidersEnabled.paystack !== false,
+            palmpay: data.settings.depositProvidersEnabled.palmpay !== false,
+          });
+        }
       }
     } catch {
       // Retain existing state
@@ -272,45 +291,51 @@ export default function WalletPage() {
           token: activeTok,
           amountGhs: topupAmountGhs,
           email,
+          provider: selectedDepositProvider,
           callbackUrl: `${window.location.origin}/wallet`,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to initialize Paystack payment");
+      if (!res.ok) throw new Error(data.error || "Failed to initialize payment order");
 
       if (data.authorizationUrl) {
+        const prov = data.provider === "palmpay" ? "palmpay" : selectedDepositProvider;
         setPendingPayment({
           reference: data.reference,
           authorizationUrl: data.authorizationUrl,
           amountGhs: topupAmountGhs,
           points: topupAmountGhs,
+          provider: prov,
         });
 
-        // Open on-page Paystack popup modal
+        // Open on-page payment popup modal
         setShowPaystackModal(true);
-        setMessage(`Paystack checkout ready for GH₵ ${topupAmountGhs}.00. Complete your payment in the popup.`);
+        const provLabel = prov === "palmpay" ? "PalmPay" : "Paystack";
+        setMessage(`${provLabel} checkout ready for GH₵ ${topupAmountGhs}.00. Complete your payment in the popup.`);
 
-        // Attempt Paystack Pop inline trigger if available
-        openPaystackInlinePopup({
-          accessCode: data.accessCode,
-          reference: data.reference,
-          authorizationUrl: data.authorizationUrl,
-          email: email || undefined,
-          amountGhs: topupAmountGhs,
-          onSuccess: (ref) => {
-            setShowPaystackModal(false);
-            verifyPaymentRef(activeTok, ref);
-          },
-          onCancel: () => {
-            // User closed native popup
-          },
-        }).then((openedInline) => {
-          if (openedInline) {
-            setShowPaystackModal(false);
-          }
-        });
+        // If Paystack, attempt Paystack Pop inline trigger if available
+        if (prov === "paystack") {
+          openPaystackInlinePopup({
+            accessCode: data.accessCode,
+            reference: data.reference,
+            authorizationUrl: data.authorizationUrl,
+            email: email || undefined,
+            amountGhs: topupAmountGhs,
+            onSuccess: (ref) => {
+              setShowPaystackModal(false);
+              verifyPaymentRef(activeTok, ref);
+            },
+            onCancel: () => {
+              // User closed native popup
+            },
+          }).then((openedInline) => {
+            if (openedInline) {
+              setShowPaystackModal(false);
+            }
+          });
+        }
       } else {
-        throw new Error("No authorization URL returned by Paystack");
+        throw new Error("No authorization URL returned by payment gateway");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Purchase error");
@@ -942,6 +967,54 @@ export default function WalletPage() {
                             placeholder="player@damii.game"
                             className="w-full bg-[#041c17] border border-[#1a5e48] focus:border-[#d6a735] text-[#f5efdf] text-sm rounded-2xl px-4 py-3 focus:outline-none transition-all placeholder:text-slate-600"
                           />
+                        </div>
+
+                        {/* Payment Gateway Selector */}
+                        <div className="space-y-2">
+                          <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider">
+                            Payment Gateway
+                          </label>
+                          <div className="grid grid-cols-2 gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedDepositProvider("palmpay")}
+                              className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between ${
+                                selectedDepositProvider === "palmpay"
+                                  ? "bg-purple-950/40 border-purple-500 shadow-md shadow-purple-900/20"
+                                  : "bg-[#041c17] border-[#1a5e48] opacity-75 hover:opacity-100"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-sm text-purple-300">PalmPay</span>
+                                {selectedDepositProvider === "palmpay" && (
+                                  <span className="w-2 h-2 rounded-full bg-purple-400" />
+                                )}
+                              </div>
+                              <span className="text-[10px] text-slate-400 mt-1">
+                                Direct MoMo / PalmPay App
+                              </span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setSelectedDepositProvider("paystack")}
+                              className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between ${
+                                selectedDepositProvider === "paystack"
+                                  ? "bg-emerald-950/40 border-emerald-500 shadow-md shadow-emerald-900/20"
+                                  : "bg-[#041c17] border-[#1a5e48] opacity-75 hover:opacity-100"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-sm text-emerald-300">Paystack</span>
+                                {selectedDepositProvider === "paystack" && (
+                                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                                )}
+                              </div>
+                              <span className="text-[10px] text-slate-400 mt-1">
+                                Mobile Money & Cards
+                              </span>
+                            </button>
+                          </div>
                         </div>
 
                         {/* Submit CTA */}
@@ -1585,6 +1658,7 @@ export default function WalletPage() {
           amountGhs={pendingPayment.amountGhs}
           points={pendingPayment.points}
           token={token || getSessionToken()}
+          provider={pendingPayment.provider}
           onSuccess={(ref, msg) => {
             setShowPaystackModal(false);
             setMessage(msg || `GH₵ ${pendingPayment.amountGhs}.00 successfully credited!`);

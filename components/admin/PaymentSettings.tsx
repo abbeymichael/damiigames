@@ -73,6 +73,21 @@ export function PaymentSettings({ token, adminSecret, canManage = true, onSettin
     message?: string;
   } | null>(null);
 
+  // PalmPay Create Order Test
+  const [copiedPalmpayWebhook, setCopiedPalmpayWebhook] = useState(false);
+  const [palmpayOrderTestLoading, setPalmpayOrderTestLoading] = useState(false);
+  const [palmpayOrderTestAmount, setPalmpayOrderTestAmount] = useState(5);
+  const [palmpayOrderTestResult, setPalmpayOrderTestResult] = useState<{
+    success: boolean;
+    orderNo?: string;
+    orderId?: string;
+    checkoutUrl?: string;
+    respCode?: string;
+    respMsg?: string;
+    raw?: any;
+    error?: string;
+  } | null>(null);
+
   const [formData, setFormData] = useState({
     // Paystack
     paystackSecretKey: "",
@@ -87,6 +102,13 @@ export function PaymentSettings({ token, adminSecret, canManage = true, onSettin
     payoutProvidersEnabled: {
       paystack: true,
       palmpay: false,
+    },
+
+    // Deposit / Pay-In Provider Toggles
+    activeDepositProvider: "paystack" as "paystack" | "palmpay",
+    depositProvidersEnabled: {
+      paystack: true,
+      palmpay: true,
     },
 
     // PalmPay
@@ -135,6 +157,12 @@ export function PaymentSettings({ token, adminSecret, canManage = true, onSettin
           payoutProvidersEnabled: {
             paystack: s.payoutProvidersEnabled ? Boolean(s.payoutProvidersEnabled.paystack !== false) : true,
             palmpay: s.payoutProvidersEnabled ? Boolean(s.payoutProvidersEnabled.palmpay) : false,
+          },
+
+          activeDepositProvider: (s.activeDepositProvider === "palmpay" ? "palmpay" : "paystack") as "paystack" | "palmpay",
+          depositProvidersEnabled: {
+            paystack: s.depositProvidersEnabled ? Boolean(s.depositProvidersEnabled.paystack !== false) : true,
+            palmpay: s.depositProvidersEnabled ? Boolean(s.depositProvidersEnabled.palmpay !== false) : true,
           },
 
           palmpayMerchantId: s.palmpayMerchantId || "",
@@ -195,6 +223,9 @@ export function PaymentSettings({ token, adminSecret, canManage = true, onSettin
 
           activePayoutProvider: formData.activePayoutProvider,
           payoutProvidersEnabled: formData.payoutProvidersEnabled,
+
+          activeDepositProvider: formData.activeDepositProvider,
+          depositProvidersEnabled: formData.depositProvidersEnabled,
 
           palmpayMerchantId: formData.palmpayMerchantId.trim(),
           palmpayBearerToken: formData.palmpayBearerToken.trim(),
@@ -377,6 +408,46 @@ export function PaymentSettings({ token, adminSecret, canManage = true, onSettin
       navigator.clipboard.writeText(palmpayCurlSnippet);
       setCopiedCurl(true);
       setTimeout(() => setCopiedCurl(false), 2500);
+    }
+  };
+
+  const palmpayWebhookUrl = typeof window !== "undefined" ? `${window.location.origin}/api/wallet/palmpay-webhook` : "/api/wallet/palmpay-webhook";
+
+  const handleCopyPalmpayWebhook = () => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(palmpayWebhookUrl);
+      setCopiedPalmpayWebhook(true);
+      setTimeout(() => setCopiedPalmpayWebhook(false), 2500);
+    }
+  };
+
+  const handleTestPalmpayCreateOrder = async () => {
+    setPalmpayOrderTestLoading(true);
+    setPalmpayOrderTestResult(null);
+    try {
+      const activeToken = token || getSessionToken() || "";
+      const headers = getAuthHeaders();
+      if (adminSecret) headers["x-admin-secret"] = adminSecret;
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          action: "test_palmpay_create_order",
+          token: activeToken,
+          amountGhs: Number(palmpayOrderTestAmount) || 5,
+          title: "Admin Deposit Test",
+          description: "PalmPay Create Order API Verification",
+        }),
+      });
+      const data = await res.json();
+      setPalmpayOrderTestResult(data);
+    } catch (err: any) {
+      setPalmpayOrderTestResult({
+        success: false,
+        error: err.message || "Failed to reach server for test order",
+      });
+    } finally {
+      setPalmpayOrderTestLoading(false);
     }
   };
 
@@ -656,6 +727,145 @@ export function PaymentSettings({ token, adminSecret, canManage = true, onSettin
                   <p className="text-[11px] text-slate-400 mt-0.5">
                     Automatically trigger payout via the active provider as soon as a player submits a withdrawal request (subject to risk limits).
                   </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Deposit & Pay-in Gateway Routing Card */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6">
+              <div>
+                <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                  <Coins size={16} className="text-amber-400" />
+                  Active Default Deposit Provider (Pay-In Rails)
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Choose which payment gateway is highlighted and selected by default when players top up marbles into their wallet.
+                </p>
+              </div>
+
+              {/* Deposit Provider Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Paystack Deposit Card */}
+                <div
+                  onClick={() => setFormData((prev) => ({ ...prev, activeDepositProvider: "paystack" }))}
+                  className={`p-5 rounded-2xl border cursor-pointer transition-all ${
+                    formData.activeDepositProvider === "paystack"
+                      ? "bg-emerald-950/30 border-emerald-500 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500/30"
+                      : "bg-slate-950/60 border-slate-800 hover:border-slate-700"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
+                        <CreditCard size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-100">Paystack Checkout</h4>
+                        <span className="text-[11px] text-slate-400">Ghana MoMo & Card Pay-in</span>
+                      </div>
+                    </div>
+                    <Radio size={18} className={formData.activeDepositProvider === "paystack" ? "text-emerald-400" : "text-slate-600"} />
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Uses Paystack Transaction Initialize API. Players pay via mobile money (MTN/Telecel/AT) or bank cards in GHS.
+                  </p>
+                  <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-400">Enabled status:</span>
+                    <span className={`text-[11px] font-bold ${formData.depositProvidersEnabled.paystack ? "text-emerald-400" : "text-slate-500"}`}>
+                      {formData.depositProvidersEnabled.paystack ? "✓ Enabled" : "✕ Disabled"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* PalmPay Deposit Card */}
+                <div
+                  onClick={() => setFormData((prev) => ({ ...prev, activeDepositProvider: "palmpay" }))}
+                  className={`p-5 rounded-2xl border cursor-pointer transition-all ${
+                    formData.activeDepositProvider === "palmpay"
+                      ? "bg-purple-950/30 border-purple-500 shadow-lg shadow-purple-500/10 ring-1 ring-purple-500/30"
+                      : "bg-slate-950/60 border-slate-800 hover:border-slate-700"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-purple-500/10 border border-purple-500/20 rounded-xl text-purple-400">
+                        <Building size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-100">PalmPay Create Order</h4>
+                        <span className="text-[11px] text-slate-400">Merchant Pay-in / Direct Order</span>
+                      </div>
+                    </div>
+                    <Radio size={18} className={formData.activeDepositProvider === "palmpay" ? "text-purple-400" : "text-slate-600"} />
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Uses PalmPay <code className="text-purple-300 font-mono">/api/v2/payment/merchant/createorder</code> API for instant pay-in order creation and checkout.
+                  </p>
+                  <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-400">Enabled status:</span>
+                    <span className={`text-[11px] font-bold ${formData.depositProvidersEnabled.palmpay ? "text-purple-400" : "text-slate-500"}`}>
+                      {formData.depositProvidersEnabled.palmpay ? "✓ Enabled" : "✕ Disabled"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Turn ON / OFF individual deposit providers */}
+              <div className="pt-4 border-t border-slate-800 space-y-4">
+                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  Deposit Gateway Availability (Turn On / Off in Wallet)
+                </h4>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Toggle Paystack Deposit */}
+                  <div className="flex items-start gap-3 p-4 bg-slate-950/60 border border-slate-800 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          depositProvidersEnabled: {
+                            ...prev.depositProvidersEnabled,
+                            paystack: !prev.depositProvidersEnabled.paystack,
+                          },
+                        }))
+                      }
+                      className="mt-0.5 text-emerald-400 hover:text-emerald-300 transition"
+                    >
+                      {formData.depositProvidersEnabled.paystack ? <CheckSquare size={18} /> : <Square size={18} className="text-slate-600" />}
+                    </button>
+                    <div>
+                      <span className="text-xs font-bold text-slate-200 block">Enable Paystack Deposits</span>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Players can select Paystack when adding marbles to their balance.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Toggle PalmPay Deposit */}
+                  <div className="flex items-start gap-3 p-4 bg-slate-950/60 border border-slate-800 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          depositProvidersEnabled: {
+                            ...prev.depositProvidersEnabled,
+                            palmpay: !prev.depositProvidersEnabled.palmpay,
+                          },
+                        }))
+                      }
+                      className="mt-0.5 text-purple-400 hover:text-purple-300 transition"
+                    >
+                      {formData.depositProvidersEnabled.palmpay ? <CheckSquare size={18} /> : <Square size={18} className="text-slate-600" />}
+                    </button>
+                    <div>
+                      <span className="text-xs font-bold text-slate-200 block">Enable PalmPay Deposits</span>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Players can select PalmPay when adding marbles to their balance.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1193,6 +1403,146 @@ export function PaymentSettings({ token, adminSecret, canManage = true, onSettin
                   <span>availableBalance, frozenBalance, currentBlance, unSettleBalance</span>
                 </div>
               </div>
+            </div>
+
+            {/* PalmPay Webhook Configuration */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                    <Zap size={16} className="text-purple-400" />
+                    PalmPay Asynchronous Webhook URL (<code className="text-purple-300 text-xs font-mono">notifyUrl</code>)
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Configure this callback in your PalmPay Merchant Portal to receive automated order settlement notifications.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyPalmpayWebhook}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 self-start sm:self-center"
+                >
+                  {copiedPalmpayWebhook ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                  {copiedPalmpayWebhook ? "Copied!" : "Copy Webhook"}
+                </button>
+              </div>
+
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-xs text-purple-300 overflow-x-auto">
+                {palmpayWebhookUrl}
+              </div>
+            </div>
+
+            {/* Test PalmPay Create Order (Pay-in / Deposits) */}
+            <div className="bg-slate-900 border border-purple-900/40 rounded-2xl p-6 space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                      Live Gateway Test
+                    </span>
+                    <h3 className="text-sm font-bold text-slate-100">
+                      Test Create Order API (<code className="text-purple-300 text-xs">/api/v2/payment/merchant/createorder</code>)
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Execute a simulated deposit order initiation in GHS cents against the PalmPay Open Gateway to verify merchant authentication and checkout URL generation.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
+                    <span className="text-xs text-slate-400 font-bold">Amount: GH₵</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={500}
+                      step={1}
+                      value={palmpayOrderTestAmount}
+                      onChange={(e) => setPalmpayOrderTestAmount(Number(e.target.value))}
+                      className="w-16 bg-transparent text-sm font-mono font-bold text-white focus:outline-none text-right"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleTestPalmpayCreateOrder}
+                    disabled={palmpayOrderTestLoading || !formData.palmpayMerchantId.trim()}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-purple-600/20"
+                  >
+                    {palmpayOrderTestLoading ? (
+                      <>
+                        <RefreshCw size={13} className="animate-spin" /> Calling API...
+                      </>
+                    ) : (
+                      <>
+                        <Zap size={13} /> Test Create Order
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {palmpayOrderTestResult && (
+                <div
+                  className={`p-4 rounded-xl border animate-in fade-in duration-200 ${
+                    palmpayOrderTestResult.success
+                      ? "bg-purple-950/30 border-purple-500/40 text-purple-100"
+                      : "bg-rose-950/30 border-rose-500/40 text-rose-200"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold flex items-center gap-1.5">
+                      {palmpayOrderTestResult.success ? (
+                        <CheckCircle2 size={16} className="text-emerald-400" />
+                      ) : (
+                        <AlertCircle size={16} className="text-rose-400" />
+                      )}
+                      {palmpayOrderTestResult.success ? "PalmPay Order Created Successfully" : "PalmPay Order Test Failed"}
+                    </span>
+                    {palmpayOrderTestResult.respCode && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800">
+                        Code: {palmpayOrderTestResult.respCode}
+                      </span>
+                    )}
+                  </div>
+
+                  {palmpayOrderTestResult.success ? (
+                    <div className="space-y-3 text-xs">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-slate-300">
+                        <div>
+                          <strong className="text-slate-400">Order ID:</strong>{" "}
+                          <span className="font-mono text-purple-300">{palmpayOrderTestResult.orderId}</span>
+                        </div>
+                        {palmpayOrderTestResult.orderNo && (
+                          <div>
+                            <strong className="text-slate-400">PalmPay Order No:</strong>{" "}
+                            <span className="font-mono text-emerald-300">{palmpayOrderTestResult.orderNo}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {palmpayOrderTestResult.checkoutUrl && (
+                        <div className="flex items-center gap-2 pt-2 border-t border-purple-900/40">
+                          <span className="text-slate-300 font-bold">Checkout Page:</span>
+                          <a
+                            href={palmpayOrderTestResult.checkoutUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-purple-300 underline font-mono text-xs hover:text-purple-200 break-all"
+                          >
+                            {palmpayOrderTestResult.checkoutUrl}
+                            <ExternalLink size={12} className="shrink-0" />
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-rose-300 font-mono">
+                      {palmpayOrderTestResult.error || palmpayOrderTestResult.respMsg || "Order creation failed"}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -319,7 +319,314 @@ export const walletService = {
       throw new Error("Paystack Gateway Error: " + (err instanceof Error ? err.message : String(err)));
     }
 
-    return { reference: ref, authorizationUrl, accessCode, pointsToAdd, amountGhs: pointsToAdd, depositId };
+    return { reference: ref, authorizationUrl, accessCode, pointsToAdd, amountGhs: pointsToAdd, depositId, provider: "paystack" };
+  },
+
+  async initPalmpayTopup(userToken: string, amountGhs: number, email?: string, customCallbackUrl?: string) {
+    if (!amountGhs || isNaN(amountGhs) || amountGhs <= 0 || !Number.isFinite(amountGhs)) {
+      throw new Error("Amount must be a positive number in GHS");
+    }
+    const profile = await dbRepository.getProfile(userToken);
+    if (!profile) throw new Error("User profile not found. Please log in first.");
+    if (profile.status === "banned") throw new Error("Account is banned. Please contact support.");
+
+    const settings = await dbRepository.getAdminSettings();
+    const minDep = settings.minDepositGhs ?? 5;
+    const maxDep = settings.maxDepositGhs ?? 5000;
+
+    if (amountGhs < minDep) {
+      throw new Error(`Deposit amount (GH₵ ${amountGhs}) is below the minimum deposit limit of GH₵ ${minDep}`);
+    }
+    if (amountGhs > maxDep) {
+      throw new Error(`Deposit amount (GH₵ ${amountGhs}) exceeds the maximum deposit limit of GH₵ ${maxDep.toLocaleString()}`);
+    }
+
+    const pointsToAdd = Math.floor(amountGhs);
+    const palmpayConfig = await getEffectivePalmpayConfig();
+    if (!palmpayConfig.merchantId || !palmpayConfig.bearerToken) {
+      throw new Error("PalmPay is not configured on the server. Please configure your PalmPay Merchant ID and Bearer Token in Payment Settings.");
+    }
+
+    // orderId must be unique merchant order number, max 32 chars
+    const orderId = `PLM${Date.now().toString(36).toUpperCase()}${securityService.generateCsprngToken(4).toUpperCase()}`.slice(0, 32);
+    const txId = `tx-${securityService.generateUUID()}`;
+    const depositId = `dep-${securityService.generateUUID()}`;
+
+    // Create pending deposit transaction
+    const tx: WalletTransaction = {
+      id: txId,
+      userToken,
+      type: "deposit",
+      currency: "points",
+      amount: pointsToAdd,
+      reference: orderId,
+      status: "pending",
+      metaJson: JSON.stringify({
+        provider: "palmpay",
+        amountGhs: pointsToAdd,
+        rate: 1,
+        email: email || `${profile.username.toLowerCase().replace(/\s+/g, "")}@damii.gh`,
+        depositId,
+        orderId,
+      }),
+      createdAt: new Date().toISOString(),
+    };
+
+    await dbRepository.createTransaction(tx);
+
+    // Create dedicated record in deposits table
+    const deposit: Deposit = {
+      id: depositId,
+      userId: userToken,
+      amount: pointsToAdd,
+      currency: "GHS",
+      method: "momo",
+      provider: "PalmPay",
+      reference: orderId,
+      status: "pending",
+      phoneNumber: profile.phoneNumber || null,
+      accountName: profile.username || null,
+      fee: 0,
+      netAmount: pointsToAdd,
+      metadataJson: JSON.stringify({
+        provider: "palmpay",
+        email: email || `${profile.username.toLowerCase().replace(/\s+/g, "")}@damii.gh`,
+        callbackUrl: customCallbackUrl || "",
+        orderId,
+      }),
+      walletTransactionId: txId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await dbRepository.createDeposit(deposit);
+
+    await dbRepository.recordDepositAction({
+      id: `act-${securityService.generateUUID()}`,
+      depositId: deposit.id,
+      action: "create",
+      actorId: userToken,
+      actorName: profile.username,
+      previousStatus: null,
+      newStatus: "pending",
+      notes: `Initiated PalmPay deposit order of GH₵ ${pointsToAdd} (${pointsToAdd} Marbles)`,
+      createdAt: new Date().toISOString(),
+    }).catch(() => {});
+
+    const rawBase = (customCallbackUrl || process.env.NEXT_PUBLIC_APP_URL || "https://damii.gh").trim().replace(/\/+$/, "");
+    let callBackUrl: string;
+    if (rawBase.includes("?")) {
+      callBackUrl = `${rawBase}&ref=${encodeURIComponent(orderId)}&provider=palmpay`;
+    } else {
+      const pathWithWallet = rawBase.endsWith("/wallet") ? rawBase : `${rawBase}/wallet`;
+      callBackUrl = `${pathWithWallet}?ref=${encodeURIComponent(orderId)}&provider=palmpay`;
+    }
+
+    const appOrigin = (process.env.NEXT_PUBLIC_APP_URL || (customCallbackUrl ? new URL(customCallbackUrl).origin : "https://damii.gh")).replace(/\/+$/, "");
+    const notifyUrl = `${appOrigin}/api/wallet/palmpay-webhook`;
+
+    const userPhone = profile.phoneNumber || "0240000000";
+    const userEmail = email || `${profile.username.toLowerCase().replace(/[^a-z0-9]/g, "") || "player"}@damii.gh`;
+
+    const orderRes = await palmpayService.createOrder({
+      orderId,
+      amountGhs: pointsToAdd,
+      title: "Damii Marbles Top-up",
+      description: `Buy ${pointsToAdd} Marbles`,
+      notifyUrl,
+      callBackUrl,
+      currency: "GHS",
+      goodsDetails: [
+        {
+          goodsId: "marbles",
+          goodsName: "Damii Marbles",
+          quantity: pointsToAdd,
+          price: Math.round(pointsToAdd * 100),
+        },
+      ],
+      customerInfo: {
+        userId: userToken,
+        userName: profile.username,
+        phone: userPhone,
+        email: userEmail,
+      },
+      remark: `Deposit by ${profile.username} (GHS ${pointsToAdd})`,
+    });
+
+    if (!orderRes.success || !orderRes.checkoutUrl) {
+      throw new Error(orderRes.error || orderRes.message || "Failed to create PalmPay payment order");
+    }
+
+    if (orderRes.orderNo) {
+      await dbRepository.updateDeposit(depositId, {
+        gatewayReference: orderRes.orderNo,
+      }).catch(() => {});
+    }
+
+    return {
+      reference: orderId,
+      orderNo: orderRes.orderNo || orderId,
+      authorizationUrl: orderRes.checkoutUrl,
+      checkoutUrl: orderRes.checkoutUrl,
+      accessCode: orderRes.payToken || orderRes.sdkSessionId || "",
+      pointsToAdd,
+      amountGhs: pointsToAdd,
+      depositId,
+      provider: "palmpay",
+      payToken: orderRes.payToken,
+      sdkSessionId: orderRes.sdkSessionId,
+      sdkSignKey: orderRes.sdkSignKey,
+    };
+  },
+
+  async verifyAndCreditPalmpay(reference: string, palmpayData?: any) {
+    if (!reference || typeof reference !== "string" || reference.trim().length < 4) {
+      throw new Error("Invalid PalmPay reference");
+    }
+
+    const cleanRef = reference.trim();
+
+    return dbRepository.lockKey(`palmpay:${cleanRef}`, async () => {
+      const alreadyProcessed = await dbRepository.isPaystackRefProcessed(`palmpay_${cleanRef}`);
+
+      const all = await dbRepository.getAllTransactions(500);
+      const tx = all.find((t) => t.reference === cleanRef || t.reference === palmpayData?.orderNo || t.reference === palmpayData?.orderId);
+      let deposit = await dbRepository.getDepositByReference(cleanRef);
+      if (!deposit && palmpayData?.orderNo) {
+        deposit = await dbRepository.getDepositByReference(palmpayData.orderNo);
+      }
+
+      if (!tx && !deposit) {
+        throw new Error("PalmPay transaction reference not found in system database");
+      }
+
+      if (tx?.status === "completed" || deposit?.status === "completed" || alreadyProcessed) {
+        return { success: true, message: "Transaction already credited", tx, deposit };
+      }
+
+      const userToken = tx?.userToken || deposit?.userId || "";
+      const expectedAmount = tx?.amount ?? deposit?.amount ?? 0;
+
+      let isVerified = false;
+      let orderStatus = palmpayData?.orderStatus;
+      let orderNo = palmpayData?.orderNo || deposit?.gatewayReference || cleanRef;
+
+      if (orderStatus === 1 || orderStatus === "1" || orderStatus === "SUCCESS" || orderStatus === "success") {
+        isVerified = true;
+      } else {
+        try {
+          const queryResult = await palmpayService.queryOrder({ orderId: cleanRef, orderNo });
+          if (queryResult?.data?.orderStatus === 1 || queryResult?.respCode === "00000000" || queryResult?.respCode === "000000") {
+            isVerified = true;
+            orderStatus = 1;
+            if (queryResult?.data?.orderNo) orderNo = queryResult.data.orderNo;
+          }
+        } catch (err) {
+          const config = await getEffectivePalmpayConfig();
+          if (config.mode === "sandbox") {
+            isVerified = true;
+          } else {
+            throw err;
+          }
+        }
+      }
+
+      if (isVerified) {
+        await dbRepository.markPaystackRefProcessed(`palmpay_${cleanRef}`);
+
+        if (tx) {
+          tx.status = "completed";
+          await dbRepository.createTransaction(tx);
+        }
+
+        let ledgerEntryId: string | null = null;
+
+        if (botService.isBot(userToken)) {
+          try {
+            await botService.fundBot(
+              userToken,
+              expectedAmount,
+              expectedAmount,
+              `PalmPay Verified Deposit (${cleanRef})`,
+              deposit?.accountName || "PalmPay Gateway",
+              cleanRef
+            );
+          } catch (err) {
+            console.error("Failed to sync bot bankroll on PalmPay deposit:", err);
+          }
+        } else {
+          await dbRepository.updateProfileBalance(userToken, expectedAmount);
+
+          const ledgerEntries = await dbRepository.writeLedger([
+            {
+              userId: userToken,
+              accountType: "available",
+              entryType: "deposit",
+              amount: String(expectedAmount),
+              referenceType: "deposit",
+              referenceId: deposit ? deposit.id : cleanRef,
+            },
+          ]).catch(() => []);
+          ledgerEntryId = ledgerEntries[0]?.id || null;
+        }
+
+        if (deposit) {
+          deposit = await dbRepository.updateDeposit(deposit.id, {
+            status: "completed",
+            gatewayResponse: "Successful",
+            gatewayReference: orderNo,
+            verifiedAt: new Date().toISOString(),
+            verifiedBy: "PalmPay Gateway",
+            approvedAt: new Date().toISOString(),
+            approvedBy: "System Gateway",
+            processedAt: new Date().toISOString(),
+            ledgerEntryId: ledgerEntryId || null,
+          });
+
+          await dbRepository.recordDepositAction({
+            id: `act-${securityService.generateUUID()}`,
+            depositId: deposit.id,
+            action: "verify",
+            actorId: "palmpay_gateway",
+            actorName: "PalmPay CreateOrder API",
+            previousStatus: "pending",
+            newStatus: "verified",
+            notes: `PalmPay verified payment of GH₵ ${expectedAmount.toFixed(2)}. Order #${orderNo}`,
+            createdAt: new Date().toISOString(),
+          }).catch(() => {});
+
+          await dbRepository.recordDepositAction({
+            id: `act-${securityService.generateUUID()}`,
+            depositId: deposit.id,
+            action: "process",
+            actorId: "system",
+            actorName: "DAMII Settlement Engine",
+            previousStatus: "verified",
+            newStatus: "completed",
+            notes: `Credited ${expectedAmount} Marbles to user wallet via PalmPay deposit.`,
+            createdAt: new Date().toISOString(),
+          }).catch(() => {});
+        }
+
+        notificationService.sendNotification({
+          userToken,
+          type: "account_alert",
+          title: "💳 PalmPay Deposit Confirmed",
+          message: `GH₵ ${expectedAmount}.00 (${expectedAmount} Marbles) has been credited to your wallet.`,
+          link: "/wallet",
+          actionLabel: "View Balance",
+        }).catch(() => {});
+
+        return {
+          success: true,
+          message: `Successfully added GH₵ ${expectedAmount}.00 (${expectedAmount} Marbles) via PalmPay to your wallet!`,
+          tx,
+          deposit,
+        };
+      } else {
+        throw new Error(`PalmPay transaction ${cleanRef} is not completed (status: ${orderStatus})`);
+      }
+    });
   },
 
   async verifyAndCreditPaystack(reference: string) {

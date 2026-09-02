@@ -61,16 +61,34 @@ export async function POST(req: NextRequest) {
       const amountGhs = Number(body.amountGhs);
       const email = String(body.email ?? "");
       const callbackUrl = String(body.callbackUrl ?? req.headers.get("origin") ?? "");
-      const res = await walletService.initPaystackTopup(userToken, amountGhs, email, callbackUrl);
-      return NextResponse.json(res);
+      const requestedProvider = String(body.provider ?? "").toLowerCase().trim();
+
+      const settings = await dbRepository.getAdminSettings();
+      const activeProvider = requestedProvider || settings.activeDepositProvider || "paystack";
+
+      if (activeProvider === "palmpay") {
+        const res = await walletService.initPalmpayTopup(userToken, amountGhs, email, callbackUrl);
+        return NextResponse.json(res);
+      } else {
+        const res = await walletService.initPaystackTopup(userToken, amountGhs, email, callbackUrl);
+        return NextResponse.json(res);
+      }
     }
 
     if (action === "verify") {
       const reference = String(body.reference ?? "");
+      const provider = String(body.provider ?? "").toLowerCase().trim();
       if (!reference) return NextResponse.json({ error: "Reference required" }, { status: 400 });
-      const res = await walletService.verifyAndCreditPaystack(reference);
-      const balance = await walletService.getBalance(userToken);
-      return NextResponse.json({ ...res, balance });
+
+      if (provider === "palmpay" || reference.startsWith("PLM") || reference.startsWith("ORD") || reference.startsWith("SBX-ORD")) {
+        const res = await walletService.verifyAndCreditPalmpay(reference);
+        const balance = await walletService.getBalance(userToken);
+        return NextResponse.json({ ...res, balance });
+      } else {
+        const res = await walletService.verifyAndCreditPaystack(reference);
+        const balance = await walletService.getBalance(userToken);
+        return NextResponse.json({ ...res, balance });
+      }
     }
 
     if (action === "withdraw") {
