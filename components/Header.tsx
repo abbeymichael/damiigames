@@ -1034,7 +1034,7 @@ export function Header() {
 
       const data = await res.json();
       if (!res.ok || data.error) {
-        setAuthError(data.error || "Passkey login failed.");
+        setAuthError(data.error || "Passkey login failed. Please sign in with username and PIN first to enroll your device.");
         setIsLoading(false);
         return;
       }
@@ -1097,6 +1097,7 @@ export function Header() {
         body: JSON.stringify({
           action: "verify_login_mfa",
           ticket: mfaChallenge.ticket,
+          username: mfaChallenge.username,
           method: activeMethod,
           code: mfaLoginCode.trim() || undefined,
           credentialId,

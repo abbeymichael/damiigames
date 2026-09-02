@@ -27,6 +27,7 @@ import {
   isPlatformBiometricsAvailable,
   registerPasskeyCredential,
   authenticateWithPasskey,
+  isIframeEnvironment,
 } from "@/lib/webauthn-client";
 import { generateQrSvg } from "@/lib/qr-generator";
 
@@ -50,6 +51,7 @@ export default function MfaSecurityManager({
 
   // Hardware Biometrics Detection
   const [hasPlatformBiometrics, setHasPlatformBiometrics] = useState(false);
+  const [isInIframeState, setIsInIframeState] = useState(false);
   const [testBiometricSuccess, setTestBiometricSuccess] = useState(false);
   const [testPasskeySuccess, setTestPasskeySuccess] = useState(false);
 
@@ -95,6 +97,7 @@ export default function MfaSecurityManager({
 
   useEffect(() => {
     fetchMfaSettings();
+    setIsInIframeState(isIframeEnvironment());
     isPlatformBiometricsAvailable().then((supported) => {
       setHasPlatformBiometrics(supported);
     });
@@ -140,9 +143,12 @@ export default function MfaSecurityManager({
       } else {
         setSettings(data.mfaSettings);
         if (onMfaUpdated) onMfaUpdated(data.mfaSettings);
+        const successMsg = regResult.isSimulated
+          ? "Phone Biometrics enrolled (Sandbox Preview Mode)! 1-tap sign-in active. (To use your device's physical Face ID / Touch ID hardware sensor, open the app in a new tab)."
+          : "Phone Biometrics enrolled! You can now verify with your fingerprint or Face ID instead of SMS.";
         setStatusMessage({
           type: "success",
-          text: "Phone Biometrics enrolled! You can now verify with your fingerprint or Face ID instead of SMS.",
+          text: successMsg,
         });
         if (data.backupCodes && data.backupCodes.length > 0) {
           setDisplayedBackupCodes(data.backupCodes);
@@ -172,7 +178,9 @@ export default function MfaSecurityManager({
         setTestBiometricSuccess(true);
         setStatusMessage({
           type: "success",
-          text: "Biometric sensor authenticated successfully! 1-tap verification confirmed.",
+          text: authResult.isSimulated
+            ? "Biometric sensor simulated & verified! 1-tap authentication confirmed (Sandbox Preview Mode)."
+            : "Biometric sensor authenticated successfully! 1-tap verification confirmed.",
         });
       } else {
         setStatusMessage({
@@ -232,9 +240,12 @@ export default function MfaSecurityManager({
         if (onMfaUpdated) onMfaUpdated(data.mfaSettings);
         setShowAddPasskeyModal(false);
         setNewPasskeyName("");
+        const successMsg = regResult.isSimulated
+          ? `Passkey "${newPasskeyName.trim()}" registered (Sandbox Preview Mode)! Open the app in a new tab for native hardware device prompts.`
+          : `Passkey "${newPasskeyName.trim()}" registered successfully!`;
         setStatusMessage({
           type: "success",
-          text: `Passkey "${newPasskeyName.trim()}" registered successfully!`,
+          text: successMsg,
         });
         if (data.backupCodes && data.backupCodes.length > 0) {
           setDisplayedBackupCodes(data.backupCodes);
@@ -264,7 +275,9 @@ export default function MfaSecurityManager({
         setTestPasskeySuccess(true);
         setStatusMessage({
           type: "success",
-          text: "Passkey verified successfully! Secure instant authentication confirmed.",
+          text: authResult.isSimulated
+            ? "Passkey simulated & verified! Secure instant authentication confirmed (Sandbox Preview Mode)."
+            : "Passkey verified successfully! Secure instant authentication confirmed.",
         });
       } else {
         setStatusMessage({
@@ -528,6 +541,30 @@ export default function MfaSecurityManager({
 
   return (
     <div className="space-y-4">
+      {/* Embedded Iframe Info Banner */}
+      {isInIframeState && (
+        <div className="p-3 bg-amber-950/40 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs text-amber-200 shadow-sm">
+          <div className="flex items-start sm:items-center gap-2">
+            <Info size={16} className="text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+            <div className="text-[11px] leading-relaxed text-amber-200">
+              <strong className="text-amber-300">Embedded Container Preview:</strong> Browser WebAuthn credentials container is simulated for testing. To use your device's physical Face ID / Touch ID hardware, open the app in a new tab.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                window.open(window.location.href, "_blank");
+              }
+            }}
+            className="px-2.5 py-1.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-black rounded-xl text-[11px] shrink-0 cursor-pointer transition-colors shadow-sm flex items-center gap-1.5 self-end sm:self-auto"
+          >
+            <span>Open in New Tab</span>
+            <span>↗</span>
+          </button>
+        </div>
+      )}
+
       {/* MFA Master Overview Card */}
       <div className="p-4 bg-gradient-to-br from-[#0c3b2e] to-[#082a20] border border-[#184d3c] rounded-2xl space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
