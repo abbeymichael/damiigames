@@ -4,6 +4,7 @@ import { WalletTransaction, WagerEscrow, Deposit, Withdrawal, DepositAction, Wit
 import { notificationService } from "./notification-service";
 import { getAdminPermissions } from "./permissions";
 import { botService } from "./bot-service";
+import { palmpayService, getEffectivePalmpayConfig } from "./palmpay-service";
 
 export async function getEffectivePaystackConfig(): Promise<{ secretKey: string; publicKey: string }> {
   try {
@@ -1087,7 +1088,7 @@ export const walletService = {
     return json.data;
   },
 
-  async processWithdrawalPayout(txIdOrRef: string, adminToken?: string) {
+  async processWithdrawalPayout(txIdOrRef: string, adminToken?: string, providerOverride?: "paystack" | "palmpay") {
     let tx = await dbRepository.getTransaction(txIdOrRef);
     if (!tx) {
       tx = await dbRepository.getTransactionByReference(txIdOrRef);
@@ -1139,7 +1140,106 @@ export const walletService = {
       throw new Error(`Withdrawal amount (GH₵ ${amountGhs.toFixed(2)}) exceeds the platform maximum single-transaction limit of GH₵ ${maxWd.toLocaleString()}.`);
     }
 
-    // 3. Float Balance Verification (if Paystack secret key is configured)
+    // Determine target payout provider: override -> platform settings -> default to 'paystack'
+    const payoutProvider: "paystack" | "palmpay" =
+      providerOverride || (settings.activePayoutProvider === "palmpay" ? "palmpay" : "paystack");
+
+    // ==========================================
+    // PALMPAY DISBURSEMENT ROUTE
+    // ==========================================
+    if (payoutProvider === "palmpay") {
+      const palmpayConfig = await getEffectivePalmpayConfig();
+      if (!palmpayConfig.merchantId || !palmpayConfig.bearerToken) {
+        throw new Error("PalmPay is not configured. Please supply your PalmPay Merchant ID and Bearer Token in Payment Settings.");
+      }
+
+      // Check float balance if available
+      try {
+        const palmpayBal = await palmpayService.queryBalance();
+        if (palmpayBal.configured && palmpayBal.success && palmpayBal.availableBalance > 0 && palmpayBal.availableBalance < amountGhs) {
+          throw new Error(
+            `Insufficient PalmPay float balance (Available: ${palmpayBal.formattedAvailable}, Required: GH₵ ${amountGhs.toFixed(2)}). Please top up your PalmPay merchant account.`
+          );
+        }
+      } catch (balErr: any) {
+        if (balErr.message?.includes("Insufficient PalmPay float balance")) {
+          throw balErr;
+        }
+        // If balance inquiry has transient network issue, continue to attempt transfer
+      }
+
+      const transferRef = tx.reference.startsWith("PALMPAY-") ? tx.reference : `PALMPAY-${tx.reference}`;
+      const recipientName = profile?.fullName || profile?.username || "Player";
+
+      const palmpayRes = await palmpayService.initiateTransfer({
+        transactionId: tx.id,
+        reference: transferRef,
+        amount: amountGhs,
+        recipientPhone: momoNumber,
+        recipientName,
+        bankCode: targetProvider,
+        remark: `DAMII Cashout: @${profile?.username || "player"} (${momoNumber})`,
+      });
+
+      // Update Transaction Metadata & Status
+      meta.momoNumber = momoNumber;
+      meta.momoProvider = targetProvider;
+      meta.payoutProvider = "palmpay";
+      meta.transferCode = palmpayRes.transferCode;
+      meta.transferId = palmpayRes.transferId;
+      meta.transferStatus = palmpayRes.status;
+      meta.payoutInitiatedAt = new Date().toISOString();
+      meta.processedByAdmin = adminToken || "system";
+
+      tx.status = palmpayRes.status === "success" ? "completed" : "pending";
+      tx.metaJson = JSON.stringify(meta);
+
+      await dbRepository.createTransaction(tx);
+
+      // Log admin audit action
+      if (adminToken) {
+        const caller = await dbRepository.getProfile(adminToken);
+        await dbRepository.createAdminLog({
+          id: `adminlog-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+          adminToken,
+          adminName: caller?.username || "Admin",
+          action: "PROCESS_PALMPAY_PAYOUT",
+          target: tx.id,
+          detailsJson: JSON.stringify({
+            reference: tx.reference,
+            amountGhs,
+            momoNumber,
+            momoProvider: targetProvider,
+            provider: "palmpay",
+            transferCode: palmpayRes.transferCode,
+            status: palmpayRes.status,
+          }),
+          createdAt: new Date().toISOString(),
+        }).catch(() => {});
+      }
+
+      // Notify user that payout is dispatched via PalmPay
+      notificationService.sendNotification({
+        userToken: tx.userToken,
+        type: "account_alert",
+        title: "🚀 Mobile Money Transfer Dispatched",
+        message: `Your withdrawal of GH₵ ${amountGhs.toFixed(2)} to ${targetProvider} (${momoNumber}) has been dispatched via PalmPay. Funds will arrive in your wallet shortly.`,
+        link: "/wallet",
+        actionLabel: "View Wallet",
+      }).catch(() => {});
+
+      return {
+        success: true,
+        provider: "palmpay",
+        transaction: tx,
+        transfer: palmpayRes,
+        message: `Transfer of GH₵ ${amountGhs.toFixed(2)} dispatched to ${targetProvider} (${momoNumber}) via PalmPay. Status: ${palmpayRes.status.toUpperCase()}`,
+      };
+    }
+
+    // ==========================================
+    // PAYSTACK DISBURSEMENT ROUTE (Default)
+    // ==========================================
     const paystackConfig = await getEffectivePaystackConfig();
     const secretKey = (paystackConfig.secretKey || "").trim();
     if (secretKey) {
@@ -1151,7 +1251,7 @@ export const walletService = {
       }
     }
 
-    // 4. Create recipient code if not already saved
+    // Create recipient code if not already saved
     let recipientCode = meta.recipientCode;
     if (!recipientCode) {
       const recipientName = profile?.fullName || profile?.username || "DAMII Player";
@@ -1160,15 +1260,16 @@ export const walletService = {
       meta.recipientCode = recipientCode;
     }
 
-    // 5. Initiate Paystack Transfer
+    // Initiate Paystack Transfer
     const transferRef = tx.reference.startsWith("TRANSFER-") ? tx.reference : `TRANSFER-${tx.reference}`;
     const transferReason = `DAMII Cashout: @${profile?.username || "player"} (${momoNumber})`;
 
     const transferRes = await this.initiatePaystackTransfer(recipientCode, amountGhs, transferRef, transferReason);
 
-    // 6. Update Transaction Metadata & Status
+    // Update Transaction Metadata & Status
     meta.momoNumber = momoNumber;
     meta.momoProvider = targetProvider;
+    meta.payoutProvider = "paystack";
     meta.transferCode = transferRes.transferCode;
     meta.transferId = transferRes.transferId;
     meta.transferStatus = transferRes.status;
@@ -1194,6 +1295,7 @@ export const walletService = {
           amountGhs,
           momoNumber,
           momoProvider: targetProvider,
+          provider: "paystack",
           transferCode: transferRes.transferCode,
           status: transferRes.status,
         }),
@@ -1213,6 +1315,7 @@ export const walletService = {
 
     return {
       success: true,
+      provider: "paystack",
       transaction: tx,
       transfer: transferRes,
       message: `Transfer of GH₵ ${amountGhs.toFixed(2)} dispatched to ${targetProvider} (${momoNumber}) via Paystack. Status: ${transferRes.status.toUpperCase()}`,

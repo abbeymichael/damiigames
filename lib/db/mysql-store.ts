@@ -827,6 +827,20 @@ export const mysqlStore: DbRepository = {
         if (pr.key === "paystack_webhook_secret" && pr.value) res.paystackWebhookSecret = String(pr.value);
         if (pr.key === "paystack_currency" && pr.value) res.paystackCurrency = String(pr.value);
         if (pr.key === "auto_payout_enabled") (res as any).autoPayoutEnabled = Boolean(pr.value);
+        if (pr.key === "active_payout_provider" && pr.value) res.activePayoutProvider = pr.value as "paystack" | "palmpay";
+        if (pr.key === "palmpay_merchant_id" && pr.value) res.palmpayMerchantId = String(pr.value);
+        if (pr.key === "palmpay_bearer_token" && pr.value) res.palmpayBearerToken = String(pr.value);
+        if (pr.key === "palmpay_app_secret" && pr.value) res.palmpayAppSecret = String(pr.value);
+        if (pr.key === "palmpay_signature" && pr.value) res.palmpaySignature = String(pr.value);
+        if (pr.key === "palmpay_mode" && pr.value) res.palmpayMode = pr.value as "sandbox" | "live";
+        if (pr.key === "palmpay_country_code" && pr.value) res.palmpayCountryCode = String(pr.value);
+        if (pr.key === "palmpay_currency" && pr.value) res.palmpayCurrency = String(pr.value);
+        if (pr.key === "palmpay_base_url" && pr.value) res.palmpayBaseUrl = String(pr.value);
+        if (pr.key === "payout_providers_enabled" && pr.value) {
+          try {
+            res.payoutProvidersEnabled = typeof pr.value === "string" ? JSON.parse(pr.value) : pr.value;
+          } catch {}
+        }
       }
     } catch {}
 
@@ -875,6 +889,16 @@ export const mysqlStore: DbRepository = {
       if (updates.paystackWebhookSecret !== undefined) next.paystackWebhookSecret = String(updates.paystackWebhookSecret).trim();
       if (updates.paystackCurrency !== undefined) next.paystackCurrency = String(updates.paystackCurrency).trim().toUpperCase();
       if ((updates as any).autoPayoutEnabled !== undefined) (next as any).autoPayoutEnabled = Boolean((updates as any).autoPayoutEnabled);
+      if (updates.activePayoutProvider !== undefined) next.activePayoutProvider = updates.activePayoutProvider;
+      if (updates.palmpayMerchantId !== undefined) next.palmpayMerchantId = String(updates.palmpayMerchantId).trim();
+      if (updates.palmpayBearerToken !== undefined) next.palmpayBearerToken = String(updates.palmpayBearerToken).trim();
+      if (updates.palmpayAppSecret !== undefined) next.palmpayAppSecret = String(updates.palmpayAppSecret).trim();
+      if (updates.palmpaySignature !== undefined) next.palmpaySignature = String(updates.palmpaySignature).trim();
+      if (updates.palmpayMode !== undefined) next.palmpayMode = updates.palmpayMode;
+      if (updates.palmpayCountryCode !== undefined) next.palmpayCountryCode = String(updates.palmpayCountryCode).trim().toUpperCase();
+      if (updates.palmpayCurrency !== undefined) next.palmpayCurrency = String(updates.palmpayCurrency).trim().toUpperCase();
+      if (updates.palmpayBaseUrl !== undefined) next.palmpayBaseUrl = String(updates.palmpayBaseUrl).trim();
+      if (updates.payoutProvidersEnabled !== undefined) next.payoutProvidersEnabled = updates.payoutProvidersEnabled;
       next.updatedAt = new Date().toISOString();
       if (adminName) next.updatedBy = adminName;
 
@@ -903,6 +927,16 @@ export const mysqlStore: DbRepository = {
         ["paystack_webhook_secret", next.paystackWebhookSecret],
         ["paystack_currency", next.paystackCurrency],
         ["auto_payout_enabled", (next as any).autoPayoutEnabled],
+        ["active_payout_provider", next.activePayoutProvider],
+        ["palmpay_merchant_id", next.palmpayMerchantId],
+        ["palmpay_bearer_token", next.palmpayBearerToken],
+        ["palmpay_app_secret", next.palmpayAppSecret],
+        ["palmpay_signature", next.palmpaySignature],
+        ["palmpay_mode", next.palmpayMode],
+        ["palmpay_country_code", next.palmpayCountryCode],
+        ["palmpay_currency", next.palmpayCurrency],
+        ["palmpay_base_url", next.palmpayBaseUrl],
+        ["payout_providers_enabled", next.payoutProvidersEnabled ? JSON.stringify(next.payoutProvidersEnabled) : undefined],
       ];
       for (const [k, v] of payKeys) {
         if (v !== undefined) {

@@ -537,6 +537,21 @@ export const fileStore: any = {
       if (positive(updates.maxDailyWithdrawalGhs)) {
         s.maxDailyWithdrawalGhs = updates.maxDailyWithdrawalGhs!;
       }
+      if (updates.paystackSecretKey !== undefined) s.paystackSecretKey = String(updates.paystackSecretKey).trim();
+      if (updates.paystackPublicKey !== undefined) s.paystackPublicKey = String(updates.paystackPublicKey).trim();
+      if (updates.paystackMode !== undefined) s.paystackMode = updates.paystackMode;
+      if (updates.paystackWebhookSecret !== undefined) s.paystackWebhookSecret = String(updates.paystackWebhookSecret).trim();
+      if (updates.paystackCurrency !== undefined) s.paystackCurrency = String(updates.paystackCurrency).trim().toUpperCase();
+      if (updates.activePayoutProvider !== undefined) s.activePayoutProvider = updates.activePayoutProvider;
+      if (updates.palmpayMerchantId !== undefined) s.palmpayMerchantId = String(updates.palmpayMerchantId).trim();
+      if (updates.palmpayBearerToken !== undefined) s.palmpayBearerToken = String(updates.palmpayBearerToken).trim();
+      if (updates.palmpayAppSecret !== undefined) s.palmpayAppSecret = String(updates.palmpayAppSecret).trim();
+      if (updates.palmpaySignature !== undefined) s.palmpaySignature = String(updates.palmpaySignature).trim();
+      if (updates.palmpayMode !== undefined) s.palmpayMode = updates.palmpayMode;
+      if (updates.palmpayCountryCode !== undefined) s.palmpayCountryCode = String(updates.palmpayCountryCode).trim().toUpperCase();
+      if (updates.palmpayCurrency !== undefined) s.palmpayCurrency = String(updates.palmpayCurrency).trim().toUpperCase();
+      if (updates.palmpayBaseUrl !== undefined) s.palmpayBaseUrl = String(updates.palmpayBaseUrl).trim();
+      if (updates.payoutProvidersEnabled !== undefined) s.payoutProvidersEnabled = updates.payoutProvidersEnabled;
 
       s.updatedAt = new Date().toISOString();
       if (adminName) s.updatedBy = adminName;

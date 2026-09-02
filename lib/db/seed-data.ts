@@ -50,6 +50,15 @@ export const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
   ratingKFactor: 32,
   minWagerGhs: 5,
   maxWagerGhs: 1000,
+  activePayoutProvider: "paystack",
+  payoutProvidersEnabled: {
+    paystack: true,
+    palmpay: false,
+  },
+  palmpayMode: "sandbox",
+  palmpayCountryCode: "GH",
+  palmpayCurrency: "GHS",
+  palmpayBaseUrl: "https://open-gw-sandbox.palmpay-inc.com",
   updatedAt: new Date(0).toISOString(),
   updatedBy: "System",
 };

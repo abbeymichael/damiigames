@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminService } from "@/lib/admin-service";
 import { leagueService } from "@/lib/league-service";
 import { walletService } from "@/lib/wallet-service";
+import { palmpayService } from "@/lib/palmpay-service";
 import { dbRepository } from "@/lib/db-client";
 import { attachAuthCookies } from "@/lib/auth-guard";
 import { hasPermission, getAdminPermissions } from "@/lib/permissions";
@@ -409,7 +410,17 @@ export async function POST(req: NextRequest) {
         body.paystackMode !== undefined ||
         body.paystackWebhookSecret !== undefined ||
         body.paystackCurrency !== undefined ||
-        body.autoPayoutEnabled !== undefined;
+        body.autoPayoutEnabled !== undefined ||
+        body.activePayoutProvider !== undefined ||
+        body.palmpayMerchantId !== undefined ||
+        body.palmpayBearerToken !== undefined ||
+        body.palmpayAppSecret !== undefined ||
+        body.palmpaySignature !== undefined ||
+        body.palmpayMode !== undefined ||
+        body.palmpayCountryCode !== undefined ||
+        body.palmpayCurrency !== undefined ||
+        body.palmpayBaseUrl !== undefined ||
+        body.payoutProvidersEnabled !== undefined;
 
       if (isPaymentUpdate) {
         const canManagePayments = await hasPermission(token, "payments.manage");
@@ -458,6 +469,16 @@ export async function POST(req: NextRequest) {
         paystackWebhookSecret,
         paystackCurrency,
         autoPayoutEnabled,
+        activePayoutProvider,
+        payoutProvidersEnabled,
+        palmpayMerchantId,
+        palmpayBearerToken,
+        palmpayAppSecret,
+        palmpaySignature,
+        palmpayMode,
+        palmpayCountryCode,
+        palmpayCurrency,
+        palmpayBaseUrl,
       } = body;
       const res = await adminService.updateSettings(token, {
         wagerFeePercent: wagerFeePercent !== undefined ? Number(wagerFeePercent) : undefined,
@@ -487,6 +508,16 @@ export async function POST(req: NextRequest) {
         paystackWebhookSecret: paystackWebhookSecret !== undefined ? String(paystackWebhookSecret).trim() : undefined,
         paystackCurrency: paystackCurrency !== undefined ? String(paystackCurrency).trim().toUpperCase() : undefined,
         autoPayoutEnabled: autoPayoutEnabled !== undefined ? Boolean(autoPayoutEnabled) : undefined,
+        activePayoutProvider: activePayoutProvider !== undefined ? activePayoutProvider : undefined,
+        payoutProvidersEnabled: payoutProvidersEnabled !== undefined ? payoutProvidersEnabled : undefined,
+        palmpayMerchantId: palmpayMerchantId !== undefined ? String(palmpayMerchantId).trim() : undefined,
+        palmpayBearerToken: palmpayBearerToken !== undefined ? String(palmpayBearerToken).trim() : undefined,
+        palmpayAppSecret: palmpayAppSecret !== undefined ? String(palmpayAppSecret).trim() : undefined,
+        palmpaySignature: palmpaySignature !== undefined ? String(palmpaySignature).trim() : undefined,
+        palmpayMode: palmpayMode !== undefined ? (palmpayMode === "live" ? "live" : "sandbox") : undefined,
+        palmpayCountryCode: palmpayCountryCode !== undefined ? String(palmpayCountryCode).trim().toUpperCase() : undefined,
+        palmpayCurrency: palmpayCurrency !== undefined ? String(palmpayCurrency).trim().toUpperCase() : undefined,
+        palmpayBaseUrl: palmpayBaseUrl !== undefined ? String(palmpayBaseUrl).trim() : undefined,
       });
       return NextResponse.json({ success: true, settings: res });
     }
@@ -564,11 +595,36 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, ...res });
     }
 
+    if (action === "get_palmpay_balance" || action === "query_palmpay_balance") {
+      const canViewPayments = await hasPermission(token, "payments.view");
+      const canViewWallet = await hasPermission(token, "wallet.view");
+      const canViewSettings = await hasPermission(token, "system.settings.view");
+      if (!isSecretValid && !canViewPayments && !canViewWallet && !canViewSettings) {
+        return NextResponse.json(
+          { error: "403 Forbidden: 'payments.view' or 'wallet.view' permission required to inspect payment balances" },
+          { status: 403 }
+        );
+      }
+      const overrideConfig = body.palmpayConfig || (body.merchantId ? {
+        merchantId: body.merchantId,
+        bearerToken: body.bearerToken,
+        appSecret: body.appSecret,
+        signature: body.signature,
+        mode: body.mode,
+        countryCode: body.countryCode,
+        currency: body.currency,
+        baseUrl: body.baseUrl,
+      } : undefined);
+      const res = await palmpayService.queryBalance(overrideConfig);
+      return NextResponse.json({ success: true, ...res });
+    }
+
     if (action === "process_payout" || action === "process_withdrawal") {
-      const { transactionId, txId, reference } = body;
+      const { transactionId, txId, reference, provider } = body;
       const target = transactionId || txId || reference;
       if (!target) return NextResponse.json({ error: "Transaction ID or reference required" }, { status: 400 });
-      const res = await walletService.processWithdrawalPayout(String(target), token);
+      const payoutProvider = provider === "palmpay" || provider === "paystack" ? provider : undefined;
+      const res = await walletService.processWithdrawalPayout(String(target), token, payoutProvider);
       return NextResponse.json({ success: true, ...res });
     }
 

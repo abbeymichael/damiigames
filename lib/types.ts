@@ -261,6 +261,20 @@ export type AdminSettings = {
   paystackMode?: "test" | "live";
   paystackWebhookSecret?: string;
   paystackCurrency?: string;
+  // Payout Gateways & PalmPay Integration
+  activePayoutProvider?: "paystack" | "palmpay";
+  payoutProvidersEnabled?: {
+    paystack?: boolean;
+    palmpay?: boolean;
+  };
+  palmpayMerchantId?: string;
+  palmpayBearerToken?: string;
+  palmpayAppSecret?: string;
+  palmpaySignature?: string;
+  palmpayMode?: "sandbox" | "live";
+  palmpayCountryCode?: string;
+  palmpayCurrency?: string;
+  palmpayBaseUrl?: string;
   updatedAt?: string | Date;
   updatedBy?: string;
 };

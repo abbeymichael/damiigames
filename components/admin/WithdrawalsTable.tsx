@@ -60,6 +60,20 @@ export function WithdrawalsTable({
     loading: true,
   });
 
+  // PalmPay Balance state
+  const [palmpayBalance, setPalmpayBalance] = useState<{
+    configured: boolean;
+    availableBalance: number;
+    currency: string;
+    error?: string;
+    loading: boolean;
+  }>({
+    configured: false,
+    availableBalance: 0,
+    currency: "GHS",
+    loading: true,
+  });
+
   // Modal states
   const [rejectModalTx, setRejectModalTx] = useState<WalletTransaction | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
@@ -124,9 +138,52 @@ export function WithdrawalsTable({
     }
   }, [token, adminSecret]);
 
+  // Fetch real-time PalmPay balance
+  const fetchPalmpayBalance = useCallback(async () => {
+    setPalmpayBalance((prev) => ({ ...prev, loading: true }));
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "get_palmpay_balance",
+          token,
+          secret: adminSecret,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && !data.error) {
+        setPalmpayBalance({
+          configured: true,
+          availableBalance: Number(data.availableBalance || 0),
+          currency: data.currency || "GHS",
+          error: undefined,
+          loading: false,
+        });
+      } else {
+        setPalmpayBalance({
+          configured: false,
+          availableBalance: 0,
+          currency: "GHS",
+          error: data.error || data.respMsg || "PalmPay balance unconfigured",
+          loading: false,
+        });
+      }
+    } catch (err) {
+      setPalmpayBalance({
+        configured: false,
+        availableBalance: 0,
+        currency: "GHS",
+        error: err instanceof Error ? err.message : "Network error",
+        loading: false,
+      });
+    }
+  }, [token, adminSecret]);
+
   useEffect(() => {
     fetchPaystackBalance();
-  }, [fetchPaystackBalance]);
+    fetchPalmpayBalance();
+  }, [fetchPaystackBalance, fetchPalmpayBalance]);
 
   // Filtered withdrawals list
   const filteredWithdrawals = useMemo(() => {
@@ -196,8 +253,8 @@ export function WithdrawalsTable({
     };
   }, [withdrawalTransactions, pendingWithdrawals]);
 
-  // Handle single payout execution via Paystack Transfers API
-  async function handleProcessPayout(tx: WalletTransaction) {
+  // Handle single payout execution via Paystack or PalmPay
+  async function handleProcessPayout(tx: WalletTransaction, provider?: "paystack" | "palmpay") {
     setPayoutInProgressId(tx.id);
     setActionMessage(null);
     try {
@@ -210,22 +267,26 @@ export function WithdrawalsTable({
           secret: adminSecret,
           transactionId: tx.id,
           reference: tx.reference,
+          provider,
         }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || data.message || "Failed to process Paystack payout");
+        throw new Error(data.error || data.message || "Failed to process payout");
       }
+      const providerLabel = data.provider === "palmpay" ? "PalmPay" : "Paystack";
+      const codeOrRef = data.transfer?.transferCode || data.transfer?.outOrderNo || "Dispatched";
       setActionMessage({
         type: "success",
-        text: `Payout initiated successfully via Paystack! Transfer Code: ${data.transfer?.transferCode || "Queued"}`,
+        text: `Payout initiated successfully via ${providerLabel}! Ref: ${codeOrRef}`,
       });
       onRefresh();
       fetchPaystackBalance();
+      fetchPalmpayBalance();
     } catch (err) {
       setActionMessage({
         type: "error",
-        text: err instanceof Error ? err.message : "Paystack payout execution error",
+        text: err instanceof Error ? err.message : "Payout execution error",
       });
     } finally {
       setPayoutInProgressId(null);
@@ -374,9 +435,9 @@ export function WithdrawalsTable({
                 <ArrowUpRight size={20} />
               </span>
               <div>
-                <h3 className="text-base font-bold text-[#f5efdf]">Withdrawals & Automated Paystack Payouts</h3>
+                <h3 className="text-base font-bold text-[#f5efdf]">Withdrawals & Multi-Gateway Payouts</h3>
                 <p className="text-xs text-slate-300">
-                  Process Mobile Money cashout requests instantly via Paystack Transfers API directly to user phone numbers.
+                  Process cashout requests via Paystack (MoMo) or PalmPay (Instant Bank & MoMo) directly from admin controls.
                 </p>
               </div>
             </div>
@@ -387,11 +448,12 @@ export function WithdrawalsTable({
               onClick={() => {
                 onRefresh();
                 fetchPaystackBalance();
+                fetchPalmpayBalance();
               }}
-              disabled={busy || paystackBalance.loading}
+              disabled={busy || paystackBalance.loading || palmpayBalance.loading}
               className="px-3 py-2 bg-[#0c3b2e] hover:bg-[#114232] text-[#d6a735] border border-[#d6a735]/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
             >
-              <RefreshCw size={14} className={busy || paystackBalance.loading ? "animate-spin" : ""} /> Refresh
+              <RefreshCw size={14} className={busy || paystackBalance.loading || palmpayBalance.loading ? "animate-spin" : ""} /> Refresh
             </button>
             <button
               type="button"
@@ -446,38 +508,54 @@ export function WithdrawalsTable({
         )}
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {/* Paystack Balance Card */}
           <div className="p-3.5 bg-[#06261f] border border-[#1a5e48] rounded-xl space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase text-slate-300 tracking-wider">Paystack Float Balance</span>
+              <span className="text-[10px] font-bold uppercase text-slate-300 tracking-wider">Paystack Float</span>
               <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
             </div>
-            <p className="text-xl font-black text-[#d6a735]">
+            <p className="text-lg font-black text-[#d6a735]">
               {paystackBalance.loading ? "Loading..." : `GH₵ ${paystackBalance.ghsBalance.toFixed(2)}`}
             </p>
-            <p className="text-[10px] text-slate-300 font-medium">Available for instant MoMo transfers</p>
+            <p className="text-[10px] text-slate-300 font-medium">Available for MoMo transfers</p>
+          </div>
+
+          {/* PalmPay Balance Card */}
+          <div className="p-3.5 bg-[#06261f] border border-[#1a5e48] rounded-xl space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase text-slate-300 tracking-wider">PalmPay Balance</span>
+              <span className="flex h-2 w-2 rounded-full bg-teal-400 animate-pulse" />
+            </div>
+            <p className="text-lg font-black text-teal-300">
+              {palmpayBalance.loading
+                ? "Loading..."
+                : palmpayBalance.configured
+                ? `${palmpayBalance.currency === "GHS" ? "GH₵" : palmpayBalance.currency} ${palmpayBalance.availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                : "Not Configured"}
+            </p>
+            <p className="text-[10px] text-slate-300 font-medium">Available merchant balance</p>
           </div>
 
           <div className="p-3.5 bg-[#06261f] border border-[#1a5e48] rounded-xl space-y-1">
-            <span className="text-[10px] font-bold uppercase text-slate-300 tracking-wider">Pending Cashout Queue</span>
-            <p className="text-xl font-black text-amber-400">
+            <span className="text-[10px] font-bold uppercase text-slate-300 tracking-wider">Pending Queue</span>
+            <p className="text-lg font-black text-amber-400">
               GH₵ {metrics.pendingGhs.toFixed(2)}{" "}
-              <span className="text-xs font-normal text-slate-300">({metrics.pendingCount} reqs)</span>
+              <span className="text-xs font-normal text-slate-300">({metrics.pendingCount})</span>
             </p>
-            <p className="text-[10px] text-slate-300 font-medium">Awaiting disbursement approval</p>
+            <p className="text-[10px] text-slate-300 font-medium">Awaiting cashout</p>
           </div>
 
           <div className="p-3.5 bg-[#06261f] border border-[#1a5e48] rounded-xl space-y-1">
             <span className="text-[10px] font-bold uppercase text-slate-300 tracking-wider">Total Disbursed</span>
-            <p className="text-xl font-black text-emerald-400">GH₵ {metrics.totalCompletedGhs.toFixed(2)}</p>
-            <p className="text-[10px] text-slate-300 font-medium">Transferred to player MoMo wallets</p>
+            <p className="text-lg font-black text-emerald-400">GH₵ {metrics.totalCompletedGhs.toFixed(2)}</p>
+            <p className="text-[10px] text-slate-300 font-medium">Transferred to player wallets</p>
           </div>
 
           <div className="p-3.5 bg-[#06261f] border border-[#1a5e48] rounded-xl space-y-1">
             <span className="text-[10px] font-bold uppercase text-slate-300 tracking-wider">Failed / Refunded</span>
-            <p className="text-xl font-black text-red-400">{metrics.failedCount}</p>
-            <p className="text-[10px] text-slate-300 font-medium">Declined or telecom rejected</p>
+            <p className="text-lg font-black text-red-400">{metrics.failedCount}</p>
+            <p className="text-[10px] text-slate-300 font-medium">Declined or rejected</p>
           </div>
         </div>
 
@@ -670,13 +748,23 @@ export function WithdrawalsTable({
                             <>
                               <button
                                 type="button"
-                                onClick={() => handleProcessPayout(tx)}
+                                onClick={() => handleProcessPayout(tx, "paystack")}
                                 disabled={isProcessingThis || busy}
-                                className="px-3 py-1.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold rounded-lg text-[11px] flex items-center gap-1 shadow-md transition-colors disabled:opacity-50"
-                                title="Transfer money directly to customer's phone via Paystack"
+                                className="px-2.5 py-1.5 bg-[#082a20] hover:bg-[#0e3b2e] text-[#d6a735] border border-[#d6a735]/40 font-bold rounded-lg text-[11px] flex items-center gap-1 shadow-sm transition-colors disabled:opacity-50"
+                                title="Transfer money directly via Paystack"
                               >
-                                <Send size={12} className={isProcessingThis ? "animate-spin" : ""} />
-                                Pay via Paystack
+                                <Send size={11} className={isProcessingThis ? "animate-spin" : ""} />
+                                Paystack
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleProcessPayout(tx, "palmpay")}
+                                disabled={isProcessingThis || busy}
+                                className="px-2.5 py-1.5 bg-[#062922] hover:bg-[#0c3830] text-teal-300 border border-teal-500/40 font-bold rounded-lg text-[11px] flex items-center gap-1 shadow-sm transition-colors disabled:opacity-50"
+                                title="Transfer money directly via PalmPay"
+                              >
+                                <Send size={11} className={isProcessingThis ? "animate-spin" : ""} />
+                                PalmPay
                               </button>
                               <button
                                 type="button"
@@ -833,16 +921,28 @@ export function WithdrawalsTable({
 
             <div className="pt-2 flex items-center justify-end gap-2 border-t border-[#1a5e48]">
               {selectedTx.status === "pending" && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleProcessPayout(selectedTx);
-                    setSelectedTx(null);
-                  }}
-                  className="px-3 py-1.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold rounded-xl text-xs shadow-md"
-                >
-                  Process Paystack Payout
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleProcessPayout(selectedTx, "paystack");
+                      setSelectedTx(null);
+                    }}
+                    className="px-3 py-1.5 bg-[#d6a735] hover:bg-[#b88c24] text-[#06261f] font-bold rounded-xl text-xs shadow-md flex items-center gap-1"
+                  >
+                    <Send size={12} /> Paystack
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleProcessPayout(selectedTx, "palmpay");
+                      setSelectedTx(null);
+                    }}
+                    className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl text-xs shadow-md flex items-center gap-1"
+                  >
+                    <Send size={12} /> PalmPay
+                  </button>
+                </>
               )}
               <button
                 type="button"

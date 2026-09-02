@@ -608,6 +608,16 @@ export const memoryStore: DbRepository = {
     if (updates.paystackWebhookSecret !== undefined) next.paystackWebhookSecret = String(updates.paystackWebhookSecret).trim();
     if (updates.paystackCurrency !== undefined) next.paystackCurrency = String(updates.paystackCurrency).trim().toUpperCase();
     if ((updates as any).autoPayoutEnabled !== undefined) (next as any).autoPayoutEnabled = Boolean((updates as any).autoPayoutEnabled);
+    if (updates.activePayoutProvider !== undefined) next.activePayoutProvider = updates.activePayoutProvider;
+    if (updates.palmpayMerchantId !== undefined) next.palmpayMerchantId = String(updates.palmpayMerchantId).trim();
+    if (updates.palmpayBearerToken !== undefined) next.palmpayBearerToken = String(updates.palmpayBearerToken).trim();
+    if (updates.palmpayAppSecret !== undefined) next.palmpayAppSecret = String(updates.palmpayAppSecret).trim();
+    if (updates.palmpaySignature !== undefined) next.palmpaySignature = String(updates.palmpaySignature).trim();
+    if (updates.palmpayMode !== undefined) next.palmpayMode = updates.palmpayMode;
+    if (updates.palmpayCountryCode !== undefined) next.palmpayCountryCode = String(updates.palmpayCountryCode).trim().toUpperCase();
+    if (updates.palmpayCurrency !== undefined) next.palmpayCurrency = String(updates.palmpayCurrency).trim().toUpperCase();
+    if (updates.palmpayBaseUrl !== undefined) next.palmpayBaseUrl = String(updates.palmpayBaseUrl).trim();
+    if (updates.payoutProvidersEnabled !== undefined) next.payoutProvidersEnabled = updates.payoutProvidersEnabled;
     next.updatedAt = new Date().toISOString();
     if (adminName) next.updatedBy = adminName;
 
