@@ -580,6 +580,8 @@ export function Header() {
   }, [pathname, syncAuth]);
 
   const unreadCount = notifications.filter((n) => !readIds.includes(n.id)).length;
+  const [unreadCountFromCenter, setUnreadCountFromCenter] = useState<number | null>(null);
+  const effectiveUnreadCount = unreadCountFromCenter !== null ? unreadCountFromCenter : unreadCount;
 
   const markAllNotificationsRead = () => {
     const allIds = notifications.map((n) => n.id);
@@ -1200,8 +1202,25 @@ export function Header() {
           <div className="topbar-user">
             {userToken ? (
               <>
-                {/* Real-time In-App Notification Center with Web Audio & Multi-Channel */}
-                <NotificationCenter userToken={userToken} username={username} />
+                {/* Real-time In-App Notification Center Trigger Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsNotificationsOpen((prev) => !prev)}
+                  aria-label={`Notifications ${effectiveUnreadCount > 0 ? `(${effectiveUnreadCount} unread)` : ""}`}
+                  className={`relative p-2 rounded-xl border transition-colors flex items-center justify-center shadow-sm cursor-pointer ${
+                    isNotificationsOpen
+                      ? "bg-[#144435] text-[#d6a735] border-[#d6a735]"
+                      : "bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] border-[#d6a735]/40"
+                  }`}
+                  title="Notifications & Game Alerts"
+                >
+                  <Bell size={16} />
+                  {effectiveUnreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 bg-gradient-to-br from-[#d6a735] to-amber-500 text-[#06261f] font-black text-[10px] rounded-full flex items-center justify-center shadow-md animate-pulse">
+                      {effectiveUnreadCount}
+                    </span>
+                  )}
+                </button>
 
                 {/* Marbles Balance Tag - Hidden for Admin (Admins cannot own or wager marbles) */}
                 {!isAdmin && (
@@ -1821,6 +1840,28 @@ export function Header() {
                   <Coins size={11} className="text-[#d6a735]" /> {typeof points === "number" ? points.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : points} ⚪
                 </span>
               )}
+              {/* Mobile Top Header Notification Bell */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setIsNotificationsOpen((prev) => !prev);
+                }}
+                aria-label={`Notifications ${effectiveUnreadCount > 0 ? `(${effectiveUnreadCount} unread)` : ""}`}
+                className={`relative p-1.5 rounded-xl border transition-colors flex items-center justify-center shadow-sm cursor-pointer ${
+                  isNotificationsOpen
+                    ? "bg-[#144435] text-[#d6a735] border-[#d6a735]"
+                    : "bg-[#0c3b2e] hover:bg-[#144435] text-[#d6a735] border-[#d6a735]/40"
+                }`}
+                title="Notifications"
+              >
+                <Bell size={15} />
+                {effectiveUnreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-0.5 bg-[#d6a735] text-[#06261f] font-black text-[9px] rounded-full flex items-center justify-center animate-pulse">
+                    {effectiveUnreadCount}
+                  </span>
+                )}
+              </button>
             </div>
           ) : (
             <button
@@ -2063,6 +2104,26 @@ export function Header() {
                     </NavLink>
                   )}
 
+                  {/* Alerts & Notifications item in Mobile Menu */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      setIsNotificationsOpen(true);
+                    }}
+                    className="w-full p-3 rounded-2xl text-xs font-black flex items-center justify-between transition-all bg-[#0c3b2e]/80 text-[#f5efdf] hover:bg-[#144435] border border-[#184d3c] cursor-pointer"
+                  >
+                    <span className="flex items-center gap-3">
+                      <Bell size={18} className="text-[#d6a735]" />
+                      <span>Alerts & Notifications</span>
+                    </span>
+                    {effectiveUnreadCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-[#d6a735] text-[#06261f] text-[10px] font-black">
+                        {effectiveUnreadCount} New
+                      </span>
+                    )}
+                  </button>
+
                   {isOrganizerOrApplied && (
                     <NavLink
                       href="/organizer"
@@ -2180,6 +2241,16 @@ export function Header() {
         )}
       </header>
 
+      {/* Real-time In-App Notification Center Drawer & Popover (Universal for Mobile & Desktop) */}
+      <NotificationCenter
+        userToken={userToken}
+        username={username}
+        isOpen={isNotificationsOpen}
+        onOpenChange={setIsNotificationsOpen}
+        onUnreadCountChange={setUnreadCountFromCenter}
+        showDesktopTrigger={false}
+      />
+
       {/* Mobile Bottom Navigation Bar (App Footer Menu) - Hidden on Admin Page */}
       {pathname !== "/admin" && (
         <nav
@@ -2263,31 +2334,35 @@ export function Header() {
               </NavLink>
             )}
 
-            {userToken && (
-              <button
-                type="button"
-                onClick={() => setIsNotificationsOpen((prev) => !prev)}
-                className={`relative flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${
-                  isNotificationsOpen
-                    ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black"
-                    : "text-[#cbd5e1] hover:text-[#f5efdf]"
-                }`}
-              >
-                <div className="relative">
-                  <Bell size={18} className={unreadCount > 0 ? "text-[#d6a735]" : "text-[#94a3b8]"} />
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 bg-[#d6a735] text-[#06261f] font-black text-[9px] rounded-full flex items-center justify-center animate-pulse shadow-sm">
-                      {unreadCount}
-                    </span>
-                  )}
-                </div>
-                <span className="text-[10px] font-extrabold tracking-tight">Updates</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                setIsNotificationsOpen((prev) => !prev);
+              }}
+              className={`relative flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all cursor-pointer ${
+                isNotificationsOpen
+                  ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black shadow-md"
+                  : "text-[#cbd5e1] hover:text-[#f5efdf]"
+              }`}
+            >
+              <div className="relative">
+                <Bell size={18} className={effectiveUnreadCount > 0 ? "text-[#d6a735]" : "text-[#94a3b8]"} />
+                {effectiveUnreadCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 bg-[#d6a735] text-[#06261f] font-black text-[9px] rounded-full flex items-center justify-center animate-pulse shadow-sm">
+                    {effectiveUnreadCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] font-extrabold tracking-tight">Updates</span>
+            </button>
 
             <button
               type="button"
-              onClick={() => setIsMobileMenuOpen((prev) => !prev)}
+              onClick={() => {
+                setIsNotificationsOpen(false);
+                setIsMobileMenuOpen((prev) => !prev);
+              }}
               className={`flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all ${
                 isMobileMenuOpen
                   ? "text-[#d6a735] bg-[#0c3b2e] border border-[#d6a735]/40 font-black shadow-md"

@@ -348,7 +348,7 @@ export function NotificationCenter({
     }
   };
 
-  if (!userToken) return null;
+  if (!userToken && !isOpen && !activeToast) return null;
 
   return (
     <>
@@ -453,8 +453,15 @@ export function NotificationCenter({
           aria-label="Alerts and In-App Notifications"
           className="fixed inset-x-0 bottom-0 md:bottom-auto md:top-16 md:right-6 md:left-auto md:w-96 max-h-[85vh] md:max-h-[620px] bg-[#06261f] border-t-2 md:border-2 border-[#d6a735]/60 rounded-t-3xl md:rounded-2xl shadow-2xl z-[150] text-left text-[#f5efdf] animate-in slide-in-from-bottom md:slide-in-from-top-2 duration-200 flex flex-col overflow-hidden"
         >
-          {/* Mobile Drag Handle */}
-          <div className="w-12 h-1 bg-slate-600 rounded-full mx-auto my-2.5 shrink-0 md:hidden" />
+          {/* Mobile Drag Handle / Dismiss Touch Bar */}
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="Dismiss notification drawer"
+            className="w-full py-2.5 shrink-0 md:hidden flex justify-center items-center focus:outline-none cursor-pointer group"
+          >
+            <div className="w-12 h-1.5 bg-[#d6a735]/40 group-hover:bg-[#d6a735] rounded-full transition-colors" />
+          </button>
 
           {/* Header with Title & Quick Controls */}
           <div className="p-3.5 bg-gradient-to-b from-[#081c15] to-[#06261f] border-b border-[#0c3b2e] flex items-center justify-between shrink-0">
@@ -552,7 +559,23 @@ export function NotificationCenter({
                   <div className="w-10 h-10 rounded-full bg-[#0c3b2e] flex items-center justify-center mx-auto text-slate-500">
                     <Bell size={18} />
                   </div>
-                  <p className="text-xs">No notifications in this category</p>
+                  <p className="text-xs">
+                    {!userToken
+                      ? "Sign in to receive match alerts, game invites, and payouts."
+                      : "No notifications in this category"}
+                  </p>
+                  {!userToken && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpen(false);
+                        window.dispatchEvent(new CustomEvent("damii-open-auth", { detail: "login" }));
+                      }}
+                      className="mt-3 px-4 py-2 bg-[#d6a735] hover:bg-[#e2b542] text-[#06261f] font-black text-xs rounded-xl shadow-md cursor-pointer transition-all"
+                    >
+                      Sign In to DAMII
+                    </button>
+                  )}
                 </div>
               ) : (
                 filteredNotifications.map((n) => {
@@ -620,7 +643,7 @@ export function NotificationCenter({
             </div>
 
             {/* Footer with Mark All Read & Multi-Channel Test */}
-            <div className="p-2.5 bg-[#081c15] border-t border-[#0c3b2e] flex items-center justify-between text-[11px]">
+            <div className="p-3 bg-[#081c15] border-t border-[#0c3b2e] flex items-center justify-between text-[11px] pb-6 sm:pb-3">
               <button
                 type="button"
                 onClick={() => setIsSettingsOpen(true)}
