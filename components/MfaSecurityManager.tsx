@@ -22,7 +22,7 @@ import {
   X,
   Radio,
 } from "lucide-react";
-import { UserMfaSettings, UserPasskey } from "@/lib/types";
+import type { UserMfaSettings, UserPasskey } from "@/lib/types";
 import {
   isPlatformBiometricsAvailable,
   registerPasskeyCredential,
@@ -31,14 +31,14 @@ import {
 } from "@/lib/webauthn-client";
 import { generateQrSvg } from "@/lib/qr-generator";
 
-interface MfaSecurityManagerProps {
+export interface MfaSecurityManagerProps {
   userToken: string;
   username: string;
   getAuthHeaders: () => Record<string, string>;
   onMfaUpdated?: (settings: UserMfaSettings) => void;
 }
 
-export default function MfaSecurityManager({
+export function MfaSecurityManager({
   userToken,
   username,
   getAuthHeaders,
@@ -1286,3 +1286,5 @@ export default function MfaSecurityManager({
     </div>
   );
 }
+
+export default MfaSecurityManager;

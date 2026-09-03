@@ -9,13 +9,14 @@ export interface SystemAvatar {
   tagline: string;
   theme: "gold" | "emerald" | "amber" | "cyan" | "ruby" | "purple";
   svgDataUri: string;
+  url: string;
 }
 
 function encodeSvg(svgString: string): string {
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svgString.trim())}`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString.trim())}`;
 }
 
-export const SYSTEM_AVATARS: SystemAvatar[] = [
+const RAW_SYSTEM_AVATARS: Omit<SystemAvatar, "url">[] = [
   {
     id: "avatar-champion",
     name: "Gold Champion",
@@ -352,6 +353,11 @@ export const SYSTEM_AVATARS: SystemAvatar[] = [
   },
 ];
 
+export const SYSTEM_AVATARS: SystemAvatar[] = RAW_SYSTEM_AVATARS.map((item) => ({
+  ...item,
+  url: item.svgDataUri,
+}));
+
 export const SYSTEM_AVATARS_MAP = new Map<string, SystemAvatar>(
   SYSTEM_AVATARS.map((a) => [a.id, a])
 );
@@ -364,6 +370,15 @@ export function getAvatarUrl(avatarUrl?: string | null, username?: string | null
     const clean = avatarUrl.trim();
     if (SYSTEM_AVATARS_MAP.has(clean)) {
       return SYSTEM_AVATARS_MAP.get(clean)!.svgDataUri;
+    }
+    const found = SYSTEM_AVATARS.find(
+      (a) => a.id === clean || a.url === clean || a.svgDataUri === clean
+    );
+    if (found) {
+      return found.svgDataUri;
+    }
+    if (clean.startsWith("data:image/svg+xml;utf8,")) {
+      return clean.replace("data:image/svg+xml;utf8,", "data:image/svg+xml;charset=utf-8,");
     }
     return clean;
   }

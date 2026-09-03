@@ -55,7 +55,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { getProfileRank } from "@/lib/rank-service";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { NavLink, safeNavigate } from "@/components/NavLink";
-import { SYSTEM_AVATARS, validateAvatarFile, resizeImageToDataUrl } from "@/lib/avatars";
+import { SYSTEM_AVATARS, validateAvatarFile, resizeImageToDataUrl, getAvatarUrl } from "@/lib/avatars";
 import {
   saveSessionToken,
   rotateSessionToken,
@@ -63,7 +63,7 @@ import {
   getAuthHeaders,
   clearSessionToken,
 } from "@/lib/client-auth";
-import MfaSecurityManager from "@/components/MfaSecurityManager";
+import { MfaSecurityManager } from "@/components/MfaSecurityManager";
 import { authenticateWithPasskey } from "@/lib/webauthn-client";
 
 type NotificationItem = {
@@ -1461,7 +1461,7 @@ export function Header() {
                         >
                           <span className={`w-7 h-7 rounded-full font-black flex items-center justify-center text-xs border overflow-hidden shadow-inner ${avatarBg}`}>
                             {avatarUrl ? (
-                              <img src={avatarUrl} alt={username} className="w-full h-full object-cover rounded-full" />
+                              <img src={getAvatarUrl(avatarUrl, username)} alt={username} className="w-full h-full object-cover rounded-full" />
                             ) : (
                               initialLetter
                             )}
@@ -1484,7 +1484,7 @@ export function Header() {
                                 <div className="p-3 bg-gradient-to-br from-red-950/90 to-[#081c15] rounded-xl border border-red-600/50 flex items-center gap-3 shadow-md">
                                   <div className="w-11 h-11 rounded-xl bg-red-600 text-white font-black flex items-center justify-center text-lg shadow-lg shrink-0 overflow-hidden">
                                     {avatarUrl ? (
-                                      <img src={avatarUrl} alt={username} className="w-full h-full object-cover rounded-xl" />
+                                      <img src={getAvatarUrl(avatarUrl, username)} alt={username} className="w-full h-full object-cover rounded-xl" />
                                     ) : (
                                       <ShieldAlert size={22} />
                                     )}
@@ -1593,7 +1593,7 @@ export function Header() {
                                 <div className="p-3 bg-gradient-to-br from-amber-950/90 to-[#081c15] rounded-xl border border-amber-500/50 flex items-center gap-3 shadow-md">
                                   <div className="w-11 h-11 rounded-xl bg-[#d6a735] text-[#06261f] font-black flex items-center justify-center text-lg shadow-lg shrink-0 overflow-hidden">
                                     {avatarUrl ? (
-                                      <img src={avatarUrl} alt={username} className="w-full h-full object-cover rounded-xl" />
+                                      <img src={getAvatarUrl(avatarUrl, username)} alt={username} className="w-full h-full object-cover rounded-xl" />
                                     ) : (
                                       <Crown size={22} />
                                     )}
@@ -1703,7 +1703,7 @@ export function Header() {
                                 <div className="p-3 bg-gradient-to-br from-cyan-950/90 to-[#081c15] rounded-xl border border-cyan-500/50 flex items-center gap-3 shadow-md">
                                   <div className="w-11 h-11 rounded-xl bg-cyan-600 text-white font-black flex items-center justify-center text-lg shadow-lg shrink-0 overflow-hidden">
                                     {avatarUrl ? (
-                                      <img src={avatarUrl} alt={username} className="w-full h-full object-cover rounded-xl" />
+                                      <img src={getAvatarUrl(avatarUrl, username)} alt={username} className="w-full h-full object-cover rounded-xl" />
                                     ) : (
                                       <Scale size={22} />
                                     )}
@@ -1811,7 +1811,7 @@ export function Header() {
                                 <div className="p-3 bg-[#0c3b2e] rounded-xl border border-[#d6a735]/30 flex items-center gap-3">
                                   <div className="w-10 h-10 rounded-full bg-[#d6a735] text-[#06261f] font-black flex items-center justify-center text-base shadow-md shrink-0 overflow-hidden">
                                     {avatarUrl ? (
-                                      <img src={avatarUrl} alt={username} className="w-full h-full object-cover rounded-full" />
+                                      <img src={getAvatarUrl(avatarUrl, username)} alt={username} className="w-full h-full object-cover rounded-full" />
                                     ) : (
                                       username ? username[0].toUpperCase() : "U"
                                     )}
@@ -2020,7 +2020,7 @@ export function Header() {
                 title={username || "Click to Edit Profile"}
               >
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt={username} className="w-full h-full object-cover rounded-full" />
+                  <img src={getAvatarUrl(avatarUrl, username)} alt={username} className="w-full h-full object-cover rounded-full" />
                 ) : (
                   (username || "U")[0].toUpperCase()
                 )}
@@ -2149,7 +2149,7 @@ export function Header() {
                           <div className="flex items-center gap-3 min-w-0">
                             <span className={`w-10 h-10 rounded-xl font-black flex items-center justify-center text-sm border shrink-0 shadow-sm overflow-hidden ${avatarStyle}`}>
                               {avatarUrl ? (
-                                <img src={avatarUrl} alt={username} className="w-full h-full object-cover rounded-xl" />
+                                <img src={getAvatarUrl(avatarUrl, username)} alt={username} className="w-full h-full object-cover rounded-xl" />
                               ) : isAdmin ? (
                                 <ShieldAlert size={18} />
                               ) : isOrganizer ? (
@@ -3356,7 +3356,11 @@ export function Header() {
                       <div className="relative group shrink-0">
                         <div className="w-20 h-20 rounded-2xl bg-[#06261f] border-2 border-[#d6a735] flex items-center justify-center text-2xl font-black text-[#d6a735] overflow-hidden shadow-xl">
                           {editAvatarUrl ? (
-                            <img src={editAvatarUrl} alt="Avatar preview" className="w-full h-full object-cover" />
+                            <img
+                              src={getAvatarUrl(editAvatarUrl, editUsername || username)}
+                              alt="Avatar preview"
+                              className="w-full h-full object-cover"
+                            />
                           ) : (
                             (editUsername || username || "U")[0].toUpperCase()
                           )}
@@ -3414,13 +3418,17 @@ export function Header() {
                       </div>
                       <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
                         {SYSTEM_AVATARS.map((item) => {
-                          const isSelected = editAvatarUrl === item.url;
+                          const avatarSrc = item.url || item.svgDataUri;
+                          const isSelected =
+                            editAvatarUrl === item.id ||
+                            editAvatarUrl === item.svgDataUri ||
+                            editAvatarUrl === item.url;
                           return (
                             <button
                               key={item.id}
                               type="button"
                               onClick={() => {
-                                setEditAvatarUrl(item.url);
+                                setEditAvatarUrl(avatarSrc);
                                 setAvatarUploadError("");
                               }}
                               className={`group relative p-1 rounded-xl border transition-all cursor-pointer flex flex-col items-center gap-1 ${
@@ -3428,10 +3436,14 @@ export function Header() {
                                   ? "bg-[#d6a735]/20 border-[#d6a735] scale-105 shadow-md shadow-[#d6a735]/10"
                                   : "bg-[#06261f] border-[#184d3c] hover:border-slate-400 hover:bg-[#0c3b2e]"
                               }`}
-                              title={item.name}
+                              title={`${item.name} - ${item.tagline}`}
                             >
-                              <div className="w-10 h-10 rounded-lg overflow-hidden border border-[#184d3c] shadow-inner bg-[#06261f]">
-                                <img src={item.url} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                              <div className="w-10 h-10 rounded-lg overflow-hidden border border-[#184d3c] shadow-inner bg-[#06261f] flex items-center justify-center">
+                                <img
+                                  src={avatarSrc}
+                                  alt={item.name}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                />
                               </div>
                               <span className="text-[8px] font-bold text-slate-300 truncate w-full text-center">
                                 {item.name.split(" ")[0]}
