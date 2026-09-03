@@ -50,12 +50,14 @@ import {
   Image as ImageIcon,
   Camera,
   Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getProfileRank } from "@/lib/rank-service";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { NavLink, safeNavigate } from "@/components/NavLink";
 import { SYSTEM_AVATARS, validateAvatarFile, resizeImageToDataUrl, getAvatarUrl } from "@/lib/avatars";
+import { validateAndFormatMomoPhone, detectGhanaTelecomProvider } from "@/lib/momo-validation";
 import {
   saveSessionToken,
   rotateSessionToken,
@@ -466,7 +468,11 @@ export function Header() {
     setEditRegion(region || "Greater Accra");
     setEditCity(city || "Accra");
     setEditAddress(address || "");
-    setEditMomoNetwork(momoNetwork || "MTN");
+    const initialTelecom = detectGhanaTelecomProvider(phoneNumber || "");
+    const initialMomo = initialTelecom.isRecognized && initialTelecom.provider !== "Unknown"
+      ? (momoNetwork === initialTelecom.provider ? momoNetwork : initialTelecom.provider)
+      : (momoNetwork || "MTN");
+    setEditMomoNetwork(initialMomo);
     setEditPasscode("");
     setEditError("");
     setEditSuccess("");
@@ -496,7 +502,17 @@ export function Header() {
           if (data.user.region) setEditRegion(data.user.region);
           if (data.user.city) setEditCity(data.user.city);
           if (data.user.address) setEditAddress(data.user.address);
-          if (data.user.momoNetwork) setEditMomoNetwork(data.user.momoNetwork);
+          const loadedPhone = data.user.phoneNumber || phoneNumber || "";
+          const loadedTelecom = detectGhanaTelecomProvider(loadedPhone);
+          if (data.user.momoNetwork) {
+            if (loadedTelecom.isRecognized && loadedTelecom.provider !== "Unknown" && data.user.momoNetwork !== loadedTelecom.provider) {
+              setEditMomoNetwork(loadedTelecom.provider);
+            } else {
+              setEditMomoNetwork(data.user.momoNetwork);
+            }
+          } else if (loadedTelecom.isRecognized && loadedTelecom.provider !== "Unknown") {
+            setEditMomoNetwork(loadedTelecom.provider);
+          }
         }
       } catch {
         // preserve current values
@@ -1163,10 +1179,20 @@ export function Header() {
 
     if (!userToken) return;
 
+    const isExistingPhoneLocked = Boolean(phoneNumber || isPhoneVerified);
+    const effectiveSubmitPhone = (!isExistingPhoneLocked && editPhone.trim() ? editPhone.trim() : (phoneNumber || editPhone || "")).trim();
+    if (effectiveSubmitPhone) {
+      const momoCheck = validateAndFormatMomoPhone(effectiveSubmitPhone, editMomoNetwork);
+      if (!momoCheck.isValid) {
+        setEditError(momoCheck.error || `Invalid Mobile Money network selected for phone number "${effectiveSubmitPhone}".`);
+        setEditActiveTab("personal");
+        return;
+      }
+    }
+
     setIsEditLoading(true);
 
     try {
-      const isExistingPhoneLocked = Boolean(phoneNumber || isPhoneVerified);
       const res = await fetch("/api/auth", {
         method: "POST",
         headers: getAuthHeaders(),
@@ -1192,6 +1218,9 @@ export function Header() {
 
       if (!res.ok || data.error) {
         setEditError(data.error || "Failed to update profile.");
+        if (data.error && (data.error.includes("MoMo") || data.error.includes("prefix") || data.error.includes("Telecel") || data.error.includes("MTN") || data.error.includes("AT"))) {
+          setEditActiveTab("personal");
+        }
         setIsEditLoading(false);
         return;
       }
@@ -3510,7 +3539,12 @@ export function Header() {
                 <div className="space-y-4">
                   {/* Phone & MoMo Network Section with Immutable MoMo Line Policy */}
                   {(() => {
-                    const isPhoneLocked = Boolean(isPhoneVerified || phoneNumber || (editPhone && editPhone.trim().length > 0));
+                    const isPhoneLocked = Boolean(isPhoneVerified || phoneNumber);
+                    const effectiveMoMoPhone = (editPhone || phoneNumber || "").trim();
+                    const telecomInfo = detectGhanaTelecomProvider(effectiveMoMoPhone);
+                    const momoValidation = validateAndFormatMomoPhone(effectiveMoMoPhone, editMomoNetwork);
+                    const hasConflict = Boolean(effectiveMoMoPhone.length >= 3 && !momoValidation.isValid);
+
                     return (
                       <div className="p-4 bg-[#0c3b2e]/60 border border-[#184d3c] rounded-2xl space-y-3">
                         <div className="flex items-center justify-between">
@@ -3544,7 +3578,14 @@ export function Header() {
                                 readOnly={isPhoneLocked}
                                 disabled={isPhoneLocked}
                                 value={editPhone}
-                                onChange={(e) => setEditPhone(e.target.value)}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setEditPhone(val);
+                                  const detected = detectGhanaTelecomProvider(val);
+                                  if (detected.isRecognized && detected.provider !== "Unknown") {
+                                    setEditMomoNetwork(detected.provider);
+                                  }
+                                }}
                                 placeholder="e.g. 0241234567"
                                 className={`w-full px-3.5 py-2.5 rounded-xl text-sm transition-colors ${
                                   isPhoneLocked
@@ -3553,23 +3594,74 @@ export function Header() {
                                 }`}
                               />
                             </div>
+                            {telecomInfo.isRecognized && (
+                              <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold">
+                                <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />
+                                <span>Detected: {telecomInfo.providerName} (prefix {telecomInfo.prefix})</span>
+                              </div>
+                            )}
                           </div>
 
                           <div>
-                            <label className="block text-xs font-bold text-[#f5efdf] mb-1.5">
-                              MoMo Network Provider
+                            <label className="block text-xs font-bold text-[#f5efdf] mb-1.5 flex items-center justify-between">
+                              <span>MoMo Network Provider</span>
+                              {telecomInfo.isRecognized && (
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                                  hasConflict
+                                    ? "bg-red-500/20 text-red-300 border-red-500/40"
+                                    : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                }`}>
+                                  {hasConflict ? "Network Conflict" : "Verified Match"}
+                                </span>
+                              )}
                             </label>
                             <select
                               value={editMomoNetwork}
-                              onChange={(e) => setEditMomoNetwork(e.target.value)}
-                              className="w-full px-3.5 py-2.5 bg-[#0c3b2e] border border-[#184d3c] rounded-xl text-[#f5efdf] text-sm focus:outline-none focus:border-[#d6a735]"
+                              onChange={(e) => {
+                                const newNet = e.target.value;
+                                setEditMomoNetwork(newNet);
+                                if (effectiveMoMoPhone && effectiveMoMoPhone.length >= 3) {
+                                  const chk = validateAndFormatMomoPhone(effectiveMoMoPhone, newNet);
+                                  if (!chk.isValid) {
+                                    setEditError(chk.error || "Network provider mismatch");
+                                  } else {
+                                    setEditError("");
+                                  }
+                                }
+                              }}
+                              className={`w-full px-3.5 py-2.5 bg-[#0c3b2e] border rounded-xl text-[#f5efdf] text-sm focus:outline-none transition-colors ${
+                                hasConflict ? "border-red-500 focus:border-red-400" : "border-[#184d3c] focus:border-[#d6a735]"
+                              }`}
                             >
-                              <option value="MTN">MTN Mobile Money</option>
-                              <option value="Telecel">Telecel Cash (Vodafone)</option>
-                              <option value="AT">AT Money (AirtelTigo)</option>
+                              <option value="MTN">MTN Mobile Money (024, 025, 053, 054, 055, 059)</option>
+                              <option value="Telecel">Telecel Cash (Vodafone - 020, 050)</option>
+                              <option value="AT">AT Money (AirtelTigo - 026, 027, 056, 057)</option>
                             </select>
                           </div>
                         </div>
+
+                        {/* Real-time MoMo Network Conflict Warning Banner */}
+                        {hasConflict && (
+                          <div className="p-3 bg-red-950/80 border border-red-700/80 rounded-xl text-[11px] text-red-200 leading-relaxed flex items-start gap-2.5 animate-in fade-in">
+                            <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+                            <div className="flex-1 space-y-1.5">
+                              <strong className="block text-red-300 font-bold">Network Provider Conflict:</strong>
+                              <p className="text-red-200/90">{momoValidation.error}</p>
+                              {telecomInfo.isRecognized && telecomInfo.provider !== "Unknown" && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditMomoNetwork(telecomInfo.provider);
+                                    setEditError("");
+                                  }}
+                                  className="px-3 py-1 bg-red-800 hover:bg-red-700 text-white rounded-lg text-[10px] font-bold border border-red-500/70 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                                >
+                                  <Check size={12} /> Auto-fix: Switch to {telecomInfo.providerName}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
 
                         {isPhoneLocked ? (
                           <div className="p-3 bg-emerald-950/70 border border-emerald-800/80 rounded-xl text-[11px] text-emerald-200/90 leading-relaxed flex items-start gap-2.5">

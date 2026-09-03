@@ -946,7 +946,7 @@ export default function ArenaPage() {
             }
             setRoom(null);
             setMode("local");
-            setMessage("This match room was cancelled by the host.");
+            setMessage("This match was cancelled. Any wager stakes were refunded in full to your wallet balance.");
             return;
           }
           loadRoom(data.room);

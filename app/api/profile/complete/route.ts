@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { dbRepository } from "@/lib/db-client";
 import { requireAuth } from "@/lib/auth-guard";
 import { securityService } from "@/lib/security";
+import { validateAndFormatMomoPhone } from "@/lib/momo-validation";
 
 export async function GET(req: NextRequest) {
   try {
@@ -232,6 +233,17 @@ export async function POST(req: NextRequest) {
       finalUsername = `Player_${userId.slice(-6)}`;
     }
 
+    // Validate MoMo Network against user's phone number prefix
+    const targetMomoNetwork = momoNetwork !== undefined ? String(momoNetwork).trim() : (user.momoNetwork || undefined);
+    const momoCheck = validateAndFormatMomoPhone(user.phoneNumber, targetMomoNetwork);
+    if (!momoCheck.isValid) {
+      return NextResponse.json(
+        { error: momoCheck.error || `Invalid Mobile Money network for phone number ${user.phoneNumber}.` },
+        { status: 400 }
+      );
+    }
+    const finalMomoNetwork = momoCheck.detectedProvider;
+
     const now = new Date().toISOString();
 
     // Update user record - momoNumber is strictly locked to the verified phone number, username is updated
@@ -248,7 +260,7 @@ export async function POST(req: NextRequest) {
       city: city !== undefined ? String(city).trim() : user.city,
       address: address !== undefined ? String(address).trim() : user.address,
       momoNumber: user.phoneNumber, // Strictly locked to verified phone number
-      momoNetwork: momoNetwork !== undefined ? String(momoNetwork).trim() : (user.momoNetwork || "MTN"),
+      momoNetwork: finalMomoNetwork,
       username: finalUsername,
       referralCode: referralCode !== undefined ? String(referralCode).trim() : user.referralCode,
       profileCompletedAt: now,

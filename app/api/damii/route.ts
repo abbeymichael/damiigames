@@ -844,10 +844,24 @@ export async function POST(req: NextRequest) {
           await dbRepository.saveRoom(room);
         }
       } else if (room.status === "playing") {
-        // If a player leaves an ongoing match, mark them as forfeited
         const isHost = token === room.hostToken;
         const isGuest = token === room.guestToken;
-        if (isHost || isGuest) {
+        const movesPlayed = room.moveCount || (room.moves ? room.moves.length : 0);
+
+        if (movesPlayed === 0 && (isHost || isGuest)) {
+          // Pre-game / 0-move cancellation: match was accepted but no moves were played yet.
+          // Refund both players in full (100% refund) and cancel room without penalty or rating changes.
+          if (room.mode === "wager" && room.escrowId) {
+            if (room.guestToken) {
+              await walletService.refundGuestWagerEscrow(room.escrowId, room.guestToken).catch(() => {});
+            }
+            await walletService.refundHostWagerEscrow(room.escrowId, room.hostToken).catch(() => {});
+          }
+          room.status = "cancelled";
+          room.winner = null;
+          await dbRepository.saveRoom(room);
+        } else if (isHost || isGuest) {
+          // If a player leaves an ongoing match after moves were played, mark them as forfeited
           const forfeitingPlayer: Player = isHost ? "white" : "black";
           room.winner = forfeitingPlayer === "white" ? "black" : "white";
           room.status = "forfeited";
@@ -1090,6 +1104,30 @@ export async function POST(req: NextRequest) {
       const code = cleanCode(body.code);
       const room = await dbRepository.getRoom(code);
       if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
+
+      const movesPlayed = room.moveCount || (room.moves ? room.moves.length : 0);
+
+      // Pre-game / 0-move cancellation: post-acceptance before game moves begin
+      if (room.status === "playing" && movesPlayed === 0 && (token === room.hostToken || token === room.guestToken)) {
+        room.status = "cancelled";
+        room.winner = null;
+        await dbRepository.saveRoom(room);
+
+        // Refund both players 100% of their stakes
+        if (room.guestToken && room.mode === "wager" && room.escrowId) {
+          await walletService.refundGuestWagerEscrow(room.escrowId, room.guestToken).catch(() => {});
+        }
+        if (room.escrowId) {
+          await walletService.refundHostWagerEscrow(room.escrowId, room.hostToken).catch(() => {});
+        }
+
+        const profile = await dbRepository.getProfile(token);
+        return NextResponse.json({
+          room: formatRoomResponse(room, token),
+          profile: securityService.sanitizeProfile(profile),
+          message: "Match cancelled before first move. 100% escrow refunded to both players.",
+        });
+      }
 
       // Host cancels waiting or pending room
       if ((room.status === "waiting" || room.status === "pending_acceptance") && token === room.hostToken) {

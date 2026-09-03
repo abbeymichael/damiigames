@@ -37,6 +37,7 @@ import type { WalletTransaction } from "@/lib/types";
 import { getAuthHeaders, getSessionToken, getCsrfToken } from "@/lib/client-auth";
 import { PaystackModal } from "@/components/PaystackModal";
 import { loadPaystackScript, openPaystackInlinePopup } from "@/lib/paystack-client";
+import { validateAndFormatMomoPhone, detectGhanaTelecomProvider } from "@/lib/momo-validation";
 
 const PRESET_AMOUNTS = [10, 20, 50, 100, 200, 500];
 
@@ -137,6 +138,12 @@ export default function WalletPage() {
       const data = await res.json();
       if (data.balance) {
         setBalance(data.balance);
+        if (data.balance.phoneNumber) {
+          const detected = detectGhanaTelecomProvider(data.balance.phoneNumber);
+          if (detected.isRecognized && detected.provider !== "Unknown") {
+            setMomoProvider(detected.provider);
+          }
+        }
         if (typeof window !== "undefined") {
           window.dispatchEvent(
             new CustomEvent("damii-balance-changed", {
@@ -363,8 +370,14 @@ export default function WalletPage() {
     }
 
     const targetMomoNumber = (balance.phoneNumber || momoNumber).trim();
-    if (!targetMomoNumber || targetMomoNumber.replace(/\D/g, "").length < 9) {
+    if (!targetMomoNumber) {
       setError("Please provide a valid 10-digit Mobile Money phone number.");
+      return;
+    }
+
+    const momoCheck = validateAndFormatMomoPhone(targetMomoNumber, momoProvider);
+    if (!momoCheck.isValid) {
+      setError(momoCheck.error || "Please provide a valid Ghana Mobile Money phone number matching the selected network.");
       return;
     }
 
@@ -1150,55 +1163,129 @@ export default function WalletPage() {
                         </div>
 
                         {/* Network & Phone */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider">
-                              Network Provider
-                            </label>
-                            <select
-                              value={momoProvider}
-                              onChange={(e) => setMomoProvider(e.target.value)}
-                              className="w-full bg-[#041c17] border border-[#1a5e48] focus:border-[#d6a735] text-[#f5efdf] text-sm rounded-2xl px-4 py-3.5 focus:outline-none font-bold"
-                            >
-                              <option value="MTN">MTN MoMo</option>
-                              <option value="Telecel">Telecel Cash</option>
-                              <option value="AT">AT Money</option>
-                            </select>
-                          </div>
+                        {(() => {
+                          const effectiveTargetPhone = (balance.phoneNumber || momoNumber || "").trim();
+                          const detected = detectGhanaTelecomProvider(effectiveTargetPhone);
+                          const validation = validateAndFormatMomoPhone(effectiveTargetPhone, momoProvider);
+                          const hasConflict = Boolean(effectiveTargetPhone.length >= 3 && !validation.isValid);
 
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider">
-                                MoMo Phone Number
-                              </label>
-                              {balance.phoneNumber && (
-                                <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
-                                  <ShieldCheck size={12} /> Verified &amp; Locked
-                                </span>
+                          return (
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider">
+                                      Network Provider
+                                    </label>
+                                    {detected.isRecognized && (
+                                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                                        hasConflict
+                                          ? "bg-red-500/20 text-red-300 border-red-500/40"
+                                          : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                      }`}>
+                                        {hasConflict ? "Network Mismatch" : "Verified Carrier"}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <select
+                                    value={momoProvider}
+                                    onChange={(e) => {
+                                      const nextProv = e.target.value;
+                                      setMomoProvider(nextProv);
+                                      if (effectiveTargetPhone && effectiveTargetPhone.length >= 3) {
+                                        const chk = validateAndFormatMomoPhone(effectiveTargetPhone, nextProv);
+                                        if (!chk.isValid) {
+                                          setError(chk.error || "Network mismatch");
+                                        } else {
+                                          setError("");
+                                        }
+                                      }
+                                    }}
+                                    className={`w-full bg-[#041c17] border text-[#f5efdf] text-sm rounded-2xl px-4 py-3.5 focus:outline-none font-bold transition-colors ${
+                                      hasConflict ? "border-red-500 focus:border-red-400" : "border-[#1a5e48] focus:border-[#d6a735]"
+                                    }`}
+                                  >
+                                    <option value="MTN">MTN MoMo (024, 025, 053, 054, 055, 059)</option>
+                                    <option value="Telecel">Telecel Cash (Vodafone - 020, 050)</option>
+                                    <option value="AT">AT Money (AirtelTigo - 026, 027, 056, 057)</option>
+                                  </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider">
+                                      MoMo Phone Number
+                                    </label>
+                                    {balance.phoneNumber && (
+                                      <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                                        <ShieldCheck size={12} /> Verified &amp; Locked
+                                      </span>
+                                    )}
+                                  </div>
+                                  <input
+                                    type="tel"
+                                    value={balance.phoneNumber || momoNumber}
+                                    onChange={(e) => {
+                                      if (!balance.phoneNumber) {
+                                        const val = e.target.value;
+                                        setMomoNumber(val);
+                                        const autoDet = detectGhanaTelecomProvider(val);
+                                        if (autoDet.isRecognized && autoDet.provider !== "Unknown") {
+                                          setMomoProvider(autoDet.provider);
+                                        }
+                                      }
+                                    }}
+                                    disabled={Boolean(balance.phoneNumber)}
+                                    placeholder="0244123456"
+                                    className={`w-full bg-[#041c17] border text-[#f5efdf] text-sm rounded-2xl px-4 py-3.5 font-mono font-bold placeholder:text-slate-600 transition-colors ${
+                                      hasConflict
+                                        ? "border-red-500"
+                                        : balance.phoneNumber
+                                        ? "border-emerald-500/40 bg-emerald-950/20 opacity-80 cursor-not-allowed"
+                                        : "border-[#1a5e48] focus:border-[#d6a735] focus:outline-none"
+                                    }`}
+                                    required
+                                  />
+                                  {detected.isRecognized ? (
+                                    <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold">
+                                      <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />
+                                      <span>Prefix {detected.prefix} detected: {detected.providerName}</span>
+                                    </div>
+                                  ) : (
+                                    <small className="block text-[10px] text-slate-400">
+                                      {balance.phoneNumber
+                                        ? "🔒 For fraud protection & account security, withdrawals are strictly disbursed to your verified phone number."
+                                        : "Enter the Mobile Money phone number to receive your funds."}
+                                    </small>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Real-time MoMo Network Conflict Warning Banner */}
+                              {hasConflict && (
+                                <div className="p-3 bg-red-950/80 border border-red-700/80 rounded-xl text-[11px] text-red-200 leading-relaxed flex items-start gap-2.5 animate-in fade-in">
+                                  <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+                                  <div className="flex-1 space-y-1.5">
+                                    <strong className="block text-red-300 font-bold">Destination Network Mismatch:</strong>
+                                    <p className="text-red-200/90">{validation.error}</p>
+                                    {detected.isRecognized && detected.provider !== "Unknown" && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setMomoProvider(detected.provider);
+                                          setError("");
+                                        }}
+                                        className="px-3 py-1 bg-red-800 hover:bg-red-700 text-white rounded-lg text-[10px] font-bold border border-red-500/70 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                                      >
+                                        <Check size={12} /> Auto-fix: Switch to {detected.providerName}
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
                               )}
                             </div>
-                            <input
-                              type="tel"
-                              value={balance.phoneNumber || momoNumber}
-                              onChange={(e) => {
-                                if (!balance.phoneNumber) {
-                                  setMomoNumber(e.target.value);
-                                }
-                              }}
-                              disabled={Boolean(balance.phoneNumber)}
-                              placeholder="0244123456"
-                              className={`w-full bg-[#041c17] border border-[#1a5e48] text-[#f5efdf] text-sm rounded-2xl px-4 py-3.5 font-mono font-bold placeholder:text-slate-600 ${
-                                balance.phoneNumber ? "opacity-80 cursor-not-allowed border-emerald-500/40 bg-emerald-950/20" : "focus:border-[#d6a735] focus:outline-none"
-                              }`}
-                              required
-                            />
-                            <small className="block text-[10px] text-slate-400">
-                              {balance.phoneNumber
-                                ? "🔒 For fraud protection & account security, withdrawals are strictly disbursed to your verified phone number."
-                                : "Enter the Mobile Money phone number to receive your funds."}
-                            </small>
-                          </div>
-                        </div>
+                          );
+                        })()}
 
                         {/* Submit Cashout CTA */}
                         <button

@@ -4,6 +4,7 @@ import { securityService } from "@/lib/security";
 import { Profile } from "@/lib/types";
 import { attachAuthCookies, clearAuthCookies, extractTokenFromRequest, getAuthContext, requireAuth } from "@/lib/auth-guard";
 import { getAdminPermissions } from "@/lib/permissions";
+import { validateAndFormatMomoPhone } from "@/lib/momo-validation";
 
 const cleanStr = (v: unknown) => securityService.sanitizeInput(String(v ?? "")).slice(0, 80);
 
@@ -62,6 +63,7 @@ export async function GET(req: NextRequest) {
     sanitized.email = user.email || sanitized.email;
     sanitized.region = user.region || sanitized.region;
     sanitized.city = user.city || sanitized.city;
+    sanitized.momoNetwork = user.momoNetwork || sanitized.momoNetwork || null;
     sanitized.phoneVerifiedAt = user.phoneVerifiedAt ? user.phoneVerifiedAt.toString() : (profile.phoneNumber ? new Date().toISOString() : null);
   }
 
@@ -199,6 +201,46 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      const effectivePhone = requestedPhone || existingPhone || user?.phoneNumber;
+
+      // Validate MoMo Network Provider against phone number prefix
+      let validatedMomoNetwork: string | undefined = undefined;
+      if (body.momoNetwork !== undefined) {
+        const requestedMomo = String(body.momoNetwork).trim();
+        if (effectivePhone) {
+          const momoCheck = validateAndFormatMomoPhone(effectivePhone, requestedMomo);
+          if (!momoCheck.isValid) {
+            return NextResponse.json(
+              { error: momoCheck.error || `Invalid MoMo network specified for phone "${effectivePhone}".` },
+              { status: 400 }
+            );
+          }
+          validatedMomoNetwork = momoCheck.detectedProvider;
+        } else if (!["MTN", "Telecel", "AT"].includes(requestedMomo)) {
+          return NextResponse.json(
+            { error: "Invalid Mobile Money network provider specified. Must be MTN, Telecel, or AT." },
+            { status: 400 }
+          );
+        } else {
+          validatedMomoNetwork = requestedMomo;
+        }
+      }
+
+      // If requested phone number is being set for the first time, validate format & prefix
+      if (requestedPhone && !existingPhone) {
+        const targetNetwork = validatedMomoNetwork || user?.momoNetwork || existingProfile.momoNetwork || undefined;
+        const phoneCheck = validateAndFormatMomoPhone(requestedPhone, targetNetwork);
+        if (!phoneCheck.isValid) {
+          return NextResponse.json(
+            { error: phoneCheck.error || "Invalid Mobile Money phone number format." },
+            { status: 400 }
+          );
+        }
+        if (!validatedMomoNetwork && phoneCheck.detectedProvider && phoneCheck.detectedProvider !== "Unknown") {
+          validatedMomoNetwork = phoneCheck.detectedProvider;
+        }
+      }
+
       // Validate username length & uniqueness if username is being changed
       const requestedUsername = body.username !== undefined ? String(body.username).trim() : undefined;
       if (requestedUsername && requestedUsername !== existingProfile.username) {
@@ -240,6 +282,9 @@ export async function POST(req: NextRequest) {
       if (body.email !== undefined) existingProfile.email = String(body.email).trim();
       if (body.region !== undefined) existingProfile.region = String(body.region).trim();
       if (body.city !== undefined) existingProfile.city = String(body.city).trim();
+      if (validatedMomoNetwork) {
+        existingProfile.momoNetwork = validatedMomoNetwork;
+      }
 
       if (!isPhoneVerified && requestedPhone) {
         existingProfile.phoneNumber = requestedPhone;
@@ -265,7 +310,7 @@ export async function POST(req: NextRequest) {
         if (body.address !== undefined) user.address = String(body.address).trim();
         if (body.gender !== undefined) user.gender = String(body.gender).trim();
         if (body.dateOfBirth !== undefined && body.dateOfBirth) user.dateOfBirth = new Date(body.dateOfBirth).toISOString();
-        if (body.momoNetwork !== undefined) user.momoNetwork = String(body.momoNetwork).trim();
+        if (validatedMomoNetwork) user.momoNetwork = validatedMomoNetwork;
         await dbRepository.saveUser(user);
       } else {
         user = await dbRepository.saveUser({
@@ -278,6 +323,7 @@ export async function POST(req: NextRequest) {
           avatarUrl: existingProfile.avatarUrl || null,
           region: existingProfile.region || null,
           city: existingProfile.city || null,
+          momoNetwork: validatedMomoNetwork || existingProfile.momoNetwork || null,
           role: existingProfile.role === "admin" || existingProfile.role === "super_admin" ? "admin" : existingProfile.role === "organizer" ? "organizer" : "player",
           createdAt: existingProfile.createdAt || new Date().toISOString(),
         });
@@ -289,6 +335,7 @@ export async function POST(req: NextRequest) {
       sanitized.email = user.email || sanitized.email;
       sanitized.region = user.region || sanitized.region;
       sanitized.city = user.city || sanitized.city;
+      sanitized.momoNetwork = user.momoNetwork || existingProfile.momoNetwork || null;
 
       return NextResponse.json({
         success: true,

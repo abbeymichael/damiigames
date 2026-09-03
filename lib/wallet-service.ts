@@ -5,6 +5,7 @@ import { notificationService } from "./notification-service";
 import { getAdminPermissions } from "./permissions";
 import { botService } from "./bot-service";
 import { palmpayService, getEffectivePalmpayConfig } from "./palmpay-service";
+import { validateAndFormatMomoPhone } from "./momo-validation";
 
 export async function getEffectivePaystackConfig(): Promise<{ secretKey: string; publicKey: string }> {
   try {
@@ -1040,99 +1041,8 @@ export const walletService = {
   validateAndFormatMomoPhone(
     rawPhone: string,
     provider?: string
-  ): {
-    isValid: boolean;
-    nationalFormat: string;
-    internationalFormat: string;
-    detectedProvider: string;
-    error?: string;
-  } {
-    if (!rawPhone || typeof rawPhone !== "string") {
-      return {
-        isValid: false,
-        nationalFormat: "",
-        internationalFormat: "",
-        detectedProvider: "MTN",
-        error: "Mobile Money phone number is required.",
-      };
-    }
-
-    // Strip spaces, hyphens, brackets, dots, and common separators
-    let clean = rawPhone.replace(/[\s\-\(\)\.]/g, "").trim();
-
-    // Standardize international prefix +233 / 233 / 00233 to national 0
-    if (clean.startsWith("+233")) {
-      clean = "0" + clean.slice(4);
-    } else if (clean.startsWith("00233")) {
-      clean = "0" + clean.slice(5);
-    } else if (clean.startsWith("233") && clean.length === 12) {
-      clean = "0" + clean.slice(3);
-    }
-
-    // Must be exactly 10 digits starting with 0
-    const ghanaMobileRegex = /^0(20|50|24|25|53|54|55|59|26|27|56|57)[0-9]{7}$/;
-    const genericGhanaRegex = /^0[235][0-9]{8}$/;
-
-    if (!genericGhanaRegex.test(clean) || clean.length !== 10) {
-      return {
-        isValid: false,
-        nationalFormat: "",
-        internationalFormat: "",
-        detectedProvider: "MTN",
-        error: `Invalid Ghana Mobile Money phone number format ("${rawPhone}"). Phone must be a valid 10-digit Ghana mobile number (e.g. 024XXXXXXX, 020XXXXXXX, 026XXXXXXX) or international (+233) format.`,
-      };
-    }
-
-    // Determine telecom carrier from 3-digit national prefix
-    const prefix = clean.slice(0, 3);
-    let detectedProvider = "MTN";
-
-    if (["024", "025", "053", "054", "055", "059"].includes(prefix)) {
-      detectedProvider = "MTN";
-    } else if (["020", "050"].includes(prefix)) {
-      detectedProvider = "Telecel";
-    } else if (["026", "027", "056", "057"].includes(prefix)) {
-      detectedProvider = "AT";
-    }
-
-    // If an explicit provider was supplied, ensure compatibility or note discrepancy
-    if (provider) {
-      const pUpper = provider.toUpperCase().trim();
-      if ((pUpper.includes("VOD") || pUpper.includes("TELECEL")) && detectedProvider !== "Telecel") {
-        return {
-          isValid: false,
-          nationalFormat: clean,
-          internationalFormat: `+233${clean.slice(1)}`,
-          detectedProvider,
-          error: `Phone prefix "${prefix}" belongs to ${detectedProvider}, but Telecel/Vodafone Cash was specified as the destination network.`,
-        };
-      }
-      if ((pUpper.includes("TIGO") || pUpper.includes("AIRTEL") || pUpper.includes("ATL") || pUpper === "AT") && detectedProvider !== "AT") {
-        return {
-          isValid: false,
-          nationalFormat: clean,
-          internationalFormat: `+233${clean.slice(1)}`,
-          detectedProvider,
-          error: `Phone prefix "${prefix}" belongs to ${detectedProvider}, but AT (AirtelTigo) Money was specified as the destination network.`,
-        };
-      }
-      if (pUpper.includes("MTN") && detectedProvider !== "MTN") {
-        return {
-          isValid: false,
-          nationalFormat: clean,
-          internationalFormat: `+233${clean.slice(1)}`,
-          detectedProvider,
-          error: `Phone prefix "${prefix}" belongs to ${detectedProvider}, but MTN Mobile Money was specified as the destination network.`,
-        };
-      }
-    }
-
-    return {
-      isValid: true,
-      nationalFormat: clean,
-      internationalFormat: `+233${clean.slice(1)}`,
-      detectedProvider,
-    };
+  ) {
+    return validateAndFormatMomoPhone(rawPhone, provider);
   },
 
   async requestWithdrawal(userToken: string, amountGhs: number, momoNumber?: string, momoProvider?: string) {

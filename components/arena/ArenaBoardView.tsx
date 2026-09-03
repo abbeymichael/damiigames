@@ -22,6 +22,7 @@ import {
   Trophy,
   Gamepad2,
   Swords,
+  X,
 } from "lucide-react";
 import {
   rowOf,
@@ -698,7 +699,17 @@ export function ArenaBoardView({
                     <Handshake size={11} /> Draw
                   </button>
 
-                  {showForfeitConfirm ? (
+                  {activeMoves.length === 0 ? (
+                    <button
+                      type="button"
+                      disabled={onlineBusy}
+                      onClick={cancelRoomOnline}
+                      className="px-2 py-0.5 bg-red-950/80 hover:bg-red-900 text-red-200 rounded text-[10px] font-bold flex items-center justify-center gap-0.5 border border-red-800 transition-colors"
+                      title="Cancel match before first move (100% Escrow Refund)"
+                    >
+                      <X size={11} /> Cancel (Refund)
+                    </button>
+                  ) : showForfeitConfirm ? (
                     <div className="flex items-center gap-1 bg-red-950/90 border border-red-700 px-1.5 py-0.5 rounded animate-in fade-in">
                       <span className="text-[9px] text-red-200 font-bold whitespace-nowrap">Resign?</span>
                       <button
